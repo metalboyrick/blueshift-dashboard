@@ -25,13 +25,14 @@ If you're new to instruction introspection, we recommend starting with the[ Inst
 Before you begin, ensure you have Rust and Anchor installed. If you need setup instructions, refer to the [official anchor documentation](https://www.anchor-lang.com/docs/installation). Then in your terminal run:
 
 ```
-anchor init blueshift_anchor_instruction_introspection
+anchor init blueshift_anchor_flash_loan
 ```
 
 Add the required dependencies:
 - `anchor-spl`: Provides utilities for working with SPL tokens (Solana's token standard)
 
 ```
+cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
 
@@ -102,7 +103,7 @@ Our `Loan` account struct needs these components:
 - `borrower_ata`: the borrower's Associated Token Account that will receive the borrowed tokens.
 - `protocol_ata`: the protocol's Associated Token Account that will provide the borrowed tokens.
 - `instructions`: the Instructions Sysvar account for introspection.
-- `token_program`, `system_program` and `associated_token_program`: required programs for the program. 
+- `token_program`, `associated_token_program`, and `system_program`: required programs for the program.
 
 Here's how we define the account struct:
 
@@ -184,3 +185,5 @@ pub enum ProtocolError {
 </Codeblock>
 
 With this foundation in place, we're ready to implement the core logic for our flash loan instructions. The account structure ensures proper token handling, while the error system provides clear feedback for debugging and security validation.
+
+> The program does't quite compile yet. Can you figure out why?

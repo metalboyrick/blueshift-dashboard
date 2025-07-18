@@ -1,16 +1,16 @@
 # Loan
 
-The `loan` instruction is the first half of our flash loan system. It performs three critical steps to ensure safe and atomic lending:
-1. Deserialize a dynamic amount of accounts based on the number of loan that the user wants to take.
-2. Save all these loans in the `loan` "scrap" account and calculate the final balance that the `protocol_token_account` needs to have.
+The `loan` instruction is the first half of our flash loan system. It performs four critical steps to ensure safe and atomic lending:
+1. Deserialize a dynamic number of accounts based on the number of loans that the user wants to take.
+2. Save all these loans in the `loan` "scratch" account and calculate the final balance that the `protocol_token_account` needs to have.
 3. Verify repayment: Use instruction introspection to confirm that a valid repayment instruction exists at the end of the transaction
-4. Transfer funds: Move all the requested `borrow_amount` from the protocol's treasury to the borrower's account
+4. Transfer funds: Move all the requested loan amounts from the protocol's treasury to the borrower's account
 
 <ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
 
 - `borrower`: the user requesting the flash loan. Must be a Signer
 - `protocol`: a Program Derived Address (PDA) that owns the protocol's liquidity pool for a specific fee. 
-- `loan`: the "scrap" account used to save the `protocol_token_account` and the final `balance` that they need to have. Must be mutable
+- `loan`: the "scratch" account used to save the `protocol_token_account` and the final `balance` that it needs to have. Must be mutable
 - `token_program`: the token program. Must be executable
 
 Here's the implementation:
@@ -54,9 +54,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
 ```
 </Codeblock>
 
-As you can see, since the `token_accounts` are a dynamic number of accounts, we pass it in similarly to how we pass `remaining_accounts`.
+Since `token_accounts` is a dynamic array of accounts, we pass them in similarly to `remaining_accounts`.
 
-But to make sure that the structure is correct, we need to add some validation to it; each loan needs a `protocol_token_account` and a `borrower_token_account` for this reason we need to make sure that there are some accounts in that array and that the number of accounts is divisible by 2
+To ensure the structure is correct, we add validation. Each loan requires a `protocol_token_account` and a `borrower_token_account`, so we must verify that the array contains accounts and that the number of accounts is divisible by two.
 
 <ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
 
@@ -110,7 +110,7 @@ We use the `split_first` and `split_at_checked` functions to sequentially extrac
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
-We begin by performing a check to make sure that the number of `amounts` is equal to the number of `token_accounts` divided by two to make sure that we have all the accounts or amount to perform multiple loans, after we've deserialized both the `instruction_data` and the `accounts`.
+After deserializing `instruction_data` and `accounts`, we check that the number of `amounts` equals the number of `token_accounts` divided by two. This ensures we have the correct number of accounts for the requested loans.
 
 <Codeblock lang="rust">
 ```rust
@@ -140,7 +140,9 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
 ```
 </Codeblock>
 
-We then proceed to create the `signer_seeds` needed for transferring out the tokens to the borrower and creating a `loan` account that can contain all the loans we're taking in this instruction by using `size_of::<LoanData>() * self.instruction_data.amounts.len()`
+Next, we create the `signer_seeds` needed to transfer tokens to the borrower and create a `loan` account. The size
+of this account is calculated using `size_of::<LoanData>() * self.instruction_data.amounts.len()` to ensure it can
+hold all the loan data for the transaction.
 
 <Codeblock lang="rust"> 
 ```rust
@@ -177,7 +179,7 @@ impl<'a> Loan<'a> {
 ```
 </Codeblock>
 
-We then proceed to create an empty slice in the `loan_data` that we're going to populate in the for cycle while performing all transfers for each loan:
+We then create a mutable slice from the `loan` account's data. We will populate this slice in a `for` loop as we process each loan and its corresponding transfer:
 
 <Codeblock lang="rust">
 ```rust    
@@ -191,7 +193,7 @@ let loan_entries = unsafe {
 ```
 </Codeblock>
 
-We can finally create a `for` loop that goes through all the loans, grab the `protocol_token_account` and the `borrower_token_account` and calculate the `balance` due to the protocol before saving that data in the `loan` account and transferring out the tokens.
+Finally, we loop through all the loans. In each iteration, we get the `protocol_token_account` and `borrower_token_account`, calculate the balance due to the protocol, save this data in the `loan` account, and transfer the tokens.
 
 <Codeblock lang="rust">
 ```rust    
@@ -224,7 +226,7 @@ for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
 ```
 </Codeblock>
 
-We finish by performing the checks needed using instruction introspection. We're going to just check if the last instruction of the transaction is a `repay` instruction and if the `loan` account used there is the same as the one that we're using in the `loan` instruction.
+We finish by using instruction introspection to perform the necessary checks. We verify that the last instruction in the transaction is a `repay` instruction and that it uses the same `loan` account as our current `loan` instruction.
 
 <Codeblock lang="rust">
 ```rust   

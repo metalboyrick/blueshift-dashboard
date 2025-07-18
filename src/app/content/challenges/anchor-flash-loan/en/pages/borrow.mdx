@@ -47,13 +47,11 @@ We start by accessing the `instructions` sysvar, which contains information abou
 
 <Codeblock lang="rust">
 ```rust
-/* 
-
+/*
     Instruction Introspection
 
     This is the primary means by which we secure our program,
     enforce atomicity while making a great UX for our users.
-
 */
 
 let ixs = ctx.accounts.instructions.to_account_info();
@@ -67,19 +65,17 @@ Finally, we perform the most critical check: ensuring that the last instruction 
 
 <Codeblock lang="rust">
 ```rust
-/* 
-
+/*
     Repay Instruction Check
 
     Make sure that the last instruction of this transaction is a repay instruction
-
 */
 
 // Check how many instruction we have in this transaction
 let instruction_sysvar = ixs.try_borrow_data()?;
 let len = u16::from_le_bytes(instruction_sysvar[0..2].try_into().unwrap());
 
-// Ensure we have a finalize ix
+// Ensure we have a repay ix
 if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
 
     // Instruction checks

@@ -1,12 +1,12 @@
 # Repay
 
-The `repay` instruction is the second half of our flash loan system. And thanks to the design that we created in the `loan` instruction, the instruction logic is pretty easy since we're just going to:
+The `repay` instruction is the second half of our flash loan system. Thanks to the design of the `loan` instruction, the logic for `repay` is quite simple, as it only needs to:
 1. Check that all balances have been correctly repaid using the `loan` account.
-2. Close the `loan` account since we don't need it anymore.
+2. Close the `loan` account, since it's no longer needed.
 
 <ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
-- `borrower`: the user that requested the flash loan and is going to back the lamports for creating the `loan` account. Must be a mutable
-- `loan`: the "scrap" account used to save the `protocol_token_account` and the final `balance` that they need to have. Must be mutable since we're going to close it at the end of the instruction.
+- `borrower`: The user who requested the flash loan. They provide the lamports for creating the `loan` account. Must be mutable.
+- `loan`: The temporary account used to store the `protocol_token_account` and the final `balance` required. Must be mutable as it will be closed at the end of the instruction.
 
 Here's the implementation:
 
@@ -36,15 +36,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
 ```
 </Codeblock>
 
-This time, `token_accounts` are a dynamic number of accounts that just represent the `protocol_token_account` associated with the loan that the `borrower` took.
+The `token_accounts` field is a dynamic array of accounts representing the protocol token accounts associated with the borrower's loan.
 
 <ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
 
-We don't need any instruction data since we're going to use the `balance` field in the `loan` account to check if the repayment went through 
+No instruction data is needed because we use the `balance` field in the `loan` account to verify if the loan has been repaid.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
-We begin by deserializing the `accounts` struct.
+We begin by parsing the accounts into the `RepayAccounts` struct.
 
 <Codeblock lang="rust">
 ```rust
@@ -65,9 +65,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
 ```
 </Codeblock>
 
-We then proceed to check if all the loans got repaid by grabbing the number of loans present in the `loan` account and iterating through the data verifying that the `protocol_token_account` is the correct one and that the balance inside of it greater than what we expect.
+Next, we check if all loans have been repaid. We do this by retrieving the number of loans from the `loan` account and iterating through them. For each loan, we verify that the `protocol_token_account` is correct and that its balance is greater than or equal to the amount loaned.
 
-<Codeblock lang="rust"> 
+<Codeblock lang="rust">
 ```rust
 impl<'a> Repay<'a> {
     pub const DISCRIMINATOR: &'a u8 = &1;
@@ -104,10 +104,10 @@ impl<'a> Repay<'a> {
 ```
 </Codeblock>
 
-We can then proceed to close the `loan` account and retrieve rent since we don't need it anymore:
+We can then proceed to close the `loan` account and reclaim the rent, as it's no longer needed:
 
 <Codeblock lang="rust">
-```rust    
+  ```rust
 // Close the loan account and give back the lamports to the borrower
 unsafe {
     *self.accounts.borrower.borrow_mut_lamports_unchecked() += *self.accounts.loan.borrow_lamports_unchecked();
@@ -118,4 +118,4 @@ unsafe {
 ```
 </Codeblock>
 
-> As you can see, for optimization purpose and by design, the repayment doesn't happen in this instruction. This is because the `borrower` could decide to opt to repay the right token account in another instruction, like when performing the swap, or executing a series of CPIs from their arb program.
+> As you can see, for optimization purposes and by design, the repayment doesn't happen in this instruction. This is because the `borrower` can choose to repay the token account in another instruction, such as when performing a swap or executing a series of CPIs from their arbitrage program.

@@ -32,6 +32,19 @@ const allChallenges: ChallengeMetadata[] = [
     collectionMintAddress: "2E5K7FxDWGXkbRpFEAkhR8yQwiUBGggVyng2vaAhah5L",
   },
   {
+    slug: "anchor-flash-loan",
+    language: "Anchor",
+    color: "221,234,224",
+    difficulty: 2,
+    isFeatured: true,
+    unitName: "Anchor Flash Loan",
+    apiPath: "/v1/verify/anchor/flash-loan",
+    pages: [{ slug: "borrow" }, { slug: "repay" }],
+    requirements: [
+      { instructionKey: "flash_loan" },
+    ],
+  },
+  {
     slug: "pinocchio-vault",
     language: "Rust",
     color: "255,173,102",
@@ -74,6 +87,19 @@ const allChallenges: ChallengeMetadata[] = [
       { instructionKey: "withdraw" },
     ],
     collectionMintAddress: "4NKZ2B5zeG9TGZifzfnG7Zw28P3ZetjaS6xPVKW5MHrp",
+  },
+  {
+    slug: "pinocchio-flash-loan",
+    language: "Rust",
+    color: "255,173,102",
+    difficulty: 2,
+    isFeatured: true,
+    unitName: "Pinocchio Flash Loan",
+    apiPath: "/v1/verify/pinocchio/flash-loan",
+    pages: [{ slug: "borrow" }, { slug: "repay" }],
+    requirements: [
+      { instructionKey: "flash_loan" },
+    ],
   },
   {
     slug: "typescript-mint-an-spl-token",

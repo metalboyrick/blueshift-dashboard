@@ -44,8 +44,8 @@
         }
       }
     },
-    "anchor-instruction-introspection": {
-      "title": "Anchor Instruction Introspection",
+    "anchor-flash-loan": {
+      "title": "Anchor Flash Loan",
       "pages": {
         "borrow": {
           "title": "Borrow"
@@ -55,11 +55,8 @@
         }
       },
       "requirements": {
-        "borrow": {
-          "title": "Challenge 1: Creating a Borrow instruction"
-        },
-        "repay": {
-          "title": "Challenge 2: Creating a Repay instruction"
+        "flash_loan": {
+          "title": "Challenge: Flash Loan Borrowing and Repaying"
         }
       }
     },
@@ -121,8 +118,8 @@
         }
       }
     },
-    "pinocchio-instruction-introspection": {
-      "title": "Pinocchio Instruction Introspection",
+    "pinocchio-flash-loan": {
+      "title": "Pinocchio Flash Loan",
       "pages": {
         "borrow": {
           "title": "Borrow"
@@ -132,11 +129,8 @@
         }
       },
       "requirements": {
-        "borrow": {
-          "title": "Challenge 1: Creating a Borrow instruction"
-        },
-        "repay": {
-          "title": "Challenge 2: Creating a Repay instruction"
+        "flash_loan": {
+          "title": "Challenge: Flash Loan Borrowing and Repaying"
         }
       }
     },
