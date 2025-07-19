@@ -41,7 +41,12 @@ export const useNftOwnership = (challenges: ChallengeMetadata[]) => {
     isLoading: loading,
   } = useQuery({
     queryKey: ["nftOwnership", publicKey?.toBase58(), challengeDeps],
-    queryFn: () => fetchNftOwnership(publicKey!, challengeDeps, connection),
+    queryFn: async () => {
+      if (!publicKey) {
+        return {};
+      }
+      return fetchNftOwnership(publicKey, challengeDeps, connection);
+    },
     enabled: !!publicKey,
     staleTime: Infinity,
     refetchOnWindowFocus: true,
