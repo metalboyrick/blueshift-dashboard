@@ -1,0 +1,131 @@
+{
+  "challenges": {
+    "anchor-vault": {
+      "title": "Anchor Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Challenge 1: Taking deposits"
+        },
+        "withdraw": {
+          "title": "Challenge 2: Allowing withdrawal"
+        }
+      }
+    },
+    "anchor-escrow": {
+      "title": "Anchor Escrow",
+      "pages": {
+        "make": {
+          "title": "Make"
+        },
+        "take": {
+          "title": "Take"
+        },
+        "refund": {
+          "title": "Refund"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Challenge 1: Making an escrow swap deal"
+        },
+        "take": {
+          "title": "Challenge 2: Taking an escrow swap deal"
+        },
+        "refund": {
+          "title": "Challenge 3: Canceling an escrow swap deal"
+        }
+      }
+    },
+    "anchor-memo": {
+      "title": "Anchor Memo",
+      "requirements": {
+        "log": {
+          "title": "Challenge 1: Logs `instruction_data` to program log"
+        }
+      }
+    },
+    "pinocchio-vault": {
+      "title": "Pinocchio Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Challenge 1: Taking deposits"
+        },
+        "withdraw": {
+          "title": "Challenge 2: Allowing withdrawal"
+        }
+      }
+    },
+    "pinocchio-escrow": {
+      "title": "Pinocchio Escrow",
+      "pages": {
+        "make": {
+          "title": "Make"
+        },
+        "take": {
+          "title": "Take"
+        },
+        "refund": {
+          "title": "Refund"
+        },
+        "conclusion": {
+          "title": "Conclusion"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Challenge 1: Making an escrow swap deal"
+        },
+        "take": {
+          "title": "Challenge 2: Taking an escrow swap deal"
+        },
+        "refund": {
+          "title": "Challenge 3: Canceling an escrow swap deal"
+        }
+      }
+    },
+    "pinocchio-secp256r1-vault": {
+      "title": "Pinocchio Secp256r1 Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Challenge 1: Taking deposits"
+        },
+        "withdraw": {
+          "title": "Challenge 2: Allowing withdrawal"
+        }
+      }
+    },
+    "pinocchio-memo": {
+      "title": "Pinocchio Memo",
+      "requirements": {
+        "log": {
+          "title": "Challenge 1: Logs instruction data to program log"
+        }
+      }
+    },
+    "assembly-memo": {
+      "title": "Assembly Memo",
+      "requirements": {
+        "log": {
+          "title": "Challenge 1: Logs the instruction data to program log"
+        }
+      }
+    },
+    "typescript-mint-an-spl-token": {
+      "title": "Mint an SPL Token",
+      "requirements": {
+        "create_mint_account": {
+          "title": "Challenge 1: Create token mint"
+        },
+        "initialize_mint": {
+          "title": "Challenge 2: Initialize mint"
+        },
+        "create_token_account": {
+          "title": "Challenge 3: Create token account"
+        },
+        "mint_to": {
+          "title": "Challenge 4: Mint tokens"
+        }
+      }
+    }
+  }
+}
