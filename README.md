@@ -16,4 +16,3 @@ Courses and challenges are located in the `src/app/content` directory.
 
 - Courses are located in `src/app/content/courses`
 - Challenges are located in `src/app/content/challenges`
-
