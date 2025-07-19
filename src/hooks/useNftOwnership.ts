@@ -1,51 +1,51 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { ChallengeMetadata } from "@/app/utils/challenges";
 import { findCertificationPda, findUnitPda } from "@/lib/nft/sdk";
+import { useQuery } from "@tanstack/react-query";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const fetchNftOwnership = async (
+  publicKey: PublicKey,
+  challenges: { slug: string; unitName: string }[],
+  connection: Connection,
+) => {
+  const pdaList = challenges.map((challenge) => {
+    const unitPda = findUnitPda(challenge.unitName);
+    return findCertificationPda(unitPda, publicKey);
+  });
+
+  const accounts = await connection.getMultipleAccountsInfo(pdaList);
+
+  const newOwnership: Record<string, boolean> = {};
+  accounts.forEach((account, index) => {
+    const challenge = challenges[index];
+    newOwnership[challenge.slug] = account !== null;
+  });
+
+  return newOwnership;
+};
 
 export const useNftOwnership = (challenges: ChallengeMetadata[]) => {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const [loading, setLoading] = useState(true);
-  const [ownership, setOwnership] = useState<Record<string, boolean>>({});
-  const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    const checkOwnership = async () => {
-      if (!publicKey || challenges.length === 0) {
-        setLoading(false);
-        return;
-      }
+  const challengeDeps = useMemo(
+    () => challenges.map(({ slug, unitName }) => ({ slug, unitName })),
+    [challenges],
+  );
 
-      setLoading(true);
-      setError(null);
+  const {
+    data: ownership,
+    error,
+    isLoading: loading,
+  } = useQuery({
+    queryKey: ["nftOwnership", publicKey?.toBase58(), challengeDeps],
+    queryFn: () => fetchNftOwnership(publicKey!, challengeDeps, connection),
+    enabled: !!publicKey,
+    staleTime: Infinity,
+    refetchOnWindowFocus: true,
+  });
 
-      try {
-        const pdaList = challenges.map((challenge) => {
-          const unitPda = findUnitPda(challenge.unitName);
-          return findCertificationPda(unitPda, publicKey);
-        });
-
-        const accounts = await connection.getMultipleAccountsInfo(pdaList);
-
-        const newOwnership: Record<string, boolean> = {};
-        accounts.forEach((account, index) => {
-          const challenge = challenges[index];
-          newOwnership[challenge.slug] = account !== null;
-        });
-
-        setOwnership(newOwnership);
-      } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        console.error("Error checking NFT ownership:", err);
-        setError(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkOwnership();
-  }, [publicKey, challenges, connection]);
-
-  return { loading, ownership, error };
+  return { loading, ownership: ownership ?? {}, error };
 };
