@@ -44,12 +44,7 @@ export const useNftOwnership = (challenges: ChallengeMetadata[]) => {
       }
     };
 
-    checkOwnership().catch((err) => {
-      console.error("Failed to check NFT ownership:", err);
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      setLoading(false);
-    });
+    checkOwnership();
   }, [publicKey, challenges, connection]);
 
   return { loading, ownership, error };
