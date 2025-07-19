@@ -9,11 +9,11 @@ import ChallengesEmpty from "./ChallengesEmpty";
 import ChallengesFooter from "./ChallengesFooter";
 import { motion } from "motion/react";
 import { anticipate } from "motion";
-import { useWindowSize } from "usehooks-ts";
 import { useEffect, useState } from "react";
 import { challengeColors, ChallengeMetadata } from "@/app/utils/challenges";
 import ChallengeCard from "../ChallengeCard/ChallengeCard";
 import NFTViewer from "../NFTViewer/NFTViewer";
+import { useNftOwnership } from "@/hooks/useNftOwnership";
 
 const challengeSections = {
   Anchor: {
@@ -48,11 +48,35 @@ export default function ChallengesList({
   const t = useTranslations();
 
   // TODO refactor this
-  const { view, selectedChallengeStatus, challengeStatuses } =
+  const { selectedChallengeStatus, challengeStatuses, setChallengeStatus } =
     usePersistentStore();
 
+  const { ownership, error: ownershipError } =
+    useNftOwnership(initialChallenges);
+
+  useEffect(() => {
+    if (ownershipError) {
+      console.error("Error checking NFT ownership:", ownershipError);
+      return;
+    }
+    for (const challenge of initialChallenges) {
+      if (
+        ownership[challenge.slug] &&
+        challengeStatuses[challenge.slug] !== "claimed"
+      ) {
+        setChallengeStatus(challenge.slug, "claimed");
+      }
+    }
+  }, [
+    ownership,
+    ownershipError,
+    initialChallenges,
+    setChallengeStatus,
+    challengeStatuses,
+  ]);
+
   const filteredChallenges = initialChallenges.filter((challenge) =>
-    selectedChallengeStatus.includes(challengeStatuses[challenge.slug])
+    selectedChallengeStatus.includes(challengeStatuses[challenge.slug]),
   );
 
   const hasNoResults = filteredChallenges.length === 0;
@@ -69,7 +93,7 @@ export default function ChallengesList({
       isFeatured: false,
       apiPath: "",
       requirements: [],
-    }
+    },
   );
 
   return (
@@ -94,7 +118,7 @@ export default function ChallengesList({
         <>
           {Object.entries(challengeSections).map(([language, section]) => {
             const languageChallenges = filteredChallenges.filter(
-              (challenge) => challenge.language === language
+              (challenge) => challenge.language === language,
             );
             if (languageChallenges.length === 0) return null;
 
@@ -119,7 +143,7 @@ export default function ChallengesList({
                   </div>
                   <div
                     className={classNames(
-                      "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+                      "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5",
                     )}
                   >
                     {languageChallenges.map((challenge) => (
