@@ -9,7 +9,7 @@ import ChallengesEmpty from "./ChallengesEmpty";
 import ChallengesFooter from "./ChallengesFooter";
 import { motion } from "motion/react";
 import { anticipate } from "motion";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { challengeColors, ChallengeMetadata } from "@/app/utils/challenges";
 import ChallengeCard from "../ChallengeCard/ChallengeCard";
 import NFTViewer from "../NFTViewer/NFTViewer";
@@ -47,8 +47,7 @@ export default function ChallengesList({
 }: ChallengesListProps) {
   const t = useTranslations();
 
-  // TODO refactor this
-  const { selectedChallengeStatus, challengeStatuses, setChallengeStatus } =
+  const { selectedChallengeStatus, challengeStatuses, claimChallenges } =
     usePersistentStore();
 
   const { ownership, error: ownershipError } =
@@ -59,24 +58,32 @@ export default function ChallengesList({
       console.error("Error checking NFT ownership:", ownershipError);
       return;
     }
-    for (const challenge of initialChallenges) {
-      if (
-        ownership[challenge.slug] &&
-        challengeStatuses[challenge.slug] !== "claimed"
-      ) {
-        setChallengeStatus(challenge.slug, "claimed");
-      }
+
+    const challengesToUpdate = initialChallenges
+      .filter(
+        (challenge) =>
+          ownership[challenge.slug] &&
+          challengeStatuses[challenge.slug] !== "claimed",
+      )
+      .map((challenge) => challenge.slug);
+
+    if (challengesToUpdate.length > 0) {
+      claimChallenges(challengesToUpdate);
     }
   }, [
     ownership,
     ownershipError,
     initialChallenges,
-    setChallengeStatus,
+    claimChallenges,
     challengeStatuses,
   ]);
 
-  const filteredChallenges = initialChallenges.filter((challenge) =>
-    selectedChallengeStatus.includes(challengeStatuses[challenge.slug]),
+  const filteredChallenges = useMemo(
+    () =>
+      initialChallenges.filter((challenge) =>
+        selectedChallengeStatus.includes(challengeStatuses[challenge.slug]),
+      ),
+    [initialChallenges, selectedChallengeStatus, challengeStatuses],
   );
 
   const hasNoResults = filteredChallenges.length === 0;
