@@ -1,19 +1,18 @@
+"use client";
 import { Link } from "@/i18n/navigation";
 import Button from "../components/Button/Button";
-import { headers } from "next/headers";
+import { usePathname } from "next/navigation";
 
-export default async function NotFound() {
-  const headersList = await headers();
-  const pathname = headersList.get("x-current-path") || "";
-  
+export default function NotFound() {
+  const pathname = usePathname();
 
   const isChallengesRoute = pathname.includes("/challenges");
   const isCoursesRoute = pathname.includes("/courses");
-  
+
   // Set appropriate content based on the route
   let message: string;
   let buttons: React.ReactNode;
-  
+
   if (isChallengesRoute) {
     message = "The challenge you are looking for doesn't exist.";
     buttons = (
