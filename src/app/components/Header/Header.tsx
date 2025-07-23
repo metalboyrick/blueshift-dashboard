@@ -14,6 +14,13 @@ import Logo from "../Logo/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/app/components/Button/Button";
 import LogoGlyph from "../Logo/LogoGlyph";
+import {
+  UserRejectedSignatureError,
+  AuthenticationAPIError,
+  NetworkError,
+  UnknownAuthError,
+  WalletDisconnectError,
+} from "@/lib/auth/errors";
 
 export default function HeaderContent() {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,6 +34,7 @@ export default function HeaderContent() {
 
   // Wallet and Auth Hook Logic
   const auth = useAuth();
+  const authError = auth.signInError || auth.signOutError;
 
   useOnClickOutside(languageDropdownRef as RefObject<HTMLDivElement>, () =>
     setIsLanguageDropdownOpen(false)
@@ -178,13 +186,8 @@ export default function HeaderContent() {
               address={auth.publicKey?.toBase58()}
               onSignIn={auth.login}
               onSignOut={auth.logout}
-              // disabled={walletButtonIsDisabled}
+              isLoading={auth.isLoggingIn || auth.isLoggingOut}
             />
-            {/*{authError && (*/}
-            {/*  <div className="absolute top-full right-0 mt-1 text-xs text-red-500 w-max max-w-xs text-right">*/}
-            {/*    {authError.message || String(authError)}*/}
-            {/*  </div>*/}
-            {/*)}*/}
           </div>
 
           {/* Mobile Menu Button */}

@@ -1,13 +1,13 @@
 import React, { useCallback, useState } from "react";
 import Button from "../Button/Button";
 import DecryptedText from "../HeadingReveal/DecryptText";
-import { AuthState } from "@/hooks/useAuth";
+import { AuthStatus } from "@/hooks/useAuth";
 import { motion } from "motion/react";
 import { anticipate } from "motion";
 import Icon from "../Icon/Icon";
 
 interface WalletButtonProps {
-  status: AuthState["status"];
+  status: AuthStatus;
   address?: string;
   onSignIn: () => void;
   onSignOut: () => void;

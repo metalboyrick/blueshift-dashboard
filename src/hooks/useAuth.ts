@@ -1,297 +1,248 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import bs58 from "bs58";
 import { usePersistentStore } from "@/stores/store";
-import { decodeJwt } from "jose";
+import { useMutation } from "@tanstack/react-query";
+import {
+  isTokenExpired as isTokenExpiredUtil,
+  getPublicKeyFromToken,
+} from "@/lib/auth/utils";
+import {
+  AuthError,
+  AuthenticationAPIError,
+  NetworkError,
+  UserRejectedSignatureError,
+  WalletDisconnectError,
+} from "@/lib/auth/errors";
+import { useTranslations } from "next-intl";
+import { toast } from "react-hot-toast";
+import { performSignIn, AuthResponse } from "@/lib/auth/api";
 
-export interface AuthState {
-  loading: boolean;
-  error: Error | null;
-  status: "loading" | "signing-in" | "signed-in" | "signing-out" | "signed-out";
-}
+type SignMessage = (message: Uint8Array) => Promise<Uint8Array>;
 
-interface AuthResponse {
-  token: string;
-}
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
-
-function prepareSignInMessage(pubkey: string) {
-  const timestampInMillisecs = Date.now();
-  const timestamp = Math.floor(timestampInMillisecs / 1000) * 1000;
-  const message = `Welcome to Blueshift. Please sign with your Solana wallet to prove you own this account: ${pubkey}\n\nTimestamp: ${timestamp}`;
-  return { pubkey, timestamp, message };
-}
+export type AuthStatus =
+  | "signed-out"
+  | "awaiting-wallet"
+  | "signing-in"
+  | "signed-in"
+  | "signing-out";
 
 /**
- * Checks if a JWT token is expired.
- * @param token The JWT token string.
- * @returns True if the token is expired or invalid, false otherwise.
+ * A hook for managing Solana wallet authentication.
+ *
+ * This hook encapsulates the entire authentication flow, including:
+ * - Connecting to a wallet.
+ * - Signing a message to prove ownership.
+ * - Exchanging the signature for a JWT from the backend.
+ * - Storing the JWT and managing the user's signed-in state.
+ * - Handling logout and wallet disconnection.
+ *
+ * It uses a state machine to track the current authentication status:
+ * - `signed-out`: The initial state.
+ * - `awaiting-wallet`: The user has initiated login but needs to connect their wallet.
+ * - `signing-in`: The message signing and API call are in progress.
+ * - `signed-in`: The user is successfully authenticated.
+ * - `signing-out`: The logout process is in progress.
  */
-export function isTokenExpired(token: string | null): boolean {
-  if (!token) {
-    return true; // No token, considered expired/invalid
-  }
-
-  try {
-    const decodedJwt = decodeJwt(token);
-    const expirationTime = decodedJwt.exp;
-
-    if (typeof expirationTime === "undefined") {
-      // No expiration claim, treat as invalid or handle as per your app's policy
-      console.warn("JWT token does not have an expiration (exp) claim.");
-      return true;
-    }
-
-    const nowInSeconds = Date.now() / 1000;
-    return expirationTime <= nowInSeconds;
-  } catch (error) {
-    console.error("Error decoding JWT token:", error);
-    return true; // Error decoding, treat as expired/invalid
-  }
-}
-
 export function useAuth() {
-  const { publicKey, signMessage, disconnect, connected, connecting } =
-    useWallet();
+  const { publicKey, signMessage, disconnect, connected } = useWallet();
   const { setVisible: setModalVisible, visible: isModalVisible } =
     useWalletModal();
   const { authToken, setAuthToken, clearAuthToken } = usePersistentStore();
 
-  const authExpiry = useMemo(() => {
-    if (!authToken) return null;
-    const decodedJwt = decodeJwt(authToken);
-    return decodedJwt.exp;
-  }, [authToken]);
+  const [status, setStatus] = useState<AuthStatus>("signed-out");
+  const [signInError, setSignInError] = useState<AuthError | null>(null);
+  const [signOutError, setSignOutError] = useState<AuthError | null>(null);
+  const t = useTranslations();
 
-  const [authState, setAuthState] = useState<AuthState>({
-    loading: false,
-    error: null,
-    status: "signed-out",
+  const isTokenExpired = () => isTokenExpiredUtil(authToken);
+
+  const signInMutation = useMutation<AuthResponse, Error>({
+    mutationFn: () => {
+      if (!publicKey || !signMessage) {
+        throw new Error("Wallet not connected or signMessage not available");
+      }
+      return performSignIn(publicKey.toBase58(), signMessage);
+    },
+    onMutate: () => {
+      setStatus("signing-in");
+    },
+    onSuccess: (data) => {
+      setAuthToken(data.token);
+      setStatus("signed-in");
+    },
+    onError: (err) => {
+      const authError = err as AuthError;
+      setSignInError(authError);
+      setStatus("signed-out");
+
+      // Display toast notification
+      if (authError instanceof UserRejectedSignatureError) {
+        toast.error(t("notifications.errors.user_rejected_signature"));
+        disconnect().catch(() => {
+          toast.error(t("notifications.errors.auth_generic"));
+        });
+      } else if (authError instanceof NetworkError) {
+        toast.error(t("notifications.errors.network_error"));
+      } else if (authError instanceof AuthenticationAPIError) {
+        toast.error(t("notifications.errors.auth_unauthorized"));
+      } else {
+        toast.error(t("notifications.errors.auth_generic"));
+      }
+    },
   });
 
-  /**
-   * Checks if the current authentication token has an 'exp' claim and if that time is in the past.
-   * @returns True if the token has an 'exp' claim and is expired.
-   *          False if the token is not expired, or if the 'exp' claim is missing (treated as non-expiring by this check).
-   */
-  const checkTokenExpired = useCallback((): boolean => {
-    if (!authToken) {
-      return true; // No token, considered expired/invalid for practical purposes
-    }
-    try {
-      const decodedJwt = decodeJwt(authToken);
-      const expirationTime = decodedJwt.exp;
-      if (typeof expirationTime === "undefined") {
-        // No expiration claim, treat as non-expiring for the purpose of this specific check.
-        console.warn(
-          "JWT token does not have an expiration (exp) claim. Treating as non-expiring.",
-        );
-        return false;
+  const signOutMutation = useMutation({
+    mutationFn: async () => {
+      clearAuthToken();
+      if (connected) {
+        try {
+          await disconnect();
+        } catch {
+          throw new WalletDisconnectError();
+        }
       }
-      const nowInSeconds = Date.now() / 1000;
-      return expirationTime <= nowInSeconds;
-    } catch (error) {
-      console.error("Error decoding JWT token during expiry check:", error);
-      return true; // Error decoding, treat as expired/invalid
-    }
-  }, [authToken]);
+    },
+    onMutate: () => {
+      setStatus("signing-out");
+    },
+    onSuccess: () => {
+      setStatus("signed-out");
+    },
+    onError: (err) => {
+      const authError = err as AuthError;
+      setSignOutError(authError);
+      // Still signed-out even if disconnect fails
+      setStatus("signed-out");
 
-  const _performSignInSequence = useCallback(async () => {
-    if (!publicKey || !signMessage) {
-      setAuthState({
-        loading: false,
-        error: new Error(
-          "Wallet not ready for signing: publicKey or signMessage missing.",
-        ),
-        status: "signed-out",
-      });
+      // Display toast notification for sign-out failures
+      toast.error(t("notifications.errors.auth_generic"));
+    },
+  });
+
+  const { reset: resetSignInMutation } = signInMutation;
+  const { reset: resetSignOutMutation } = signOutMutation;
+
+  const resetAuthState = useCallback(() => {
+    resetSignInMutation();
+    resetSignOutMutation();
+    setSignInError(null);
+    setSignOutError(null);
+  }, [resetSignInMutation, resetSignOutMutation]);
+
+  const login = useCallback(() => {
+    resetAuthState();
+
+    // If we are already in a signing state, don't do anything
+    if (
+      status === "awaiting-wallet" ||
+      status === "signing-in" ||
+      status === "signed-in"
+    ) {
       return;
     }
 
-    // Ensure status reflects the current operation, even if re-entrant or called from different paths
-    setAuthState({ loading: true, error: null, status: "signing-in" });
-
-    try {
-      const { pubkey, timestamp, message } = prepareSignInMessage(
-        publicKey.toBase58(),
-      );
-      const encodedMessage = new TextEncoder().encode(message);
-      const signature = await signMessage(encodedMessage);
-      const serializedSignature = bs58.encode(signature);
-
-      const response = await fetch(`${API_BASE_URL}/v1/auth`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pubkey: pubkey,
-          timestamp,
-          signature: serializedSignature,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response
-          .text()
-          .catch(() => "Failed to read error response body.");
-        throw new Error(
-          `Authentication API request failed with status ${response.status}: ${errorBody || response.statusText}`,
-        );
-      }
-      const data: AuthResponse = await response.json();
-
-      const decodedJwt = decodeJwt(data.token);
-
-      setAuthToken(data.token);
-      // Explicitly set signed-in state and clear loading on success
-      setAuthState({
-        loading: false,
-        error: null,
-        status: "signed-in",
-      });
-    } catch (err) {
-      console.error("Error during sign-in sequence:", err);
-      setAuthState({
-        loading: false,
-        status: "signed-out",
-        error: err instanceof Error ? err : new Error(String(err)),
-      });
-    }
-  }, [publicKey, signMessage, API_BASE_URL, setAuthToken, setAuthState]);
-
-  const login = useCallback(async () => {
-    if (connected && publicKey && signMessage) {
-      // Wallet is already connected and ready, perform sign-in sequence directly.
-      await _performSignInSequence();
-    } else if (!connecting) {
-      // Not connected and not currently attempting to connect:
-      // Set status to "signing-in" to indicate intent, then open the modal.
-      // The useEffect hook will handle calling _performSignInSequence once connected.
-      setAuthState({ loading: true, error: null, status: "signing-in" });
-      setModalVisible(true);
-    } else if (connecting) {
-      // Currently attempting to connect (e.g., auto-connect or previous modal interaction):
-      // Set status to "signing-in". The useEffect will handle it once connection completes.
-      setAuthState({ loading: true, error: null, status: "signing-in" });
+    if (connected) {
+      // If we are connected to wallet, sign in
+      signInMutation.mutate();
     } else {
-      // Fallback for any other unusual states.
-      setAuthState({
-        loading: false,
-        error: new Error(
-          "Cannot initiate login: wallet state is not conducive to signing.",
-        ),
-        status: "signed-out",
-      });
+      // If we are not connected to wallet, show the wallet modal
+      setStatus("awaiting-wallet");
+      setModalVisible(true);
+    }
+  }, [status, connected, setModalVisible, signInMutation, resetAuthState]);
+
+  const logout = useCallback(() => {
+    resetAuthState();
+    if (status === "signing-out") return;
+    signOutMutation.mutate();
+  }, [status, signOutMutation, resetAuthState]);
+
+  const { isPending: isSigningIn, mutate: doSignIn } = signInMutation;
+  const { isPending: isSigningOut } = signOutMutation;
+
+  // This is the primary effect for managing auth status based on external state
+  // changes (e.g., wallet connection, token changes, etc.).
+  // It acts as a state machine to keep the auth status consistent.
+  useEffect(() => {
+    // 1. Do nothing if a sign-in or sign-out is already in progress.
+    if (isSigningIn || isSigningOut) {
+      return;
+    }
+
+    // 2. Handle wallet/token mismatches as a high-priority event. This
+    // preempts the main state machine to force re-authentication whenever
+    // the connected wallet doesn't match the stored token.
+    if (connected && authToken && publicKey) {
+      const tokenPublicKey = getPublicKeyFromToken(authToken);
+      if (tokenPublicKey !== publicKey.toBase58()) {
+        clearAuthToken();
+        doSignIn();
+        return; // Re-authentication is in progress, stop further processing.
+      }
+    }
+
+    // 3. If there are no mismatches, proceed with the main state machine logic.
+    switch (status) {
+      case "signed-out":
+        // If we have a valid, matching session, transition to signed-in.
+        // This handles automatic session restoration.
+        if (connected && authToken && !isTokenExpired()) {
+          setStatus("signed-in");
+        }
+        break;
+      case "signed-in":
+        // If we lose the wallet connection, the token, or the token expires, sign out.
+        if (!connected || !authToken || isTokenExpired()) {
+          setStatus("signed-out");
+        }
+        break;
+      case "awaiting-wallet":
+        // The user initiated a login and is waiting to connect their wallet.
+        if (connected) {
+          // Wallet is now connected, so proceed with signing.
+          doSignIn();
+        } else if (!isModalVisible) {
+          // The user closed the modal without connecting, so cancel the login.
+          setStatus("signed-out");
+        }
+        break;
+      case "signing-in":
+      case "signing-out":
+        // These are transient states, and this effect is paused while they
+        // are active (see guard at the top), so no action is needed here.
+        break;
     }
   }, [
+    status,
     connected,
-    connecting,
+    authToken,
     publicKey,
-    signMessage,
-    setModalVisible,
-    _performSignInSequence,
-    setAuthState,
+    isModalVisible,
+    isSigningIn,
+    isSigningOut,
+    doSignIn,
+    clearAuthToken,
+    authToken,
   ]);
-
-  // Effect to handle automatic sign-in when the wallet is connected and ready.
-  useEffect(() => {
-    // This effect transitions to "signed-in" state when conditions are met.
-    if (authToken && connected) {
-      // Only transition to "signed-in" if not already signed-in and not in the process of signing out.
-      if (
-        authState.status !== "signed-in" &&
-        authState.status !== "signing-out"
-      ) {
-        setAuthState({ loading: false, error: null, status: "signed-in" });
-      }
-    } else if (!authToken && authState.status === "signed-in") {
-      // If token is lost (e.g. cleared, expired) while status is "signed-in", revert to "signed-out".
-      setAuthState({ loading: false, error: null, status: "signed-out" });
-    }
-    // Note: If !connected and status is "signed-in", we generally let explicit logout handle it,
-    // as transient disconnections shouldn't always force a sign-out.
-    // The `logout` function explicitly handles disconnection.
-  }, [authToken, connected, authState.status, setAuthState]);
-
-  // useEffect to handle signing after modal connection or if connection was pending.
-  useEffect(() => {
-    // This effect triggers if status is "signing-in" AND the wallet is connected and ready.
-    // If login() called _performSignInSequence directly, the status would have already transitioned
-    // from "signing-in" by the time _performSignInSequence completes, preventing a redundant call here.
-    if (
-      authState.status === "signing-in" &&
-      connected &&
-      publicKey &&
-      signMessage
-    ) {
-      _performSignInSequence();
-    }
-  }, [
-    authState.status,
-    connected,
-    publicKey,
-    signMessage,
-    _performSignInSequence,
-  ]);
-
-  // Effect to handle cancellation of sign-in (e.g. modal closed before connection)
-  useEffect(() => {
-    if (
-      authState.status === "signing-in" &&
-      !isModalVisible &&
-      !connected &&
-      !connecting
-    ) {
-      setAuthState({
-        loading: false,
-        error: null, // User cancelled, not necessarily an error
-        status: "signed-out",
-      });
-    }
-  }, [authState.status, isModalVisible, connected, connecting, setAuthState]);
-
-  const logout = useCallback(async () => {
-    setAuthState({
-      loading: true,
-      error: null, // Clear previous errors
-      status: "signing-out",
-    });
-    try {
-      clearAuthToken();
-      // Wallet disconnect should be attempted regardless of its current state,
-      // and errors during disconnect are caught.
-      if (connected) {
-        await disconnect(); // Ensure disconnect is awaited
-      }
-      setAuthState({
-        loading: false,
-        error: null,
-        status: "signed-out",
-      });
-    } catch (err) {
-      console.error("Error during logout:", err);
-      // Even if disconnect fails, app state is signed-out.
-      setAuthState({
-        loading: false,
-        error: err instanceof Error ? err : new Error(String(err)),
-        status: "signed-out",
-      });
-    }
-  }, [clearAuthToken, disconnect, connected, setAuthState]);
 
   return {
     login,
     logout,
     publicKey,
     authToken,
-    authExpiry,
-    checkTokenExpired,
-    connected,
-    ...authState,
+    isTokenExpired,
+    status,
+
+    /* Convenient status flags */
+    isLoggedIn: status === "signed-in",
+    isLoggingIn: status === "awaiting-wallet" || isSigningIn,
+    isLoggingOut: isSigningOut,
+
+    /* Errors */
+    signInError,
+    signOutError,
   };
 }

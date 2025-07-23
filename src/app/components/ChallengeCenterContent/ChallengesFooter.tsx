@@ -27,9 +27,6 @@ export default function ChallengesFooter({
   const auth = useAuth();
 
   const handleMint = async () => {
-    if (!auth.connected) {
-      return auth.login();
-    }
     mint(challenge).catch((error) => {
       console.error("Error minting NFT:", error);
     });
@@ -59,13 +56,13 @@ export default function ChallengesFooter({
           />
         </Link>
       )}
-      {status === "completed" && !auth.connected && (
+      {status === "completed" && !auth.isLoggedIn && (
         <span className="text-tertiary font-medium gap-x-1.5 flex items-center">
           <Icon name="Locked" />
           {t("ChallengeCenter.locked_description")}
         </span>
       )}
-      {status === "completed" && auth.connected && (
+      {status === "completed" && auth.isLoggedIn && (
         <Button
           variant="primary"
           size="md"
