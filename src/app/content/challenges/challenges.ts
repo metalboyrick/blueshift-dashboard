@@ -43,6 +43,7 @@ const allChallenges: ChallengeMetadata[] = [
     requirements: [
       { instructionKey: "flash_loan" },
     ],
+    collectionMintAddress: "4HJoxVtwKsLNKx3QsxG34FW39ENQZSZHmXi7wsuEVrAy",
   },
   {
     slug: "pinocchio-vault",
@@ -100,6 +101,7 @@ const allChallenges: ChallengeMetadata[] = [
     requirements: [
       { instructionKey: "flash_loan" },
     ],
+    collectionMintAddress: "9L975Y5Y6Gub2RHNFECyP3cJh3aiE1eVgo2A6mVV8YQu",
   },
   {
     slug: "typescript-mint-an-spl-token",
