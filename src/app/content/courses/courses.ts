@@ -24,6 +24,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "pinocchio-101" },
       { slug: "pinocchio-accounts" },
       { slug: "pinocchio-instructions" },
+      { slug: "pinocchio-errors" },
       { slug: "reading-and-writing-data" },
       { slug: "performance" },
       { slug: "conclusions" },
