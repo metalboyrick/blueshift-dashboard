@@ -131,7 +131,7 @@ fn write_config_to_slice(
 ) -> Result<(), ProgramError> {
     let data = account_info.try_borrow_mut_data()?;
 
-    if data.len() != Config::LEN {
+    if data.len().ne(&Config::LEN) {
         return Err(ProgramError::InvalidAccountData);
     }
 
@@ -149,7 +149,7 @@ fn write_config_to_slice(
 
 > Tip: Always double-check your offsets and lengths to avoid off-by-one errors. Or if you're feeling fancy create const with the offsets so it's easier to update if you decide to change the ordering of the fields.
 
-Or for maximum performance and ergonomics, you can reinterpret the account’s data buffer as a struct and mutate its fields directly. Since we usually are already "loading" the account to check for ownership and discriminator we can use the follwing pattern:
+Or for maximum performance and ergonomics, you can reinterpret the account’s data buffer as a struct and mutate its fields directly. Since we usually are already "loading" the account to check for ownership and discriminator, we can use the following pattern:
 
 ```rust
 impl Config {
@@ -189,7 +189,214 @@ unsafe { config.set_authority_unchecked(instruction_data.authority) }?;
 
 > As noted previously, the struct must be `#[repr(C, packed)]` to ensure layout matches the buffer and the buffer must be exactly the right size.
 
-
 <ArticleSection name="Dynamically Sized Data" id="dynamically-sized-data" level="h2" />
 
+Whenever possible, avoid storing dynamically sized data directly in accounts. However, some use cases require it. 
+
+> In Pinocchio, handling dynamic data is more challenging than in Anchor or standard Rust, primarily due to the `no_std` environment, which prevents us from using heap-allocated types like `Vec` or `String`.
+
+If your account contains dynamic data, always place all statically sized fields at the beginning of your struct, and append the dynamic data at the end.
+
+### Reading Dynamic Data
+
+To avoid undefined behavior, always check that the account data buffer is at least as large as the statically sized portion. The dynamic section may be empty, so this check is essential.
+
+This layout ensures that the offsets for fixed-size fields are always known, regardless of the dynamic data’s length.
+
+There are two main scenarios when reading dynamically sized data:
+
+- Single dynamic field at the end: You can easily determine the size and offset of the dynamic data at runtime like this:
+
+```rust
+const DYNAMIC_DATA_START_OFFSET: usize = size_of::<[u8; 32]>();
+
+#[repr(C)]
+pub struct DynamicallySizedAccount {
+    pub sized_data: [u8; 32],
+    // pub dynamic_data: &'info [u8], // Not part of the struct, but follows in the buffer
+}
+
+impl DynamicallySizedAccount {
+    /// Returns the length of the dynamic data section.
+    #[inline(always)]
+    pub fn get_dynamic_data_len(data: &[u8]) -> Result<usize, ProgramError> {
+        if data.len().le(&DYNAMIC_DATA_START_OFFSET) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(data.len() - DYNAMIC_DATA_START_OFFSET)
+    }
+
+    /// Returns a slice of the dynamic data.
+    #[inline(always)]
+    pub fn read_dynamic_data(data: &[u8]) -> Result<&[u8], ProgramError> {
+        if data.len().le(&DYNAMIC_DATA_START_OFFSET) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(&data[DYNAMIC_DATA_START_OFFSET..])
+    }
+}
+```
+
+- Multiple dynamic field at the end: This scenario is more complex, since you need a way to determine the length of each dynamic field except the last. The most common approach is to prefix each dynamic field (except the last) with its length, so you can parse the buffer correctly.
+
+Here’s a simple and robust pattern: store the length of the first dynamic field as a u8 (or u16, etc. if you need larger sizes) immediately after the statically sized data. The first dynamic field follows, and the second dynamic field occupies the remainder of the buffer.
+
+```rust
+const DYNAMIC_DATA_START_OFFSET: usize = size_of::<[u8; 32]>();
+const MINIMUM_STRUCT_SIZE: usize = DYNAMIC_DATA_START_OFFSET + size_of::<u8>();
+
+#[repr(C)]
+pub struct DynamicallySizedAccount {
+    pub sized_data: [u8; 32],
+    // dynamic_data_1 and dynamic_data_2 follow in the buffer
+}
+
+impl DynamicallySizedAccount {
+    /// Returns the length of the first dynamic data section.
+    #[inline(always)]
+    pub fn get_dynamic_data_1_len(data: &[u8]) -> Result<usize, ProgramError> {
+        if data.len() < MINIMUM_STRUCT_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // The length is stored as a u8 immediately after the static data
+        Ok(data[DYNAMIC_DATA_START_OFFSET] as usize)
+    }
+
+    /// Returns a slice of the first dynamic data section.
+    #[inline(always)]
+    pub fn read_dynamic_data_1(data: &[u8]) -> Result<&[u8], ProgramError> {
+        let len = Self::get_dynamic_data_1_len(data)?;
+
+        if data.len() < MINIMUM_STRUCT_SIZE + len {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let offset = MINIMUM_STRUCT_SIZE;
+        
+        Ok(&data[offset..offset + len])
+    }
+
+    /// Returns a slice of the second dynamic data section (the remainder).
+    #[inline(always)]
+    pub fn read_dynamic_data_2(data: &[u8]) -> Result<&[u8], ProgramError> {
+        let len = Self::get_dynamic_data_1_len(data)?;
+
+        if data.len() < MINIMUM_STRUCT_SIZE + len {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(&data[MINIMUM_STRUCT_SIZE + len..])
+    }
+}
+```
+
+### Writing Dynamic Data
+
+Writing dynamic data into an account buffer follows the same principles as reading: you must carefully lay out each field in the correct order and explicitly encode the lengths of dynamic fields so they can be parsed later.
+
+This layout ensures that the offsets for fixed-size fields are always known, and dynamic fields can be efficiently written and read.
+
+There are two main scenarios when writing dynamically sized data:
+
+- Single dynamic field at the end: You can simply write the statically sized fields first, then the dynamic field using:
+
+```rust
+let buffer = core::slice::from_raw_parts_mut(
+    data.as_mut_ptr().add(DYNAMIC_DATA_START_OFFSET),
+    dynamic_data.len(),
+);
+buffer.copy_from_slice(dynamic_data);
+```
+
+- Multiple dynamic fields at the end: You need to prefix each dynamic field (except the last) with its length, so you can later determine where each field starts and ends during reading. Here’s how you can do it:
+
+```rust
+fn write_dynamically_sized_account(
+    data: &mut [u8],
+    sized_data: &[u8; 32],
+    dynamic_data_1: &str,
+    dynamic_data_2: &str,
+) -> Result<(), ProgramError> {
+    let d1 = dynamic_data_1.as_bytes();
+    let d2 = dynamic_data_2.as_bytes();
+    let total_len = MINIMUM_STRUCT_SIZE + d1.len() + d2.len();
+
+    if data.len() != total_len {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if d1.len() > u8::MAX as usize {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    // Write statically sized data
+    data[..DYNAMIC_DATA_START_OFFSET].copy_from_slice(sized_data);
+
+    // Write length of first dynamic field
+    let mut offset = DYNAMIC_DATA_START_OFFSET;
+    data[offset] = d1.len() as u8;
+    offset += 1;
+
+    // Write first dynamic field
+    unsafe {
+        let dst = core::slice::from_raw_parts_mut(data.as_mut_ptr().add(offset), d1.len());
+        dst.copy_from_slice(d1);
+    }
+    offset += d1.len();
+
+    // Write second dynamic field
+    unsafe {
+        let dst = core::slice::from_raw_parts_mut(data.as_mut_ptr().add(offset), d2.len());
+        dst.copy_from_slice(d2);
+    }
+
+    Ok(())
+}
+```
+
+> Tip: Every time you update a dynamic field, if the size changes, you must resize the account. Here’s a general-purpose function for resizing an account:
+
+```rust
+pub fn resize_account(
+    account: &AccountInfo,
+    payer: &AccountInfo,
+    new_size: usize,
+    zero_out: bool,
+) -> ProgramResult {
+    // If the account is already the correct size, return early
+    if new_size == account.data_len() {
+        return Ok(());
+    }
+
+    // Calculate rent requirements
+    let rent = Rent::get()?;
+    let new_minimum_balance = rent.minimum_balance(new_size);
+
+    // Adjust lamports to meet rent-exemption requirements
+    match new_minimum_balance.cmp(&account.lamports()) {
+        core::cmp::Ordering::Greater => {
+            // Need more lamports for rent exemption
+            let lamports_diff = new_minimum_balance.saturating_sub(account.lamports());
+            **payer.try_borrow_mut_lamports()? -= lamports_diff;
+            **account.try_borrow_mut_lamports()? += lamports_diff;
+        }
+        core::cmp::Ordering::Less => {
+            // Return excess lamports to payer
+            let lamports_diff = account.lamports().saturating_sub(new_minimum_balance);
+            **account.try_borrow_mut_lamports()? -= lamports_diff;
+            **payer.try_borrow_mut_lamports()? += lamports_diff;
+        }
+        core::cmp::Ordering::Equal => {
+            // No lamport transfer needed
+        }
+    }
+
+    // Reallocate the account
+    account.realloc(new_size, zero_out)?;
+
+    Ok(())
+}
+```
 
