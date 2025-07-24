@@ -280,7 +280,7 @@ impl AccountCheck for Mint2022Account {
         let data = account.try_borrow_data()?;
 
         if data.len().ne(&pinocchio_token::state::Mint::LEN) {
-            if data.len().lt(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
                 return Err(PinocchioError::InvalidAccountData.into());
             }
             if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
@@ -332,7 +332,7 @@ impl AccountCheck for TokenAccount2022Account {
         let data = account.try_borrow_data()?;
 
         if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
-            if data.len().lt(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
                 return Err(PinocchioError::InvalidAccountData.into());
             }
             if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR) {
@@ -397,7 +397,7 @@ impl AccountCheck for MintInterface {
             let data = account.try_borrow_data()?;
 
             if data.len().ne(&pinocchio_token::state::Mint::LEN) {
-                if data.len().lt(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
                     return Err(PinocchioError::InvalidAccountData.into());
                 }
                 if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
@@ -426,7 +426,7 @@ impl AccountCheck for TokenAccountInterface {
             let data = account.try_borrow_data()?;
 
             if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
-                if data.len().lt(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
                     return Err(PinocchioError::InvalidAccountData.into());
                 }
                 if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET]
