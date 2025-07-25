@@ -57,7 +57,6 @@ We're going to handle the implementation for the `DepositInstructionData` same a
 
 <Codeblock lang="rust">
 ```rust
-##[repr(C, packed)]
 pub struct DepositInstructionData {
     pub amount: u64,
     pub max_x: u64,
@@ -92,7 +91,7 @@ let (vault_x, _) = find_program_address(
     &[
         self.accounts.config.key(),
         self.accounts.token_program.key(),
-        &config.mint_x,
+        config.mint_x(),
     ],
     &pinocchio_associated_token_account::ID,
 );

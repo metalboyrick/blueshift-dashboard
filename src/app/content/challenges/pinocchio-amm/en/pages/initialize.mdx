@@ -98,13 +98,9 @@ impl TryFrom<&[u8]> for InitializeInstructionData {
 ```
 </Codeblock>
 
-We start by defining the `InitializeInstructionData` struct, which represents the data layout for the initialize instruction. We use `#[repr(C, packed)]` to ensure there are no alignment issues, since we deserialize the data by directly transmuting it into the struct.
+We define the `InitializeInstructionData` struct with an `Option<[u8; 32]>` for the authority field, making it explicitly optional. This design clearly communicates that authority can be omitted to create an immutable pool.
 
-The `authority` field is optional, so if it is set to `None`, we don’t need to actually pass it in saving 32 bytes of transaction data. For this reason, we implement deserialization logic that checks the length of the data: one path for when `authority` is present, and another for when it is absent.
-
-If the data includes the `authority` field, we can transmute it directly. However, if the data does not include `authority`, we create a buffer using the `MaybeUninit` method since it's the most optimal, append a `[0u8; 32]` segment at the end to fill the missing field, and then transmute the data into the struct. This approach ensures we avoid unaligned or “dirty” data during deserialization.
-
-> Using `#[repr(C, packed)]` is mandatory to not run into Undefined Behaviours (UB)
+For this reason, to save 32 bytes of transaction data when creating immutable pools, We checking the instruction data length and parse the data accordingly; if the data is shorter, we set aut`hority to `None`; if it includes the full `authority` field, we parse it and wrap it in `Some()`.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 

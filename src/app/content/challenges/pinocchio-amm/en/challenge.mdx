@@ -138,7 +138,9 @@ fn process_instruction(
 
 <ArticleSection name="State" id="state" level="h2" />
 
-We're going to move into the `state.rs` where all the data for our `Escrow` lives. Let's break this down into two parts: the struct definition and its implementation.
+We're going to move into the `state.rs` where all the data for our `Escrow` lives. 
+
+Let's break this down into three parts: the struct definition, reading helpers, and writing helpers
 
 First, let's look at the struct definition:
 
@@ -147,15 +149,15 @@ First, let's look at the struct definition:
 use core::mem::size_of;
 use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 
-#[repr(C, packed)]
+#[repr(C)]
 pub struct Config {
-    pub state: u8,
-    pub seed: u64,
-    pub authority: Pubkey,
-    pub mint_x: Pubkey, // Token X Mint
-    pub mint_y: Pubkey, // Token Y Mint
-    pub fee: u16,       // Swap fee in basis points
-    pub config_bump: [u8; 1],
+    state: u8,
+    seed: [u8; 8],
+    authority: Pubkey,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    fee: [u8; 2],
+    config_bump: [u8; 1],
 }
 
 #[repr(u8)]
@@ -165,10 +167,22 @@ pub enum AmmState {
     Disabled = 2u8,
     WithdrawOnly = 3u8,
 }
+
+impl Config {
+    pub const LEN: usize = size_of::<u8>()
+        + size_of::<u64>()
+        + size_of::<Pubkey>() * 3
+        + size_of::<u16>()
+        + size_of::<u8>();
+
+    //...
+}
 ```
 </Codeblock>
 
-The `#[repr(C, packed)]` attribute ensures our struct has a predictable, tightly-packed memory layout. This is crucial for on-chain programs, as it guarantees that data is stored and deserialized exactly as expected, avoiding alignment issues and making serialization more efficient.
+The `#[repr(C)]` attribute ensures our struct has a predictable, C-compatible memory layout that remains consistent across different platforms and Rust compiler versions. This is crucial for on-chain programs where data must be serialized and deserialized reliably.
+
+We store `seed` (u64) and `fee` (u16) as byte arrays instead of their native types to ensure safe deserialization. When data is read from account storage, there's no guarantee about memory alignment and reading a `u64` from an unaligned memory address can cause undefined behavior. By using byte arrays and converting with `from_le_bytes()`, we ensure the data can be safely read regardless of alignment, while also guaranteeing consistent little-endian byte ordering across all platforms.
 
 Each field in the `Config` struct serves a specific purpose:
 - **state**: Tracks the current status of the AMM (e.g., uninitialized, initialized, disabled, or withdraw-only). 
@@ -181,46 +195,110 @@ Each field in the `Config` struct serves a specific purpose:
 
 The `AmmState` enum defines the possible states for the AMM, making it easy to manage the pool’s lifecycle and restrict certain actions based on its status.
 
-Now, let's look at the implementation with all its helper methods:
+### Reading helpers
+
+The reading helpers provide safe, efficient access to the `Config` data with proper validation and borrowing:
 
 <Codeblock lang="rust">
 ```rust
 impl Config {
-    pub const LEN: usize = size_of::<u8>()
-        + size_of::<u64>()
-        + size_of::<Pubkey>() * 3
-        + size_of::<u16>()
-        + size_of::<u8>();
+    //...
 
     #[inline(always)]
-    pub fn load(account_info: &AccountInfo) -> Result<Self, ProgramError> {
+    pub fn load(account_info: &AccountInfo) -> Result<Ref<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
         if account_info.owner().ne(&crate::ID) {
             return Err(ProgramError::InvalidAccountData);
         }
-
-        let data = account_info.try_borrow_data()?;
-
-        Ok(unsafe { Self::load_unchecked(&data)? })
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes_unchecked(data)
+        }))
     }
 
     #[inline(always)]
-    pub unsafe fn load_unchecked(data: &[u8]) -> Result<Self, ProgramError> {
-        if data.len().ne(&Config::LEN) {
+    pub unsafe fn load_unchecked(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
             return Err(ProgramError::InvalidAccountData);
         }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(Self::from_bytes_unchecked(
+            account_info.borrow_data_unchecked(),
+        ))
+    }
 
-        // SAFETY: We checked the length and the struct is repr(C, packed)
-        Ok(unsafe { (data.as_ptr() as *const Self).read_unaligned() })
+    // Getter methods for safe field access
+    #[inline(always)]
+    pub fn state(&self) -> u8 { self.state }
+
+    #[inline(always)]
+    pub fn seed(&self) -> u64 { u64::from_le_bytes(self.seed) }
+
+    #[inline(always)]
+    pub fn authority(&self) -> &Pubkey { &self.authority }
+
+    #[inline(always)]
+    pub fn mint_x(&self) -> &Pubkey { &self.mint_x }
+
+    #[inline(always)]
+    pub fn mint_y(&self) -> &Pubkey { &self.mint_y }
+
+    #[inline(always)]
+    pub fn fee(&self) -> u16 { u16::from_le_bytes(self.fee) }
+
+    #[inline(always)]
+    pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
+}
+```
+</Codeblock>
+
+Key features of the reading helpers:
+- Safe Borrowing: The `load` method returns a `Ref<Self>` that safely manages borrowing from the account data, preventing data races and ensuring memory safety.
+- Validation: Both `load` and `load_unchecked` validate the account data length and owner before allowing access to the struct.
+- Getter Methods: All fields are accessed through getter methods that handle the conversion from byte arrays to their proper types (e.g., `u64::from_le_bytes` for the `seed`).
+- Performance: The `#[inline(always)]` attribute ensures these frequently-called methods are inlined for optimal performance.
+
+### Writing helpers
+
+The writing helpers provide safe, validated methods for modifying the `Config` data:
+
+<Codeblock lang="rust">
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load_mut(account_info: &AccountInfo) -> Result<RefMut<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
+            Self::from_bytes_unchecked_mut(data)
+        }))
     }
 
     #[inline(always)]
-    pub fn load_mut_unchecked(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
-        if data.len().ne(&Config::LEN) {
+    pub fn set_state(&mut self, state: u8) -> Result<(), ProgramError> {
+        if state.ge(&(AmmState::WithdrawOnly as u8)) {
             return Err(ProgramError::InvalidAccountData);
         }
+        self.state = state as u8;
+        Ok(())
+    }
 
-        // SAFETY: We checked the length and the struct is repr(C, packed)
-        Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })    
+    #[inline(always)]
+    pub fn set_fee(&mut self, fee: u16) -> Result<(), ProgramError> {
+        if fee.ge(&10_000) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.fee = fee.to_le_bytes();
+        Ok(())
     }
 
     #[inline(always)]
@@ -232,22 +310,34 @@ impl Config {
         mint_y: Pubkey,
         fee: u16,
         config_bump: [u8; 1],
-    ) {
-        self.state = AmmState::Initialized as u8;
-        self.seed = seed;
-        self.authority = authority;
-        self.mint_x = mint_x;
-        self.mint_y = mint_y;
-        self.fee = fee;
-        self.config_bump = config_bump;
+    ) -> Result<(), ProgramError> {
+        self.set_state(AmmState::Initialized as u8)?;
+        self.set_seed(seed);
+        self.set_authority(authority);
+        self.set_mint_x(mint_x);
+        self.set_mint_y(mint_y);
+        self.set_fee(fee)?;
+        self.set_config_bump(config_bump);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn has_authority(&self) -> Option<Pubkey> {
+        let bytes = self.authority();
+        let chunks: &[u64; 4] = unsafe { &*(bytes.as_ptr() as *const [u64; 4]) };
+        if chunks.iter().any(|&x| x != 0) {
+            Some(self.authority)
+        } else {
+            None
+        }
     }
 }
 ```
 </Codeblock>
 
-The implementation of the Config struct provides several important features to ensure safety, efficiency, and clarity in your Amm program:
-1. Precise Size Calculation: The `LEN` constant computes the exact size of the `Config` struct in bytes. This guarantees that account allocations and deserialization are always correct, preventing subtle bugs due to size mismatches.
-2. Safe and Flexible Loading: The `load` method safely loads and validates a `Config` struct from an account, checking both the account owner and data length. The `load_unchecked` and `load_mut_unchecked` methods provide lower-level, unchecked access for advanced use cases where you can guarantee safety, such as during initialization or trusted internal calls.
-3. Performance Optimizations: The use of `#[inline(always)]` hints to the compiler to aggressively inline these methods, reducing function call overhead in performance-critical onchain code.
-The set_inner method allows for efficient, atomic updates of all struct fields at once, minimizing the risk of inconsistent state.
-4. Memory Safety: All loading methods validate the data length before casting, and the safe loader also checks account ownership. This helps prevent accidental memory corruption or unauthorized access.
+Key features of the writing helpers:
+- Mutable Borrowing: The `load_mut` method returns a `RefMut<Self>` that safely manages mutable borrowing from the account data.
+- Input Validation: Methods like `set_state` and `set_fee` include validation to ensure only valid values are stored (e.g., fee cannot exceed 10,000 basis points).
+- Atomic Updates: The `set_inner` method allows for efficient, atomic updates of all struct fields at once, minimizing the risk of inconsistent state.
+- Authority Checking: The `has_authority` method provides an efficient way to check if an authority is set (non-zero) or if the AMM is immutable (all zeros).
+- Byte Conversion: Multi-byte values are properly converted to little-endian byte arrays using methods like `to_le_bytes()` to ensure consistent cross-platform behavior.
