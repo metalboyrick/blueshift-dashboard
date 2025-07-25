@@ -193,36 +193,34 @@ impl Config {
         + size_of::<u8>();
 
     #[inline(always)]
-    pub fn load(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+    pub fn load(account_info: &AccountInfo) -> Result<Self, ProgramError> {
         if account_info.owner().ne(&crate::ID) {
             return Err(ProgramError::InvalidAccountData);
         }
 
         let data = account_info.try_borrow_data()?;
 
+        Ok(unsafe { Self::load_unchecked(&data)? })
+    }
+
+    #[inline(always)]
+    pub unsafe fn load_unchecked(data: &[u8]) -> Result<Self, ProgramError> {
         if data.len().ne(&Config::LEN) {
             return Err(ProgramError::InvalidAccountData);
         }
 
-        Ok(unsafe { &*(data.as_ptr() as *const Self) })
+        // SAFETY: We checked the length and the struct is repr(C, packed)
+        Ok(unsafe { (data.as_ptr() as *const Self).read_unaligned() })
     }
 
     #[inline(always)]
-    pub unsafe fn load_unchecked(bytes: &mut [u8]) -> Result<&Self, ProgramError> {
-        if bytes.len().ne(&Config::LEN) {
+    pub fn load_mut_unchecked(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if data.len().ne(&Config::LEN) {
             return Err(ProgramError::InvalidAccountData);
         }
 
-        Ok(&*(bytes.as_ptr() as *const Self))
-    }
-
-    #[inline(always)]
-    pub fn load_mut_unchecked(bytes: &mut [u8]) -> Result<&mut Self, ProgramError> {
-        if bytes.len().ne(&Config::LEN) {
-            return Err(ProgramError::InvalidAccountData);
-        }
-
-        Ok(unsafe { &mut *(bytes.as_mut_ptr() as *mut Self) })
+        // SAFETY: We checked the length and the struct is repr(C, packed)
+        Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })    
     }
 
     #[inline(always)]
