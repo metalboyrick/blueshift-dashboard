@@ -65,7 +65,7 @@ const allChallenges: ChallengeMetadata[] = [
     slug: "pinocchio-amm",
     language: "Rust",
     color: "255,173,102",
-    difficulty: 2,
+    difficulty: 3,
     isFeatured: true,
     unitName: "Pinocchio AMM",
     apiPath: "/v1/verify/pinocchio/amm",
