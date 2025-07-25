@@ -53,7 +53,12 @@ const allChallenges: ChallengeMetadata[] = [
     isFeatured: true,
     unitName: "Pinocchio Escrow",
     apiPath: "/v1/verify/pinocchio/escrow",
-    pages: [{ slug: "make" }, { slug: "take" }, { slug: "refund" }, { slug: "conclusion" }],
+    pages: [
+      { slug: "make" },
+      { slug: "take" },
+      { slug: "refund" },
+      { slug: "conclusion" },
+    ],
     requirements: [
       { instructionKey: "make" },
       { instructionKey: "take" },
@@ -69,13 +74,20 @@ const allChallenges: ChallengeMetadata[] = [
     isFeatured: true,
     unitName: "Pinocchio AMM",
     apiPath: "/v1/verify/pinocchio/amm",
-    pages: [{ slug: "initialize" }, { slug: "deposit" }, { slug: "withdraw" }, { slug: "swap" }, { slug: "conclusion" }],
+    pages: [
+      { slug: "initialize" },
+      { slug: "deposit" },
+      { slug: "withdraw" },
+      { slug: "swap" },
+      { slug: "conclusion" },
+    ],
     requirements: [
       { instructionKey: "initialize" },
       { instructionKey: "deposit" },
       { instructionKey: "withdraw" },
       { instructionKey: "swap" },
     ],
+    collectionMintAddress: "9Lz67dYmMG8JzkkvfWQuVgGR12JdjV54p9e8TViKiqQz",
   },
   {
     slug: "pinocchio-secp256r1-vault",
