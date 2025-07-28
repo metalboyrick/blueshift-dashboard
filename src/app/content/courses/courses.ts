@@ -148,6 +148,19 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusions" },
     ],
   },
+  {
+    slug: "instruction-introspection",
+    language: "General",
+    color: "255,173,102",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "introduction" },
+      { slug: "introspection-with-anchor" },
+      { slug: "introspection-with-pinocchio" },
+      { slug: "conclusions" },
+    ],
+  },
 ]);
 
 const releasedCoursesSetting = process.env.NEXT_PUBLIC_RELEASED_COURSES?.trim();
