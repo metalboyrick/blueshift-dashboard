@@ -239,7 +239,6 @@ let seed_value = config.seed(); // No intermediate reference
 In this case we don't have any "special types", but always remember that some types require extra care due to invalid bit patterns:
 
 ```rust
-```rust
 pub struct StateAccount {
     pub is_active: bool,
     pub state_type: StateType,
@@ -359,7 +358,7 @@ let value = unsafe { (data.as_ptr() as *const BadStruct).read_unaligned() };
 
 Writing data safely follows similar principles to reading:
 
-### Field-by-Field Serialization (Raccomended)
+### Field-by-Field Serialization (Recommended)
 
 ```rust
 impl Config {
@@ -668,8 +667,8 @@ impl MultiDynamicAccount {
             return Err(ProgramError::InvalidAccountData);
         }
         
-        let data_1 = &data[Self::MIN_SIZ..Self::MIN_SIZ + len];
-        let data_2 = &data[Self::MIN_SIZ + len..]; // Remainder
+        let data_1 = &data[Self::MIN_SIZE..Self::MIN_SIZE + len];
+        let data_2 = &data[Self::MIN_SIZE + len..]; // Remainder
         
         Ok((fixed_data, timestamp, data_1, data_2))
     }
@@ -707,7 +706,7 @@ impl MultiDynamicAccount {
         offset += 1;
         
         // Write data1
-        buffer[offset..offset + data_1.len()].copy_from_slice(data1);
+        buffer[offset..offset + data_1.len()].copy_from_slice(data_1);
         offset += data_1.len();
         
         // Write data2 (remainder - no length prefix needed)
