@@ -242,7 +242,17 @@ impl Config {
     pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> &Self {
         &*(bytes.as_ptr() as *const Config)
     }
-    
+
+    /// Return a mutable `Config` reference from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked_mut(bytes: &mut [u8]) -> &mut Self {
+        &mut *(bytes.as_mut_ptr() as *mut Config)
+    }
+
     // Getter methods for safe field access
     #[inline(always)]
     pub fn state(&self) -> u8 { self.state }
