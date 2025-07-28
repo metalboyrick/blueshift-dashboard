@@ -1,11 +1,11 @@
 # Withdraw
 
 The `withdraw` instruction performs two main tasks:
-- Withdraw the `mint_x` and `mint_y` token based on the amount of LP the user want to `burn`.
-- Calculate the amount to withdraw and check that the amount isn't less than `mint_x` and `mint_y` designeted by the user.
+- Withdraw the `mint_x` and `mint_y` token based on the amount of LP the user wants to `burn`.
+- Calculate the amount to withdraw and check that the amount isn't less than `mint_x` and `mint_y` designated by the user.
 - Burn the right amount of `mint_lp` from the user ata.
 
-> As mention in the `initialize` instruction section; we're going to initialize all the `Associated Token Accounts` outside of our instruction for optimization purposes.
+> As mentioned in the `initialize` instruction section; we're going to initialize all the `Associated Token Accounts` outside of our instruction for optimization purposes.
 
 <ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
 
@@ -48,9 +48,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
 <ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
 
 Here's the instruction data we need to pass in:
-- `amount`: The amount of LP token that the user wish to burn. Must be a `[u64]`
+- `amount`: The amount of LP token that the user wishes to burn. Must be a `[u64]`
 - `min_x`: The min amount of token X that the user is willing to withdraw. Must be a `[u64]`
-- `min_y`: The mint amount of token Y that the user is willing to withdraw. Must be a `[u64]`
+- `min_y`: The min amount of token Y that the user is willing to withdraw. Must be a `[u64]`
 - `expiration`: The expiration of this order. Important to make sure that the transaction has to be played in a certain amount of time. Must be a `[i64]`
 
 We're going to handle the implementation for the `WithdrawInstructionData` same as initialization. So I’ll leave the implementation to you:
@@ -80,7 +80,7 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
 
 We begin by deserializing both the `instruction_data` and the `accounts`.
 
-When then need to:
+We then need to:
 - Load the `Config` account to grab all the data inside of it. We can do so using the `Config::load()` helper.
 - Verify that the `AmmState` is valid (so if it's not equal to `AmmState::Disabled`).
 - Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts.
@@ -117,7 +117,7 @@ if !(x <= self.instruction_data.min_x && y <= self.instruction_data.min_y) {
 
 > The `authority` of `vault_x` and `vault_y` is the `config` account
 
-You should be proficient enough to this on your own, so I’ll leave the implementation to you:
+You should be proficient enough to do this on your own, so I’ll leave the implementation to you:
 
 <Codeblock lang="rust">
 ```rust

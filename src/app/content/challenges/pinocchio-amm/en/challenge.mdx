@@ -6,7 +6,7 @@ An Automated Market Maker (AMM) is a foundational building block of decentralize
 
 Think of an AMM as a self-operating liquidity pool: users deposit pairs of tokens, and the AMM uses a mathematical formula to determine the price and facilitate swaps between them. This allows anyone to trade tokens instantly, at any time, without needing a counterparty.
 
-If you look closely, you'll notice that an AMM it's not other than an Escrow with additional steps, calculation and logic. So if you missed it, go through the [Pinocchio Escrow Challenge](/en/challenges/pinocchio-escrow) before going through this course.
+If you look closely, you'll notice that an AMM is nothing other than an Escrow with additional steps, calculation and logic. So if you missed it, go through the [Pinocchio Escrow Challenge](/en/challenges/pinocchio-escrow) before going through this course.
 
 In this challenge, you'll implement a simple AMM with four core instructions:
 - **Initialize**: Set up the AMM by creating its configuration account and minting the LP (liquidity provider) token that represents shares in the pool.
@@ -42,7 +42,7 @@ crate-type = ["lib", "cdylib"]
 
 You're now ready to write your amm program.
 
-<ArticleSection name="Constat Product Curve" id="constant-product-curve" level="h2" />
+<ArticleSection name="Constant Product Curve" id="constant-product-curve" level="h2" />
 
 At the heart of most AMMs is a simple but powerful formula known as the constant product curve. This formula ensures that the product of the two token reserves in the pool always remains constant, even as users trade or provide liquidity.
 
@@ -75,7 +75,7 @@ After that, if the pool already has 100 X and 100 Y, and you add 10 X and 10 Y, 
 
 ### Fees
 
-Each swap usually charges a small fee (e.g., 0.3%), which is added to the pool. This means LPs earn a share of the trading fees, increasing the value of their LP tokens over time and incentivising people to provide liquidity.
+Each swap usually charges a small fee (e.g., 0.3%), which is added to the pool. This means LPs earn a share of the trading fees, increasing the value of their LP tokens over time and incentivizing people to provide liquidity.
 
 <ArticleSection name="Template" id="template" level="h2" />
 
