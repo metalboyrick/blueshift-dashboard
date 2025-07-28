@@ -1,0 +1,343 @@
+![Pinocchio Amm Challenge](/graphics/challenge-banners/pinocchio-amm.png)
+
+# The Amm
+
+An Automated Market Maker (AMM) is a foundational building block of decentralized finance, enabling users to swap tokens directly with a smart contract rather than relying on a traditional order book or centralized exchange.
+
+Think of an AMM as a self-operating liquidity pool: users deposit pairs of tokens, and the AMM uses a mathematical formula to determine the price and facilitate swaps between them. This allows anyone to trade tokens instantly, at any time, without needing a counterparty.
+
+If you look closely, you'll notice that an AMM it's not other than an Escrow with additional steps, calculation and logic. So if you missed it, go through the [Pinocchio Escrow Challenge](/en/challenges/pinocchio-escrow) before going through this course.
+
+In this challenge, you'll implement a simple AMM with four core instructions:
+- **Initialize**: Set up the AMM by creating its configuration account and minting the LP (liquidity provider) token that represents shares in the pool.
+- **Deposit**: Allow users to supply both `token_x` and `token_y` to the pool. In return, they’ll receive a proportional amount of LP tokens, representing their share of the liquidity.
+- **Withdraw**: Enable users to redeem their LP tokens to withdraw their share of `token_x` and `token_y` from the pool, effectively removing liquidity.
+- **Swap**: Let anyone trade token_x for `token_y` (or vice versa) using the pool, with a small fee paid to liquidity providers.
+
+**Note**: If you're not familiar with Pinocchio, you should start by reading the [Introduction to Pinocchio](/en/courses/introduction-to-pinocchio) to familiarize with the core concepts that we're going to use in this program.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Let's start by creating a fresh Rust environment:
+
+```
+# create workspace
+cargo new blueshift_native_amm --lib --edition 2021
+cd blueshift_native_amm
+```
+
+Add `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` and the `constant-product-curve` created by [Dean](https://x.com/deanmlittle) to handle all calculation for our Amm:
+
+```
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
+```
+
+Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
+
+```
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+You're now ready to write your amm program.
+
+<ArticleSection name="Constat Product Curve" id="constant-product-curve" level="h2" />
+
+At the heart of most AMMs is a simple but powerful formula known as the constant product curve. This formula ensures that the product of the two token reserves in the pool always remains constant, even as users trade or provide liquidity.
+
+### The formula
+
+The most common AMM formula is: `x * y = k` where: 
+- `x` = amount of token X in the pool
+- `y` = amount of token Y in the pool
+- `k` = a constant (never changes)
+
+Whenever someone swaps one token for another, the pool adjusts the reserves so that the product `k` remains unchanged. This creates a price curve that automatically adjusts based on supply and demand.
+
+### Example
+
+Suppose the pool starts with 100 token X and 100 token Y: `100 * 100 = 10,000`.
+
+If a user wants to swap 10 token X for token Y, the pool must keep `k = 10,000`. So, if `x_new` = 110 (after deposit), solve for `y_new`: `110 * y_new = 10,000` so `y_new = 10,000 / 110 ≈ 90.91`. 
+
+The user will receive `100 - 90.91 = 9.09` token Y (minus any fees).
+
+### Liquidity Provision
+
+When users deposit both tokens into the pool, they become liquidity providers (LPs). In return, they receive LP tokens that represent their share of the pool.
+- LP tokens are minted in proportion to how much liquidity you add.
+- When you withdraw, you burn your LP tokens to reclaim your share of both tokens (plus a share of the fees collected from swaps).
+
+The first liquidity provider sets the initial ratio. For example, if you deposit 100 X and 100 Y, you might receive 100 LP tokens. 
+
+After that, if the pool already has 100 X and 100 Y, and you add 10 X and 10 Y, you get LP tokens proportional to your contribution: `share = deposit_x / total_x = 10 / 100 = 10%` so the Amm will mint to the user wallet, 10% of total LP supply.
+
+### Fees
+
+Each swap usually charges a small fee (e.g., 0.3%), which is added to the pool. This means LPs earn a share of the trading fees, increasing the value of their LP tokens over time and incentivising people to provide liquidity.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+This time we'll split the program into small, focused modules instead of cramming everything into the `lib.rs`. The folder tree will look roughly like this:
+
+```
+src
+├── instructions
+│       ├── deposit.rs
+│       ├── initialize.rs
+│       ├── mod.rs
+│       ├── swap.rs
+│       └── withdraw.rs
+├── lib.rs
+└── state.rs
+```
+
+The entrypoint, that lives in the `lib.rs` looks always the same:
+
+<Codeblock lang="rust">
+```rust
+use pinocchio::{
+    account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
+    ProgramResult,
+};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+pub mod error;
+pub use error::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Initialize::DISCRIMINATOR, data)) => {
+            Initialize::try_from((data, accounts))?.process()
+        }
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, data)) => Withdraw::try_from((data, accounts))?.process(),
+        Some((Swap::DISCRIMINATOR, data)) => Swap::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+</Codeblock>
+
+<ArticleSection name="State" id="state" level="h2" />
+
+We're going to move into the `state.rs` where all the data for our `Escrow` lives. 
+
+Let's break this down into three parts: the struct definition, reading helpers, and writing helpers
+
+First, let's look at the struct definition:
+
+<Codeblock lang="rust">
+```rust
+use core::mem::size_of;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+
+#[repr(C)]
+pub struct Config {
+    state: u8,
+    seed: [u8; 8],
+    authority: Pubkey,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    fee: [u8; 2],
+    config_bump: [u8; 1],
+}
+
+#[repr(u8)]
+pub enum AmmState {
+    Uninitialized = 0u8,
+    Initialized = 1u8,
+    Disabled = 2u8,
+    WithdrawOnly = 3u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<u8>()
+        + size_of::<u64>()
+        + size_of::<Pubkey>() * 3
+        + size_of::<u16>()
+        + size_of::<u8>();
+
+    //...
+}
+```
+</Codeblock>
+
+The `#[repr(C)]` attribute ensures our struct has a predictable, C-compatible memory layout that remains consistent across different platforms and Rust compiler versions. This is crucial for on-chain programs where data must be serialized and deserialized reliably.
+
+We store `seed` (u64) and `fee` (u16) as byte arrays instead of their native types to ensure safe deserialization. When data is read from account storage, there's no guarantee about memory alignment and reading a `u64` from an unaligned memory address can cause undefined behavior. By using byte arrays and converting with `from_le_bytes()`, we ensure the data can be safely read regardless of alignment, while also guaranteeing consistent little-endian byte ordering across all platforms.
+
+Each field in the `Config` struct serves a specific purpose:
+- **state**: Tracks the current status of the AMM (e.g., uninitialized, initialized, disabled, or withdraw-only). 
+- **seed**: A unique value used for program-derived address (PDA) generation, allowing multiple AMMs to exist with different configurations.
+- **authority**: The public key with administrative control over the AMM (e.g., for pausing or upgrading the pool). Can be set to immutable by passing `[0u8; 32]`.
+- **mint_x**: The SPL token mint address for token X in the pool.
+- **mint_y**: The SPL token mint address for token Y in the pool.
+- **fee**: The swap fee, expressed in basis points (1 basis point = 0.01%), which is collected on each trade and distributed to liquidity providers.
+- **config_bump**: The bump seed used in PDA derivation to ensure the config account address is valid and unique. Saved to make PDA derivation more efficient.
+
+The `AmmState` enum defines the possible states for the AMM, making it easy to manage the pool’s lifecycle and restrict certain actions based on its status.
+
+### Reading helpers
+
+The reading helpers provide safe, efficient access to the `Config` data with proper validation and borrowing:
+
+<Codeblock lang="rust">
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load(account_info: &AccountInfo) -> Result<Ref<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes_unchecked(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub unsafe fn load_unchecked(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(Self::from_bytes_unchecked(
+            account_info.borrow_data_unchecked(),
+        ))
+    }
+
+    // Getter methods for safe field access
+    #[inline(always)]
+    pub fn state(&self) -> u8 { self.state }
+
+    #[inline(always)]
+    pub fn seed(&self) -> u64 { u64::from_le_bytes(self.seed) }
+
+    #[inline(always)]
+    pub fn authority(&self) -> &Pubkey { &self.authority }
+
+    #[inline(always)]
+    pub fn mint_x(&self) -> &Pubkey { &self.mint_x }
+
+    #[inline(always)]
+    pub fn mint_y(&self) -> &Pubkey { &self.mint_y }
+
+    #[inline(always)]
+    pub fn fee(&self) -> u16 { u16::from_le_bytes(self.fee) }
+
+    #[inline(always)]
+    pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
+}
+```
+</Codeblock>
+
+Key features of the reading helpers:
+- Safe Borrowing: The `load` method returns a `Ref<Self>` that safely manages borrowing from the account data, preventing data races and ensuring memory safety.
+- Validation: Both `load` and `load_unchecked` validate the account data length and owner before allowing access to the struct.
+- Getter Methods: All fields are accessed through getter methods that handle the conversion from byte arrays to their proper types (e.g., `u64::from_le_bytes` for the `seed`).
+- Performance: The `#[inline(always)]` attribute ensures these frequently-called methods are inlined for optimal performance.
+
+### Writing helpers
+
+The writing helpers provide safe, validated methods for modifying the `Config` data:
+
+<Codeblock lang="rust">
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load_mut(account_info: &AccountInfo) -> Result<RefMut<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
+            Self::from_bytes_unchecked_mut(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub fn set_state(&mut self, state: u8) -> Result<(), ProgramError> {
+        if state.ge(&(AmmState::WithdrawOnly as u8)) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.state = state as u8;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_fee(&mut self, fee: u16) -> Result<(), ProgramError> {
+        if fee.ge(&10_000) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.fee = fee.to_le_bytes();
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_inner(
+        &mut self,
+        seed: u64,
+        authority: Pubkey,
+        mint_x: Pubkey,
+        mint_y: Pubkey,
+        fee: u16,
+        config_bump: [u8; 1],
+    ) -> Result<(), ProgramError> {
+        self.set_state(AmmState::Initialized as u8)?;
+        self.set_seed(seed);
+        self.set_authority(authority);
+        self.set_mint_x(mint_x);
+        self.set_mint_y(mint_y);
+        self.set_fee(fee)?;
+        self.set_config_bump(config_bump);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn has_authority(&self) -> Option<Pubkey> {
+        let bytes = self.authority();
+        let chunks: &[u64; 4] = unsafe { &*(bytes.as_ptr() as *const [u64; 4]) };
+        if chunks.iter().any(|&x| x != 0) {
+            Some(self.authority)
+        } else {
+            None
+        }
+    }
+}
+```
+</Codeblock>
+
+Key features of the writing helpers:
+- Mutable Borrowing: The `load_mut` method returns a `RefMut<Self>` that safely manages mutable borrowing from the account data.
+- Input Validation: Methods like `set_state` and `set_fee` include validation to ensure only valid values are stored (e.g., fee cannot exceed 10,000 basis points).
+- Atomic Updates: The `set_inner` method allows for efficient, atomic updates of all struct fields at once, minimizing the risk of inconsistent state.
+- Authority Checking: The `has_authority` method provides an efficient way to check if an authority is set (non-zero) or if the AMM is immutable (all zeros).
+- Byte Conversion: Multi-byte values are properly converted to little-endian byte arrays using methods like `to_le_bytes()` to ensure consistent cross-platform behavior.

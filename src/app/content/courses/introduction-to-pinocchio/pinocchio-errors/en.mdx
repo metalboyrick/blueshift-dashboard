@@ -1,0 +1,87 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Errors
+
+Clear, descriptive error types are essential in Solana programs built with Pinocchio. They make debugging easier and provide meaningful feedback to users and clients interacting with your program.
+
+### The PinocchioError Enum
+
+When defining custom error types in Rust, you have several options, such as `thiserror`, `anyhow`, and `failure`. For Pinocchio programs, `thiserror` is the preferred choice because:
+- It lets you annotate each error variant with a human-readable message using the `#[error("...")]` attribute.
+- It automatically implements the `core::error::Error` and `Display` traits, making your errors easy to print and debug.
+- All error messages and formatting are checked at compile time, reducing the risk of runtime issues.
+- Most importantly, `thiserror` supports `no_std` environments when you disable its default features, which is required for Pinocchio programs.
+
+To use thiserror in a Pinocchio program, add it to your `Cargo.toml` like this:
+
+```
+[dependencies]
+thiserror = { version = "1.0", default-features = false }
+```
+
+Here’s how you can define a custom error type for your Pinocchio program:
+
+```rust
+use {
+    num_derive::FromPrimitive,
+    solana_program_error::{ProgramError, ToStr},
+    thiserror::Error,
+};
+
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum PinocchioError {
+    // 0
+    /// Lamport balance below rent-exempt threshold.
+    #[error("Lamport balance below rent-exempt threshold")]
+    NotRentExempt,
+}
+```
+
+Each variant is annotated with a message that will be displayed when the error occurs.
+
+To return your custom errors from Solana instructions, implement `From<PinocchioError>` for `ProgramError`:
+
+```rust
+impl From<PinocchioError> for ProgramError {
+    fn from(e: PinocchioError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+```
+
+This allows you to use the `?` operator and return your custom errors seamlessly.
+
+### Deserialize Errors from Raw Values
+
+If you need to convert raw error codes (such as those from logs or cross-program invocations) back into your error enum, implement `TryFrom<u32>`:
+
+```rust
+impl TryFrom<u32> for PinocchioError {
+    type Error = ProgramError;
+    fn try_from(error: u32) -> Result<Self, Self::Error> {
+        match error {
+            0 => Ok(PinocchioError::NotRentExempt),
+            _ => Err(ProgramError::InvalidArgument),
+        }
+    }
+}
+```
+
+> This is optional, but useful for advanced error handling and testing.
+
+### Human Readable Errors
+
+For logging and debugging, you may want to provide a string representation of your errors. Implementing the `ToStr` trait allows you to do this:
+
+```rust
+impl ToStr for PinocchioError {
+    fn to_str<E>(&self) -> &'static str {
+        match self {
+            PinocchioError::NotRentExempt => "Error: Lamport balance below rent-exempt threshold",
+        }
+    }
+}
+```
+
+> This step is also optional, but it can make error reporting more user-friendly.
