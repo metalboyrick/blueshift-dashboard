@@ -1,0 +1,163 @@
+{
+  "challenges": {
+    "anchor-memo": {
+      "title": "Memo avec Anchor",
+      "requirements": {
+        "log": {
+          "title": "Challenge 1: Afficher les `instruction_data` dans le journal du programme"
+        }
+      }
+    },
+    "anchor-vault": {
+      "title": "Vault avec Anchor",
+      "requirements": {
+        "deposit": {
+          "title": "Challenge 1: Effectuer des dépôts"
+        },
+        "withdraw": {
+          "title": "Challenge 2: Permettre un retrait"
+        }
+      }
+    },
+    "anchor-escrow": {
+      "title": "Escrow avec Anchor",
+      "pages": {
+        "make": {
+          "title": "Créer"
+        },
+        "take": {
+          "title": "Accepter"
+        },
+        "refund": {
+          "title": "Rembourser"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Challenge 1: Créer un accord d'échange"
+        },
+        "take": {
+          "title": "Challenge 2: Accepter un accord d'échange"
+        },
+        "refund": {
+          "title": "Challenge 3: Annuler un accord d'échange"
+        }
+      }
+    },
+    "anchor-flash-loan": {
+      "title": "Prêt Flash avec Anchor",
+      "pages": {
+        "borrow": {
+          "title": "Emprunter"
+        },
+        "repay": {
+          "title": "Rembourser"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "Challenge: Emprunt et Remboursement d'un Prêt Flash"
+        }
+      }
+    },
+    "pinocchio-memo": {
+      "title": "Memo avec Pinocchio",
+      "requirements": {
+        "log": {
+          "title": "Challenge 1: Afficher les données d'instruction dans le journal du programme"
+        }
+      }
+    },
+    "pinocchio-vault": {
+      "title": "Vault avec Pinocchio",
+      "requirements": {
+        "deposit": {
+          "title": "Challenge 1: Effectuer des dépôts"
+        },
+        "withdraw": {
+          "title": "Challenge 2: Permettre un retrait"
+        }
+      }
+    },
+    "pinocchio-escrow": {
+      "title": "Escrow avec Pinocchio",
+      "pages": {
+        "make": {
+          "title": "Créer"
+        },
+        "take": {
+          "title": "Accepter"
+        },
+        "refund": {
+          "title": "Rembourser"
+        },
+        "conclusion": {
+          "title": "Conclusion"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Challenge 1: Créer un accord d'échange"
+        },
+        "take": {
+          "title": "Challenge 2: Accepter un accord d'échange"
+        },
+        "refund": {
+          "title": "Challenge 3: Annuler un accord d'échange"
+        }
+      }
+    },
+    "pinocchio-secp256r1-vault": {
+      "title": "Vault avec Pinocchio Secp256r1",
+      "requirements": {
+        "deposit": {
+          "title": "Challenge 1: Effectuer des dépôts"
+        },
+        "withdraw": {
+          "title": "Challenge 2: Permettre un retrait"
+        }
+      }
+    },
+    "pinocchio-flash-loan": {
+      "title": "Prêt Flash avec Pinocchio",
+      "pages": {
+        "borrow": {
+          "title": "Emprunter"
+        },
+        "repay": {
+          "title": "Rembourser"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "Challenge: Emprunt et Remboursement d'un Prêt Flash"
+        }
+      }
+    },
+    "assembly-memo": {
+      "title": "Memo avec Assembly",
+      "requirements": {
+        "log": {
+          "title": "Challenge 1: Afficher les données d'instruction dans le journal du programme"
+        }
+      }
+    },
+    "typescript-mint-an-spl-token": {
+      "title": "Mint un SPL Token",
+      "requirements": {
+        "create_mint_account": {
+          "title": "Challenge 1: Créer un mint de jeton"
+        },
+        "initialize_mint": {
+          "title": "Challenge 2: Initialiser un mint"
+        },
+        "create_token_account": {
+          "title": "Challenge 3: Créer un compte de jeton"
+        },
+        "mint_to": {
+          "title": "Challenge 4: Mint des jetons"
+        }
+      }
+    }
+  }
+}

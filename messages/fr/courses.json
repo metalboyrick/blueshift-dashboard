@@ -1,0 +1,121 @@
+{
+  "courses": {
+    "introduction-to-anchor": {
+      "title": "Introduction à Anchor",
+      "lessons": {
+        "anchor-101": "Anchor 101",
+        "anchor-accounts": "Les Comptes avec Anchor",
+        "anchor-instructions": "Les Instructions avec Anchor",
+        "conclusions": "Conclusions"
+      }
+    },
+    "introduction-to-pinocchio": {
+      "title": "Introduction à Pinocchio",
+      "lessons": {
+        "pinocchio-101": "Pinocchio 101",
+        "pinocchio-accounts": "Les Comptes avec Pinocchio",
+        "pinocchio-instructions": "Les Instructions avec Pinocchio",
+        "conclusions": "Conclusions"
+      }
+    },
+    "secp256r1-on-solana": {
+      "title": "Secp256r1 sur Solana",
+      "lessons": {
+        "introduction": "Secp256r1 sur Solana",
+        "secp256r1-with-anchor": "Secp256r1 avec Anchor",
+        "secp256r1-with-pinocchio": "Secp256r1 avec Pinocchio",
+        "conclusions": "Conclusions"
+      }
+    },
+    "tokens-on-solana": {
+      "title": "Jetons sur Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "mint-and-token-accounts": "Comptes de Mint et Comptes de Jeton",
+        "functionalities": "Fonctionnalités",
+        "conclusions": "Conclusions"
+      }
+    },
+    "spl-token-with-web3js": { 
+      "title": "SPL Token avec Web3.js",
+      "lessons": {
+        "introduction": "Introduction",
+        "mint-to": "Mint To",
+        "transfer": "Transfer",
+        "burn": "Burn",
+        "close-account": "Close Account",
+        "approve-and-revoke": "Approve and Revoke",
+        "freeze-and-thaw": "Freeze and Thaw",
+        "set-authority": "Set Authority",
+        "conclusions": "Conclusions"
+      }
+    },
+    "spl-token-with-anchor": {
+      "title": "SPL Token avec Anchor",
+      "lessons": {
+        "introduction": "Introduction",
+        "mint-to": "Mint To",
+        "transfer": "Transfer",
+        "burn": "Burn",
+        "close-account": "Close Account",
+        "approve-and-revoke": "Approve and Revoke",
+        "freeze-and-thaw": "Freeze and Thaw",
+        "set-authority": "Set Authority",
+        "conclusions": "Conclusions"
+      }
+    },
+    "token-2022-program": {
+      "title": "Programme Token2022",
+      "lessons": {
+        "introduction": "Introduction",
+        "token-extensions": "Extensions de Jetons",
+        "conclusions": "Conclusions"
+      }
+    },
+    "token-2022-with-web3js": {
+      "title": "Token2022 avec Web3.js",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-fee-extension": "Extension Transfer Fee",
+        "mint-close-authority-extension": "Extension Mint Close Authority",
+        "default-account-state-extension": "Extension Default Account State",
+        "immutable-owner-extension": "Extension Immutable Owner",
+        "memo-transfer-extension": "Extension Memo Transfer",
+        "non-transferable-extension": "Extension Non Transferable",
+        "interest-bearing-extension": "Extension Interest Bearing",
+        "cpi-guard-extension": "Extension CPI Guard",
+        "permanent-delegate-extension": "Extension Permanent Delegate",
+        "metadata-extension": "Extension Metadata",
+        "group-and-member-extension": "Extension Group and Member",
+        "conclusions": "Conclusions"
+      }
+    },
+    "token-2022-with-anchor": {
+      "title": "Token2022 avec Anchor",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-fee-extension": "Extension Transfer Fee",
+        "mint-close-authority-extension": "Extension Mint Close Authority",
+        "default-account-state-extension": "Extension Default Account State",
+        "immutable-owner-extension": "Extension Immutable Owner",
+        "memo-transfer-extension": "Extension Memo Transfer",
+        "non-transferable-extension": "Extension Non Transferable",
+        "interest-bearing-extension": "Extension Interest Bearing",
+        "cpi-guard-extension": "Extension CPI Guard",
+        "permanent-delegate-extension": "Extension Permanent Delegate",
+        "metadata-extension": "Extension Metadata",
+        "group-and-member-extension": "Extension Group and Member",
+        "conclusions": "Conclusions"
+      }
+    },
+    "instruction-introspection": {
+      "title": "Introspection des Instructions",
+      "lessons": {
+        "introduction": "Introduction",
+        "introspection-with-anchor": "Introspection avec Anchor",
+        "introspection-with-pinocchio": "Introspection avec Pinocchio",
+        "conclusions": "Conclusions"
+      }
+    }
+  }
+}
