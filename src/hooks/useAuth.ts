@@ -102,10 +102,10 @@ export function useAuth() {
 
   const signInMutation = useMutation<AuthResponse, Error>({
     mutationFn: () => {
-      if (!publicKey || !signMessage) {
+      if (!publicKey || !currentPublicKey || !signMessage) {
         throw new Error("Wallet not connected or signMessage not available");
       }
-      return performSignIn(currentPublicKey!, signMessage);
+      return performSignIn(currentPublicKey, signMessage);
     },
     onMutate: () => {
       setStatus("signing-in");
