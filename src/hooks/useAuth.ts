@@ -78,6 +78,17 @@ export function useAuth() {
     );
   }, [connected, authToken, publicKey, tokenPublicKey, currentPublicKey]);
 
+    // Memoize valid session with matching wallet/token
+  const hasValidMatchingSession = useMemo(() => {
+    return (
+      connected &&
+      authToken &&
+      !isTokenExpired() &&
+      currentPublicKey === tokenPublicKey
+    );
+  }, [connected, authToken, isTokenExpired, currentPublicKey, tokenPublicKey]);
+
+
   // Enhanced error handling with specific error types
   const handleSignInError = useCallback(
     (err: AuthError) => {
@@ -203,8 +214,7 @@ export function useAuth() {
       case "signed-out":
         // If we have a valid, matching session, transition to signed-in.
         // This handles automatic session restoration.
-        const hasValidSession = connected && authToken && !isTokenExpired();
-        if (hasValidSession && currentPublicKey === tokenPublicKey) {
+        if (hasValidMatchingSession) {
           setStatus("signed-in");
         }
         break;
@@ -241,6 +251,7 @@ export function useAuth() {
     clearAuthToken,
     isTokenExpired,
     hasWalletTokenMismatch,
+    hasValidMatchingSession,
     currentPublicKey,
     tokenPublicKey,
   ]);
