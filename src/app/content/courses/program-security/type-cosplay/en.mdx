@@ -69,7 +69,7 @@ An attacker can exploit this by:
 - The attacker becomes the "admin" for operations intended only for `ProgramAccountOne` owners
 
 Solana uses discriminators to solve this problem:
-- Anchor's 8-byte discriminator (default): Derived from the account name, automatically added to accounts marked with #[account]. (from anchor `0.31.0` it's possible to implement "custom" discriminator)
+- Anchor's 8-byte discriminator (default): Derived from the account name, automatically added to accounts marked with #[account]. (from anchor `0.31.0` it's possible to implement "custom" discriminators)
 - Length-based discrimination: Used by the Token Program to distinguish between Token and Mint accounts (though Token2022 now uses explicit discriminators)
 
 The simplest fix is using Anchor's built-in type validation:
