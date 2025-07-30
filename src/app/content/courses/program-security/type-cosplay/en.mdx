@@ -19,12 +19,11 @@ pub mod insecure_check{
     //..
 
     pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
-        let account_data =
-            ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();
-        if ctx.accounts.program_account_one.owner != ctx.program_id {
+        let program_account_one = ctx.accounts.program_account_one.to_account_info();
+        if program_account_one.owner != ctx.program_id {
             return Err(ProgramError::IllegalOwner.into());
         }
-        if account_data.owner != ctx.accounts.admin.key() {
+        if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
             return Err(ProgramError::InvalidAccountData.into());
         }
 
@@ -103,15 +102,17 @@ Or for custom validation, you can add explicit discriminator checks:
 
 ```rust
 pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
-    let account_data =
-        ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();
-    if ctx.accounts.program_account_one.owner != ctx.program_id {
+    let program_account_one = ctx.accounts.program_account_one.to_account_info();
+    if program_account_one.owner != ctx.program_id {
         return Err(ProgramError::IllegalOwner.into());
     }
-    if account_data.owner != ctx.accounts.admin.key() {
+    if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
         return Err(ProgramError::InvalidAccountData.into());
     }
-    if account_data.discriminant != AccountDiscriminant::ProgramAccountOne {
+    let data = program_account_one.data.borrow();
+    // Assume ProgramAccountOne has a discriminator of 8 bytes
+    let discriminator = &data[..8];
+    if discriminator != ProgramAccountOne::DISCRIMINATOR {
         return Err(ProgramError::InvalidAccountData.into());
     }
 
