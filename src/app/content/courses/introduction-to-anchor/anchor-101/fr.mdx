@@ -110,8 +110,8 @@ Pour ce faire, il utilise une combinaison de types de comptes et d'attributs *in
 
 **Types de comptes dans notre exemple**
 - `Signer<'info>`: Vérifie que le compte a signé la transaction. Essentiel pour la sécurité et pour les CPIs qui exigent une signature.
-- `SystemAccount<'info>`: Confirme que le Programme du Système (*System Program*) est propriétaire du compte.
-- `Program<'info, System>`: S'assure que le compte est exécutable et qu'il correspond à l'ID du Programme du Système, ce qui permet de réaliser des CPIs tels que la création de comptes ou des transferts de lamport.
+- `SystemAccount<'info>`: Confirme que le Programme Système (*System Program*) est propriétaire du compte.
+- `Program<'info, System>`: S'assure que le compte est exécutable et qu'il correspond à l'ID du Programme Système, ce qui permet de réaliser des CPIs tels que la création de comptes ou des transferts de lamport.
 
 **Attributs Inline que vous rencontrerez**
 - `mut`: Indique que le compte est mutable. Obligatoire à chaque fois que le solde de lamport ou les données changent.

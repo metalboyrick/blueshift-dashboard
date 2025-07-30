@@ -1,0 +1,53 @@
+# Remboursement
+
+L'instruction de remboursement termine notre cycle de prêt flash en garantissant que les fonds empruntés sont remboursés avec les frais appropriés. Cette instruction effectue deux étapes essentielles :
+1. Extrait le montant du prêt : Utilise l'introspection des instructions pour récupérer le montant `amount_borrowed` initial à partir des données de l'instruction d'emprunt
+2. Retourne les fonds : Calcule les `fee` et transfère le montant emprunté plus les frais au protocole
+
+<ArticleSection name="Introspection des Instructions" id="instruction-introspection" level="h2" />
+
+Tout d'abord, nous devons examiner la première instruction de la transaction afin d'extraire le montant initial du prêt :
+
+<Codeblock lang="rust">
+```rust
+let ixs = ctx.accounts.instructions.to_account_info();
+
+let mut amount_borrowed: u64;
+
+if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
+    // Check the amount borrowed:
+    let mut borrowed_data: [u8;8] = [0u8;8];
+    borrowed_data.copy_from_slice(&borrow_ix.data[8..16]);
+    amount_borrowed = u64::from_le_bytes(borrowed_data)
+
+} else {
+    return Err(ProtocolError::MissingBorrowIx.into());
+}
+```
+</Codeblock>
+
+> Nous ne vérifions pas qu'il s'agit bien de la vraie `borrow_ix` en utilisant l'ID du programme et le discriminateur car cela n'a pas d'importance si une personne construit une "fausse" instruction. C'est sans danger pour le protocole puisqu'il est juste payé. Par ailleurs, si nous avons prêté l'argent, nous savons qu'il s'agira de la première instruction et que le `amount_borrowed` y figurera.
+
+<ArticleSection name="Transfert de fonds" id="transfer-funds" level="h2" />
+
+Ensuite, nous calculons les frais de protocole et transférons le montant total :
+
+<Codeblock lang="rust">
+```rust
+// Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
+let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
+amount_borrowed = amount_borrowed.checked_add(fee).ok_or(ProtocolError::Overflow)?;
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
+        from: ctx.accounts.borrower_ata.to_account_info(),
+        to: ctx.accounts.protocol_ata.to_account_info(),
+        authority: ctx.accounts.borrower.to_account_info(),
+    }), 
+    amount_borrowed
+)?;
+```
+</Codeblock>
+
+Notre commission est codée en dur à 500 points de base et nous effectuons des calculs "vérifiés" pour nous assurer que le montant ne dépasse pas, ce qui pourrait être exploité avec de très grands nombres. De plus, nous convertissons le montant en `u128` pour la multiplication afin d'éviter un dépassement intermédiaire, puis nous repassons en toute sécurité en `u64`.
