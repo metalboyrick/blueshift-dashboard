@@ -1,0 +1,139 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Revival Attack
+
+Revival attacks exploit Solana's account closure mechanism by bringing "dead" accounts back to life within the same transaction. 
+
+When you close an account by transferring out its lamports, Solana doesn't immediately garbage collect it; the account only gets cleaned up after the transaction completes. This delay creates a dangerous window where attackers can "revive" closed accounts by sending lamports back to them, leaving zombie accounts with stale data that your program might still trust.
+
+The attack succeeds because of a fundamental misunderstanding about account lifecycle. Developers assume that closing an account makes it immediately unusable, but in reality, the account remains accessible until the transaction ends. An attacker can sandwich your close instruction with a transfer that refunds the account's rent exemption, preventing garbage collection and maintaining the account in an exploitable state.
+
+This is particularly devastating in protocols where account closure represents finalization like: completing escrows, settling disputes, or burning assets. A revived account can trick your program into believing these operations never completed, potentially allowing double-spending, unauthorized access, or protocol manipulation.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Consider this vulnerable instruction that closes a program account:
+
+```rust
+#[program]
+pub mod insecure_close{
+    use super::*;
+
+    //..
+
+    pub fn close(ctx: Context<Close>) -> Result<()> {
+        let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+        **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+            .checked_add(ctx.accounts.account_to_close.to_account_info().lamports())
+            .unwrap();
+        **ctx.accounts.account_to_close.to_account_info().lamports.borrow_mut() = 0;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Close<'info> {
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+This code looks correct: it transfers all lamports from the account to the destination, which should trigger garbage collection. However, the account's data remains untouched, and the account is still accessible within the same transaction.
+
+An attacker can exploit this by creating a transaction with multiple instructions:
+- Instruction 1: Call your close function to drain the account's lamports
+- Instruction 2: Transfer lamports back to the "closed" account (revival)
+- Instruction 3: Use the revived account in subsequent operations
+
+The result is a zombie account that appears closed to your program's logic but remains functional with all its original data intact. This can lead to:
+- Double-spending: Using "closed" escrow accounts multiple times
+- Authorization bypass: Reviving admin accounts that should be deactivated
+- State corruption: Operating on accounts that should no longer exist
+
+The safest solution is using Anchor's `close` constraint, which handles secure closure automatically:
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    pub owner: Signer<'info>,
+   #[account(
+        mut,
+        close = owner,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Or you could add the `signer` account constraint like this:
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(signer)]
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+For custom closure logic, implement the full secure closure pattern:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    let account = ctx.accounts.account.to_account_info();
+
+    let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+    **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+        .checked_add(account.lamports())
+        .unwrap();
+    **account.lamports.borrow_mut() = 0;
+
+    let mut data = account.try_borrow_mut_data()?;
+    for byte in data.deref_mut().iter_mut() {
+        *byte = 0;
+    }
+
+    let dst: &mut [u8] = &mut data;
+    let mut cursor = std::io::Cursor::new(dst);
+    cursor
+        .write_all(&anchor_lang::__private::CLOSED_ACCOUNT_DISCRIMINATOR)
+        .unwrap();
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+In Pinocchio, implement the closure pattern manually:
+
+```rust
+self.program_account.realloc(0, true)?;
+self.program_account.close()?;
+
+let mut data_ref = self.program_account.try_borrow_mut_data()?;
+data_ref[0] = 0xff;
+```
+
+
+
+
+

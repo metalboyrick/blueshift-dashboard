@@ -21,6 +21,22 @@
         "conclusions": "Conclusions"
       }
     },
+    "program-security": {
+      "title": "Program Security",
+      "lessons": {
+        "introduction": "Introduction",
+        "signer-checks": "Signer Checks",
+        "owner-checks": "Owner Checks",
+        "data-matching": "Data Matching",
+        "duplicate-mutable-accounts": "Duplicate Mutable Accounts",
+        "reinitialization-attack": "Reinitialization Attack",
+        "revival-attacks": "Revival Attacks",
+        "arbitrary-cpi": "Arbitrary CPI",
+        "type-cosplay": "Type Cosplay",
+        "pda-sharing": "PDA Sharing",
+        "conclusions": "Conclusions"
+      }
+    },
     "secp256r1-on-solana": {
       "title": "Secp256r1 on Solana",
       "lessons": {
