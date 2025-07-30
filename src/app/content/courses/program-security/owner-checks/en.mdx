@@ -86,11 +86,11 @@ pub struct Instruction<'info> {
 }
 ```
 
-Or you could just add a owner check in the instruction using the `ctx.accounts.program_account.owner` check like this:
+Or you could just add an owner check in the instruction using the `ctx.accounts.program_account.owner` check like this:
 
 ```rust
 pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-    if ctx.accounts.program.owner != ID {
+    if ctx.accounts.program_account.owner != ID {
         return Err(ProgramError::IncorrectProgramId.into());
     }
     
