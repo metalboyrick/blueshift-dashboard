@@ -18,7 +18,7 @@ Consider this vulnerable instruction that closes a program account:
 #[program]
 pub mod insecure_close{
     use super::*;
-    
+
     //..
 
     pub fn close(ctx: Context<Close>) -> Result<()> {
@@ -64,11 +64,11 @@ The safest solution is using Anchor's `close` constraint, which handles secure c
 
 ```rust
 #[derive(Accounts)]
-pub struct UpdateOwnership<'info> {
+pub struct Close<'info> {
     pub owner: Signer<'info>,
    #[account(
         mut,
-        close = owner
+        close = owner,
         has_one = owner
     )]
     pub program_account: Account<'info, ProgramAccount>,
@@ -79,7 +79,7 @@ Or you could add the `signer` account constraint like this:
 
 ```rust
 #[derive(Accounts)]
-pub struct UpdateOwnership<'info> {
+pub struct Close<'info> {
     #[account(signer)]
     /// CHECK: This account will not be checked by Anchor
     pub owner: UncheckedAccount<'info>,

@@ -87,7 +87,7 @@ Or you could just check that data in the instruction using the `ctx.accounts.pro
 
 ```rust
 pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-    if ctx.accounts.program_account.owner != ctx.accounts.owner.key {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key() {
         return Err(ProgramError::InvalidAccountData.into());
     }
 

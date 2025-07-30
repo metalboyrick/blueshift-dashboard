@@ -25,7 +25,7 @@ pub mod unsafe_initialize_account{
         let mut writer: Vec<u8> = vec![];
         
         let program_account = ProgramAccount {
-            owner: ctx.accounts.owner.key
+            owner: ctx.accounts.owner.key()
         }.try_serialize(&mut writer)?;
 
         sol_memcpy(&mut data, &writer, writer.len());

@@ -37,7 +37,7 @@ pub mod insecure_cpi{
                 ctx.accounts.destination.clone(),
                 ctx.accounts.authority.clone(),
             ],
-        )
+        )?;
 
         Ok(())
     }
@@ -119,7 +119,7 @@ pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
             ctx.accounts.destination.clone(),
             ctx.accounts.authority.clone(),
         ],
-    )
+    )?;
 
     Ok(())
 }
