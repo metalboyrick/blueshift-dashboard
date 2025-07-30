@@ -65,6 +65,7 @@ The safest solution is using Anchor's `close` constraint, which handles secure c
 ```rust
 #[derive(Accounts)]
 pub struct Close<'info> {
+    #[account(mut)]
     pub owner: Signer<'info>,
    #[account(
         mut,
