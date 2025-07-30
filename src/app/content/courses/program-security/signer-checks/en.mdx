@@ -115,7 +115,7 @@ By adding this check, the instruction handler will only proceed if the authority
 
 In Pinocchio, since we don't have the possibility of adding security checks directly inside of the account struct, we are forced to do so in the instruction logic. 
 
-We can do so very similarly to anchor by using the `is_signer()` function like this:
+We can do so very similarly to Anchor by using the `is_signer()` function like this:
 
 ```rust
 if !self.accounts.owner.is_signer() {
