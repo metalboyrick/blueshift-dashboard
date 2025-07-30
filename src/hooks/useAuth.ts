@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { usePersistentStore } from "@/stores/store";
@@ -57,41 +57,76 @@ export function useAuth() {
   const [signOutError, setSignOutError] = useState<AuthError | null>(null);
   const t = useTranslations();
 
-  const isTokenExpired = () => isTokenExpiredUtil(authToken);
+  // Memoize expensive token operations
+  const isTokenExpired = useCallback(
+    () => isTokenExpiredUtil(authToken),
+    [authToken]
+  );
 
-  const signInMutation = useMutation<AuthResponse, Error>({
-    mutationFn: () => {
-      if (!publicKey || !signMessage) {
-        throw new Error("Wallet not connected or signMessage not available");
-      }
-      return performSignIn(publicKey.toBase58(), signMessage);
-    },
-    onMutate: () => {
-      setStatus("signing-in");
-    },
-    onSuccess: (data) => {
-      setAuthToken(data.token);
-      setStatus("signed-in");
-    },
-    onError: (err) => {
-      const authError = err as AuthError;
-      setSignInError(authError);
+  const tokenPublicKey = useMemo(() => {
+    return authToken ? getPublicKeyFromToken(authToken) : null;
+  }, [authToken]);
+
+  const currentPublicKey = useMemo(() => {
+    return publicKey?.toBase58() || null;
+  }, [publicKey]);
+
+  // Memoize wallet/token mismatch check
+  const hasWalletTokenMismatch = useMemo(() => {
+    return (
+      connected && authToken && publicKey && tokenPublicKey !== currentPublicKey
+    );
+  }, [connected, authToken, publicKey, tokenPublicKey, currentPublicKey]);
+
+    // Memoize valid session with matching wallet/token
+  const hasValidMatchingSession = useMemo(() => {
+    return (
+      connected &&
+      authToken &&
+      !isTokenExpired() &&
+      currentPublicKey === tokenPublicKey
+    );
+  }, [connected, authToken, isTokenExpired, currentPublicKey, tokenPublicKey]);
+
+
+  // Enhanced error handling with specific error types
+  const handleSignInError = useCallback(
+    (err: AuthError) => {
+      setSignInError(err);
       setStatus("signed-out");
 
-      // Display toast notification
-      if (authError instanceof UserRejectedSignatureError) {
+      if (err instanceof UserRejectedSignatureError) {
         toast.error(t("notifications.errors.user_rejected_signature"));
         disconnect().catch(() => {
           toast.error(t("notifications.errors.auth_generic"));
         });
-      } else if (authError instanceof NetworkError) {
+      } else if (err instanceof NetworkError) {
         toast.error(t("notifications.errors.network_error"));
-      } else if (authError instanceof AuthenticationAPIError) {
+      } else if (err instanceof AuthenticationAPIError) {
         toast.error(t("notifications.errors.auth_unauthorized"));
       } else {
         toast.error(t("notifications.errors.auth_generic"));
       }
     },
+    [t, disconnect]
+  );
+
+  const signInMutation = useMutation<AuthResponse, Error>({
+    mutationFn: () => {
+      if (!publicKey || !currentPublicKey || !signMessage) {
+        throw new Error("Wallet not connected or signMessage not available");
+      }
+      return performSignIn(currentPublicKey, signMessage);
+    },
+    onMutate: () => {
+      setStatus("signing-in");
+      setSignInError(null); // Clear previous errors
+    },
+    onSuccess: (data) => {
+      setAuthToken(data.token);
+      setStatus("signed-in");
+    },
+    onError: handleSignInError,
   });
 
   const signOutMutation = useMutation({
@@ -107,6 +142,7 @@ export function useAuth() {
     },
     onMutate: () => {
       setStatus("signing-out");
+      setSignOutError(null); // Clear previous errors
     },
     onSuccess: () => {
       setStatus("signed-out");
@@ -116,7 +152,6 @@ export function useAuth() {
       setSignOutError(authError);
       // Still signed-out even if disconnect fails
       setStatus("signed-out");
-
       // Display toast notification for sign-out failures
       toast.error(t("notifications.errors.auth_generic"));
     },
@@ -135,20 +170,14 @@ export function useAuth() {
   const login = useCallback(() => {
     resetAuthState();
 
-    // If we are already in a signing state, don't do anything
-    if (
-      status === "awaiting-wallet" ||
-      status === "signing-in" ||
-      status === "signed-in"
-    ) {
+    // Early return for invalid states
+    if (["awaiting-wallet", "signing-in", "signed-in"].includes(status)) {
       return;
     }
 
     if (connected) {
-      // If we are connected to wallet, sign in
       signInMutation.mutate();
     } else {
-      // If we are not connected to wallet, show the wallet modal
       setStatus("awaiting-wallet");
       setModalVisible(true);
     }
@@ -175,21 +204,17 @@ export function useAuth() {
     // 2. Handle wallet/token mismatches as a high-priority event. This
     // preempts the main state machine to force re-authentication whenever
     // the connected wallet doesn't match the stored token.
-    if (connected && authToken && publicKey) {
-      const tokenPublicKey = getPublicKeyFromToken(authToken);
-      if (tokenPublicKey !== publicKey.toBase58()) {
-        clearAuthToken();
-        doSignIn();
-        return; // Re-authentication is in progress, stop further processing.
-      }
+    if (hasWalletTokenMismatch) {
+      clearAuthToken();
+      doSignIn();
+      return; // Re-authentication is in progress, stop further processing.
     }
-
     // 3. If there are no mismatches, proceed with the main state machine logic.
     switch (status) {
       case "signed-out":
         // If we have a valid, matching session, transition to signed-in.
         // This handles automatic session restoration.
-        if (connected && authToken && !isTokenExpired()) {
+        if (hasValidMatchingSession) {
           setStatus("signed-in");
         }
         break;
@@ -219,30 +244,48 @@ export function useAuth() {
     status,
     connected,
     authToken,
-    publicKey,
     isModalVisible,
     isSigningIn,
     isSigningOut,
     doSignIn,
     clearAuthToken,
-    authToken,
+    isTokenExpired,
+    hasWalletTokenMismatch,
+    hasValidMatchingSession,
+    currentPublicKey,
+    tokenPublicKey,
   ]);
 
-  return {
-    login,
-    logout,
-    publicKey,
-    authToken,
-    isTokenExpired,
-    status,
+  // Memoize return object to prevent unnecessary re-renders
+  return useMemo(
+    () => ({
+      login,
+      logout,
+      publicKey,
+      authToken,
+      isTokenExpired,
+      status,
 
-    /* Convenient status flags */
-    isLoggedIn: status === "signed-in",
-    isLoggingIn: status === "awaiting-wallet" || isSigningIn,
-    isLoggingOut: isSigningOut,
+      /* Convenient status flags */
+      isLoggedIn: status === "signed-in",
+      isLoggingIn: status === "awaiting-wallet" || isSigningIn,
+      isLoggingOut: isSigningOut,
 
-    /* Errors */
-    signInError,
-    signOutError,
-  };
+      /* Errors */
+      signInError,
+      signOutError,
+    }),
+    [
+      login,
+      logout,
+      publicKey,
+      authToken,
+      isTokenExpired,
+      status,
+      isSigningIn,
+      isSigningOut,
+      signInError,
+      signOutError,
+    ]
+  );
 }
