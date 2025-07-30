@@ -19,12 +19,11 @@ pub mod insecure_check{
     //..
 
     pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
-        let account_data =
-            ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();
-        if ctx.accounts.program_account_one.owner != ctx.program_id {
+        let program_account_one = ctx.accounts.program_account_one.to_account_info();
+        if program_account_one.owner != ctx.program_id {
             return Err(ProgramError::IllegalOwner.into());
         }
-        if account_data.owner != ctx.accounts.admin.key() {
+        if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
             return Err(ProgramError::InvalidAccountData.into());
         }
 
@@ -70,7 +69,7 @@ An attacker can exploit this by:
 - The attacker becomes the "admin" for operations intended only for `ProgramAccountOne` owners
 
 Solana uses discriminators to solve this problem:
-- Anchor's 8-byte discriminator (default): Derived from the account name, automatically added to accounts marked with #[account]. (from anchor `0.31.0` it's possible to implement "custom" discriminator)
+- Anchor's 8-byte discriminator (default): Derived from the account name, automatically added to accounts marked with #[account]. (from anchor `0.31.0` it's possible to implement "custom" discriminators)
 - Length-based discrimination: Used by the Token Program to distinguish between Token and Mint accounts (though Token2022 now uses explicit discriminators)
 
 The simplest fix is using Anchor's built-in type validation:
@@ -103,15 +102,17 @@ Or for custom validation, you can add explicit discriminator checks:
 
 ```rust
 pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
-    let account_data =
-        ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();
-    if ctx.accounts.program_account_one.owner != ctx.program_id {
+    let program_account_one = ctx.accounts.program_account_one.to_account_info();
+    if program_account_one.owner != ctx.program_id {
         return Err(ProgramError::IllegalOwner.into());
     }
-    if account_data.owner != ctx.accounts.admin.key() {
+    if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
         return Err(ProgramError::InvalidAccountData.into());
     }
-    if account_data.discriminant != AccountDiscriminant::ProgramAccountOne {
+    let data = program_account_one.data.borrow();
+    // Assume ProgramAccountOne has a discriminator of 8 bytes
+    let discriminator = &data[..8];
+    if discriminator != ProgramAccountOne::DISCRIMINATOR {
         return Err(ProgramError::InvalidAccountData.into());
     }
 

@@ -65,7 +65,7 @@ An attacker can exploit this by:
 
 The attack succeeds because while the token accounts are legitimate, the program performing the operation is not. The malicious program might transfer tokens in the wrong direction, drain accounts to the attacker's wallet, or perform any operation that the passed accounts allow.
 
-Luckily `Anchor` makes it super easy to perform this check directly in the account struct by just changing `UncheckedAccount` to `Program` which automatically validates the program ID:
+Luckily `Anchor` makes it super easy to perform this check directly in the account struct by just changing `UncheckedAccount` to `Program` and passing the `Token` type which automatically validates the program ID:
 
 ```rust
 #[derive(Accounts)]
