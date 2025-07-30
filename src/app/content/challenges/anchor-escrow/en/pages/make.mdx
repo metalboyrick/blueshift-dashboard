@@ -137,3 +137,12 @@ pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Resu
 </Codeblock>
 
 Here we add two validation checks; one on the `amount` and one on the `receive` arguments to ensure we're not passing a zero value for either.
+
+### Warning
+
+Certain extensions from SPL Token-2022 e.g., transfer hooks, confidential transfers, default account states can introduce vulnerabilities like blocking transfers , locking funds and causing rug pulls in escrow logic, vaults, or CPIs.
+
+
+- Ensure `mint_a` and `mint_b` are owned by the same token program to prevent CPI failures.
+- Use well-audited tokens (e.g., USDC, wSOL) from the standard SPL Token program.
+- Avoid unverified or complex Token-2022 mints.
