@@ -18,6 +18,7 @@ Consider this vulnerable instruction that closes a program account:
 #[program]
 pub mod insecure_close{
     use super::*;
+    
     //..
 
     pub fn close(ctx: Context<Close>) -> Result<()> {

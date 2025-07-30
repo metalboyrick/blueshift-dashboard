@@ -16,23 +16,25 @@ Consider this vulnerable instruction that performs admin operations based on acc
 #[program]
 pub mod insecure_check{
     use super::*;
-        //..
+    //..
 
-        pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
-            let account_data =
-                ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();
-            if ctx.accounts.program_account_one.owner != ctx.program_id {
-                return Err(ProgramError::IllegalOwner.into());
-            }
-            if account_data.owner != ctx.accounts.admin.key() {
-                return Err(ProgramError::InvalidAccountData.into());
-            }
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let account_data =
+            ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();
+        if ctx.accounts.program_account_one.owner != ctx.program_id {
+            return Err(ProgramError::IllegalOwner.into());
+        }
+        if account_data.owner != ctx.accounts.admin.key() {
+            return Err(ProgramError::InvalidAccountData.into());
+        }
 
-            //..do something
+        //..do something
+    
         Ok(())
 
-        //..
     }
+        
+    //..
 }
 
 #[derive(Accounts)]
@@ -100,7 +102,6 @@ pub struct ProgramAccountTwo {
 Or for custom validation, you can add explicit discriminator checks:
 
 ```rust
-
 pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
     let account_data =
         ProgramAccountOne::try_from_slice(&ctx.accounts.program_account_one.data.borrow()).unwrap();

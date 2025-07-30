@@ -1,7 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
-import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Signer checks
 
@@ -19,14 +16,16 @@ Consider this vulnerable instruction that transfers ownership of a program accou
 #[program]
 pub mod insecure_update{
     use super::*;
-        //..
 
-        pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-            ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
         Ok(())
-
-        //..
     }
+
+    //..
 }
 
 #[derive(Accounts)]
@@ -99,22 +98,16 @@ pub struct UpdateOwnership<'info> {
 Or you could just add a signer check in the instruction using the `ctx.accounts.owner.is_signer` check like this:
 
 ```rust
-#[program]
-pub mod insecure_update{
-    use super::*;
-        //..
-
-        pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-            if !ctx.accounts.owner.is_signer {
-                return Err(ProgramError::MissingRequiredSignature.into());
-            }
-
-            ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
-        Ok(())
-
-        //..
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if !ctx.accounts.owner.is_signer {
+        return Err(ProgramError::MissingRequiredSignature.into());
     }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+
+    Ok(())
 }
+```
 
 By adding this check, the instruction handler will only proceed if the authority account has signed the transaction. If the account is not signed, the transaction will fail.
 

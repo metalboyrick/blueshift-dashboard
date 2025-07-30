@@ -20,27 +20,27 @@ Consider this vulnerable instruction that performs a token transfer:
 #[program]
 pub mod insecure_cpi{
     use super::*;
-        //..
+    //..
 
-        pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
-            solana_program::program::invoke(
-                &spl_token::instruction::transfer(
-                    ctx.accounts.token_program.key,
-                    ctx.accounts.source.key,
-                    ctx.accounts.destination.key,
-                    ctx.accounts.authority.key,
-                    &[],
-                    amount,
-                )?,
-                &[
-                    ctx.accounts.source.clone(),
-                    ctx.accounts.destination.clone(),
-                    ctx.accounts.authority.clone(),
-                ],
-            )
+    pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
+        solana_program::program::invoke(
+            &spl_token::instruction::transfer(
+                ctx.accounts.token_program.key,
+                ctx.accounts.source.key,
+                ctx.accounts.destination.key,
+                ctx.accounts.authority.key,
+                &[],
+                amount,
+            )?,
+            &[
+                ctx.accounts.source.clone(),
+                ctx.accounts.destination.clone(),
+                ctx.accounts.authority.clone(),
+            ],
+        )
 
-            Ok(())
-        }
+        Ok(())
+    }
 
     //..
 }
@@ -130,7 +130,7 @@ pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
 In Pinocchio, manual validation is required since there's no automatic program checking:
 
 ```rust
-if self.accounts.owner.pubkey() != &spl_token::ID {
+if self.accounts.token_program.pubkey() != &spl_token::ID {
     return Err(ProgramError::MissingRequiredSignature.into());
 }
 ```

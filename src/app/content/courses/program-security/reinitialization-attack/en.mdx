@@ -1,7 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
-import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Reinitialization attacks
 
@@ -21,6 +18,7 @@ Consider this vulnerable instruction that initializes a program account:
 #[program]
 pub mod unsafe_initialize_account{
     use super::*;
+    
     //..
 
     pub fn unsafe_initialize_account(ctx: Context<InitializeAccount>) -> Result<()> {
@@ -34,6 +32,8 @@ pub mod unsafe_initialize_account{
     
         Ok(())
     }
+
+    //..
 }
 
 #[derive(Accounts)]
@@ -84,21 +84,14 @@ pub struct ProgramAccount {
 Or you could just check that the account has already been initialized in the instruction using the `ctx.accounts.program_account.is_initialized` check like this:
 
 ```rust
-#[program]
-pub mod insecure_update{
-    use super::*;
-        //..
-
-        pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-            if ctx.accounts.program_account.is_initialized {
-                return Err(ProgramError::AccountAlreadyInitialized.into());
-            }
-
-            //..
-
-        Ok(())
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.is_initialized {
+        return Err(ProgramError::AccountAlreadyInitialized.into());
     }
+
+    Ok(())
 }
+```
 
 > Anchor's `init_if_needed` constraint, guarded by a feature flag, should be used with extreme caution. While it conveniently initializes an account only if it hasn't been initialized yet, it creates a dangerous trap: if the account is already initialized, the instruction handler continues executing normally. This means your program could unknowingly operate on existing accounts, potentially overwriting critical data or allowing unauthorized access.
 

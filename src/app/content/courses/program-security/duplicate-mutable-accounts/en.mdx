@@ -1,7 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
-import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Duplicate Mutable Accounts
 
@@ -19,13 +16,18 @@ Consider this vulnerable instruction that updates ownership fields on two progra
 #[program]
 pub mod unsafe_update_account{
     use super::*;
-        //..
+    
+    //..
 
-        pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
-                ctx.accounts.program_account_1.owner = pubkey_a;
-                ctx.accounts.program_account_2.owner = pubkey_b;
-            Ok(())
-        }
+    pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+        ctx.accounts.program_account_1.owner = pubkey_a;
+        ctx.accounts.program_account_2.owner = pubkey_b;
+        
+        Ok(())
+    }
+
+    //..
+
 }
 
 #[derive(Accounts)]
@@ -40,6 +42,7 @@ pub struct UpdateAccount<'info> {
 pub struct ProgramAccount {
     owner: Pubkey,
 }
+```
 
 This code has a critical flaw: it never verifies that `program_account_1` and `program_account_2` are different accounts.
 
@@ -55,12 +58,13 @@ The solution is straightforward. You just need to verify that accounts are uniqu
 
 ```rust
 pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
-        if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
-            return Err(ProgramError::InvalidArgument)
-        }
+    if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+        return Err(ProgramError::InvalidArgument)
+    }
 
-        ctx.accounts.program_account_1.owner = pubkey_a;
-        ctx.accounts.program_account_2.owner = pubkey_b;
+    ctx.accounts.program_account_1.owner = pubkey_a;
+    ctx.accounts.program_account_2.owner = pubkey_b;
+
     Ok(())
 }
 ```

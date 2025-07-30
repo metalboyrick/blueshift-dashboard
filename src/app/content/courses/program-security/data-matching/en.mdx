@@ -1,7 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
-import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Data Matching
 
@@ -19,14 +16,15 @@ Consider this vulnerable instruction that updates ownership of a program account
 #[program]
 pub mod insecure_update{
     use super::*;
-        //..
+    //..
 
-        pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-            ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
         Ok(())
-
-        //..
     }
+
+    //..
 }
 
 #[derive(Accounts)]
@@ -59,7 +57,6 @@ Luckily `Anchor` makes it super easy to perform this check directly in the accou
 
 ```rust
 #[derive(Accounts)]
-#[derive(Accounts)]
 pub struct UpdateOwnership<'info> {
     pub owner: Signer<'info>,
     /// CHECK: This account will not be checked by Anchor
@@ -72,7 +69,6 @@ pub struct UpdateOwnership<'info> {
 Or we could decide to change the desing of the program and make the `program_account` a PDA derived from the `owner` like this:
 
 ```rust
-#[derive(Accounts)]
 #[derive(Accounts)]
 pub struct UpdateOwnership<'info> {
     pub owner: Signer<'info>,
@@ -90,22 +86,16 @@ pub struct UpdateOwnership<'info> {
 Or you could just check that data in the instruction using the `ctx.accounts.program_account.owner` check like this:
 
 ```rust
-#[program]
-pub mod insecure_update{
-    use super::*;
-        //..
-
-        pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-            if ctx.accounts.program_account.owner != ctx.accounts.owner.key {
-                return Err(ProgramError::InvalidAccountData.into());
-            }
-
-            ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
-        Ok(())
-
-        //..
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key {
+        return Err(ProgramError::InvalidAccountData.into());
     }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+    Ok(())
 }
+```
 
 By adding this check, the instruction handler will only proceed if the account has the correct `owner`. If the `owner` is not the correct one, the transaction will fail.
 

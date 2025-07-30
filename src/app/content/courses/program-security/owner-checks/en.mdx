@@ -1,7 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
-import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Owner checks
 
@@ -23,22 +20,23 @@ Consider this vulnerable instruction that executes logic based on the `owner` of
 #[program]
 pub mod insecure_check{
     use super::*;
-        //..
+    //..
 
-        pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
-            let account_data = ctx.accounts.program_account.try_borrow_data()?;
-            let mut account_data_slice: &[u8] = &account_data;
-            let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let account_data = ctx.accounts.program_account.try_borrow_data()?;
+        let mut account_data_slice: &[u8] = &account_data;
+        let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
 
-            if account_state.owner != ctx.accounts.owner.key() {
-                return Err(ProgramError::InvalidArgument.into());
-            }
+        if account_state.owner != ctx.accounts.owner.key() {
+            return Err(ProgramError::InvalidArgument.into());
+        }
 
-            //..do something
+        //..do something
+
         Ok(())
-
-        //..
     }
+
+    //..
 }
 
 #[derive(Accounts)]
@@ -91,23 +89,16 @@ pub struct Instruction<'info> {
 Or you could just add a owner check in the instruction using the `ctx.accounts.program_account.owner` check like this:
 
 ```rust
-#[program]
-pub mod insecure_update{
-    use super::*;
-        //..
-
-        pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
-            if ctx.accounts.program.owner != ID {
-                return Err(ProgramError::IncorrectProgramId.into());
-            }
-            
-            //..
-
-        Ok(())
-
-        //..
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program.owner != ID {
+        return Err(ProgramError::IncorrectProgramId.into());
     }
+    
+    //..do something
+
+    Ok(())
 }
+```
 
 By adding this check, the instruction handler will only proceed if the account has the correct `program_id`. If the account is not owned by our program, the transaction will fail.
 
