@@ -109,7 +109,7 @@ In Pinocchio, since we don't have the possibility of adding security checks dire
 We can do so by checking if the account has the correct discriminator:
 
 ```rust
-let account_data = ctx.accounts.program_account.try_borrow_data()?;
+let account_data = self.accounts.program_account.try_borrow_data()?;
 
 if account_data[0] == DISCRIMINATOR {
     return Err(ProgramError::AccountAlreadyInitialized.into());
