@@ -98,9 +98,9 @@ impl TryFrom<&[u8]> for InitializeInstructionData {
 ```
 </Codeblock>
 
-We define the `InitializeInstructionData` struct with an `Option<[u8; 32]>` for the authority field, making it explicitly optional. This design clearly communicates that authority can be omitted to create an immutable pool.
+The authority field in `InitializeInstructionData` is optional and can be omitted to create an immutable pool.
 
-For this reason, to save 32 bytes of transaction data when creating immutable pools, We checking the instruction data length and parse the data accordingly; if the data is shorter, we set authority to `None`; if it includes the full `authority` field, we parse it and wrap it in `Some()`.
+To facilitate this and save 32 bytes of transaction data when creating immutable pools, we check the instruction data length and parse the data accordingly; if the data is shorter, we set the authority field to `None` by writing 32 zero bytes to the end of the buffer; if it includes the full `authority` field, we cast the byte slice directly to the struct.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
@@ -131,6 +131,8 @@ let mint_lp_seeds = [
 ];
 ```
 </Codeblock>
+
+> The `mint_authority` of the `mint_lp` is the `config` account
 
 You should be proficient enough to this on your own, so I’ll leave the implementation to you:
 

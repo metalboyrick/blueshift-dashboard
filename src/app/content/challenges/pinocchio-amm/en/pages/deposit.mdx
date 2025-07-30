@@ -135,9 +135,7 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
 
 > If it's the first deposit, we can skip the calculation of LP tokens and deposits and just go with the value that the user suggest
 
-- Transfer the amounts from the token accounts of the user to the vaults and mint the appropriate amount of LP tokens in the user token account
-
-> The `mint_authority` of the `mint_lp` is the `config` account
+- Transfer the amounts from the token accounts of the user to the vaults and mint the appropriate amount of LP tokens to the user token account
 
 You should be proficient enough to this on your own, so I’ll leave the implementation to you:
 
