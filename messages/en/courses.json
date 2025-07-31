@@ -135,6 +135,14 @@
         "introspection-with-pinocchio": "Introspection with Pinocchio",
         "conclusions": "Conclusions"
       }
+    },
+    "testing-with-mollusk": {
+      "title": "Testing with Mollusk",
+      "lessons": {
+        "mollusk-101": "Mollusk 101",
+        "advanced-functionalities": "Advanced Functionalities",
+        "conclusions": "Conclusions"
+      }
     }
   }
 }

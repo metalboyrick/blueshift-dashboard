@@ -33,7 +33,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   {
     slug: "program-security",
     language: "General",
-    color: "255,173,102",
+    color: "0,255,255",
     difficulty: 1,
     isFeatured: true,
     lessons: [
@@ -171,13 +171,25 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   {
     slug: "instruction-introspection",
     language: "General",
-    color: "255,173,102",
+    color: "0,255,255",
     difficulty: 1,
     isFeatured: true,
     lessons: [
       { slug: "introduction" },
       { slug: "introspection-with-anchor" },
       { slug: "introspection-with-pinocchio" },
+      { slug: "conclusions" },
+    ],
+  },
+  {
+    slug: "testing-with-mollusk",
+    language: "Rust",
+    color: "255,173,102",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "mollusk-101" },
+      { slug: "advanced-functionalities" },
       { slug: "conclusions" },
     ],
   },
