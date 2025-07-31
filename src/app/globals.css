@@ -100,7 +100,7 @@ blockquote {
 }
 
 blockquote p {
-  @apply my-0;
+  @apply my-0 inline-block;
 }
 
 blockquote p::before {
