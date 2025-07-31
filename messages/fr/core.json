@@ -108,7 +108,7 @@
   "ChallengePage": {
     "pagination_header": "Challenges",
     "connect_wallet": "Connecter un Portefeuille",
-    "connect_wallet_description": "Un portefeuille Solana est nécessaire pour relever le défi et débloquer les NFT.",
+    "connect_wallet_description": "Un portefeuille Solana est nécessaire pour relever le challenge et débloquer les NFT.",
     "back_to_lessons": "Retour aux Leçons",
     "requirements_title": "Challenge",
     "upload_program_btn": "Upload un Programme",

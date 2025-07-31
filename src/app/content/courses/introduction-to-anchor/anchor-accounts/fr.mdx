@@ -201,7 +201,7 @@ Anchor propose également la macro `init_if_needed` : elle vérifie si le compte
 
 Comme mentionné, `anchor_spl` crée des aides pour les programmes **Token** et **Token2022**, ce dernier introduisant les Extensions de Jetons (*Token Extensions*). La principale difficulté est que, même si ces comptes remplissent des tâches similaires et ont des structures comparables, ils ne peuvent pas être désérialisés et vérifiés de la même manière puisqu'ils appartiennent à deux programmes différents.
 
-Nous pourrions créer une logique plus « avancée » pour gérer ces différents types de comptes, mais heureusement Anchor prend en charge ce scénario grâce à **InterfaceAccounts** :
+Nous pourrions créer une logique plus "avancée" pour gérer ces différents types de comptes, mais heureusement Anchor prend en charge ce scénario grâce à **InterfaceAccounts** :
 
 ```rust
 use anchor_spl::token_interface::{Mint, TokenAccount};

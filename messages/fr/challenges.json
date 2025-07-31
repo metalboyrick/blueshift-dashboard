@@ -108,7 +108,7 @@
       }
     },
     "pinocchio-secp256r1-vault": {
-      "title": "Vault avec Pinocchio Secp256r1",
+      "title": "Vault Secp256r1 avec Pinocchio",
       "requirements": {
         "deposit": {
           "title": "Challenge 1: Effectuer des dépôts"
