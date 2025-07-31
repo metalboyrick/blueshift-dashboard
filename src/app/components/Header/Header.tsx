@@ -11,16 +11,8 @@ import { routing } from "@/i18n/routing";
 import WalletMultiButton from "@/app/components/Wallet/WalletMultiButton";
 
 import Logo from "../Logo/Logo";
-import { useAuth } from "@/hooks/useAuth";
 import Button from "@/app/components/Button/Button";
 import LogoGlyph from "../Logo/LogoGlyph";
-import {
-  UserRejectedSignatureError,
-  AuthenticationAPIError,
-  NetworkError,
-  UnknownAuthError,
-  WalletDisconnectError,
-} from "@/lib/auth/errors";
 
 export default function HeaderContent() {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,10 +23,6 @@ export default function HeaderContent() {
   const { locales } = routing;
   const router = useRouter();
   const languageDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Wallet and Auth Hook Logic
-  const auth = useAuth();
-  const authError = auth.signInError || auth.signOutError;
 
   useOnClickOutside(languageDropdownRef as RefObject<HTMLDivElement>, () =>
     setIsLanguageDropdownOpen(false)
@@ -181,13 +169,7 @@ export default function HeaderContent() {
 
           {/* Wallet Multi Button and Error Display */}
           <div className="relative">
-            <WalletMultiButton
-              status={auth.status}
-              address={auth.publicKey?.toBase58()}
-              onSignIn={auth.login}
-              onSignOut={auth.logout}
-              isLoading={auth.isLoggingIn || auth.isLoggingOut}
-            />
+            <WalletMultiButton />
           </div>
 
           {/* Mobile Menu Button */}

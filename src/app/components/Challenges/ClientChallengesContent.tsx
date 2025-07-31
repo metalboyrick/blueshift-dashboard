@@ -484,12 +484,7 @@ export default function ChallengesContent({
               {t("ChallengePage.connect_wallet_description")}
             </div>
           </div>
-          <WalletMultiButton
-            status={auth.status}
-            address={auth.publicKey?.toBase58()}
-            onSignIn={auth.login}
-            onSignOut={auth.logout}
-          />
+          <WalletMultiButton disabled={isVerificationLoading} />
         </div>
       ) : (
         <motion.div

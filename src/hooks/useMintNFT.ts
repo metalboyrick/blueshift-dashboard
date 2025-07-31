@@ -32,7 +32,7 @@ export default function useMintNFT() {
 
         if (!certificate) {
           throw new Error(
-            `Certificate not found for challengeks: ${challenge.slug}`,
+            `Certificate not found for challenge: ${challenge.slug}`,
           );
         }
 

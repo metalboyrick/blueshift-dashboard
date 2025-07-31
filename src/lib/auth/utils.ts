@@ -1,5 +1,3 @@
-"use client";
-
 import { decodeJwt } from "jose";
 
 /**
