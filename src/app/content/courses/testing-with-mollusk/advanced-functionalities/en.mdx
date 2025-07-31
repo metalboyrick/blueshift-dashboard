@@ -321,7 +321,7 @@ The syscall function signature follows a specific pattern:
 - `invoke_context`: Provides access to the execution context and runtime state
 - Arguments 1-5: Up to five 64-bit arguments can be passed from the program
 - memory_mapping: Provides access to the program's memory space
-- Return value: A Result<u64, Box<dyn std::error::Error>> indicating success or failure
+- Return value: A `Result<u64, Box<dyn std::error::Error>>` indicating success or failure
 
 > This how all Syscalls are created under the hood 
 
@@ -423,7 +423,7 @@ pub struct Context {
 
 These configuration methods enable precise control over compute budgets, feature availability, and system variables, making it possible to test programs under various runtime conditions.
 
-### Basic Configuration Setup
+### Basic Configuration Setup
 
 ```rust
 use mollusk_svm::Mollusk;
@@ -445,7 +445,7 @@ fn test() {
 
 The compute budget determines how many compute units are available for program execution. This is crucial for testing programs that approach or exceed compute limits:
 
-```
+```rust
 // Test with standard compute budget
 mollusk.set_compute_budget(200_000);
 ```
@@ -466,7 +466,7 @@ For a comprehensive list of available features, consult the `agave-feature-set` 
 
 Mollusk provides access to all system variables (sysvars) that programs can query during execution. While these are automatically configured with reasonable defaults, you can customize them for specific testing scenarios:
 
-```
+```rust
 /// Mollusk sysvars wrapper for easy manipulation
 pub struct Sysvars {
     pub clock: Clock,                     // Current slot, epoch, and timestamp

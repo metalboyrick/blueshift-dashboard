@@ -33,7 +33,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   {
     slug: "program-security",
     language: "General",
-    color: "255,173,102",
+    color: "0,255,255",
     difficulty: 1,
     isFeatured: true,
     lessons: [
@@ -171,7 +171,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   {
     slug: "instruction-introspection",
     language: "General",
-    color: "255,173,102",
+    color: "0,255,255",
     difficulty: 1,
     isFeatured: true,
     lessons: [
