@@ -1,0 +1,254 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Advanced Functionalities
+
+Mollusk provides flexible initialization options to accommodate different testing scenarios. You can create instances pre-loaded with your program or start with a minimal environment and add components as needed.
+
+When testing a specific program, initialize Mollusk with your program pre-loaded:
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    let mollusk = Mollusk::new(&ID, "target/deploy/program.so");
+}
+```
+
+This approach automatically loads your compiled program and makes it available for testing, streamlining the setup process for program-specific test suites.
+
+For broader testing scenarios or when you need to add programs dynamically, start with the default instance:
+
+```rust
+use mollusk_svm::Mollusk;
+
+#[test]
+fn test() {
+    // System Program, ...
+    let mollusk = Mollusk::default();
+}
+```
+
+The default instance includes essential builtin programs like the System Program, providing a foundation for most Solana operations without the overhead of programs you don't need.
+
+When your tests require the System Program, Mollusk provides a convenient helper to generate the necessary account references:
+
+```rust
+let (system_program, system_program_account) = keyed_account_for_system_program();
+```
+
+To replicate program loading functionality or load custom programs that are not present by default, you can use these helpers:
+
+```rust
+use mollusk_svm::Mollusk;
+use mollusk_svm::program::create_program_account_loader_v3;
+
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::default();
+
+    // Get the account that you need
+    let program = &ID; // ID of the program we're trying to load into mollusk
+    let program_account = create_program_account_loader_v3(&ID);
+
+    // Load the program into your mollusk instance
+    mollusk.add_program(
+        &ID, 
+        "src/programs/program", 
+        &mollusk_svm::program::loader_keys::LOADER_V3
+    );
+}
+```
+
+<ArticleSection name="Token Program" id="token-program" level="h2" />
+
+Mollusk's token program helpers significantly simplify testing scenarios involving SPL tokens. The `mollusk-svm-programs-token` crate provides pre-configured support for `Token`, `Token2022`, and `Associated Token` programs.
+
+After including the token helper crate, add the specific token programs your tests require:
+
+```rust
+use mollusk_svm::Mollusk;
+
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::default();
+
+    // Add the SPL Token Program
+    mollusk_svm_programs_token::token::add_program(&mut mollusk);
+
+    // Add the Token2022 Program
+    mollusk_svm_programs_token::token2022::add_program(&mut mollusk);
+
+    // Add the Associated Token Program
+    mollusk_svm_programs_token::associated_token::add_program(&mut mollusk);
+}
+```
+
+And create the account references needed for your test scenarios:
+
+```rust
+// SPL Token Program
+let (token_program, token_program_account) = 
+    mollusk_svm_programs_token::token::keyed_account();
+
+// Token2022 Program
+let (token2022_program, token2022_program_account) = 
+    mollusk_svm_programs_token::token2022::keyed_account();
+
+// Associated Token Program
+let (associated_token_program, associated_token_program_account) =
+    mollusk_svm_programs_token::associated_token::keyed_account();
+```
+
+These helpers ensure that token-related tests have access to the correct program accounts with proper configuration, enabling comprehensive testing of token operations without manual program setup.
+
+If we then wanted to create State accounts from the token program that are already initialized, we would need to create them using the Account method and load them in the account struct of the Mollusk instance.
+
+Creating initialized token accounts manually involves significant boilerplate for serializing account data and calculating rent exemption. Here are helper functions that streamline this process:
+
+```rust
+use spl_token::{state::{Mint, Account as TokenAccount, AccountState}, ID as token};
+use spl_associated_token_account::get_associated_token_address_with_program_id;
+
+// Create a Keyed Account for a Mint with default data
+#[allow(dead_code)]
+pub fn keyed_account_for_mint_default(
+    mollusk: &Mollusk,
+    authority: &Pubkey,
+    decimals: u8,
+    pubkey: Option<Pubkey>,
+    token_program: Option<Pubkey>,
+) -> (Pubkey, Account) {
+    let mint_data = Mint {
+        mint_authority: Some(*authority).into(),
+        supply: 0,
+        decimals,
+        is_initialized: true,
+        freeze_authority: None.into(),
+    };
+
+    let mut data = vec![0u8; Mint::LEN];
+    Mint::pack(mint_data, &mut data).unwrap();
+
+    let account = Account {
+        lamports: mollusk.sysvars.rent.minimum_balance(Mint::LEN),
+        data,
+        owner: token_program.unwrap_or(token::ID),
+        executable: false,
+        rent_epoch: 0,
+    };
+
+    (pubkey.unwrap_or(Pubkey::new_unique()), account)
+}
+
+// Create a Keyed Account for a Token Account with default data
+#[allow(dead_code)]
+pub fn keyed_account_for_token_account_default(
+    mollusk: &Mollusk,
+    mint: &Pubkey,
+    owner: &Pubkey,
+    amount: u64,
+    pubkey: Option<Pubkey>,
+    token_program: Option<Pubkey>,
+) -> (Pubkey, Account) {
+    let account_data = TokenAccount {
+        mint: *mint,
+        owner: *owner,
+        amount,
+        delegate: None.into(),
+        state: AccountState::Initialized,
+        is_native: None.into(),
+        delegated_amount: 0,
+        close_authority: None.into(),
+    };
+
+    let mut data = vec![0u8; TokenAccount::LEN];
+    TokenAccount::pack(account_data, &mut data).unwrap();
+
+    let account = Account {
+        lamports: mollusk.sysvars.rent.minimum_balance(TokenAccount::LEN),
+        data,
+        owner: token_program.unwrap_or(token::ID),
+        executable: false,
+        rent_epoch: 0,
+    };
+
+    (pubkey.unwrap_or(Pubkey::new_unique()), account)
+}
+
+// Create a Keyed Account for an Associated Token Account with default data
+#[allow(dead_code)]
+pub fn keyed_account_for_associated_token_account_default(
+    mollusk: &Mollusk,
+    mint: &Pubkey,
+    owner: &Pubkey,
+    amount: u64,
+    token_program: Option<Pubkey>,
+) -> (Pubkey, Account) {
+    let associated_token_address = get_associated_token_address_with_program_id(
+        owner,
+        mint,
+        &token_program.unwrap_or(token::ID),
+    );
+
+    keyed_account_for_token_account_default(
+        mollusk,
+        mint,
+        owner,
+        amount,
+        Some(associated_token_address),
+        Some(token_program.unwrap_or(token::ID)),
+    )
+}
+```
+
+
+
+Benchmarking Compute Units
+
+The Mollusk Compute Unit Bencher can be used to benchmark the compute unit usage of Solana programs. It provides a simple API for developers to write benchmarks for their programs, which can be checked while making changes to the program.
+
+A markdown file is generated, which captures all of the compute unit benchmarks. If a benchmark has a previous value, the delta is also recorded. This can be useful for developers to check the implications of changes to the program on compute unit usage.
+
+use {
+    mollusk_svm_bencher::MolluskComputeUnitBencher,
+    mollusk_svm::Mollusk,
+    /* ... */
+};
+
+// Optionally disable logging.
+solana_logger::setup_with("");
+
+/* Instruction & accounts setup ... */
+
+let mollusk = Mollusk::new(&program_id, "my_program");
+
+MolluskComputeUnitBencher::new(mollusk)
+    .bench(("bench0", &instruction0, &accounts0))
+    .bench(("bench1", &instruction1, &accounts1))
+    .bench(("bench2", &instruction2, &accounts2))
+    .bench(("bench3", &instruction3, &accounts3))
+    .must_pass(true)
+    .out_dir("../target/benches")
+    .execute();
+The must_pass argument can be provided to trigger a panic if any defined benchmark tests do not pass. out_dir specifies the directory where the markdown file will be written.
+
+Developers can invoke this benchmark test with cargo bench. They may need to add a bench to the project's Cargo.toml.
+
+[[bench]]
+name = "compute_units"
+harness = false
+The markdown file will contain entries according to the defined benchmarks.
+
+| Name   | CUs   | Delta  |
+|--------|-------|--------|
+| bench0 | 450   | --     |
+| bench1 | 579   | -129   |
+| bench2 | 1,204 | +754   |
+| bench3 | 2,811 | +2,361 |
+
+
+Custom Syscall creation 

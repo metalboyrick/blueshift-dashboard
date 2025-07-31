@@ -237,11 +237,15 @@ mollusk.process_and_validate_instruction(
     &accounts,
     &[
         Check::success(), // Verify the transaction succeeded
+        Check::compute_units(5_000), // Expect specific compute usage
         Check::account(&payer).data(&expected_data).build(), // Validate account data
+        Check::account(&payer).owner(&ID).build(), // Validate account owner
         Check::account(&payer).lamports(expected_lamports).build(), // Check lamport balance
     ],
 );
 ```
+
+> We can perform multiple checks on the same account by "bundling" them together like this: `Check::account(&payer).data(&expected_data).owner(&ID).lamports(expected_lamports).build()`
 
 The validation system supports various check types to verify different aspects of execution results. For edge case testing, you can verify that instructions fail as expected:
 
