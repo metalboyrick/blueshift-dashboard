@@ -397,3 +397,100 @@ fn test_custom_syscall() {
 
 > This example demonstrates testing a syscall that burns compute units, validating that the exact number of requested units are consumed. The ability to verify precise data makes Mollusk the best way to test custom syscalls before the implementation.
 
+<ArticleSection name="Configuration Methods" id="configuration-methods" level="h2" />
+
+Mollusk provides comprehensive configuration options that allow you to customize the execution environment to match specific testing requirements as we can see from Mollusk `Context`: 
+
+```rust
+/// Instruction context fixture.
+pub struct Context {
+    /// The compute budget to use for the simulation.
+    pub compute_budget: ComputeBudget,
+    /// The feature set to use for the simulation.
+    pub feature_set: FeatureSet,
+    /// The runtime sysvars to use for the simulation.
+    pub sysvars: Sysvars,
+    /// The program ID of the program being invoked.
+    pub program_id: Pubkey,
+    /// Accounts to pass to the instruction.
+    pub instruction_accounts: Vec<AccountMeta>,
+    /// The instruction data.
+    pub instruction_data: Vec<u8>,
+    /// Input accounts with state.
+    pub accounts: Vec<(Pubkey, Account)>,
+}
+```
+
+These configuration methods enable precise control over compute budgets, feature availability, and system variables, making it possible to test programs under various runtime conditions.
+
+### Basic Configuration Setup
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::feature_set::FeatureSet;
+
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::new(&program_id, "path/to/program.so");
+    
+    // Configure compute budget for performance testing
+    mollusk.set_compute_budget(200_000);
+    
+    // Configure feature set to enable/disable specific Solana features
+    mollusk.set_feature_set(FeatureSet::all_enabled());
+    
+    // Sysvars are handled automatically but can be customized if needed
+}
+```
+
+The compute budget determines how many compute units are available for program execution. This is crucial for testing programs that approach or exceed compute limits:
+
+```
+// Test with standard compute budget
+mollusk.set_compute_budget(200_000);
+```
+
+Solana's feature set controls which blockchain features are active during program execution. Mollusk allows you to configure these features to test compatibility across different network states:
+
+```rust
+use solana_sdk::feature_set::FeatureSet;
+
+// Enable all features (latest functionality)
+mollusk.set_feature_set(FeatureSet::all_enabled());
+
+// Use default feature set (production-like environment)
+mollusk.set_feature_set(FeatureSet::default());
+```
+
+For a comprehensive list of available features, consult the `agave-feature-set` crate [documentation](https://docs.rs/agave-feature-set/2.3.6/agave_feature_set/), which details all configurable blockchain features and their implications.
+
+Mollusk provides access to all system variables (sysvars) that programs can query during execution. While these are automatically configured with reasonable defaults, you can customize them for specific testing scenarios:
+
+```
+/// Mollusk sysvars wrapper for easy manipulation
+pub struct Sysvars {
+    pub clock: Clock,                     // Current slot, epoch, and timestamp
+    pub epoch_rewards: EpochRewards,      // Epoch reward distribution info  
+    pub epoch_schedule: EpochSchedule,    // Epoch timing and slot configuration
+    pub last_restart_slot: LastRestartSlot, // Last validator restart information
+    pub rent: Rent,                       // Rent calculation parameters
+    pub slot_hashes: SlotHashes,          // Recent slot hash history
+    pub stake_history: StakeHistory,      // Historical stake activation data
+}
+```
+
+You can customize specific sysvars to test time-dependent logic, rent calculations, or other system-dependent behaviors or use some of the helpers:
+
+```rust
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::new(&program_id, "path/to/program.so");
+    
+    // Customize clock for time-based testing
+    mollusk.sysvars.clock.epoch = 10;
+    mollusk.sysvars.clock.unix_timestamp = 1234567890;
+
+    // Jump to Slot 1000
+    warp_to_slot(&mut Mollusk, 1000)
+}
+```
