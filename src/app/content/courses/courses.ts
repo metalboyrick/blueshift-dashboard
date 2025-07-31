@@ -181,6 +181,18 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusions" },
     ],
   },
+  {
+    slug: "testing-with-mollusk",
+    language: "Rust",
+    color: "255,173,102",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "mollusk-101" },
+      { slug: "advanced-functionalities" },
+      { slug: "conclusions" },
+    ],
+  },
 ]);
 
 const releasedCoursesSetting = process.env.NEXT_PUBLIC_RELEASED_COURSES?.trim();
