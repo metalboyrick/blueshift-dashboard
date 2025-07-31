@@ -42,7 +42,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "owner-checks" },
       { slug: "data-matching" },
       { slug: "duplicate-mutable-accounts" },
-      { slug: "reinitialization-attack" },
+      { slug: "reinitialization-attacks" },
       { slug: "revival-attacks" },
       { slug: "arbitrary-cpi" },
       { slug: "type-cosplay" },

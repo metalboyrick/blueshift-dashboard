@@ -29,7 +29,7 @@
         "owner-checks": "Owner Checks",
         "data-matching": "Data Matching",
         "duplicate-mutable-accounts": "Duplicate Mutable Accounts",
-        "reinitialization-attack": "Reinitialization Attack",
+        "reinitialization-attacks": "Reinitialization Attacks",
         "revival-attacks": "Revival Attacks",
         "arbitrary-cpi": "Arbitrary CPI",
         "type-cosplay": "Type Cosplay",
