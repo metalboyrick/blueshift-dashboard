@@ -1,29 +1,28 @@
 import React, { useCallback, useState } from "react";
 import Button from "../Button/Button";
 import DecryptedText from "../HeadingReveal/DecryptText";
-import { AuthState } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { motion } from "motion/react";
 import { anticipate } from "motion";
 import Icon from "../Icon/Icon";
 
 interface WalletButtonProps {
-  status: AuthState["status"];
-  address?: string;
-  onSignIn: () => void;
-  onSignOut: () => void;
   disabled?: boolean;
-  isLoading?: boolean;
 }
 
 export default function WalletMultiButton({
-  status,
-  address,
-  onSignIn,
-  onSignOut,
   disabled = false,
-  isLoading = false,
 }: WalletButtonProps) {
   const [isHoveringLocal, setIsHoveringLocal] = useState<boolean>(false);
+  const {
+    status,
+    publicKey,
+    login,
+    logout,
+    isLoggingIn,
+    isLoggingOut,
+  } = useAuth();
+  const address = publicKey?.toBase58();
 
   const showDisconnectOverlay = isHoveringLocal && status === "signed-in";
 
@@ -40,14 +39,11 @@ export default function WalletMultiButton({
 
   const handleClick = useCallback(() => {
     if (status === "signed-in") {
-      onSignOut();
+      logout();
     } else {
-      onSignIn();
+      login();
     }
-  }, [status, onSignIn, onSignOut]);
-
-  // const walletButtonIsDisabled = connecting || disconnecting || authLoading;
-  // const walletButtonIsLoading = authLoading;
+  }, [status, login, logout]);
 
   return (
     <div
@@ -56,7 +52,7 @@ export default function WalletMultiButton({
       className="relative"
     >
       <Button
-        disabled={disabled || isLoading}
+        disabled={disabled || isLoggingIn || isLoggingOut}
         label={buttonLabel}
         icon="Wallet"
         variant="primary"

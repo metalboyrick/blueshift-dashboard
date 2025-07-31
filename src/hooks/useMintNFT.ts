@@ -10,53 +10,62 @@ export default function useMintNFT() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const mint = useCallback(async (challenge: ChallengeMetadata) => {
-    setIsLoading(true);
-    setError(null);
+  const mint = useCallback(
+    async (challenge: ChallengeMetadata) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      if (minterError) {
-        throw new Error(`Minter setup failed: ${minterError.message}`);
+      try {
+        if (minterError) {
+          throw new Error(`Minter setup failed: ${minterError.message}`);
+        }
+
+        if (!minter) {
+          throw new Error(
+            "Minter is not available (possibly due to wallet not being connected or a setup issue).",
+          );
+        }
+
+        const unit = findUnitPda(challenge.unitName);
+        const user = minter.provider.wallet?.publicKey;
+        const certificate = certificates[challenge.slug];
+
+        if (!certificate) {
+          throw new Error(
+            `Certificate not found for challenge: ${challenge.slug}`,
+          );
+        }
+
+        if (!user) {
+          throw new Error(
+            "User public key is not available. Please connect your wallet.",
+          );
+        }
+
+        const signature = Buffer.from(certificate.signature, "hex");
+
+        const tx = await minter.methods
+          .mintCredential(signature)
+          .accounts({ unit })
+          .rpc({
+            commitment: "processed",
+            skipPreflight: true,
+          });
+
+        setIsLoading(false);
+        setChallengeStatus(challenge.slug, "claimed");
+
+        return tx;
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        console.error("Error minting NFT:", err.message, err);
+        setError(err);
+        setIsLoading(false);
+        throw err;
       }
-
-      if (!minter) {
-        throw new Error("Minter is not available (possibly due to wallet not being connected or a setup issue).");
-      }
-
-      const unit = findUnitPda(challenge.unitName);
-      const user = minter.provider.wallet?.publicKey;
-      const certificate = certificates[challenge.slug];
-
-      if (!certificate) {
-        throw new Error(`Certificate not found for challengeks: ${challenge.slug}`);
-      }
-
-      if (!user) {
-        throw new Error("User public key is not available. Please connect your wallet.");
-      }
-
-      const signature = Buffer.from(certificate.signature, "hex");
-
-      const tx = await minter.methods
-      .mintCredential(signature)
-      .accounts({ unit })
-      .rpc({
-        commitment: "processed",
-        skipPreflight: true
-      });
-
-      setIsLoading(false);
-      setChallengeStatus(challenge.slug, "claimed");
-
-      return tx;
-    } catch (e) {
-      const err = e instanceof Error ? e : new Error(String(e));
-      console.error("Error minting NFT:", err.message, err);
-      setError(err);
-      setIsLoading(false);
-      throw err;
-    }
-  }, [minterError, minter, certificates, setChallengeStatus]);
+    },
+    [minterError, minter, certificates, setChallengeStatus],
+  );
 
   return { mint, isLoading, error };
 }
