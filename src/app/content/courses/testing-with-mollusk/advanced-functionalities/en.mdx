@@ -205,14 +205,17 @@ pub fn keyed_account_for_associated_token_account_default(
 }
 ```
 
+<ArticleSection name="Benchmarking Compute Units" id="benchmarking-compute-units" level="h2" />
 
+Mollusk includes a dedicated compute unit benchmarking system that enables precise measurement and tracking of your program's computational efficiency. The `MolluskComputeUnitBencher` provides a streamlined API for creating comprehensive benchmarks that monitor compute unit consumption across different instruction scenarios.
 
-Benchmarking Compute Units
+This benchmarking system is particularly valuable for performance optimization, as it generates detailed reports showing both current compute unit usage and deltas from previous runs. 
 
-The Mollusk Compute Unit Bencher can be used to benchmark the compute unit usage of Solana programs. It provides a simple API for developers to write benchmarks for their programs, which can be checked while making changes to the program.
+This allows you to immediately see the impact of code changes on your program's efficiency, helping you optimize critical performance bottlenecks.
 
-A markdown file is generated, which captures all of the compute unit benchmarks. If a benchmark has a previous value, the delta is also recorded. This can be useful for developers to check the implications of changes to the program on compute unit usage.
+The bencher integrates seamlessly with your existing Mollusk test setup:
 
+```rust
 use {
     mollusk_svm_bencher::MolluskComputeUnitBencher,
     mollusk_svm::Mollusk,
@@ -234,21 +237,35 @@ MolluskComputeUnitBencher::new(mollusk)
     .must_pass(true)
     .out_dir("../target/benches")
     .execute();
-The must_pass argument can be provided to trigger a panic if any defined benchmark tests do not pass. out_dir specifies the directory where the markdown file will be written.
+```
 
-Developers can invoke this benchmark test with cargo bench. They may need to add a bench to the project's Cargo.toml.
+### Configuration Options
 
+The bencher provides several configuration options:
+- `must_pass(true)`: Triggers a panic if any benchmark fails to execute successfully, ensuring your benchmarks remain valid as code changes
+- `out_dir("../target/benches")`: Specifies where the markdown report will be generated, allowing integration with CI/CD systems and documentation workflows
+
+### Integration with Cargo
+
+To run benchmarks using `cargo bench`, add a benchmark configuration to your `Cargo.toml`:
+
+```
 [[bench]]
 name = "compute_units"
 harness = false
-The markdown file will contain entries according to the defined benchmarks.
+```
 
+### Benchmark Reports
+
+The bencher generates markdown reports that provide both current performance metrics and historical comparison:
+
+```
 | Name   | CUs   | Delta  |
 |--------|-------|--------|
 | bench0 | 450   | --     |
 | bench1 | 579   | -129   |
 | bench2 | 1,204 | +754   |
 | bench3 | 2,811 | +2,361 |
-
+```
 
 Custom Syscall creation 
