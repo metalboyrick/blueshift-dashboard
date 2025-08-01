@@ -23,7 +23,7 @@ cargo new blueshift_secp256r1_vault --lib --edition 2021
 cd blueshift_secp256r1_vault
 ```
 
-Ajoutez Pinocchio et le crate `Secp256r1` compatible avec Pinocchio
+Ajoutez Pinocchio et la crate `Secp256r1` compatible avec Pinocchio
 
 ```
 cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
@@ -167,7 +167,7 @@ Nous désérialisons les données d'instruction dans une structure `DepositInstr
 - `pubkey`: La clé publique Secp256r1 de l'utilisateur effectuant le dépôt
 - `amount`: La quantité de lamports à déposer
 
-Bien que *unwrap* soit généralement déconseillé en production, dans ce cas précis il est utilisé en toute sécurité car nous avons déjà validé la longueur des données dans la méthode `try_from`. Si la longueur des données n'est pas correcte, une erreur sera renvoyée avant d'atteindre ce point.
+Bien que *unwrap* soit généralement déconseillé en production, dans ce cas précis il est utilisé en toute sécurité car nous avons déjà validé la taille des données dans la méthode `try_from`. Si la taille des données n'est pas correcte, une erreur sera renvoyée avant d'atteindre ce point.
 
 Enfin, implémentons l'instruction `deposit` :
 
@@ -222,7 +222,7 @@ impl<'a> Deposit<'a> {
 
 Comme mentionné précédemment, nous devons vérifier que le PDA du vault est dérivé à partir des bonnes seeds. Dans ce vault basé sur Secp256r1, nous utilisons `Secp256r1Pubkey` comme seed à la place de la clé publique du propriétaire. Il s'agit d'une mesure de sécurité cruciale qui garantit que seul le détenteur de la clé Secp256r1 correspondante peut accéder au vault.
 
-`Secp256r1Pubkey` a une longueur de 33 octets car elle utilise une représentation par points compressés pour les clés publiques à courbe elliptique. Ce format comprend :
+`Secp256r1Pubkey` a une taille de 33 octets car elle utilise une représentation par points compressés pour les clés publiques à courbe elliptique. Ce format comprend :
 - 1 octet pour la parité du point (indique si la coordonnée y est paire ou impaire)
 - 32 octets pour la coordonnée x
 

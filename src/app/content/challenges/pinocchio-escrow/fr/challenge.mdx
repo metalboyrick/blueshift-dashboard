@@ -202,7 +202,7 @@ L'implementation présente plusieurs caractéristiques importantes :
    - `#[inline(always)]` sur les *getters* pour une performance maximale
    - Méthodes *unsafe* pour les cas où l'on sait que le *borrow* est sûr
    - Définition efficace de la valeur des champs avec `set_inner`
-4. **Sécurité de la mémoire**: Validation appropriée de la longueur des données du compte et du propriétaire
+4. **Sécurité de la mémoire**: Validation appropriée de la taille des données du compte et du propriétaire
 5. **Documentation**: Des commentaires clairs expliquant l'objectif et les considérations de sécurité de chaque méthode
 
 Cette mise en œuvre garantit que l'état de notre escrow est à la fois sûr et efficace et qu'il y a une validation appropriée et des optimisations de performance lorsque cela est nécessaire.

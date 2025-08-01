@@ -1,0 +1,210 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# L'Extension Transfer Fee
+
+L'extension `TransferFee` (Frais de transfert) est une extension de compte de `Mint` qui permet au créateur de fixer une "taxe" sur le jeton prélevée à chaque fois que quelqu'un effectue un échange.
+
+Pour éviter que le destinataire des frais ne soit bloqué en écriture à chaque fois qu'un échange est effectué et pour garantir que nous pouvons paralléliser les transactions contenant un `Mint` avec cette extension, les frais sont mis de côté dans le compte de jetons du destinataire, que seul le `Withdraw Authority` peut retirer.
+
+<ArticleSection name="Initialisation du Compte de Mint" id="initializing-the-mint-account" level="h2" />
+
+Pour initialiser l'extension `TransferFee` sur un compte de `Mint` nous allons avoir besoin de la fonction `createInitializeTransferFeeConfigInstruction()`. 
+
+Voici comment créer un compte de mint avec l'extension `TransferFee` :
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeTransferFeeConfigInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Transfer Fee extension
+const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Transfer Fee extension
+const initializeTransferFeeConfig = createInitializeTransferFeeConfigInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    500,
+    BigInt(1e6),
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTransferFeeConfig,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Transfert de Jetons avec les Frais" id="transferring-tokens-with-the-fee" level="h2" />
+
+Pour transférer des jetons dont le `Mint` a l'extension `TransferFee` deux options sont possibles :
+- Nous pouvons utiliser l'instruction `transferChecked()` et, ce faisant, le calcul des frais est géré automatiquement.
+- Nous pouvons utiliser l'instruction `tranferCheckedWithFee()` et saisir manuellement les `fee` que nous allons payer pour ce transfert. Cela est très utile si nous voulons nous assurer de ne pas être "lésés" si l'autorité modifie les frais et impose des frais anormalement élevés. C'est comme définir le slippage pour un transfert.
+
+> Même si l'autorité modifie les frais, les nouveaux frais deviendront actifs 2 époques après leur modification
+
+Voici comment effectuer un transfert à l'aide de l'instruction `tranferCheckedWithFee()` :
+
+```ts
+createTransferCheckedWithFeeInstruction(
+    sourceTokenAccount,
+    mint.publicKey, 
+    destinationTokenAccount, 
+    keypair.publicKey, 
+    BigInt(100e6), // transfer amount
+    6, // decimals
+    BigInt(1e6), // fee paid for the transfer
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(transferInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens transferred! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Récolte des Frais" id="harvesting-the-fee" level="h2" />
+
+Comme indiqué dans l'introduction, les frais de transfert restent dans le compte de `Token` qui reçoit les jetons afin d'éviter le verrouillage en écriture du compte de `Mint` account ou de `sourceTokenAccount`. Pour cette raison, avant de pouvoir retirer les frais, nous devons être en mesure de rechercher tous les comptes de `Token` qui ont des frais à réclamer.
+
+Nous pouvons le faire en définissant un filtre et en récupérant tous les comptes qui appartiennent à ce mint :
+
+```ts
+// Retrieve all Token Accounts for the Mint Account
+const allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
+    commitment: "confirmed",
+    filters: [
+        {
+            memcmp: {
+                offset: 0,
+                bytes: mint.publicKey.toString(), // Mint Account address
+            },
+        },
+    ],
+});
+```
+
+Et obtenir une liste de tous les comptes de `Token` qui contiennent des frais en "déballant" le compte `Token` et en utilisant la fonction `getTransferAmoun()` comme ceci :
+
+```ts
+// List of Token Accounts to withdraw fees from
+const accountsToWithdrawFrom: PublicKey[] = [];
+
+for (const accountInfo of allAccounts) {
+    const account = unpackAccount(
+        accountInfo.pubkey,
+        accountInfo.account,
+        TOKEN_2022_PROGRAM_ID,
+    );
+
+    // Extract transfer fee data from each account
+    const transferFeeAmount = getTransferFeeAmount(account);
+
+    // Check if fees are available to be withdrawn
+    if (transferFeeAmount !== null && transferFeeAmount.withheldAmount > 0) {
+        accountsToWithdrawFrom.push(accountInfo.pubkey);
+    }
+}
+```
+
+Ensuite, nous pouvons utiliser l'instruction `withdrawWithheldTokensFromAccounts` avec le `Withdraw Authority` pour transmettre la liste des `accountsToWithdrawFrom` comme ceci :
+
+```ts
+const harvestInstructions = createWithdrawWithheldTokensFromAccountsInstruction(
+    mint.publicKey,
+    sourceTokenAccount,
+    keypair.publicKey,
+    [],
+    accountsToWithdrawFrom,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(harvestInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Mise à jour des Frais" id="updating-the-fee" level="h2" />
+
+Après avoir initialisé notre `Mint` avec l'extension `TranferFee`, nous pourrions avoir besoin de mettre à jour ces frais à l'avenir. Et pour s'assurer que le créateur ne "dupe" pas les détenteurs de jetons en leur proposant des frais très bas pour les attirer puis en leur imposant des frais très élevés à chaque transfert, le nouveau `TranferFee` sera activé après 2 époques.
+
+Pour tenir compte de cela, voici à quoi ressemblent les données de l'extension `TransferFee` : 
+
+```rust
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+ 
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Pour modifier les frais, nous pouvons utiliser l'instruction `setTransferFee` comme ceci :
+
+```ts
+const setTransferFeeInstruction = createSetTransferFeeInstruction(
+    mint.publicKey
+    keypaird.publicKey
+    [],
+    BigInt(1000), // new transfer fee
+    BigInt(100e6), // new maximum fee amount
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(setTransferFeeInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

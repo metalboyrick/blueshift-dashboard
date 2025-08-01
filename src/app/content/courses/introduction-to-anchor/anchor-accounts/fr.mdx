@@ -164,7 +164,7 @@ Ce programme possède deux types de comptes essentiels :
 
 ### Comptes de Jeton avec Anchor
 
-Nativement, le crate Anchor ne contient que les aides pour les CPI et les comptes pour le System Program. Si vous souhaitez avoir la même aide pour les jetons SPL, vous pouvez utiliser la crate `anchor_spl`.
+Nativement, la crate Anchor ne contient que les aides pour les CPI et les comptes pour le System Program. Si vous souhaitez avoir la même aide pour les jetons SPL, vous pouvez utiliser la crate `anchor_spl`.
 
 `anchor_spl` ajoute:
 - Des modules d'aide pour chaque instruction des programmes SPL Token et Token-2022
@@ -306,7 +306,7 @@ pub struct InstructionAccounts<'info> {
 
 ### Program
 
-Le type `Program` est utilisé pour valider et interagir avec d'autres programmes Solana. Anchor peut facilement identifier les comptes de programme puisque leur paramètre `executable` est fixé à `true`. Ce type est particulièrement utile dans les cas suivants :
+Le type `Program` est utilisé pour valider et interagir avec d'autres programmes Solana. Anchor peut facilement identifier les comptes de programme puisque leur drapeau `executable` est fixé à `true`. Ce type est particulièrement utile dans les cas suivants :
 
 - Lorsque vous devez faire des Invocations de Programme Croisé (*Cross-Program Invocations* ou CPIs)
 - Lorsque vous voulez vous assurer que vous interagissez avec le bon programme
@@ -379,7 +379,7 @@ pub account: Account<'info, CustomAccountType>,
 
 ### Contrainte Executable
 
-La contrainte `executable` vérifie qu'un compte est un compte de programme (dont le paramètre `executable` est fixé à `true`). Ceci est particulièrement utile lors des Invocations de Programme Croisé (CPI) pour s'assurer que vous interagissez avec un programme et non avec un compte de données :
+La contrainte `executable` vérifie qu'un compte est un compte de programme (dont le drapeau `executable` est fixé à `true`). Ceci est particulièrement utile lors des Invocations de Programme Croisé (CPI) pour s'assurer que vous interagissez avec un programme et non avec un compte de données :
 
 ```rust
 #[account(executable)]
@@ -423,7 +423,7 @@ pub account: Account<'info, CustomAccountType>,
 
 ### Contrainte Personnalisée
 
-Lorsque les contraintes intégrées ne répondent pas à vos besoins, vous pouvez écrire une expression de validation personnalisée. Cela permet une logique de validation complexe qui ne peut pas être exprimée avec d'autres contraintes, comme la vérification de la longueur des données du compte ou la validation des relations entre plusieurs champs :
+Lorsque les contraintes intégrées ne répondent pas à vos besoins, vous pouvez écrire une expression de validation personnalisée. Cela permet une logique de validation complexe qui ne peut pas être exprimée avec d'autres contraintes, comme la vérification de la taille des données du compte ou la validation des relations entre plusieurs champs :
 
 ```rust
 #[account(

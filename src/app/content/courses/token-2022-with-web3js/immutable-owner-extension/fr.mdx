@@ -1,0 +1,72 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# L'Extension Immutable Owner
+
+`ImmutableOwner` (Propriétaire immuable) est une extension de compte de `Token` qui empêche toute modification de la propriété du compte de `Token`. Cela protège les comptes contre les accès non autorisés et les tentatives de transfert.
+
+> Toutes les extensions de `Token` du programme ATAs ont des propriétaires immuables activés par défaut
+
+<ArticleSection name="Initialisation du Compte de Jeton" id="initializing-the-token-account" level="h2" />
+
+Pour initialiser l'extension `ImmutableOwner` sur un compte de `Token` nous allons avoir besoin de la fonction `initializeImmutableOwner()`. 
+
+Voici comment créer un compte de jeton avec l'extension `ImmutableOwner` :
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeAccountInstruction,
+    createInitializeImmutableOwnerInstruction,
+    getAccountLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const tokenAccount = Keypair.generate();
+
+// Calculate the size needed for a Token account with Transfer Fee extension
+const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Immutable Owner extension
+const initializeImmutableOwnerInstruction = createInitializeImmutableOwnerInstruction(
+    tokenAccount.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the Token account itself
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeImmutableOwnerInstruction,
+    initializeAccountInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {skipPreflight: false});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Comme souligné précédemment, si nous voulons ajouter cette extension à un compte `Associated Token`, il suffit de l'initialiser avec le programme Token2022.

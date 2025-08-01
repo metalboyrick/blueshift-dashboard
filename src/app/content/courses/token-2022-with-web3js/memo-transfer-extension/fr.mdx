@@ -1,0 +1,185 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# L'Extension Memo Transfer
+
+L'extension `MemoTranfer` (Transfert avec mémo) est une extension de compte de `Token` qui impose que tous les transferts entrants d'un compte de token incluent un mémo, facilitant ainsi le suivi des transactions et l'identification des utilisateurs.
+
+<ArticleSection name="Initialisation du Compte de Jeton" id="initializing-the-token-account" level="h2" />
+
+Pour initialiser l'extension `MemoTransfer` sur un compte de `Token` nous allons avoir besoin de la fonction `enableRequiredMemoTransfers()`. 
+
+Voici comment créer un compte de jeton avec l'extension `MemoTransfer` :
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeAccountInstruction,
+    createInitializeImmutableOwnerInstruction,
+    getAccountLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const tokenAccount = Keypair.generate();
+
+// Calculate the size needed for a Token account with Transfer Fee extension
+const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Memo Transfer extension
+const enableMemoTransferInstruction = createEnableRequiredMemoTransfersInstruction(
+    destinationTokenAccount.publicKey,
+    destinationKeypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the Token account itself
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeAccountInstruction,
+    enableMemoTransferInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {skipPreflight: false});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Transfert de Jetons avec un Mémo" id="transferring-token-with-a-memo" level="h2" />
+
+Pour utiliser le programme Mémo sur Solana, nous avons deux options possibles.
+
+Créer notre propre instruction mémo "brute" comme ceci :
+
+```ts
+const message = "Hello, Solana";
+
+new TransactionInstruction({
+    keys: [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }],
+    data: Buffer.from(message, "utf-8"), // Memo message. In this case it is "Hello, Solana"
+    programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), // Memo program that validates keys and memo message
+});
+```
+
+Ou nous pouvons utiliser le SDK du programme Mémo après avoir téléchargé le package comme ceci : 
+
+```
+npm i @solana/spl-memo
+```
+
+Dans notre exemple, nous allons utiliser la deuxième option, ce qui donnera le résultat suivant :
+
+```ts
+const memoInstruction = createMemoInstruction(
+    "Hello, world!",
+    [keypair.publicKey],
+);
+
+const transferInstruction = createTransferCheckedInstruction(
+    tokenAccount,
+    mint.publicKey,
+    destinationTokenAccount.publicKey,
+    keypair.publicKey,
+    BigInt(100e6),
+    6,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transferTransaction = new Transaction().add(
+    memoInstruction,
+    transferInstruction,
+);
+
+const transferSignature = await sendAndConfirmTransaction(connection, transferTransaction, [keypair]);
+
+console.log(`Tokens transferred with memo! Check out your TX here: https://explorer.solana.com/tx/${transferSignature}?cluster=devnet`);
+```
+
+<ArticleSection name="Désactiver et Activer le Mémo" id="disabling-and-enabling-the-memo" level="h2" />
+
+Si nous ne voulons pas imposer l'ajout d'un mémo lors du transfert, nous pouvons utiliser la fonction `disableRequiredMemoTransfer` comme ceci :
+
+```ts
+const disableRequiredMemoTransfersInstruction = createDisableRequiredMemoTransfersInstruction(
+    destinationTokenAccount,
+    destinationKeypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transferInstruction = createTransferCheckedInstruction(
+    tokenAccount,
+    mint.publicKey,
+    destinationTokenAccount,
+    keypair.publicKey,
+    BigInt(100e6),
+    6,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    disableRequiredMemoTransfersInstruction,
+    transferInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, destinationKeypair]);
+
+console.log(`Tokens transferred and account state changed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Et si nous voulons le réactiver, nous pouvons simplement utiliser la fonction `enableRequiredMemoTransfers()` comme ceci :
+
+```ts
+const enableRequiredMemoTransfersInstruction = createEnableRequiredMemoTransfersInstruction(
+    destinationTokenAccount,
+    destinationKeypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transferInstruction = createTransferCheckedInstruction(
+    tokenAccount,
+    mint.publicKey,
+    destinationTokenAccount,
+    keypair.publicKey,
+    BigInt(100e6),
+    6,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    enableRequiredMemoTransfersInstruction,
+    transferInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, destinationKeypair]);
+
+console.log(`Tokens transferred and account state changed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
