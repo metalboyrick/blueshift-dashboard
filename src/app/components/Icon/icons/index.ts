@@ -6,6 +6,7 @@ import { ChallengeIcon } from "./Challenge";
 import { ChevronIcon } from "./Chevron";
 import { ClaimIcon } from "./Claim";
 import { ClaimedIcon } from "./Claimed";
+import { Close } from "./Close";
 import { CopyIcon } from "./Copy";
 import { DiscordIcon } from "./Discord";
 import { FilterIcon } from "./Filter";
@@ -49,6 +50,7 @@ export const IconComponents = {
   Chevron: ChevronIcon,
   Claim: ClaimIcon,
   Claimed: ClaimedIcon,
+  Close: Close,
   Completed: UnclaimedIcon,
   Copy: CopyIcon,
   Discord: DiscordIcon,
