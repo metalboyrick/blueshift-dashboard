@@ -136,7 +136,7 @@ let program_account = Pubkey::new_unique();
 let program_account_account = Account {
     lamports,
     data,
-    owner: &ID, // The program's that owns the account
+    owner: ID, // The program's that owns the account
     executable: false,
     rent_epoch: 0,
 };
