@@ -135,7 +135,7 @@ export function useChallengeVerifier({
           setCertificate(challenge.slug, result.certificate);
         } else {
             
-          if (response.status === 401 && authToken) {
+          if (response.status === 401) {
             const errorMessage = "Session expired. Please reconnect your wallet and try again.";
             console.error("Session expired:", errorMessage);
             setError(errorMessage);
