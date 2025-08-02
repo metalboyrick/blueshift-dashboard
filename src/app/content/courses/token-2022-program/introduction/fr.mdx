@@ -1,0 +1,121 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Le Programme Token2022
+
+Le Programme Token2022, également connu sous le nom de Token Extensions (Extension de Jetons), est un ensembles plus large de fonctionnalités fournies par le Programme de Jetons.
+
+Le Programme Legacy Token répond à la plupart des besoins en matière de jetons fongibles et non fongibles grâce à un ensemble simple d'interfaces et de structures agnostiques. Cependant, il manque des fonctionnalités et des implémentations plus avancées qui aideraient les développeurs à créer des comportements personnalisés avec une interface commune, rendant ainsi le développement plus rapide et plus sûr.
+
+C'est précisément pour cette raison qu'un nouveau Programme de Jetons appelé `Token2022` a été créé et doté d'un nouvel ensemble de fonctionnalités appelées `Token Extensions`. Ces extensions fournissent des comportements spécifiques et personnalisables qui peuvent être associés soit au `Token Account` soit au `Mint Account`.
+
+> Le `SPL-Token Program` (communément appelé par les développeurs `Tokenkeg` en raison de l'adresse du programme : `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) et le `Token2022 Program` sont deux programmes complètement différents qui partagent le même "point de départ". Cela signifie que les jetons `Tokenkeg` peuvent être désérialisés avec `Token2022` mais qu'ils ne peuvent pas être utilisés dans ce programme pour leur ajouter des extensions.
+
+<ArticleSection name="Comptes de Mint et Comptes de Jetons" id="mint-and-token-accounts" level="h2" />
+
+Dans la section précédente, nous avons évoqué le fait que la principale différence entre les programmes `Tokenkeg` et `Token2022` réside dans les **Token Extensions**.
+
+Pour être applicables, ces extensions doivent être directement intégrées aux comptes de `Mint` et `Token` car c'est le seul moyen de garantir que l'ensemble de règles soit appliqué tout en fonctionnant directement au niveau du programme de jetons.
+
+Pour cette raison, examinons les principales différences entre le programme de jetons "classique" et le nouveau programme de jetons sur ces comptes.
+
+**Comptes de Jetons "classique"**
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If `is_native.is_some`, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Comme vous pouvez le constater, il n'y a pas de discriminateur pour ces comptes. En effet, les champs ont tous une longueur fixe et la différence d'espace est suffisante pour distinguer ces différents types de comptes en comparant simplement leurs différentes longueurs.
+
+Le problème avec le Programme d'Extension de Jetons est que toutes les données supplémentaires nécessaires à l'extension sont ajoutées à la fin des comptes `Mint` et `Token`.
+
+Cela signifie que la distinction basée sur la longueur serait insuffisante car nous pourrions avoir un `Mint` avec 3 ou 4 extensions qui dépasseraient la longueur du compte de `Token`. Pour cette raison, lorsque des comptes de `Mint` et de `Token` ont des extensions, un discriminateur leur est ajouté comme ceci :
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Legacy Token Program data
+    /// ...
+    /// Padding (83 empty bytes)
+    pub padding: [u8; 83]
+    /// Discriminator (0)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// Legacy Token Program data
+    /// ...
+    /// Discriminator (1)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+```
+
+Pour conserver la structure existante, le discriminateur ne se trouve pas au premier octet comme d'habitude mais à l'octet `165`.
+
+En effet, la longueur du compte de `Token` est de 164 octets ce qui signifie que le discriminateur est ajouté après la longueur de base. Pour le compte de `Mint` cela signifie que nous avons dû ajouter 83 octets de remplissage (*padding*) afin de garantir que les deux comptes aient la même longueur de base.
+
+Pour distinguer les deux comptes, il suffit donc de vérifier le 165e octet et d'agir en conséquence.
+
+<ArticleSection name="Extension de Jetons" id="token-extensions" level="h2" />
+
+Dans la section suivante, nous allons parler des avantages et des différentes Extension de Jetons actuellement présentes sur Solana, mais dans ce paragraphe d'introduction, nous allons seulement expliquer comment elles sont sérialisées et ajoutées aux deux comptes d'état dont nous avons parlé précédemment.
+
+Chaque extension dispose d'un discriminateur qui est enregistré avec la taille de cette extension directement dans le compte. Nous appellerons cela l'"en-tête" (*header*) de l'extension et il ressemble à cela :
+
+```rust
+pub struct ExtensionHeader {
+    /// Extension Discriminator
+    pub discriminator: u16
+    /// Lenght of the Disriminator
+    pub lenght: u16
+}
+```
+
+Cela permet de savoir très facilement quelles extensions se trouvent dans le jeton et de désérialiser uniquement les données dont nous avons besoin, puisqu'il suffit de récupérer le discriminateur, puis passer à l'extension suivante pour vérifier ce qui s'y trouve ou non.

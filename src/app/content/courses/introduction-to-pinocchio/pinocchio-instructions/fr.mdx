@@ -1,0 +1,100 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Instructions
+
+Comme nous l'avons vu précédemment, l'utilisation du trait `TryFrom` nous permet de séparer proprement la validation de la logique métier, améliorant ainsi à la fois la maintenabilité et la sécurité.
+
+<ArticleSection name="Structure d'Instruction" id="instruction-structure" level="h2" />
+
+Lorsque vient le moment de traiter la logique, nous pouvons créer une structure comme celle-ci :
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_datas: DepositInstructionData,
+}
+```
+
+Cette structure définit les données qui seront accessibles pendant le traitement de la logique. Nous désérialisons ensuite cela à l'aide de la fonction `try_from` que vous trouverez dans le fichier `lib.rs` :
+
+```rust
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_datas = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_datas,
+        })
+    }
+}
+```
+
+Ce *wrapper* offre trois avantages clés :
+1. Il accepte à la fois les entrées brutes (octets et comptes)
+2. Il délègue la validation aux implémentations individuelles de `TryFrom`
+3. Il renvoie une structure Deposit entièrement typée et validée
+
+Nous pouvons ensuite implémenter la logique de traitement comme ceci :
+
+```rust
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&self) -> ProgramResult {
+        // deposit logic
+        Ok(())
+    }
+}
+```
+
+- Le `DISCRIMINATOR` est l'octet que nous utilisons pour la correspondance de modèle dans le point d'entrée
+- La méthode `process()` ne contient que la logique métier car toutes les vérifications de validation sont déjà terminées
+
+Le résultat ? Nous bénéficions d'une ergonomie de type Anchor avec tous les avantages d'une solution entièrement native : explicite, prédictible et rapide.
+
+<ArticleSection name="Invocation de Programme Croisé" id="cross-program-invocation" level="h2" />
+
+Comme mentionné précédemment, Pinocchio fournit des crates d'aide telles que `pinocchio-system` et `pinocchio-token` qui simplifient les Invocations de Programme Croisé (CPIs) aux programmes natifs. 
+
+Ces structures et méthodes d'aide remplacent l'approche `CpiContext` d'Anchor que nous utilisions auparavant :
+
+```rust
+Transfer {
+    from: self.accounts.owner,
+    to: self.accounts.vault,
+    lamports: self.instruction_datas.amount,
+}
+.invoke()?;
+```
+
+La structure `Transfer` (de `pinocchio-system`) encapsule tous les champs nécessaires par le programme système et `.invoke()` exécute le CPI. Aucun créateur de contexte ni code passe-partout supplémentaire n'est nécessaire.
+
+Lorsque l'appelant doit être une Adresse Dérivée de Programme (PDA), Pinocchio conserve la même API concise :
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(self.accounts.owner.key().as_ref()),
+    Seed::from(&[bump]),
+];
+let signers = [Signer::from(&seeds)];
+
+Transfer {
+    from: self.accounts.vault,
+    to: self.accounts.owner,
+    lamports: self.accounts.vault.lamports(),
+}
+.invoke_signed(&signers)?;
+```
+
+**Voici comment cela fonctionne :**
+1. `Seeds` crée un tableau d'objets Seed qui correspondent à la dérivation PDA
+2. `Signer` enveloppe ces seeds dans une fonction d'aide Signer
+3. `invoke_signed` exécute le CPI en transmettant le tableau des signataires pour autoriser le transfert
+
+Le résultat ? Une interface claire et de première classe pour les CPIs réguliers et signés - aucune macro requise et aucune magie cachée.
