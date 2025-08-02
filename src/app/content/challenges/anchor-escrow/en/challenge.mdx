@@ -22,17 +22,21 @@ In this challenge, we're going to implement this concept through three simple bu
 
 Let's start by creating a fresh Anchor workspace:
 
+<Codeblock lang="terminal">
 ```bash
 anchor init blueshift_anchor_escrow
 cd blueshift_anchor_escrow
 ```
+</Codeblock>
 
 We then continue by enabling `init-if-needed` on the `anchor-lang` crate and by adding the `anchor-spl` crate as well:
 
+<Codeblock lang="terminal">
 ```bash
 cargo add anchor-lang --features init-if-needed
 cargo add anchor-spl
 ```
+</Codeblock>
 
 Since we're using `anchor-spl`, we also need to update the `Cargo.toml` file to include `anchor-spl/idl-build` in the `idl-build` feature. 
 
