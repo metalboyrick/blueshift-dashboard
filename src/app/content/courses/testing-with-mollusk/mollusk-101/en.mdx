@@ -198,7 +198,7 @@ let instruction_data = &[
     &get_anchor_discriminator_from_name("deposit"),
     &1_000_000u64.to_le_bytes()[..],
 ]
-.concat(),
+.concat();
 
 pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
     let mut hasher = Sha256::new();
