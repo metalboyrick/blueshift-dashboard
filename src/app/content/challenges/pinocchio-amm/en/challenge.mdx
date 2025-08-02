@@ -213,7 +213,7 @@ impl Config {
             return Err(ProgramError::InvalidAccountData);
         }
         if account_info.owner().ne(&crate::ID) {
-            return Err(ProgramError::InvalidAccountData);
+            return Err(ProgramError::InvalidAccountOwner);
         }
         Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
             Self::from_bytes_unchecked(data)
@@ -226,7 +226,7 @@ impl Config {
             return Err(ProgramError::InvalidAccountData);
         }
         if account_info.owner() != &crate::ID {
-            return Err(ProgramError::InvalidAccountData);
+            return Err(ProgramError::InvalidAccountOwner);
         }
         Ok(Self::from_bytes_unchecked(
             account_info.borrow_data_unchecked(),
@@ -302,7 +302,7 @@ impl Config {
             return Err(ProgramError::InvalidAccountData);
         }
         if account_info.owner().ne(&crate::ID) {
-            return Err(ProgramError::InvalidAccountData);
+            return Err(ProgramError::InvalidAccountOwner);
         }
         Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
             Self::from_bytes_unchecked_mut(data)
