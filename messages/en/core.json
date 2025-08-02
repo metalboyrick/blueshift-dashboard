@@ -115,6 +115,8 @@
     "connect_wallet": "Connect Wallet",
     "connect_wallet_description": "A Solana wallet is required to complete the challenge and unlock NFTs",
     "back_to_lessons": "Back to Lessons",
+    "back_to_homepage": "Back to Homepage",
+    "head_to_challenges": "Back to Challenges", 
     "requirements_title": "Challenge",
     "upload_program_btn": "Upload Program",
     "run_program_btn": "Execute",

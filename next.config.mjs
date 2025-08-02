@@ -40,6 +40,15 @@ const withMDX = createMDX({
           theme: "dracula-soft",
           // aurora-x
           keepBackground: false,
+          transformers: [
+            {
+              span(node) {
+                if (this.options.lang === "bash" || this.options.lang === "sh") {
+                  delete node.properties.style;
+                }
+              },
+            },
+          ],
         },
       ],
     ],

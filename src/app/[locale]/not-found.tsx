@@ -2,42 +2,39 @@
 import { Link } from "@/i18n/navigation";
 import Button from "../components/Button/Button";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 export default function NotFound() {
   const pathname = usePathname();
+  const t = useTranslations();
 
   const isChallengesRoute = pathname.includes("/challenges");
   const isCoursesRoute = pathname.includes("/courses");
-
+  
   // Set appropriate content based on the route
   let message: string;
   let buttons: React.ReactNode;
-
+  
   if (isChallengesRoute) {
     message = "The challenge you are looking for doesn't exist.";
     buttons = (
       <Link href="/challenges">
-        <Button icon="ArrowLeft" label="Head to Challenges" />
+        <Button icon="ArrowLeft" label={t("ChallengePage.head_to_challenges")} />
       </Link>
     );
   } else if (isCoursesRoute) {
     message = "The course or lesson you are looking for doesn't exist.";
     buttons = (
       <Link href="/">
-        <Button icon="ArrowLeft" label="Head to Courses" />
+        <Button icon="ArrowLeft" label={t("ChallengePage.back_to_lessons")} />
       </Link>
     );
   } else {
     message = "The page you are looking for doesn't exist.";
     buttons = (
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Link href="/">
-          <Button icon="ArrowLeft" label="Head to Courses" />
-        </Link>
-        <Link href="/challenges">
-          <Button icon="ArrowLeft" label="Head to Challenges" />
-        </Link>
-      </div>
+      <Link href="/">
+        <Button icon="ArrowLeft" label={t("ChallengePage.back_to_homepage")} />
+      </Link>
     );
   }
 
