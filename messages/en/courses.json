@@ -35,8 +35,8 @@
       "title": "Introduction to Assembly",
       "lessons": {
         "assembly-101": "Assembly 101",
-        "instruction": "Instruction",
         "registers-and-memory": "Registers and Memory",
+        "instruction": "Instruction",
         "tooling": "Tooling",
         "program-example": "Program Example",
         "conclusions": "Conclusions"
