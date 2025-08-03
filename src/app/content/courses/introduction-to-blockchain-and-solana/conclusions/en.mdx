@@ -2,24 +2,51 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Conclusions
 
-Congratulations! You've completed the Introduction to Blockchain and Solana course. You now have a solid understanding of blockchain fundamentals and how Solana works as a high-performance blockchain platform.
+Congratulations! You've completed the Introduction to Blockchain and Solana course. You now have a solid understanding of blockchain fundamentals and how Solana works as a high-performance blockchain.
 
-<ArticleSection name="What you've learned" id="what-you-learned" level="h2" />
+Throughout this course, we've traced the evolution of blockchain technology from its theoretical foundations to its practical implementation in modern platforms like Solana. This journey reveals how fundamental computer science problems led to revolutionary solutions that continue to shape our digital future.
 
-Throughout this course, you've gained essential knowledge about:
-- The evolution of the web from Web1.0 to Web3.0 and how blockchain enables the "read-write-own" web
-- Key differences between Web2 and Web3 architectures, including the shift from client-server to peer-to-peer models
-- The fundamental differences between Bitcoin, Ethereum, and Solana, and their respective use cases
-- Solana's unique account-based architecture, where everything is an account owned by a program
+## Distributed Systems
+
+We began by exploring why distributed systems are inherently difficult. 
+- The CAP Theorem showed us that we cannot simultaneously achieve consistency, availability, and partition tolerance. 
+- The Byzantine Generals Problem demonstrated that coordinating untrusted parties seemed mathematically impossible. 
+
+These weren't just academic exercises: they represented real barriers that prevented the creation of truly decentralized digital systems.
+
+For decades, computer scientists accepted that you had to choose: either trust a central authority or accept the limitations of Byzantine fault tolerance in small, known networks. The idea of a permissionless, decentralized system that could scale globally while remaining secure appeared to violate fundamental mathematical constraints.
+
+## Blockchains 
+
+The blockchain revolution emerged from combining well-established cryptographic primitives in novel ways. 
+- Hash functions provided immutable fingerprints for data integrity. 
+- Digital signatures enabled authentication without trusted intermediaries. 
+- Merkle trees made verification scalable and efficient.
+
+These tools weren't new, they had existed for decades. The breakthrough was recognizing how they could work together with economic incentives to solve the Byzantine Generals Problem at scale. Instead of trying to identify who to trust, blockchain systems made lying economically more expensive than telling the truth.
+
+This created a trustless system where trust was placed in mathematics rather than centralized entities. For the first time, global networks of strangers could maintain consensus on shared data without any central authority.
+
+## The Evolution
+
+Bitcoin proved the concept was possible, optimizing for security and decentralization at the expense of scalability. 
+
+Its UTXO model and Proof of Work consensus created digital money that worked without banks, solving the double-spending problem that had plagued previous digital currency attempts.
+
+Ethereum expanded the vision beyond payments to general-purpose computation. 
+
+By introducing smart contracts and an account-based model, Ethereum demonstrated that blockchains could support any application, not just financial transactions. However, this flexibility came with new bottlenecks as sequential execution limited throughput.
+
+Solana represents the next evolutionary step, redesigning blockchain architecture from first principles to achieve the seemingly impossible: high performance without sacrificing decentralization or security. 
+
+Through innovations like Proof of History, parallel execution, and stateless programs, Solana pushes the boundaries of what blockchain systems can achieve.
+
+## Solana
+
+You then discovered all the several fundamental concepts that make Solana unique:
+
+- Solana's account-based architecture, where everything is an account owned by a program
 - How Solana transactions work with atomic, multi-instruction capabilities
 - The stateless nature of Solana programs and how they operate on external accounts
 - Program Derived Addresses (PDAs) and their role in deterministic address generation and program signing
 - Cross Program Invocation (CPI) and how it enables composability between programs
-
-<ArticleSection name="Next Steps" id="next-steps" level="h2" />
-
-You're now ready to start building on Solana! Here are some recommended next steps:
-
-1. Learn more about how tokens work on Solana in the [Tokens on Solana Course](/en/courses/tokens-on-solana).
-2. Explore the [Challenges section](/en/challenges) for hands-on exercises.
-3. Join our community to share your ideas and implementations, and to get help.
