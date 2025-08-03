@@ -2,7 +2,15 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # sBPF Registers and Memory Model
 
-sBPF provides 11 general-purpose 64-bit registers inherited from eBPF, but with Solana-specific calling conventions and memory layout constraints that directly impact how you write assembly code:
+When your sBPF program executes, it operates with two primary storage mechanisms: 11 high-speed registers built into the processor and organized memory regions that hold everything else.
+
+<ArticleSection name="Registers" id="registers" level="h2" />
+
+Registers are like 11 numbered storage slots (`r0` through `r10`) built directly into the processor. Each holds a single 64-bit value and provides instant access without delays. When you execute `add64 r1, r2`, the processor immediately retrieves values from both registers and performs the calculation.
+
+The tradeoff is simple: you only get 11 boxes total, so you need to use them strategically for the values you're actively working with.
+
+sBPF assigns specific roles to each register:
 
 | Register | Role | Callee-saved? | Usage Notes |
 |----------|------|---------------|-------------|
@@ -12,13 +20,15 @@ sBPF provides 11 general-purpose 64-bit registers inherited from eBPF, but with 
 | `r6-r9` | General purpose | Yes | Must preserve across calls |
 | `r10` | Frame pointer | Yes, read-only | Stack base, cannot modify directly |
 
-- **Callee-saved registers** (`r6`-`r9`) must contain the same values on function exit as they did on entry. The call and exit instructions automatically handle saving and restoring these registers, but you're responsible for not corrupting them within your function.
+Registers `r6` through `r9` are "callee-saved," meaning their values persist across function calls. Use these for important data that must survive function invocations. 
 
-- **The frame pointer** `r10` is read-only and points to the base of your current stack frame. Unlike traditional architectures where you might manipulate a stack pointer, sBPF uses negative offsets from `r10` for stack access: `ldxdw r0, [r10 - 8]` loads the first 8 bytes from your stack frame.
+The remaining registers (`r0`-`r5`) get overwritten during syscalls and function calls.
 
-<ArticleSection name="Fixed Virtual Memory Map" id="fixed-virtual-memory-map" level="h2" />
+Register `r10` is "special" because it serves as your frame pointer, pointing to your stack space base and remaining read-only. You access stack variables using negative offsets like `[r10 - 8]` and `[r10 - 16]`.
 
-sBPF uses a fixed virtual memory map that determines where different types of data live:
+<ArticleSection name="Memory" id="memory" level="h2" />
+
+While registers hold actively used values, memory stores everything else. sBPF organizes memory into fixed regions with identical layouts across all programs:
 
 | Region | Start Address | Purpose | Size/Notes |
 |--------|---------------|---------|------------|
@@ -27,15 +37,43 @@ sBPF uses a fixed virtual memory map that determines where different types of da
 | Heap | 0x300000000 | Dynamic allocation | Via `sol_alloc_free` |
 | Input | 0x400000000 | Program parameters | Serialized arguments |
 
-- The **text region** contains your executable code plus any read-only data like string constants. When you define data with `.quad` or similar directives, it typically ends up here.
-- The **stack region** is where local variables live. With `r10` pointing to the stack base, you access locals with negative offsets: `[r10 - 16]`, `[r10 - 24]`, etc. The stack is limited to 32 KiB total.
-- The **input region** is where Solana places your program's parameters. On entry, `r1` points to this region (`0x400000000`), letting you read the serialized account data and instruction parameters passed to your program.
+- The **text region** contains your executable code and read-only data like string constants. Data defined with `.quad` directives typically resides here.
+- The **stack region** houses local variables. With `r10` pointing to the stack base, you access locals using negative offsets: `[r10 - 16]`, `[r10 - 24]`, etc. The stack is limited to 32 KiB total.
+- The **input region** contains your program's parameters. On entry, `r1` points to this region (`0x400000000`), allowing you to read serialized account data and instruction parameters passed to your program.
+
+This fixed layout provides three key benefits: security through memory isolation between programs, determinism with identical addresses across all validators, and performance through compiler optimizations for known locations.
 
 > Attempting to access unmapped addresses triggers an AccessViolation and the transaction fails.
 
+<ArticleSection name="Using Registers and Memory" id="using-registers-and-memory" level="h2" />
+
+Here's how registers and memory work together in practice:
+
+```assembly
+.globl entrypoint
+entrypoint:
+    # On entry: r1 points to input data at 0x400000000
+    
+    ldxdw r0, [r1 + 0]      # Load first 8 bytes from input into r0
+    mov64 r2, 42            # Put 42 in register r2
+    add64 r0, r2            # Add them: r0 = r0 + r2
+    
+    stxdw [r10 - 8], r0     # Store result on stack
+    mov64 r0, 0             # Return success
+    exit
+```
+
+This program demonstrates the typical pattern:
+- Uses register `r1` (input pointer) to read from memory
+- Uses registers `r0` and `r2` for calculations
+- Uses register `r10` (frame pointer) to access stack memory
+- Returns the result in register `r0`
+
+The workflow follows a consistent pattern: load data from memory into registers, perform calculations with registers, then store results back to memory when needed.
+
 ### Stack Usage
 
-The stack operates with `r10` as the frame pointer pointing to the base of the current stack frame (highest address). Local variables are addressed with negative offsets:
+The stack operates with `r10` as the frame pointer, pointing to the base of your current stack frame (the highest address). Local variables use negative offsets:
 
 ```assembly
 # Store a value on the stack
@@ -46,9 +84,11 @@ stxdw [r10 - 8], r0         ; Store at first stack slot
 ldxdw r1, [r10 - 8]         ; Load from first stack slot
 ```
 
+Stack slots are typically 8 bytes wide, so consecutive variables use offsets like `[r10 - 8]`, `[r10 - 16]`, `[r10 - 24]`, and so on.
+
 ### Program Entry and Exit
 
-Your program begins execution at the symbol marked with `.globl` (typically `entrypoint` or `e`). The initial register state is minimal:
+Your program begins execution at the symbol marked with `.globl` (typically entrypoint). The initial register state is minimal and predictable:
 
 ```assembly
 .globl entrypoint
@@ -63,9 +103,8 @@ entrypoint:
     exit            # Return to runtime
 ```
 
-The exit behavior depends on call depth:
+Exit behavior depends on call depth:
+- At call depth 0, exit terminates the program with `r0` as the result code. 
+- At deeper call levels, exit acts like a return statement, restoring caller-saved registers (`r6`-`r9`) and the caller's frame pointer (`r10`) before continuing execution at the return address.
 
-- Call depth 0: exit terminates the program with `r0` as the result code
-- Call depth > 0: exit acts like return, restoring caller-saved registers (`r6`-`r9`), the caller's frame pointer (`r10`), and continuing execution at the return address
-
-The runtime implicitly adds prologue/epilogue code to handle setup and teardown, including initial register state and final return handling.
+The runtime automatically handles setup and teardown through implicit prologue and epilogue code, including initial register state configuration and final return processing.
