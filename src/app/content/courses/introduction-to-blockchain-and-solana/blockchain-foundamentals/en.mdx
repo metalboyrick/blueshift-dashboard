@@ -1,0 +1,113 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Blockchain Foundamentals
+
+Now that you understand why distributed systems are fundamentally hard and why the Byzantine Generals Problem seemed unsolvable, let's explore how blockchain actually works.
+
+The breakthrough came from combining two key innovations: novel consensus mechanisms and clever use of cryptographic primitives.
+
+<ArticleSection name="Consensus Mechanisms" id="consensus-mechanisms" level="h2" />
+
+Computer scientists actually solved the Byzantine Generals Problem mathematically in the 1980s, showing that to tolerate f traitors, you need at least `3f+1` total participants.
+
+Consider 4 generals where 1 is a traitor. The traitor sends "attack" to generals A and B, but "retreat" to general C. Now A and B believe the majority wants to attack, while C believes the majority wants to retreat. Without additional communication rounds, they cannot reach consensus.
+
+But with 7 generals and 2 traitors, the 5 honest generals form a majority that can overcome conflicting messages through multiple rounds of sharing what they've heard from others.
+
+The mathematical solution worked but was impractical:
+- You must know exactly who all participants are in advance
+- Multiple message rounds between every pair of participants
+- Communication complexity grows exponentially
+- In a permissionless system, attackers can create unlimited fake identities
+
+To solve this problem, instead of counting identities, blockchains count something expensive to fake: computational work or staked money.
+
+### Proof of Work
+
+In POW systems, to propose what should happen next, you must prove you've done expensive computational work:
+- Miners gather pending transactions into a "block"
+- Miners must find a random number (called a "nonce") that,when combined with the block data and hashed, produces a result starting with multiple zeros
+- The first miner to find this number broadcasts their solution to the network
+- Other participants can instantly verify the solution is correct and accept the new block
+
+This works because finding the nonce requires trillions of random guesses, but verifying the solution takes milliseconds. 
+
+Each block also references the previous block's hash, creating a chain. To rewrite history, an attacker would need to redo all subsequent computational work while honest miners continue extending the real chain.
+
+The security assumption is attacking costs more in electricity than the attacker could gain.
+
+### Proof of Stake
+
+In POS systems, instead of burning electricity, participants put their own money at risk:
+- Participants lock up cryptocurrency tokens as collateral
+- The protocol randomly selects validators to propose blocks, weighted by their stake
+- Selected validators propose blocks, and other validators vote to accept or reject
+- Honest behavior earns rewards; dishonest behavior results in "slashing" (losing half of their staked tokens)
+
+This works because validators have "skin in the game". Attacking the network would destroy the value of their staked tokens (through slashing). Additionally, unlike Proof of Work, Proof of Stake can provide mathematical finality: after enough validators commit, reversal becomes mathematically impossible.
+
+### The Blockchain Trilemma
+
+Just as distributed systems face the CAP Theorem, blockchains face their own impossible trade-off. The Blockchain Trilemma states that blockchain consensus can optimize for at most two of these three properties:
+- Security: Resistance to attacks and censorship
+- Scalability: High transaction throughput
+- Decentralization: No single point of control
+
+Bitcoin chose security and decentralization over scalability. Traditional payment systems like Visa chose scalability and security over decentralization. The ongoing challenge is finding ways to achieve all three simultaneously.
+
+<ArticleSection name="Cryptographic Primitives" id="cryptographic-primitives" level="h2" />
+
+Consensus mechanisms solve the "who decides" problem, but how do we ensure the data itself is trustworthy?
+
+This is where cryptographic primitives come in: mathematical tools that have been battle-tested for decades. 
+
+Blockchains rely on three key cryptographic tools that work together to create an immutable, verifiable system:
+
+### Hash Functions
+
+Imagine you need to verify that a massive document hasn't been altered, but you can only send a tiny piece of information to prove it. This is exactly what hash functions accomplish.
+
+A hash function takes any input (whether it's the word "Hello," the entire works of Shakespeare, or a block containing thousands of transactions) and produces a fixed-size output that serves as a unique digital fingerprint.
+
+Hash functions have two properties:
+- Deterministic: The same input always produces the same output.
+- Avalanche Effect: Change even a single character, and the entire hash changes completely.
+
+Consider these SHA-256 hashes:
+
+```
+SHA-256("Hello") = 185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969
+SHA-256("hello") = 2cf24dfa6b4f4acd83b07d8d16e6c1c6e8e5b6d77d1b8e0b7d6c9a8b7a6c5d4e3
+```
+
+Notice how changing just the capitalization of one letter creates a completely different hash. 
+
+While it's trivial to compute a hash from any input, it's computationally impossible to reverse the process. Given a hash, you cannot figure out what the original input was since this would take longer than the age of the universe for a secure hash function.
+
+In blockchains, hashes are used for integrity: every block contains the hash of the previous block, creating an unbreakable chain. If someone tries to modify a transaction from last week, they would change that block's hash. Since the next block references the old hash, the modification would break the chain. To fix this, they'd need to recalculate every subsequent block's hash while the network continues adding new blocks. An impossible game of catch-up.
+
+### Digital signatures
+
+Traditional authentication relies on shared secrets like passwords, but blockchain operates without trusted authorities or secure channels to share secrets. For this reason they use digital signatures since they enable authentication without revealing any secret information.
+
+Digital signatures use asymmetric cryptography which relies on mathematical relationships that are easy to compute in one direction but nearly impossible to reverse. When you create a digital signature, you generate two mathematically related numbers called a private key and a public key; the private key must remain secret while the public key can be shared freely.
+
+- The private key can be used to create a digital signature for a specific transaction
+- The signature is unique to both your private key and the exact transaction content
+- Anyone can use your public key to verify the signature could only have been created by someone with the corresponding private key
+
+Without your private key, it's computationally impossible to create a valid signature, even with access to millions of previous signatures. Each signature is unique to its specific transaction, so intercepted signatures can't be reused.
+
+This creates "non-repudiation": once you've signed a transaction, you can't claim you didn't authorize it. The mathematical proof is irrefutable.
+
+In blockchains, this is how wallets work. Your "wallet" doesn't store cryptocurrency; the coins exist as entries on the blockchain. Instead, wallets store private keys and help create digital signatures to prove you can spend those coins. They're essentially digital signature managers.
+
+### Merkle Trees
+
+How do you verify that a specific transaction exists in a block containing thousands of other transactions without downloading the entire block?
+
+Merkle trees organize data in a binary tree where each leaf represents a transaction, and each parent node contains the hash of its two children. This continues up the tree until you reach a single root hash representing the entire dataset.
+
+For this reason, to prove any transaction exists in the tree, you only need the transaction and the "Merkle path": the sibling hashes needed to reconstruct the root. This means that for a tree with a million transactions, you need only about 20 hashes to prove inclusion.
+
+In blockchains Merkle Trees makes it extremely easy verify transactions with just a few kilobytes of proof. The security guarantee remains identical: if the Merkle path verifies correctly, you can be mathematically certain the transaction was included in that block.
