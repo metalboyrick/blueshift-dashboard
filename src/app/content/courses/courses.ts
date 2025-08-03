@@ -45,6 +45,21 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     ],
   },
   {
+    slug: "introduction-to-assembly",
+    language: "Assembly",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "assembly-101" },
+      { slug: "instruction" },
+      { slug: "registers-and-memory" },
+      { slug: "tooling" },
+      { slug: "program-example" },
+      { slug: "conclusions" },
+    ],
+  },
+  {
     slug: "program-security",
     language: "General",
     color: "0,255,255",
