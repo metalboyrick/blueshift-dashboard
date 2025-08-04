@@ -493,9 +493,7 @@ This is ideal because:
 
 <ArticleSection name="Dynamically Sized Data" id="dynamically-sized-data" level="h2" />
 
-Whenever possible, avoid storing dynamically sized data directly in accounts. However, some use cases require it. 
-
-> In Pinocchio, handling dynamic data is more challenging than in Anchor or standard Rust, primarily due to the `no_std` environment, which prevents us from using heap-allocated types like `Vec` or `String`.
+Whenever possible, avoid storing dynamically sized data directly in accounts. However, some use cases require it.
 
 If your account contains dynamic data, always place all statically sized fields at the beginning of your struct, and append the dynamic data at the end.
 
