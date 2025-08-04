@@ -107,7 +107,7 @@ First, let's look at the struct definition:
 
 <Codeblock lang="rust">
 ```rust
-use pinocchio::{account_info::{AccountInfo, Ref}, program_error::ProgramError, pubkey::Pubkey};
+use pinocchio::{program_error::ProgramError, pubkey::Pubkey};
 use core::mem::size_of;
 
 #[repr(C)]
@@ -203,7 +203,7 @@ impl Escrow {
 
 The implementation provides several key features:
 1. **Exact Size Calculation**: `LEN` precisely calculates the account size by summing each field's size
-2. **Safe Loading**: `from_account_info` provides a safe way to load and validate escrow data
+2. **Safe Loading**: `load` provides a safe way to load and validate escrow data
 3. **Performance Optimizations**:
    - `#[inline(always)]` on getters for maximum performance
    - Unsafe methods for when we know the borrow is safe
