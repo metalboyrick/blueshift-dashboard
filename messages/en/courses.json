@@ -1,5 +1,15 @@
 {
   "courses": {
+    "introduction-to-blockchain-and-solana": {
+      "title": "Introduction to Blockchain and Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "blockchain-fundamentals": "Blockchain Fundamentals",
+        "blockchain-evolution": "Blockchain Evolution",
+        "introduction-to-solana": "Introduction to Solana",
+        "conclusion": "Conclusion"
+      }
+    },
     "introduction-to-anchor": {
       "title": "Introduction to Anchor",
       "lessons": {
