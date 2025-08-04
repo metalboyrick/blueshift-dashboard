@@ -143,13 +143,13 @@ This can be used for maximum performance with properly aligned structs but it re
 ```rust
 #[repr(C)]
 pub struct Config {
-    authority: Pubkey,
-    mint_x: Pubkey, 
-    mint_y: Pubkey,
-    seed: u64,        // This field requires 8-byte alignment
-    fee: u16,         // This field requires 2-byte alignment  
-    state: u8,
-    config_bump: u8,
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    pub seed: u64,        // This field requires 8-byte alignment
+    pub fee: u16,         // This field requires 2-byte alignment  
+    pub state: u8,
+    pub config_bump: u8,
 }
 
 impl Config {
@@ -170,16 +170,17 @@ impl Config {
     }
 }
 
-// Alternative: Avoid alignment issues entirely by using byte arrays
+// Alternative: Avoid alignment issues entirely by using byte arrays for types with
+// alignment requirement greater than 1 and provide accessor methods
 #[repr(C)]
 pub struct ConfigSafe {
-    authority: [u8; 32],
-    mint_x: [u8; 32], 
-    mint_y: [u8; 32],
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
     seed: [u8; 8],      // Convert with u64::from_le_bytes when needed
     fee: [u8; 2],       // Convert with u16::from_le_bytes when needed
-    state: u8,
-    config_bump: u8,
+    pub state: u8,
+    pub config_bump: u8,
 }
 
 impl ConfigSafe {
@@ -188,7 +189,7 @@ impl ConfigSafe {
             return Err(ProgramError::InvalidAccountData);
         }
 
-        // No alignment check needed - everything is u8 aligned
+        // SAFETY: No alignment check needed - everything is u8 aligned
         Ok(unsafe { &*(data.as_ptr() as *const Self) })
     }
     
@@ -202,7 +203,7 @@ impl ConfigSafe {
 }
 ```
 
-As you can see, all the struct fields are private. This is because we should always use accessor methods to read data, even with properly aligned structs.
+As you can see, both seed and fee fields are private. This is because we should always use accessor methods to read data, since their values are represented by byte arrays.
 
 When you access a field directly (`config.seed`), the compiler may need to create a reference to that field's memory location, even temporarily. If that field is not properly aligned, creating the reference is undefined behavior, even if you never explicitly use the reference!
 
@@ -426,14 +427,6 @@ impl Config {
         // SAFETY: We've verified length and alignment
         Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
     }
-
-    pub fn set_authority(&mut self, authority: Pubkey) {
-        self.authority = authority;
-    }
-    
-    pub fn set_fee(&mut self, fee: u16) {
-        self.fee = fee;
-    }
 }
 ```
 
@@ -446,11 +439,11 @@ The best of both worlds: we can use byte arrays internally but provide ergonomic
 ```rust
 #[repr(C)]
 pub struct ConfigSafe {
-    pub authority: [u8; 32],
-    pub mint_x: [u8; 32], 
-    pub mint_y: [u8; 32],
-    pub seed: [u8; 8],
-    pub fee: [u8; 2],
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    seed: [u8; 8],
+    fee: [u8; 2],
     pub state: u8,
     pub config_bump: u8,
 }
@@ -465,22 +458,22 @@ impl ConfigSafe {
         Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
     }
     
+    pub fn seed(&self) -> u64 {
+        u64::from_le_bytes(self.seed)
+    }
+    
+    pub fn fee(&self) -> u16 {
+        u16::from_le_bytes(self.fee)
+    }
+
     // Setters that handle endianness correctly
+
     pub fn set_seed(&mut self, seed: u64) {
         self.seed = seed.to_le_bytes();
     }
     
     pub fn set_fee(&mut self, fee: u16) {
         self.fee = fee.to_le_bytes();
-    }
-    
-    pub fn set_authority(&mut self, authority: &Pubkey) {
-        self.authority.copy_from_slice(authority.as_ref());
-    }
-    
-    // Single bytes can be set directly
-    pub fn set_state(&mut self, state: u8) {
-        self.state = state;
     }
 }
 ```
@@ -755,7 +748,7 @@ pub fn resize_account(
     }
 
     // Reallocate the account
-    account.resize(new_size, zero_out)?;
+    account.resize(new_size)?;
 
     Ok(())
 }
