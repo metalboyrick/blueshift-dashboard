@@ -7,6 +7,8 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 This challenge serves as an excellent introduction to sBPF assembly programming on Solana since we'll explore the simplicity of a bite-size memo program written directly in sBPF assembly. This program demonstrates fundamental concepts of Solana's assembly programming by creating a basic memo that prints instruction data to the Solana log.
 
+If you're not familiar with how to write assembly program, follow the [introduction to Assembly course](en/courses/introduction-to-assembly)
+
 <ArticleSection name="Program Structure" id="program-structure" level="h2" />
 
 Let's look at the complete program first, then break it down section by section:
@@ -89,18 +91,3 @@ exit      ; Return using r0 value
 The program:
 1. Calls helper ID 16 (`sol_log_`) to print the memo to the validator log
 2. Exits using the value in `r0`
-
-
-<ArticleSection name="Conclusion" id="conclusion" level="h2" />
-
-You can now test your program against our unit tests and claim your NFTs!
-
-Start by building your program using the following command in your terminal:
-
-```
-coming soon
-```
-
-This will generate a `.so` file in your `target/deploy` folder. 
-
-Now click on the `take challenge` button and drop the file there!

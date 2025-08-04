@@ -4,5 +4,21 @@ import { Requirement } from "../../../../components/Challenges/Requirement";
 
 <ChallengeTitle>sBPF Assembly Memo</ChallengeTitle>
 
-The program only has one instruction and no accounts. It sets the `r0` register to the number of accounts in the instruction data, `r2` to the length of the instruction data, and `r1` to the offset of the instruction data, then invokes the `sol_log_` syscall.
+Create a program only has one instruction. It must:
+- Set the `r0` register to the number of accounts in the instruction data, 
+- Set `r2` to the length of the instruction data, and `r1` to the offset of the instruction data, 
+- Invoke the `sol_log_` syscall.
+
+Start by insalling the sBPF package like explained in the [tooling section](en/courses/introduction-to-assembly/tooling) of the Introduction to Assembly course and build your program using the following command in your terminal:
+
+```
+sbpf light-build
+```
+
+This will generate a `.so` file in your `target/deploy` folder. 
+
+Now click on the `take challenge` button and drop the file there!
+
+
+
 
