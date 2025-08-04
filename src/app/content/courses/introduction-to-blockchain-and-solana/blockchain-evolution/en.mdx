@@ -20,7 +20,7 @@ This timing isn't arbitrary. Faster blocks would cause network splits where mine
 
 ### The UTXO Model 
 
-Bitcoin doesn't track account balances like banks do. Instead, it tracks individual "coins" using UTXOs (Unspent Transaction Outputs) similarly to how physical cash work.
+Bitcoin doesn't track account balances like banks do. Instead, it tracks individual "coins" using UTXOs (Unspent Transaction Outputs), which function similarly to physical cash.
 
 Imagine you have three $20 bills in your wallet and want to buy something that costs $35. You can't split a $20 bill, so you give the cashier two bills ($40) and receive $5 in change. Bitcoin works exactly the same:
 
@@ -74,17 +74,17 @@ This account model enables persistent state—data that survives across transact
 
 This makes applications like lending protocols, governance systems, and complex financial instruments possible.
 
-All of this is possible thank to the Ethereum Virtual Machine (EVM) that runs on every node, making the blockchain programmable. It defines what programs can run, how they execute, and what resources they consume.
+All of this is possible thanks to the Ethereum Virtual Machine (EVM), which runs on every node and makes the blockchain programmable. It defines what programs can run, how they execute, and what resources they consume.
 
 <ArticleSection name="Solana" id="solana" level="h2" />
 
 Ethereum demonstrated that blockchains could support general-purpose computation, but this success revealed scalability constraints. As decentralized applications gained adoption, network congestion led to high transaction fees and slower confirmation times. 
 
-These limitations stemmed from fundamental architectural decisions in Ethereum's design that Solana attempts to address through architectural innovations, redesigning core blockchain components from first principles.
+These limitations stemmed from fundamental architectural decisions in Ethereum's design, which Solana attempts to address through architectural innovations by redesigning core blockchain components from first principles.
 
 ### Consensus
 
-Solana uses Proof of Stake but adds a crucial innovation: Proof of History. Instead of waiting for consensus on when events happened, Solana creates a cryptographic clock that timestamps all transactions before consensus allowing validators to process transactions in parallel since they already know the correct order.
+Solana uses Proof of Stake but adds a crucial innovation: Proof of History. Instead of waiting for consensus on when events happened, Solana creates a cryptographic clock that timestamps all transactions before consensus, allowing validators to process transactions in parallel since they already know the correct order.
 
 This temporal ordering enables much faster consensus: Solana produces blocks every 400 milliseconds compared to Ethereum's 12 seconds.
 
@@ -98,4 +98,4 @@ Solana fundamentally rethinks this architecture:
 - Optimized Execution: The SVM uses a register-based architecture instead of the EVM's stack-based approach, reducing the overhead of moving data around during computation. Programs compile to native machine code rather than bytecode, eliminating interpretation overhead.
 - Predictable Costs: Instead of Ethereum's fixed gas prices determined years ago, Solana uses dynamic fee markets where transaction costs reflect actual network demand and computational resources consumed.
 
-The result is that Solana can process over 5,000 transactions per second (tps) compared to Ethereum's 15 tps, while maintaining sub-second finality and decentralization. This performance comes from architectural decisions that prioritize parallel execution over the sequential processing model inherited from single-threaded computing.
+The result is that Solana can process over 5,000 transactions per second (TPS) compared to Ethereum's 15 TPS, while maintaining sub-second finality and decentralization. This performance comes from architectural decisions that prioritize parallel execution over the sequential processing model inherited from single-threaded computing.

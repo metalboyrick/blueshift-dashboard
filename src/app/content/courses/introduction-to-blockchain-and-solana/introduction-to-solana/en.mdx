@@ -30,11 +30,7 @@ Every account has a unique 32-byte address, displayed as a base58-encoded string
 
 Accounts can store up to 10 MiB of data, which can contain either executable program code or program-specific data.
 
-All accounts require a lamport deposit proportional to their data size to achieve what we called "rent exemption". 
-
-The term "rent" is historical: originally, lamports were deducted from accounts each epoch, but this feature is now deactivated. 
-
-Today, the deposit works more like a refundable down payment: as long as your account maintains the minimum balance for its data size, it remains rent-exempt and persists indefinitely. When you no longer need an account, you can close it and recover this deposit entirely.
+All accounts require a lamport deposit proportional to their data size to become "rent-exempt." The term "rent" is historical, as lamports were originally deducted from accounts each epoch, but this feature is now disabled. Today, the deposit works more like a refundable deposit. As long as your account maintains the minimum balance for its data size, it remains rent-exempt and persists indefinitely. When you no longer need an account, you can close it and recover this deposit entirely.
 
 Every account is owned by a program, and only that owning program can modify the account's data or withdraw its lamports. However, anyone can increase an account's lamport balance, which is useful for funding operations or paying rent without relying on calling the program itself.
 
@@ -44,11 +40,11 @@ Signing authority works differently depending on ownership. Accounts owned by th
 
 The most common account type is the System Account, which stores lamports (the smallest unit of SOL) and is owned by the System Program. These function as basic wallet accounts that users interact with directly for sending and receiving SOL.
 
-Token Accounts serve a specialized purpose, storing SPL token information including ownership and token metadata. The Token Program owns these accounts and manages all token-related operations across the Solana ecosystem. Tokens Accounts are _Data Accounts_.
+Token Accounts serve a specialized purpose, storing SPL token information, including ownership and token metadata. The Token Program owns these accounts and manages all token-related operations across the Solana ecosystem. Token Accounts are _Data Accounts_.
 
 Data Accounts store application-specific information and are owned by custom programs. These accounts hold your application's state and can be structured however your program requires, from simple user profiles to complex financial data.
 
-Finally Program Accounts contain the executable code that runs on Solana; essentially is where the smart contract lives. These accounts are marked as `executable: true` and store the actual bytecode where the program logic that processes instructions and manages state lives.
+Finally, Program Accounts contain the executable code that runs on Solana, which is where the smart contract lives. These accounts are marked as `executable: true` and store the program's logic that processes instructions and manages state.
 
 ### Working with Account Data
 
@@ -167,7 +163,7 @@ For transparency and security, users can verify that on-chain programs match the
 
 PDAs are deterministically generated addresses that enable powerful programmability patterns. They're created using seeds and a program ID, producing addresses without corresponding private keys.
 
-PDAs use `SHA-256` hashing with specific inputs including your custom seeds, a bump value to ensure the result is off-curve, the program ID that will own the PDA, and a constant marker. 
+PDAs use `SHA-256` hashing with specific inputs, including your custom seeds, a bump value to ensure the result is off-curve, the program ID that will own the PDA, and a constant marker.
 
 When the hash produces an on-curve address (which happens approximately 50% of the time), the system iterates from bump 255 down to 254, 253, and so on until finding an off-curve result.
 
@@ -206,7 +202,7 @@ CPIs enable programs to call other programs within the same transaction, creatin
 
 This allows developers to build complex applications by combining existing programs rather than rebuilding functionality from scratch.
 
-CPIs follow the same pattern as regular instructions, requiring you to specify the target program, the accounts it needs, and the instruction data with the main difference that they can be performed inside other programs. 
+CPIs follow the same pattern as regular instructions, requiring you to specify the target program, the accounts it needs, and the instruction data, with the main difference being that they can be performed inside other programs.
 
 The calling program maintains control over the flow while delegating specific operations to specialized programs:
 
@@ -225,8 +221,6 @@ token_program::cpi::transfer(cpi_ctx, amount)?;
 
 Original transaction signers maintain their authority throughout CPI chains, allowing programs to act on behalf of users seamlessly. 
 
-However, programs can only make CPIs up to 4 levels deep (`A → B → C → D`) to prevent infinite recursion. P
-
-rograms can also sign for their PDAs in CPIs using `CpiContext::new_with_signer`, enabling sophisticated autonomous operations.
+However, programs can only make CPIs up to 4 levels deep (`A → B → C → D`) to prevent infinite recursion. Programs can also sign for their PDAs in CPIs using `CpiContext::new_with_signer`, enabling sophisticated autonomous operations.
 
 This composability enables complex operations across multiple programs within a single atomic transaction, making Solana applications highly modular and interoperable.

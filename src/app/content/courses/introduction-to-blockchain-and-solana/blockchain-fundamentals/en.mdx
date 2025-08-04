@@ -86,17 +86,17 @@ Notice how changing just the capitalization of one letter creates a completely d
 
 While it's trivial to compute a hash from any input, it's computationally impossible to reverse the process. Given a hash, you cannot figure out what the original input was since this would take longer than the age of the universe for a secure hash function.
 
-In blockchains, hashes are used for integrity: every block contains the hash of the previous block, creating an unbreakable chain. If someone tries to modify a transaction from last week, they would change that block's hash. Since the next block references the old hash, the modification would break the chain. To fix this, they'd need to recalculate every subsequent block's hash while the network continues adding new blocks. A practically impossible game of catch-up.
+In blockchains, hashes are used for integrity. Every block contains the hash of the previous block, creating an unbreakable chain. If someone were to modify a transaction from last week, they would change that block's hash. Since the next block references the old hash, the modification would break the chain. To fix this, they'd need to recalculate every subsequent block's hash while the network continues adding new blocks, which is a practically impossible game of catch-up.
 
 ### Digital signatures
 
-Traditional authentication relies on shared secrets like passwords, but blockchain operates without trusted authorities or secure channels to share secrets. For this reason they use digital signatures, since they enable authentication without revealing any secret information.
+Traditional authentication relies on shared secrets like passwords, but blockchain operates without trusted authorities or secure channels to share secrets. For this reason, they use digital signatures, which enable authentication without revealing any secret information.
 
 Digital signatures use asymmetric cryptography which relies on mathematical relationships that are easy to compute in one direction but nearly impossible to reverse. When you create a digital signature, you generate two mathematically related numbers called a private key and a public key; the private key must remain secret while the public key can be shared freely.
 
 - The private key can be used to create a digital signature for a specific transaction
-- The signature is unique to both your private key and the exact transaction content
-- Anyone can use your public key to verify the signature could only have been created by someone with the corresponding private key
+- The signature is unique to both your private key and the exact transaction content.
+- Anyone can use your public key to verify that the signature could only have been created by someone with the corresponding private key.
 
 Without your private key, it's computationally impossible to create a valid signature, even with access to millions of previous signatures. To prevent an attacker from replaying an old transaction, each signature must include a unique piece of data, often a simple counter called a "nonce", ensuring every signature is unique.
 
@@ -112,7 +112,7 @@ Merkle trees organize data in a binary tree where each leaf represents a transac
 
 For this reason, to prove any transaction exists in the tree, you only need the transaction and the "Merkle path": the sibling hashes needed to reconstruct the root. This means that for a tree with a million transactions, you need only about 20 hashes to prove inclusion.
 
-In blockchains Merkle trees make it extremely easy to verify transactions with just a few kilobytes of proof. The security guarantee remains identical: if the Merkle path verifies correctly, you can be mathematically certain the transaction was included in that block.
+In blockchains, Merkle trees make it extremely easy to verify transactions with just a few kilobytes of proof. The security guarantee remains identical: if the Merkle path verifies correctly, you can be mathematically certain the transaction was included in that block.
 
 <ArticleSection name="The creation of a Trustless System" id="the-creation-of-a-trustless-system" level="h2" />
 
