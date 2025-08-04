@@ -36,7 +36,7 @@
       "lessons": {
         "assembly-101": "Assembly 101",
         "registers-and-memory": "Registers and Memory",
-        "instruction": "Instruction",
+        "instructions": "Instructions",
         "tooling": "Tooling",
         "program-example": "Program Example",
         "conclusions": "Conclusions"

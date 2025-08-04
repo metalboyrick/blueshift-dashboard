@@ -2,9 +2,32 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Instructions
 
-When you compile Rust (or C/assembly) the tool-chain emits a stream of fixed-width, 8-byte instructions and packs them into the `.text` section of your ELF.
+Now that you understand sBPF's registers and memory regions, let's examine the instructions that manipulate them. 
 
-Think of it as a tiny fixed-width struct that the VM can decode in one pass:
+Instructions are the fundamental operations your program performs—adding numbers, loading from memory, or jumping to different locations.
+
+<ArticleSection name="What are Instructions?" id="what-are-instructions" level="h2" />
+
+Instructions are your program's basic building blocks. Think of them as commands that tell the processor exactly what to do:
+- `add64 r1, r2`: "Add the values in registers `r1` and `r2`, store result in `r1`"
+- `ldxdw r0, [r10 - 8]`: "Load 8 bytes from stack memory into register `r0`"
+- `jeq r1, 42, +3`: "If `r1` equals 42, jump forward 3 instructions"
+
+Each instruction performs exactly one operation and encodes as precisely 8 bytes of data for instant VM decoding.
+
+sBPF instructions work with different data sizes:
+- byte = 8 bits (1 byte)
+- halfword = 16 bits (2 bytes) 
+- word = 32 bits (4 bytes)
+- doubleword = 64 bits (8 bytes)
+
+Most sBPF operations use 64-bit values (doublewords) since registers are 64 bits, but you can load and store smaller sizes when needed for efficiency tho.
+
+<ArticleSection name="Instruction Categories and Format" id="instruction-categories-and-format" level="h2" />
+
+When you compile Rust, C, or assembly code, the toolchain emits a stream of fixed-width, 8-byte instructions packed into your ELF's `.text` section.
+
+Each instruction follows a consistent structure that the VM can decode in a single pass:
 
 ```
    1 byte    4 bits   4 bits     2 bytes         4 bytes
@@ -13,45 +36,92 @@ Think of it as a tiny fixed-width struct that the VM can decode in one pass:
 └──────────┴────────┴────────┴──────────────┴──────────────────┘
 ```
 
-- `opcode`: It says what kind of work this instruction represents. Top 3 bits choose the class: arithmetic, memory, jump, call, exit. Lower 5 bits pick the exact variant (e.g. add, mul, ldxdw, jeq).
-- `dst`: The “destination” register number (`r0` – `r10`). Whatever the instruction produces; like an arithmetic result, a loaded value, a helper return—lands here.
-- `src`: The “source” register. For two-operand arithmetic (add r1, r2) it supplies the second input. For memory ops it can carry the base address you’re loading from or storing to. For ALU-immediate variants (add r1, 10) these 4 bits are folded into the opcode, so src isn’t used.
-- `offset`: A small integer that modifies the instruction’s behaviour: On loads/stores it’s added to src to reach [src + offset]. On jumps it’s a relative branch target measured in instructions (not bytes).
-- `imm`: Arithmetic ops use it for immediate math (add r1, 42). CALL uses it as the helper/syscall number (sol_log = 16). Memory ops often treat it as an absolute pointer or additional stride.
+- `opcode`: Defines the operation type. The top 3 bits select the instruction class (arithmetic, memory, jump, call, exit), while the lower 5 bits specify the exact variant (add, multiply, load, jump-if-equal).
+- `dst`: The destination register number (`r0–r10`) where results are stored—arithmetic results, loaded values, or helper function returns.
+- `src`: The source register providing input. For two-operand arithmetic (`add r1, r2`), it supplies the second value. For memory operations, it can provide the base address. For immediate variants (`add r1, 10`), these 4 bits fold into the opcode.
+- `offset`: A small integer that modifies instruction behavior. For loads/stores, it's added to the source address to reach `[src + offset]`. For jumps, it's a relative branch target measured in instructions.
+- `imm`:The immediate value field. Arithmetic operations use it for constants (`add r1, 42`), `CALL` uses it for syscall numbers (`sol_log = 16`), and memory operations may treat it as an absolute pointer.
 
-<ArticleSection name="How does it work?" id="how-does-it-work" level="h2" />
+### Instruction Categories
 
-The opcode tells you everything about how to interpret the remaining fields.
+Different instruction types use these fields in specific ways:
 
-When the VM encounters `add64 r1, r2`, it reads the opcode and knows this is a 64-bit arithmetic operation using two registers. 
+- **Data Movement**: Move values between registers and memory:
 
-The `dst` field says the result goes into `r1`, the `src` field says `r2` provides the second operand, and the offset and immediate fields are ignored.
+```assembly
+mov64 r1, 42           # Put immediate value 42 into r1
+                       # opcode=move_imm, dst=1, src=unused, imm=42
 
-For `add64 r1, 42`, the opcode changes to indicate this is an immediate operation. Now `dst` still points to `r1`, but src is meaningless, and the immediate field (`imm`) provides the second operand. 
+ldxdw r0, [r10 - 8]    # Load 8 bytes from stack into r0  
+                       # opcode=load64, dst=0, src=10, offset=-8, imm=unused
 
-The VM knows which fields matter based solely on the opcode.
+stxdw [r1 + 16], r0    # Store r0 to memory at [r1 + 16]
+                       # opcode=store64, dst=1, src=0, offset=16, imm=unused
+```
+- **Arithmetic**: Perform mathematical operations:
 
-For memory operations like `ldxdw r1, [r2+8]`, it's a little different since it combine multiple fields meaningfully. 
+```assembly
+add64 r1, r2           # r1 = r1 + r2
+                       # opcode=add_reg, dst=1, src=2, offset=unused, imm=unused
 
-The opcode indicates a 64-bit load from memory, `dst` receives the loaded value, `src` provides the base address, and `offset` (8) is added to create the final address `r2 + 8`. The immediate field remains unused.
+add64 r1, 100          # r1 = r1 + 100  
+                       # opcode=add_imm, dst=1, src=unused, offset=unused, imm=100
+```
 
-This uniform approach extends to control flow. When you write `jeq r1, r2, +5`, the opcode encodes a conditional jump comparing two registers. 
+- **Control Flow**: Change execution sequence:
 
-If `r1` equals `r2`, the VM adds the `offset` (5) to the program counter to jump forward 5 instructions. The immediate field could alternatively hold a constant for comparison in `jeq r1, 42, +5`.
+```assembly
+ja +5                  # Jump forward 5 instructions unconditionally
+                       # opcode=jump, dst=unused, src=unused, offset=5, imm=unused
 
-> TLDR: Opcode determines which fields are meaningful. You don't need to memorize complex addressing modes or special cases: the instruction format stays constant, and the opcode tells you how to interpret each field.
+jeq r1, r2, +3         # If r1 == r2, jump forward 3 instructions
+                       # opcode=jump_eq_reg, dst=1, src=2, offset=3, imm=unused
+
+jeq r1, 42, +3         # If r1 == 42, jump forward 3 instructions  
+                       # opcode=jump_eq_imm, dst=1, src=unused, offset=3, imm=42
+```
+
+### Opcode Encoding
+
+The opcode encoding captures multiple pieces of information beyond just the operation type:
+- Instruction class: Arithmetic, memory, jump, call, etc.
+- Operation size: 32-bit vs 64-bit operations
+- Source type: Register vs immediate value
+- Specific operation: Add vs subtract, load vs store, etc.
+
+This creates distinct opcodes for instruction variants. For example, `add64 r1, r2` (register source) uses a different opcode than `add64 r1, 42 `(immediate source). Similarly, `add64` and `add32` have different opcodes for different operation sizes.
+
+Arithmetic operations further distinguish between signed and unsigned variants. `udiv64` treats values as unsigned (0 to 18 quintillion), while `sdiv64` handles signed values (-9 quintillion to +9 quintillion).
+
+<ArticleSection name="Instruction Execution" id="instruction-execution" level="h2" />
+
+The opcode determines how the VM interprets the remaining fields. 
+
+When the VM encounters `add64 r1, r2`, it reads the opcode and recognizes this as a 64-bit arithmetic operation using two registers: 
+
+The `dst` field indicates the result goes into `r1`, the `src` field specifies `r2` as the second operand, and the `offset` and `immediate` fields are ignored.
+
+For `add64 r1, 42`, the opcode changes to indicate an immediate operation. Now `dst` still points to `r1`, but `src` becomes meaningless, and the `immediate` field provides the second operand (42).
+
+Memory operations combine multiple fields meaningfully: 
+
+For `ldxdw r1, [r2+8]`, the opcode indicates a 64-bit memory load, `dst` receives the loaded value, `src` provides the base address, and `offset` (8) is added to create the final address `r2 + 8`.
+
+Control flow instructions follow the same pattern: 
+
+When you write `jeq r1, r2, +5`, the opcode encodes a conditional jump comparing two registers. If `r1` equals `r2`, the VM adds the `offset` (5) to the program counter, jumping forward 5 instructions.
+
+> The opcode determines which fields are meaningful. The instruction format remains constant: the opcode tells you how to interpret each field, eliminating complex addressing modes or special cases.
 
 ### Function Calls and Syscalls
 
-Until sBPF v3, `call imm` served double duty: the immediate value determined whether you were calling an internal function or invoking a syscall. 
+sBPF's call mechanism evolved across versions for better clarity and security. Until sBPF v3, `call imm` served dual purposes: the immediate value determined whether you were calling an internal function or invoking a syscall. 
 
-The runtime distinguished between these based on the immediate value range, with syscall numbers typically being small positive integers like `16` for `sol_log`.
+The runtime distinguished between these based on the immediate value range, with syscall numbers typically being small positive integers like 16 for `sol_log`.
 
-From sBPF v3 onwards, the instructions were separated for clarity and security. `call off` now handles internal function calls using a relative offset, while `syscall imm` explicitly invokes runtime functions. 
+From sBPF v3 onwards, the instructions separated for explicit behavior. `call` off now handles internal function calls using relative offsets, while `syscall imm` explicitly invokes runtime functions. This separation makes bytecode intentions clear and enables better verification.
 
-This separation makes the bytecode more explicit about its intentions and allows for better verification.
-
-Indirect calls through `callx` also evolved. In earlier versions, the target register was encoded in the immediate field, but from v2 onwards, it's encoded in the source register field. 
+Indirect calls through `callx` also evolved. Earlier versions encoded the target register in the immediate field, but from v2 onwards, it's encoded in the source register field for consistency with the general instruction format.
 
 <ArticleSection name="Opcodes Reference Table" id="opcodes-reference-table" level="h2" />
 
