@@ -18,7 +18,7 @@ When you write code on a single computer, you live in a predictable world:
 - Time moves forward consistently
 - When you save something, it's actually saved
 
-Let's take a simple banking system. Transferring $100 from Alice to Bob in tha case is extremelt easy:
+Let's take a simple banking system. Transferring $100 from Alice to Bob in that case is extremely easy:
 
 ```python
 def transfer(from_account, to_account, amount):
@@ -31,12 +31,12 @@ def transfer(from_account, to_account, amount):
 
 This works perfectly... until you need to scale.
 
-Your bank grows beyond what one computer can handle so now you split accounts across different databases:
-- Server A: Accounts 1-1,000,000
-- Server B: Accounts 1,000,001-2,000,000
-- Server C: Accounts 2,000,001-3,000,000
+Your bank grows beyond what one computer can handle so now you split accounts evenly across different databases:
+- Server A: Accounts 1 to 1,000,000
+- Server B: Accounts 1,000,001 to 2,000,000
+- Server C: Accounts 2,000,001 to 3,000,000
 
-Now Alice (on Server A) wants to send money to Bob (on Server B). That simple transfer becomes:
+Now Alice (on Server A) wants to send $100 to Bob (on Server B). That simple transfer becomes:
 
 ```python
 def distributed_transfer(alice_server, bob_server, amount):
@@ -50,7 +50,7 @@ def distributed_transfer(alice_server, bob_server, amount):
 Still seems straightforward? Here's what can go wrong:
 - Network Partition: The connection between servers fails right after Step 1 but before Step 2. Alice's $100 vanishes into the digital void.
 - Server Crash: Server B crashes after receiving the "add money" command but before confirming it processed. Did Bob get the money? Nobody knows.
-- Race Conditions: Two transfers from Alice happen simultaneously. Both check her $100 balance, both see sufficient funds, both proceed. Alice just spent $200 she didn't have.
+- Race Conditions: Two transfers from Alice happen simultaneously. Both check her $100 balance, both see sufficient fund, both proceed. Alice just spent an extra $100 she didn't have.
 
 ### CAP Theorem
 
@@ -65,9 +65,9 @@ Traditional banking systems usually choose Consistency + Partition Tolerance (CP
 
 Social media platforms often choose Availability + Partition Tolerance (AP Systems). They'd rather let you post (even if friends can't see it immediately) than prevent you from posting at all.
 
-### The byzantine generals problems
+### The Byzantine Generals Problem
 
-Additional to the CAP Theorem, most distributed systems assume participants are honest: they might fail or disconnect, but they won't actively deceive each other. This assumption breaks down when participants can be malicious.
+In addition to the CAP Theorem, most distributed systems assume participants are honest: they might fail or disconnect, but they won't actively deceive each other. This assumption breaks down when participants can be malicious.
 
 The Byzantine Generals Problem, formulated by computer scientists in 1982, illustrates this challenge:
 
@@ -93,4 +93,4 @@ Bitcoin was the first practical implementation of blockchain technology. While t
 
 Blockchains, or chain of blocks as Satoshi referred to them in its original [whitepaper](https://bitcoin.org/bitcoin.pdf), finally created a system that was distributed, Byzantine fault tolerant, and permissionless simultaneously.
 
-The breakthrough wasn't trying to identify who to trust, it was making lying more economically expensive than telling the truth. Proof of Work accomplishes this by requiring participants to spend real computational energy to propose changes. Attackers would need to spend more on electricity than they could gain from attacking.
+The breakthrough wasn't trying to identify who to trust; it was making lying more economically expensive than telling the truth. Proof of Work accomplishes this by requiring participants to spend real computational energy to propose changes. An attacker would need to spend more on electricity than they could gain from an attack.
