@@ -39,7 +39,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     lessons: [
       { slug: "assembly-101" },
       { slug: "registers-and-memory" },
-      { slug: "instruction" },
+      { slug: "instructions" },
       { slug: "tooling" },
       { slug: "program-example" },
       { slug: "conclusions" },
