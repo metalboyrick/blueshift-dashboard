@@ -1,0 +1,33 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Sécurité des Programmes
+
+> Un grand merci à [Unboxed Software](https://x.com/unboxedsoftware) pour avoir ouvert la voie et élaboré le contenu initial de ce cours grâce à leur guide !
+
+Chaque jour, des millions de dollars transitent à une vitesse fulgurante par les programmes Solana. Dans cet environnement à haut enjeu et haute performance, une seule ligne de code vulnérable peut vider un protocole en quelques secondes, tandis qu'un programme bien sécurisé peut traiter des milliers de transactions par seconde sans aucun problème.
+
+L'architecture révolutionnaire de traitement parallèle de Solana n'est pas seulement plus rapide que les autres blockchains, elle est fondamentalement différente.
+
+Alors que les développeurs d'Ethereum se préoccupent de l'optimisation du gaz et de l'exécution séquentielle, ceux de Solana doivent maîtriser un tout nouveau paysage de menaces où les comptes remplacent le stockage, les programmes sont sans état et les transactions s'affrontent dans des voies d'exécution parallèles.
+
+Il existe de nombreuses failles de sécurité propres au développement sur la blockchain Solana. Dans ce cours, vous apprendrez toutes les attaques qui concernent Sealevel qui sont modelées sur le [dépôt de Coral "Sealevel Attack"](https://github.com/coral-xyz/sealevel-attacks), en intégrant des exemples concrets et des stratégies d'atténuation pratiques.
+
+Avant de déployer vos programmes sur le Mainnet, vous devez avoir au moins une compréhension de base des principes fondamentaux de la sécurité.
+
+> Ces exploits sont "valables" pour le développement Native et Anchor
+
+<ArticleSection name="Introduction à la Sécurité des Programmes" id="introduction-to-program-security" level="h2" />
+
+Les considérations de sécurité les plus critiques dans le développement sur Solana découlent du modèle de propriété des comptes et de la manière dont les programmes interagissent avec les comptes.
+
+Les programmes doivent soigneusement valider la propriété des comptes, mettre en œuvre des contrôles d'accès appropriés et gérer les complexités des Invocations de Programme Croisé (CPIs). 
+
+La nature sans état des programmes signifie que toute la logique de validation doit être explicitement implémentée car il n'existe aucune protection intégrée contre la manipulation malveillante des comptes.
+
+De plus, les vulnérabilités courantes dans les programmes Solana comprennent l'absence de vérification des droits de propriété, une vérification insuffisante des signataires, des dépassements arithmétiques (overflow/underflow) et une gestion inadéquate de l'initialisation et de la fermeture des comptes. 
+
+> Anchor a été développé dans le but de rendre les programmes Solana plus sécurisés en obligeant les développeurs à utiliser des types spécifiques ou à faire des choix délibérés pour leurs programmes.
+
+Même si chaque faille de sécurité peut sembler "simple" à première vue, chaque scénario mérite d'être examiné en profondeur. Ces leçons contiennent moins de texte et davantage d'exemples de code pratiques, ce qui vous permet d'acquérir une compréhension solide et concrète des risques de sécurité abordés.
+
+Prêt à approfondir vos connaissances en matière de sécurité sur Solana ? Commençons ensemble à créer des programmes plus sécurisés.

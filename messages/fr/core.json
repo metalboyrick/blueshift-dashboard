@@ -97,7 +97,13 @@
     "view_source": "Voir Source"
   },
   "notifications": {
-    "session_expired_logout": "Votre session a expiré. Veuillez vous reconnecter."
+    "session_expired_logout": "Votre session a expiré. Veuillez vous reconnecter.",
+    "errors": {
+      "user_rejected_signature": "Vous devez approuver le message dans votre portefeuille pour vous connecter.",
+      "auth_unauthorized": "Échec de l'authentification. Veuillez réessayer.",
+      "network_error": "Impossible de se connecter au serveur. Veuillez vérifier votre connexion Internet.",
+      "auth_generic": "Une erreur inattendue s'est produite. Veuillez réessayer."
+    }
   },
   "course_levels": {
     "1": "Débutant",
@@ -110,6 +116,8 @@
     "connect_wallet": "Connecter un Portefeuille",
     "connect_wallet_description": "Un portefeuille Solana est nécessaire pour relever le challenge et débloquer les NFT.",
     "back_to_lessons": "Retour aux Leçons",
+    "back_to_homepage": "Retour à la Page d'Accueil",
+    "head_to_challenges": "Retour aux Challenges", 
     "requirements_title": "Challenge",
     "upload_program_btn": "Upload un Programme",
     "run_program_btn": "Exécuter",
@@ -138,9 +146,9 @@
     "mint_modal_skip_description": "Vous pouvez voir vos déblocages sur la page des Challenges.",
     "mint_modal_tweet": "Partager sur X",
     "assistance_prompt": {
-      "title": "Vous êtes bloqué ?",
-      "body": "N'abandonnez pas tout de suite ! Rejoignez notre communauté Discord pour obtenir de l'aide et du soutien.",
-      "link_text": "Obtenir de l'aide"
+      "title": "Besoin d'aide ?",
+      "body": "On dirait que vous rencontrez des difficultés. Si vous êtes bloqué, n'hésitez pas à demander de l'aide à notre communauté Discord.",
+      "link_text": "Demander sur Discord"
     },
     "reset_code_modal": {
       "title": "Réinitialiser le Code",

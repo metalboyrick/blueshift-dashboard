@@ -1,7 +1,6 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-
 ![Anchor Vault Challenge](/graphics/challenge-banners/anchor-vault.png)
 
 # Le Vault
@@ -14,9 +13,11 @@ Dans ce challenge, nous allons créer un vault à lamport simple qui montre comm
 
 Avant de commencer, assurez-vous que Rust et Anchor sont installés (voir la [documentation officielle](https://www.anchor-lang.com/docs/installation) si vous avez besoin d'un rappel). Ensuite, exécutez dans votre terminal :
 
-```
+<Codeblock lang="terminal">
+```bash
 anchor init blueshift_anchor_vault
 ```
+</Codeblock>
 
 Nous n'avons pas besoin de crate supplémentaire pour ce challenge donc vous pouvez maintenant ouvrir le dossier précédemment créé et commencer à coder !
 
@@ -30,35 +31,35 @@ declare_id!("22222222222222222222222222222222222222222222");
 
 #[program]
 pub mod blueshift_anchor_vault {
-  use super::*;
+    use super::*;
 
-  pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
-    // deposit logic
-    Ok(())
-  }
+    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
+        // deposit logic
+        Ok(())
+    }
 
-  pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
-    // withdraw logic
-    Ok(())
-  }
+    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
+        // withdraw logic
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
 pub struct VaultAction<'info> {
-  #[account(mut)]
-  pub signer: Signer<'info>,
-  #[account(
-    mut,
-    seeds = [b"vault", signer.key().as_ref()],
-    bump,
-  )]
-  pub vault: SystemAccount<'info>,
-  pub system_program: Program<'info, System>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", signer.key().as_ref()],
+        bump,
+    )]
+    pub vault: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[error_code]
 pub enum VaultError {
-  // error enum
+    // error enum
 }
 ```
 </Codeblock>
@@ -80,15 +81,15 @@ Voici comment nous définissons la structure du compte :
 ```rust
 #[derive(Accounts)]
 pub struct VaultAction<'info> {
-  #[account(mut)]
-  pub signer: Signer<'info>,
-  #[account(
-    mut,
-    seeds = [b"vault", signer.key().as_ref()],
-    bump,
-  )]
-  pub vault: SystemAccount<'info>,
-  pub system_program: Program<'info, System>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", signer.key().as_ref()],
+        bump,
+    )]
+    pub vault: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 ```
 </Codeblock>
@@ -113,10 +114,10 @@ Cela ressemblera à quelque chose comme ça :
 ```rust
 #[error_code]
 pub enum VaultError {
-  #[msg("Vault already exists")]
-  VaultAlreadyExists,
-  #[msg("Invalid amount")]
-  InvalidAmount,
+    #[msg("Vault already exists")]
+    VaultAlreadyExists,
+    #[msg("Invalid amount")]
+    InvalidAmount,
 }
 ```
 </Codeblock>
@@ -151,13 +152,15 @@ Une fois ces vérifications effectuées, la fonction d'aide Anchor du Programme 
 use anchor_lang::system_program::{transfer, Transfer};
 
 transfer(
-  CpiContext::new(
-    ctx.accounts.system_program.to_account_info(),
-    Transfer {
-      from: ctx.accounts.signer.to_account_info(),
-      to: ctx.accounts.vault.to_account_info(),
-    }
-  ), amount)?;
+      CpiContext::new(
+        ctx.accounts.system_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.signer.to_account_info(),
+            to: ctx.accounts.vault.to_account_info(),
+        },
+    ),
+    amount,
+)?;
 ```
 </Codeblock>
 
@@ -187,15 +190,15 @@ let signer_seeds = &[b"vault", signer_key.as_ref(), &[ctx.bumps.vault]];
 
 // Transfer all lamports from vault to signer
 transfer(
-  CpiContext::new_with_signer(
-    ctx.accounts.system_program.to_account_info(),
-    Transfer {
-      from: ctx.accounts.vault.to_account_info(),
-      to: ctx.accounts.signer.to_account_info(),
-    },
-    &[&signer_seeds[..]]
-  ),
-  ctx.accounts.vault.lamports()
+    CpiContext::new_with_signer(
+        ctx.accounts.system_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.vault.to_account_info(),
+            to: ctx.accounts.signer.to_account_info(),
+        },
+        &[&signer_seeds[..]]
+    ),
+    ctx.accounts.vault.lamports()
 )?;
 ```
 </Codeblock>
@@ -210,13 +213,12 @@ Vous pouvez maintenant tester votre programme à l'aide de nos tests unitaires e
 
 Commencez par compiler votre programme en utilisant la commande suivante dans votre terminal :
 
-```
+<Codeblock lang="terminal">
+```bash
 anchor build
 ```
+</Codeblock>
 
 Cela générera un fichier `.so` directement dans votre dossier `target/deploy`. 
 
 Cliquez ensuite sur le bouton `Relever le challenge` et déposez le fichier !
-
-
-

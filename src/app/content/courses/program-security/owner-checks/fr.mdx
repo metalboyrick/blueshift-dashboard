@@ -1,0 +1,115 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Vérification du Propriétaire
+
+Les vérifications du propriétaire constituent la première ligne de défense dans la sécurité des programmes Solana. Elles vérifient qu'un compte transmis à un handler d'instructions appartient bien au programme attendu, empêchant ainsi les attaquants de le remplacer par des comptes malveillants similaires.
+
+Chaque compte contient dans la structure `AccountInfo` de Solana un champ `owner` qui identifie le programme qui contrôle ce compte. Les vérifications du propriétaire garantissent que le champ `owner` correspond bien au `program_id` attendu avant que votre programme ne fasse confiance aux données du compte.
+
+La structure `AccountInfo` struct contient plusieurs champs, dont le propriétaire, qui représente le programme propriétaire du compte. Les vérifications du propriétaire garantissent que le champ `owner` dans `AccountInfo` correspond au `program_id` attendu.
+
+Sans vérification du propriétaire, un attaquant peut créer une "réplique" parfaite de la structure de données de votre compte, avec le bon discriminateur et tous les champs appropriés, et l'utiliser pour manipuler les instructions qui reposent sur la validation des données. C'est comme si quelqu'un créait une fausse carte d'identité qui ressemble à une vraie, mais qui est contrôlée par la mauvaise autorité.
+
+> L'exception cruciale concerne les cas où vous modifiez les données internes du compte. Dans ces cas-là, le runtime de Solana empêche automatiquement les autres programmes d'écrire dans des comptes qui ne leur appartiennent pas. Mais pour les opérations de lecture et la logique de validation, vous devez vous débrouiller seul.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Considérez cette instruction vulnérable qui exécute une logique basée sur l'`owner` d'un `program_account` :
+
+```rust
+#[program]
+pub mod insecure_check{
+    use super::*;
+    //..
+
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let account_data = ctx.accounts.program_account.try_borrow_data()?;
+        let mut account_data_slice: &[u8] = &account_data;
+        let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+        if account_state.owner != ctx.accounts.owner.key() {
+            return Err(ProgramError::InvalidArgument.into());
+        }
+
+        //..do something
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Le type `UncheckedAccount` est la manière dont Anchor indique "Je ne vérifie rien, manipulez avec une extrême prudence". Même si les données du compte peuvent être désérialisées parfaitement et sembler légitimes, l'absence de vérification du propriétaire crée une vulnérabilité critique.
+
+Un attaquant peut créer son propre compte avec une structure de données identique et le transmettre à votre instruction. Votre programme vérifiera volontiers le champ de propriété, mais comme l'attaquant contrôle le compte, il peut faire tout ce qu'il veut à l'intérieur de l'instruction.
+
+La solution est simple mais essentielle : vérifiez toujours que le compte appartient bien à votre programme avant de vous fier à son contenu.
+
+C'est très facile avec `Anchor` car il est possible d'effectuer cette vérification directement dans la structure de compte en remplaçant simplement `UncheckedAccount` par `ProgramAccount`, comme ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+Ou vous pouvez ajouter la contrainte de compte `owner` comme ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut, owner = ID)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+
+}
+```
+
+Ou vous pouvez simplement ajouter une vérification du propriétaire dans l'instruction à l'aide de la vérification `ctx.accounts.program_account.owner` comme ceci :
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ID {
+        return Err(ProgramError::IncorrectProgramId.into());
+    }
+    
+    //..do something
+
+    Ok(())
+}
+```
+
+En ajoutant cette vérification, l'handler d'instructions ne poursuivra que si le compte dispose du `program_id` correct. Si le compte n'appartient pas à notre programme, la transaction échouera.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dans Pinocchio, comme nous n'avons pas la possibilité d'ajouter des contrôles de sécurité directement dans la structure de compte, nous sommes obligés de le faire dans la logique d'instruction. 
+
+Nous pouvons procéder de manière très similaire à Anchor en utilisant la fonction `is_owned_by()` comme ceci :
+
+```rust
+if !self.accounts.owner.is_owned_by(ID) {
+    return Err(ProgramError::IncorrectProgramId.into());
+}
+```

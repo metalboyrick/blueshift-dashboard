@@ -24,17 +24,21 @@ Si vous êtes novice en matière d'introspection des instructions, nous vous rec
 
 Avant de commencer, assurez-vous que Rust et Anchor sont installés. Si vous avez besoin d'instructions d'installation, consultez la [documentation officielle d'Anchor](https://www.anchor-lang.com/docs/installation). Ensuite, exécutez dans votre terminal :
 
-```
+<Codeblock lang="terminal">
+```bash
 anchor init blueshift_anchor_flash_loan
 ```
+</Codeblock>
 
 Ajouter les dépendances nécessaires :
 - `anchor-spl`: Fournit des utilitaires pour travailler avec les jetons SPL (la norme de jetons de Solana)
 
-```
+<Codeblock lang="terminal">
+```bash
 cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
+</Codeblock>
 
 Vous êtes maintenant prêt à vous lancer dans la création de votre programme de prêts flash !
 

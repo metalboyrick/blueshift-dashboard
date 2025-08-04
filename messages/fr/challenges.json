@@ -107,6 +107,40 @@
         }
       }
     },
+        "pinocchio-amm": {
+      "title": "AMM avecPinocchio",
+      "pages": {
+        "initialize": {
+          "title": "Initialiser"
+        },
+        "deposit": {
+          "title": "Déposer"
+        },
+        "withdraw": {
+          "title": "Retirer"
+        },
+        "swap": {
+          "title": "Echanger"
+        },
+        "conclusion": {
+          "title": "Conclusion"
+        }
+      },
+      "requirements": {
+        "initialize": {
+          "title": "Challenge 1: Initialisation de l'AMM"
+        },
+        "deposit": {
+          "title": "Challenge 2: Dépôt de liquidités"
+        },
+        "withdraw": {
+          "title": "Challenge 3: Retrait de liquidités"
+        },
+        "swap": {
+          "title": "Challenge 4: Echange de jetons"
+        }
+      }
+    },
     "pinocchio-secp256r1-vault": {
       "title": "Vault Secp256r1 avec Pinocchio",
       "requirements": {

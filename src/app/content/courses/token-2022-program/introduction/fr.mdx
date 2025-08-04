@@ -79,7 +79,7 @@ pub struct Mint {
     /// ...
     /// Padding (83 empty bytes)
     pub padding: [u8; 83]
-    /// Discriminator (0)
+    /// Discriminator (1)
     pub discriminator: u8
     /// Extensions data
     /// ...
@@ -90,18 +90,18 @@ pub struct Mint {
 pub struct Account {
     /// Legacy Token Program data
     /// ...
-    /// Discriminator (1)
+    /// Discriminator (2)
     pub discriminator: u8
     /// Extensions data
     /// ...
 }
 ```
 
-Pour conserver la structure existante, le discriminateur ne se trouve pas au premier octet comme d'habitude mais à l'octet `165`.
+Pour conserver la structure existante, le discriminateur ne se trouve pas au premier octet comme d'habitude mais à l'octet `166`.
 
-En effet, la longueur du compte de `Token` est de 164 octets ce qui signifie que le discriminateur est ajouté après la longueur de base. Pour le compte de `Mint` cela signifie que nous avons dû ajouter 83 octets de remplissage (*padding*) afin de garantir que les deux comptes aient la même longueur de base.
+En effet, la longueur du compte de `Token` est de 165 octets ce qui signifie que le discriminateur est ajouté après la longueur de base. Pour le compte de `Mint` cela signifie que nous avons dû ajouter 83 octets de remplissage (*padding*) afin de garantir que les deux comptes aient la même longueur de base.
 
-Pour distinguer les deux comptes, il suffit donc de vérifier le 165e octet et d'agir en conséquence.
+Pour distinguer les deux comptes, il suffit donc de vérifier le 166e octet (data[165] si vous comptez à partir de 0) et d'agir en conséquence.
 
 <ArticleSection name="Extension de Jetons" id="token-extensions" level="h2" />
 
@@ -113,8 +113,8 @@ Chaque extension dispose d'un discriminateur qui est enregistré avec la taille 
 pub struct ExtensionHeader {
     /// Extension Discriminator
     pub discriminator: u16
-    /// Lenght of the Disriminator
-    pub lenght: u16
+    /// Length of the Disriminator
+    pub length: u16
 }
 ```
 

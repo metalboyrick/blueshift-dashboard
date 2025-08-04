@@ -15,6 +15,25 @@
         "pinocchio-101": "Pinocchio 101",
         "pinocchio-accounts": "Les Comptes avec Pinocchio",
         "pinocchio-instructions": "Les Instructions avec Pinocchio",
+        "pinocchio-errors": "Les Erreurs avec Pinocchio",
+        "reading-and-writing-data": "Lecture et Écriture des Données",
+        "performance": "Performance",
+        "conclusions": "Conclusions"
+      }
+    },
+    "program-security": {
+      "title": "Sécurité des Programmes",
+      "lessons": {
+        "introduction": "Introduction",
+        "signer-checks": "Vérification du Signataire",
+        "owner-checks": "Vérification du Propriétaire",
+        "data-matching": "Correspondance des Données",
+        "duplicate-mutable-accounts": "Comptes Mutables en Double",
+        "reinitialization-attacks": "Attaques par Réinitialisation",
+        "revival-attacks": "Attaques de Résurrection",
+        "arbitrary-cpi": "CPI Arbitraire",
+        "type-cosplay": "Cosplay de Type",
+        "pda-sharing": "Partage de PDA",
         "conclusions": "Conclusions"
       }
     },
@@ -36,7 +55,7 @@
         "conclusions": "Conclusions"
       }
     },
-    "spl-token-with-web3js": { 
+    "spl-token-with-web3js": {
       "title": "SPL Token avec Web3.js",
       "lessons": {
         "introduction": "Introduction",
@@ -115,6 +134,14 @@
         "introspection-with-anchor": "Introspection avec Anchor",
         "introspection-with-pinocchio": "Introspection avec Pinocchio",
         "conclusions": "Conclusions"
+      },
+      "testing-with-mollusk": {
+        "title": "Test avec Mollusk",
+        "lessons": {
+          "mollusk-101": "Mollusk 101",
+          "advanced-functionalities": "Fonctionnalités Avancées",
+          "conclusions": "Conclusions"
+        }
       }
     }
   }

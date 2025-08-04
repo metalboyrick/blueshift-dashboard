@@ -3,7 +3,7 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Comptes
 
-Comme nous l'avons vu dans la section précédente, la validation des comptes avec Pinocchio diffère de celle avec Anchor car nous ne pouvons pas utiliser les types de comptes qui effectuent automatiquement les vérifications du propriétaire, de la signature et du discriminateur. 
+Comme nous l'avons vu dans la section précédente, la validation des comptes avec Pinocchio diffère de celle avec Anchor car nous ne pouvons pas utiliser les types de comptes qui effectuent automatiquement les vérifications du propriétaire, de la signature et du discriminateur.
 
 En Rust natif, nous devons effectuer ces validations manuellement. Bien que cela nécessite une plus grande attention aux détails, son implémentation est simple :
 
@@ -29,7 +29,7 @@ Cependant, l'écriture de ces vérifications pour chaque instruction peut deveni
 
 ### Interfaces Communes et Traits
 
-Pour notre fichier `helper.rs`, nous exploitons deux concepts fondamentaux de Rust : **Interfaces Communes** et **Traits**. 
+Pour notre fichier `helper.rs`, nous exploitons deux concepts fondamentaux de Rust : **Interfaces Communes** et **Traits**.
 
 Nous avons préféré cette approche à une solution basée sur des macros (comme celle d'Anchor) pour plusieurs raisons essentielles :
 - Les Traits et les Interfaces fournissent un code clair et explicite que les lecteurs peuvent suivre sans avoir à "développer" mentalement les macros
@@ -97,8 +97,8 @@ pub trait AccountCheck {
 
 pub struct SignerAccount;
 
-impl SignerAccount {
-    pub fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+impl AccountCheck for SignerAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
         if !account.is_signer() {
             return Err(PinocchioError::NotSigner.into());
         }
@@ -108,8 +108,8 @@ impl SignerAccount {
 
 pub struct SystemAccount;
 
-impl SystemAccount {
-    pub fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+impl AccountCheck for SystemAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
         if !account.is_owned_by(&pinocchio_system::ID) {
             return Err(PinocchioError::InvalidOwner.into());
         }
@@ -280,6 +280,9 @@ impl AccountCheck for Mint2022Account {
         let data = account.try_borrow_data()?;
 
         if data.len().ne(&pinocchio_token::state::Mint::LEN) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
             if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
                 return Err(PinocchioError::InvalidAccountData.into());
             }
@@ -329,6 +332,9 @@ impl AccountCheck for TokenAccount2022Account {
         let data = account.try_borrow_data()?;
 
         if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
             if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR) {
                 return Err(PinocchioError::InvalidAccountData.into());
             }
@@ -391,6 +397,9 @@ impl AccountCheck for MintInterface {
             let data = account.try_borrow_data()?;
 
             if data.len().ne(&pinocchio_token::state::Mint::LEN) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
                 if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
                     return Err(PinocchioError::InvalidAccountData.into());
                 }
@@ -417,7 +426,14 @@ impl AccountCheck for TokenAccountInterface {
             let data = account.try_borrow_data()?;
 
             if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
-                return Err(PinocchioError::InvalidAccountData.into());
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+                if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET]
+                    .ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR)
+                {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
             }
         }
 
@@ -436,10 +452,21 @@ Nous pouvons créer des contrôles pour le Programme de Jetons Associés. Ces v�
 pub struct AssociatedTokenAccount;
 
 impl AssociatedTokenAccountCheck for AssociatedTokenAccount {
-    fn check(account: &AccountInfo, authority: &AccountInfo, mint: &AccountInfo) -> Result<(), ProgramError> {
+    fn check(
+        account: &AccountInfo,
+        authority: &AccountInfo,
+        mint: &AccountInfo,
+        token_program: &AccountInfo,
+    ) -> Result<(), ProgramError> {
         TokenAccount::check(account)?;
 
-        if find_program_address(&[authority.key(), &pinocchio_token::ID, mint.key()], &pinocchio_associated_token_account::ID).0.ne(account.key()) {
+        if find_program_address(
+            &[authority.key(), token_program.key(), mint.key()],
+            &pinocchio_associated_token_account::ID,
+        )
+        .0
+        .ne(account.key())
+        {
             return Err(PinocchioError::InvalidAddress.into());
         }
 
@@ -471,11 +498,11 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
 
 <ArticleSection name="Comptes de Programme" id="program-accounts" level="h2" />
 
-Enfin, nous implémentons des vérifications et des fonctions d'aide pour les comptes de programme, y compris les fonctionnalités `init` et `close`. 
+Enfin, nous implémentons des vérifications et des fonctions d'aide pour les comptes de programme, y compris les fonctionnalités `init` et `close`.
 
 Vous remarquerez peut-être quelque chose d'intéressant dans notre implémentation de `close` : nous redimensionnons le compte pour qu'il ne contienne presque plus rien en ne laissant que le premier octet et en le définissant sur 255. Il s'agit d'une mesure de sécurité visant à prévenir les attaques par réinitialisation.
 
-Une attaque par réinitialisation se produit lorsqu'un pirate tente de réutiliser un compte fermé en le réinitialisant avec des données malveillantes. En définissant le premier octet sur 255 et en réduisant le compte à une taille proche de zéro, nous rendons impossible toute confusion future entre ce compte et un type de compte valide. Il s'agit d'un pattern de sécurité courant dans les programmes Solana.
+Une attaque par réinitialisation se produit lorsqu'un attaquant tente de réutiliser un compte fermé en le réinitialisant avec des données malveillantes. En définissant le premier octet sur 255 et en réduisant le compte à une taille proche de zéro, nous rendons impossible toute confusion future entre ce compte et un type de compte valide. Il s'agit d'un pattern de sécurité courant dans les programmes Solana.
 
 <Codeblock lang="rust">
   ```rust
@@ -676,7 +703,7 @@ pub fn set_seeds(account_info: &AccountInfo, seed: u64) -> Result<(), ProgramErr
     let data = account_info.try_borrow_mut_data()?;
     Ok(unsafe {
         *(data.as_mut_ptr() as *mut [u8; 8]) = seed.to_le_bytes();
-    })    
+    })
 }
 
 #[inline(always)]
@@ -684,7 +711,7 @@ pub fn set_seeds_unchecked(account_info: &AccountInfo, seed: u64) -> Result<(), 
     let data = account_info.try_borrow_mut_data()?;
     Ok(unsafe {
         *(data.as_mut_ptr() as *mut [u8; 8]) = seed.to_le_bytes();
-    })    
+    })
 }
 ```
 
