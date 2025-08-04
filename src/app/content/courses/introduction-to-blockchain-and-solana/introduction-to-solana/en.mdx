@@ -36,7 +36,7 @@ The term "rent" is historical: originally, lamports were deducted from accounts 
 
 Today, the deposit works more like a refundable down payment: as long as your account maintains the minimum balance for its data size, it remains rent-exempt and persists indefinitely. When you no longer need an account, you can close it and recover this deposit entirely.
 
-Every account is owned by a a program, and only that owning program can modify the account's data or withdraw its lamports. However, anyone can increase an account's lamport balance, which is useful for funding operations or paying rent without relying on calling the program itself.
+Every account is owned by a program, and only that owning program can modify the account's data or withdraw its lamports. However, anyone can increase an account's lamport balance, which is useful for funding operations or paying rent without relying on calling the program itself.
 
 Signing authority works differently depending on ownership. Accounts owned by the System Program can sign transactions to modify their own data, transfer ownership, or reclaim stored lamports. Once ownership transfers to another program, that program gains complete control over the account regardless of whether you still possess the private key. This transfer of control is permanent and irreversible.
 
@@ -44,9 +44,9 @@ Signing authority works differently depending on ownership. Accounts owned by th
 
 The most common account type is the System Account, which stores lamports (the smallest unit of SOL) and is owned by the System Program. These function as basic wallet accounts that users interact with directly for sending and receiving SOL.
 
-Token Accounts serve a specialized purpose, storing SPL token information including ownership and token metadata. The Token Program owns these accounts and manages all token-related operations across the Solana ecosystem.
+Token Accounts serve a specialized purpose, storing SPL token information including ownership and token metadata. The Token Program owns these accounts and manages all token-related operations across the Solana ecosystem. Tokens Accounts are _Data Accounts_.
 
-Tokens Accounts are Data Accounts owned by the program. Every Data Accounts store application-specific information and are owned by custom programs. These accounts hold your application's state and can be structured however your program requires, from simple user profiles to complex financial data.
+Data Accounts store application-specific information and are owned by custom programs. These accounts hold your application's state and can be structured however your program requires, from simple user profiles to complex financial data.
 
 Finally Program Accounts contain the executable code that runs on Solana; essentially is where the smart contract lives. These accounts are marked as `executable: true` and store the actual bytecode where the program logic that processes instructions and manages state lives.
 
@@ -108,7 +108,7 @@ Transaction {
 
 ### Transaction Requirements and Fees
 
-Transactions are limited to 1,232 bytes total, which constrains how many instructions and accounts you can include. 
+Transactions are limited to 1,232 bytes total, which constrains how many instructions and accounts you can include.
 
 Each instruction within a transaction requires three essential components: the program address to invoke, all accounts the instruction will read from or write to, and any additional data such as function arguments. 
 
@@ -221,7 +221,7 @@ let cpi_ctx = CpiContext::new(token_program.clone(), cpi_accounts);
 token_program::cpi::transfer(cpi_ctx, amount)?;
 ```
 
-### Constraint and Capabilities
+### Constraints and Capabilities
 
 Original transaction signers maintain their authority throughout CPI chains, allowing programs to act on behalf of users seamlessly. 
 
