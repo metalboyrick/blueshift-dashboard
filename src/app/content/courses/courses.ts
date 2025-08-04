@@ -12,7 +12,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "blockchain-fundamentals" },
       { slug: "blockchain-evolution" },
       { slug: "introduction-to-solana" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
