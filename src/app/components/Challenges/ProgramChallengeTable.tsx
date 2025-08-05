@@ -269,7 +269,7 @@ export default function ChallengeTable({
             label={t("ChallengePage.upload_program_btn")}
             className="w-full sm:w-auto"
             onClick={() => {
-              if (auth.checkTokenExpired()) {
+              if (auth.isTokenExpired()) {
                 alert(t("notifications.session_expired_logout"));
                 auth.logout();
               } else {

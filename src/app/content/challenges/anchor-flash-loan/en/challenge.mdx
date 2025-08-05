@@ -24,17 +24,21 @@ If you're new to instruction introspection, we recommend starting with the[ Inst
 
 Before you begin, ensure you have Rust and Anchor installed. If you need setup instructions, refer to the [official anchor documentation](https://www.anchor-lang.com/docs/installation). Then in your terminal run:
 
-```
+<Codeblock lang="terminal">
+```bash
 anchor init blueshift_anchor_flash_loan
 ```
+</Codeblock>
 
 Add the required dependencies:
 - `anchor-spl`: Provides utilities for working with SPL tokens (Solana's token standard)
 
-```
+<Codeblock lang="terminal">
+```bash
 cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
+</Codeblock>
 
 Now you're ready to dive into building your flash loan program!
 

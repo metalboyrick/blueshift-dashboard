@@ -24,7 +24,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
           className="text-brand-secondary flex-shrink-0 top-1.5 relative"
           size={18}
         />
-        {children}
+        <div className="overflow-x-auto custom-scrollbar min-w-0">{children}</div>
       </blockquote>
     ),
   };

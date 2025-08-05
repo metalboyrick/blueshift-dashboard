@@ -7,11 +7,14 @@ import "@/app/globals.css";
 import Header from "@/app/components/Header/Header";
 import Footer from "@/app/components/Footer/Footer";
 import GlobalModals from "@/app/components/Modals/GlobalModals";
+import { AuthProvider } from "@/contexts/AuthContext";
 import WalletProvider from "@/contexts/WalletProvider";
 import TanstackProvider from "@/contexts/TanstackProvider";
 import { Geist_Mono, Funnel_Display } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { headers } from "next/headers";
+import { Toaster } from "react-hot-toast";
+import Icon from "@/app/components/Icon/Icon";
 
 const GeistMono = Geist_Mono({
   subsets: ["latin"],
@@ -111,18 +114,39 @@ export default async function RootLayout({
         <NextIntlClientProvider>
           <TanstackProvider>
             <WalletProvider>
-              <GlobalModals />
-              {!pathname?.includes("/nft-generator") ? (
-                <>
-                  <Header />
-                  <div className="pt-[69px] min-h-[calc(100dvh-69px)]">
-                    {children}
-                  </div>
-                  <Footer />
-                </>
-              ) : (
-                children
-              )}
+              <AuthProvider>
+                <GlobalModals />
+                {!pathname?.includes("/nft-generator") ? (
+                  <>
+                    <Header />
+                    <div className="pt-[69px] min-h-[calc(100dvh-69px)]">
+                      {children}
+                    </div>
+                    <Footer />
+                  </>
+                ) : (
+                  children
+                )}
+                <Toaster
+                  position="top-center"
+                  toastOptions={{
+                    style: {
+                      background: "var(--color-background-card)",
+                      color: "var(--color-primary)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                    },
+                    error: {
+                      icon: <Icon name="Close" className="text-error" />,
+                      iconTheme: {
+                        primary: "var(--color-error)",
+                        secondary: "var(--color-primary)",
+                      },
+                    },
+                  }}
+                />
+              </AuthProvider>
             </WalletProvider>
           </TanstackProvider>
         </NextIntlClientProvider>

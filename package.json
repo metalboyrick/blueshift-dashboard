@@ -47,6 +47,7 @@
     "next-intl": "^4.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hot-toast": "^2.5.2",
     "rehype-pretty-code": "^0.14.1",
     "three": "^0.177.0",
     "usehooks-ts": "^3.1.1",

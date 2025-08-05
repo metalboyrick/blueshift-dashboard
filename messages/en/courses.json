@@ -1,5 +1,15 @@
 {
   "courses": {
+    "introduction-to-blockchain-and-solana": {
+      "title": "Introduction to Blockchain and Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "blockchain-fundamentals": "Blockchain Fundamentals",
+        "blockchain-evolution": "Blockchain Evolution",
+        "introduction-to-solana": "Introduction to Solana",
+        "conclusions": "Conclusions"
+      }
+    },
     "introduction-to-anchor": {
       "title": "Introduction to Anchor",
       "lessons": {
@@ -15,6 +25,25 @@
         "pinocchio-101": "Pinocchio 101",
         "pinocchio-accounts": "Pinocchio Accounts",
         "pinocchio-instructions": "Pinocchio Instructions",
+        "pinocchio-errors": "Pinocchio Errors",
+        "reading-and-writing-data": "Reading and Writing Data",
+        "performance": "Performance",
+        "conclusions": "Conclusions"
+      }
+    },
+    "program-security": {
+      "title": "Program Security",
+      "lessons": {
+        "introduction": "Introduction",
+        "signer-checks": "Signer Checks",
+        "owner-checks": "Owner Checks",
+        "data-matching": "Data Matching",
+        "duplicate-mutable-accounts": "Duplicate Mutable Accounts",
+        "reinitialization-attacks": "Reinitialization Attacks",
+        "revival-attacks": "Revival Attacks",
+        "arbitrary-cpi": "Arbitrary CPI",
+        "type-cosplay": "Type Cosplay",
+        "pda-sharing": "PDA Sharing",
         "conclusions": "Conclusions"
       }
     },
@@ -36,7 +65,7 @@
         "conclusions": "Conclusions"
       }
     },
-    "spl-token-with-web3js": { 
+    "spl-token-with-web3js": {
       "title": "SPL Token with Web3.js",
       "lessons": {
         "introduction": "Introduction",
@@ -114,6 +143,14 @@
         "introduction": "Introduction",
         "introspection-with-anchor": "Introspection with Anchor",
         "introspection-with-pinocchio": "Introspection with Pinocchio",
+        "conclusions": "Conclusions"
+      }
+    },
+    "testing-with-mollusk": {
+      "title": "Testing with Mollusk",
+      "lessons": {
+        "mollusk-101": "Mollusk 101",
+        "advanced-functionalities": "Advanced Functionalities",
         "conclusions": "Conclusions"
       }
     }
