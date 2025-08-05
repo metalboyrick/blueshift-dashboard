@@ -7,7 +7,7 @@
         "blockchain-fundamentals": "Blockchain Fundamentals",
         "blockchain-evolution": "Blockchain Evolution",
         "introduction-to-solana": "Introduction to Solana",
-        "conclusion": "Conclusion"
+        "conclusions": "Conclusions"
       }
     },
     "introduction-to-anchor": {
@@ -65,7 +65,7 @@
         "conclusions": "Conclusions"
       }
     },
-    "spl-token-with-web3js": { 
+    "spl-token-with-web3js": {
       "title": "SPL Token with Web3.js",
       "lessons": {
         "introduction": "Introduction",
