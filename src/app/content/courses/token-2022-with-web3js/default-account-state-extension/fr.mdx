@@ -27,7 +27,7 @@ import {
 
 const mint = Keypair.generate();
 
-// Calculate the size needed for a Mint account with Transfer Fee extension
+// Calculate the size needed for a Mint account with Default Account State extension
 const mintLen = getMintLen([ExtensionType.DefaultAccountState]);
 
 // Calculate minimum lamports required for rent exemption

@@ -19,7 +19,7 @@ import {
 } from '@solana/web3.js';
 import {
     createInitializeAccountInstruction,
-    createInitializeImmutableOwnerInstruction,
+    createEnableCpiGuardInstruction,
     getAccountLen,
     ExtensionType,
     TOKEN_2022_PROGRAM_ID,
@@ -27,8 +27,8 @@ import {
 
 const tokenAccount = Keypair.generate();
 
-// Calculate the size needed for a Token account with Transfer Fee extension
-const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
+// Calculate the size needed for a Token account with Cpi Guard extension
+const accountLen = getAccountLen([ExtensionType.CpiGuard]);
 
 // Calculate minimum lamports required for rent exemption
 const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);

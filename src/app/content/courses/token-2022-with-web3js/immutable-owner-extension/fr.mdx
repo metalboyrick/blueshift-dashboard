@@ -29,7 +29,7 @@ import {
 
 const tokenAccount = Keypair.generate();
 
-// Calculate the size needed for a Token account with Transfer Fee extension
+// Calculate the size needed for a Token account with Immutable Owner extension
 const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
 
 // Calculate minimum lamports required for rent exemption

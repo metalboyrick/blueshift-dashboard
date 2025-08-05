@@ -27,8 +27,8 @@ import {
 
 const mint = Keypair.generate();
 
-// Calculate the size needed for a Mint account with Transfer Fee extension
-const mintLen = getMintLen([ExtensionType.MintCloseAuthority]);
+// Calculate the size needed for a Mint account with Permanent Delegate extension
+const mintLen = getMintLen([ExtensionType.PermanentDelegate]);
 
 // Calculate minimum lamports required for rent exemption
 const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
