@@ -108,7 +108,7 @@
       }
     },
         "pinocchio-amm": {
-      "title": "AMM avecPinocchio",
+      "title": "AMM avec Pinocchio",
       "pages": {
         "initialize": {
           "title": "Initialiser"
