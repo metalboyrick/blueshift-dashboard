@@ -12,7 +12,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "blockchain-fundamentals" },
       { slug: "blockchain-evolution" },
       { slug: "introduction-to-solana" },
-      { slug: "conclusion" },
+      { slug: "conclusions" },
     ],
   },
   {
@@ -41,7 +41,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "pinocchio-errors" },
       { slug: "reading-and-writing-data" },
       { slug: "performance" },
-      { slug: "conclusion" },
+      { slug: "conclusions" },
     ],
   },
   {
@@ -101,10 +101,10 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "mint-to" },
       { slug: "transfer" },
       { slug: "burn" },
-      { slug: "close-account"},
-      { slug: "approve-and-revoke"},
-      { slug: "freeze-and-thaw"},
-      { slug: "set-authority"},
+      { slug: "close-account" },
+      { slug: "approve-and-revoke" },
+      { slug: "freeze-and-thaw" },
+      { slug: "set-authority" },
       { slug: "conclusions" },
     ],
   },
@@ -119,10 +119,10 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "mint-to" },
       { slug: "transfer" },
       { slug: "burn" },
-      { slug: "close-account"},
-      { slug: "approve-and-revoke"},
-      { slug: "freeze-and-thaw"},
-      { slug: "set-authority"},
+      { slug: "close-account" },
+      { slug: "approve-and-revoke" },
+      { slug: "freeze-and-thaw" },
+      { slug: "set-authority" },
       { slug: "conclusions" },
     ],
   },
@@ -226,7 +226,7 @@ export const courses = allCourses.filter((course) => {
   const releasedSlugs = releasedCoursesSetting
     .split(",")
     .map((slug) => slug.trim())
-    .filter(slug => slug.length > 0); // Ensure empty strings from trailing/multiple commas are ignored
+    .filter((slug) => slug.length > 0); // Ensure empty strings from trailing/multiple commas are ignored
 
   return releasedSlugs.includes(course.slug);
 });
