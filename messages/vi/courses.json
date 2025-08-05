@@ -1,0 +1,158 @@
+{
+  "courses": {
+    "introduction-to-blockchain-and-solana": {
+      "title": "Giới thiệu về Blockchain và Solana",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "blockchain-fundamentals": "Nguyên lý cơ bản của Blockchain",
+        "blockchain-evolution": "Sự phát triển của Blockchain",
+        "introduction-to-solana": "Giới thiệu về Solana",
+        "conclusion": "Kết luận"
+      }
+    },
+    "introduction-to-anchor": {
+      "title": "Giới thiệu về Anchor",
+      "lessons": {
+        "anchor-101": "Anchor cơ bản",
+        "anchor-accounts": "Tài khoản trong Anchor",
+        "anchor-instructions": "Lệnh trong Anchor",
+        "conclusions": "Kết luận"
+      }
+    },
+    "introduction-to-pinocchio": {
+      "title": "Giới thiệu về Pinocchio",
+      "lessons": {
+        "pinocchio-101": "Pinocchio cơ bản",
+        "pinocchio-accounts": "Tài khoản trong Pinocchio",
+        "pinocchio-instructions": "Lệnh trong Pinocchio",
+        "pinocchio-errors": "Xử lý lỗi trong Pinocchio",
+        "reading-and-writing-data": "Đọc và ghi dữ liệu",
+        "performance": "Tối ưu hiệu suất",
+        "conclusions": "Kết luận"
+      }
+    },
+    "program-security": {
+      "title": "Bảo mật chương trình",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "signer-checks": "Kiểm tra người ký",
+        "owner-checks": "Kiểm tra chủ sở hữu",
+        "data-matching": "Khớp dữ liệu",
+        "duplicate-mutable-accounts": "Tài khoản có thể thay đổi trùng lặp",
+        "reinitialization-attacks": "Tấn công khởi tạo lại",
+        "revival-attacks": "Tấn công hồi sinh",
+        "arbitrary-cpi": "CPI tùy ý",
+        "type-cosplay": "Giả mạo kiểu dữ liệu",
+        "pda-sharing": "Chia sẻ PDA",
+        "conclusions": "Kết luận"
+      }
+    },
+    "secp256r1-on-solana": {
+      "title": "Secp256r1 trên Solana",
+      "lessons": {
+        "introduction": "Secp256r1 trên Solana",
+        "secp256r1-with-anchor": "Secp256r1 với Anchor",
+        "secp256r1-with-pinocchio": "Secp256r1 với Pinocchio",
+        "conclusions": "Kết luận"
+      }
+    },
+    "tokens-on-solana": {
+      "title": "Token trên Solana",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "mint-and-token-accounts": "Tài khoản Mint và Token",
+        "functionalities": "Các chức năng",
+        "conclusions": "Kết luận"
+      }
+    },
+    "spl-token-with-web3js": {
+      "title": "SPL Token với Web3.js",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "mint-to": "Mint token",
+        "transfer": "Chuyển token",
+        "burn": "Đốt token",
+        "close-account": "Đóng tài khoản",
+        "approve-and-revoke": "Phê duyệt và thu hồi",
+        "freeze-and-thaw": "Đóng băng và rã đông",
+        "set-authority": "Thiết lập quyền hạn",
+        "conclusions": "Kết luận"
+      }
+    },
+    "spl-token-with-anchor": {
+      "title": "SPL Token với Anchor",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "mint-to": "Mint token",
+        "transfer": "Chuyển token",
+        "burn": "Đốt token",
+        "close-account": "Đóng tài khoản",
+        "approve-and-revoke": "Phê duyệt và thu hồi",
+        "freeze-and-thaw": "Đóng băng và rã đông",
+        "set-authority": "Thiết lập quyền hạn",
+        "conclusions": "Kết luận"
+      }
+    },
+    "token-2022-program": {
+      "title": "Chương trình Token2022",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "token-extensions": "Phần mở rộng Token",
+        "conclusions": "Kết luận"
+      }
+    },
+    "token-2022-with-web3js": {
+      "title": "Token2022 với Web3.js",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "transfer-fee-extension": "Phần mở rộng phí chuyển",
+        "mint-close-authority-extension": "Phần mở rộng quyền đóng mint",
+        "default-account-state-extension": "Phần mở rộng trạng thái tài khoản mặc định",
+        "immutable-owner-extension": "Phần mở rộng chủ sở hữu bất biến",
+        "memo-transfer-extension": "Phần mở rộng chuyển memo",
+        "non-transferable-extension": "Phần mở rộng không thể chuyển",
+        "interest-bearing-extension": "Phần mở rộng sinh lãi",
+        "cpi-guard-extension": "Phần mở rộng bảo vệ CPI",
+        "permanent-delegate-extension": "Phần mở rộng ủy quyền vĩnh viễn",
+        "metadata-extension": "Phần mở rộng metadata",
+        "group-and-member-extension": "Phần mở rộng nhóm và thành viên",
+        "conclusions": "Kết luận"
+      }
+    },
+    "token-2022-with-anchor": {
+      "title": "Token2022 với Anchor",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "transfer-fee-extension": "Phần mở rộng phí chuyển",
+        "mint-close-authority-extension": "Phần mở rộng quyền đóng mint",
+        "default-account-state-extension": "Phần mở rộng trạng thái tài khoản mặc định",
+        "immutable-owner-extension": "Phần mở rộng chủ sở hữu bất biến",
+        "memo-transfer-extension": "Phần mở rộng chuyển memo",
+        "non-transferable-extension": "Phần mở rộng không thể chuyển",
+        "interest-bearing-extension": "Phần mở rộng sinh lãi",
+        "cpi-guard-extension": "Phần mở rộng bảo vệ CPI",
+        "permanent-delegate-extension": "Phần mở rộng ủy quyền vĩnh viễn",
+        "metadata-extension": "Phần mở rộng metadata",
+        "group-and-member-extension": "Phần mở rộng nhóm và thành viên",
+        "conclusions": "Kết luận"
+      }
+    },
+    "instruction-introspection": {
+      "title": "Nội quan lệnh",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "introspection-with-anchor": "Nội quan với Anchor",
+        "introspection-with-pinocchio": "Nội quan với Pinocchio",
+        "conclusions": "Kết luận"
+      }
+    },
+    "testing-with-mollusk": {
+      "title": "Kiểm thử với Mollusk",
+      "lessons": {
+        "mollusk-101": "Mollusk cơ bản",
+        "advanced-functionalities": "Chức năng nâng cao",
+        "conclusions": "Kết luận"
+      }
+    }
+  }
+}

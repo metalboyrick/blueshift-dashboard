@@ -1,0 +1,28 @@
+# Refund
+
+The `refund` instruction lets the maker cancel an open offer:
+  - Close the escrow PDA and send its rent lamports back to the maker.
+- Move the full Token A balance out of the vault and back to the maker, then close the vault account.
+
+<ArticleSection name="Required Account" id="required-account" level="h2" />
+
+Knowing that this are the required accounts:
+
+- maker: the creator of the escrow. Must be a signer and mutable
+- escrow: the escrow account that we're initializing. Must be mutable
+- mint_a: the token we're depositing in the escrow
+- vault: the associated token account owned by the escrow. Must be mutable
+- maker_ata_a: the associated token account owned by the maker. Must be mutable
+- system_program: the system program. Must be executable
+- token_program: the token program. Must be executable
+
+We're going to let you create your own account struct since now you should be familiar with the process.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+All the data that we need to perform the logic already lives in the Escrow account or on the accounts that we're deserializing. For this reason we don't need any `instruction_data` for this instruction.
+
+<ArticleSection name="Logic" id="logic" level="h2" />
+
+Here again, we're going to let you spread your wings and create your own logic for this! Don't be scared to go back to the previous sections to see how we implemented the make and take instruction, or reach out on Discord if you get stuck.
+

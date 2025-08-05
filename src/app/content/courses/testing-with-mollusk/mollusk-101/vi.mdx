@@ -1,0 +1,288 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mollusk 101
+
+Testing Solana programs efficiently requires a framework that balances speed, precision, and insight. When developing complex program logic, you need an environment that enables rapid iteration without sacrificing the ability to test edge cases or measure performance accurately.
+
+The ideal Solana testing framework should provide three essential capabilities: 
+- Fast execution for quick development cycles, 
+- Flexible account state manipulation for comprehensive edge case testing, 
+- Detailed performance metrics for optimization insights.
+
+Mollusk addresses these requirements by providing a streamlined testing environment specifically designed for Solana program development.
+
+<ArticleSection name="What is Mollusk" id="what-is-mollusk" level="h2" />
+
+[Mollusk](https://github.com/anza-xyz/mollusk), created and maintained by [Joe Caulfield](https://x.com/realbuffalojoe) from the [Anza](https://x.com/anza_xyz) team, is a lightweight test harness for Solana programs that provides a direct interface to program execution without the overhead of a full validator runtime.
+
+Rather than simulating a complete validator environment, Mollusk constructs a program execution pipeline using low-level Solana Virtual Machine (SVM) components. This approach eliminates unnecessary overhead while maintaining the essential functionality needed for thorough program testing.
+
+The framework achieves exceptional performance by excluding heavyweight components like `AccountsDB` and `Bank` from the Agave validator implementation. This design choice requires explicit account provisioning, which actually becomes an advantage because it grants precise control over account states and enables testing scenarios that would be difficult to reproduce in a full validator environment.
+
+Mollusk's test harness supports comprehensive configuration options, including compute budget adjustments, feature set modifications, and sysvar customization. These configurations are managed directly through the `Mollusk` struct and can be modified using built-in helper functions.
+
+<ArticleSection name="First Steps" id="first-steps" level="h2" />
+
+The core `mollusk-svm` crate provides the fundamental testing infrastructure, while additional crates offer specialized helpers for common Solana programs like `Token` and `Memo` programs.
+
+### Setup
+
+Add the main Mollusk crate to your project:
+
+```
+cargo add mollusk-svm
+```
+
+Include program-specific helpers as needed:
+
+```
+cargo add mollusk-svm-programs-memo mollusk-svm-programs-token
+```
+
+These additional crates provide pre-configured helpers for standard Solana programs, reducing boilerplate code and simplifying the setup of common testing scenarios involving token operations or memo instructions.
+
+### Additional Dependencies
+
+Several Solana crates enhance the testing experience by providing essential types and utilities:
+
+```
+cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk
+```
+
+Since these dependencies are only needed for testing, keep your program binary lightweight by adding them under the `[dev-dependencies]` section in your `Cargo.toml`:
+
+```
+[dev-dependencies]
+mollusk-svm = "0.4.0"
+```
+> This configuration ensures that testing utilities don't increase your program's deployment size while providing access to all necessary Solana types and helper functions during development.
+
+<ArticleSection name="Mollusk Basics" id="mollusk-basics" level="h2" />
+
+Start by declaring the `program_id` and creating a `Mollusk` instance with the address that you used in your program so it gets called correctly and doesn't throw any "ProgramMismatch` error during testing, and the path to the built program like so:
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+// Alternative using an Array of bytes
+// pub const ID: [u8; 32] = [
+//    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+//    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+//    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+//    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+// ];
+
+#[test]
+fn test() {
+    let mollusk = Mollusk::new(&ID, "target/deploy/program.so");
+    
+    // Alternative using an Array of bytes
+    // let mollusk = Mollusk::new(&Pubkey::new_from_array(ID), "target/deploy/program.so")
+}
+```
+
+To tests, we can then use one of the four main API methods offered:
+- `process_instruction`: Process an instruction and return the result.
+- `process_and_validate_instruction`: Process an instruction and perform a series of checks on the result, panicking if any checks fail.
+- `process_instruction_chain`: Process a chain of instructions and return the result.
+- `process_and_validate_instruction_chain`: Process a chain of instructions and perform a series of checks on each result, panicking if any checks fail.
+
+But before being able to use this methods, we would need to create our accounts and instruction struct to pass in:
+
+### Accounts
+
+When testing Solana programs with Mollusk, you'll work with several types of accounts that mirror real-world program execution scenarios. Understanding how to construct these accounts properly is essential for effective testing.
+
+The most fundamental account type is the `SystemAccount`, which comes in two primary variants:
+- Payer: An account with lamports that funds program account creation or lamport transfers
+- Uninitialized Account: A program account awaiting initialization within your instruction
+
+System accounts contain no data and are owned by the System Program. The key difference between payer and uninitialized accounts is their lamport balance: payers have funds, while uninitialized accounts start empty.
+
+Here's how to create these basic accounts in Mollusk:
+
+```rust
+use solana_sdk::{
+    account::Account,
+    system_program
+};
+
+// Payer account with lamports for transactions
+let payer = Pubkey::new_unique();
+let payer_account = Account::new(100_000_000, 0, &system_program::id());
+
+// Uninitialized account with no lamports
+let uninitialized_account = Pubkey::new_unique();
+let uninitialized_account_account = Account::new(0, 0, &system_program::id());
+```
+
+For `ProgramAccounts` that contain data, you have two construction approaches:
+
+```rust
+use solana_sdk::account::Account;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let program_account_account = Account {
+    lamports,
+    data,
+    owner: ID, // The program's that owns the account
+    executable: false,
+    rent_epoch: 0,
+};
+```
+
+Or using `AccountSharedData`:
+
+```rust
+use solana_sdk::account::AccountSharedData;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let mut program_account_account = AccountSharedData::new(lamports, data.len(), &ID);
+program_account_account.set_data_from_slice(&data);
+```
+
+Once you've created your accounts, compile them into the format Mollusk expects:
+
+```rust
+let accounts = [
+    (user, user_account),
+    (program_account, program_account_account)
+];
+```
+
+> When using AccountSharedData, remember to call `.into()` to convert it to the Account type that Mollusk requires for execution like this: `program_account_account.into()`.
+
+### Instructions
+
+Creating instructions for Mollusk testing is straightforward once you understand the three essential components: the `program_id` that identifies your program, the `instruction_data` containing the discriminator and parameters, and the account metadata specifying which accounts are involved and their permissions.
+
+Here's the basic instruction structure:
+
+```rust
+use solana_sdk::instruction::{Instruction, AccountMeta};
+
+let instruction = Instruction::new_with_bytes(
+    ID, // Your program's ID
+    &[0], // Instruction data (discriminator + parameters)
+    vec![AccountMeta::new(payer, true)], // Account metadata
+);
+```
+
+The instruction data must include the instruction discriminator followed by any parameters your instruction requires. For Anchor programs, the default discriminators are 8-byte values derived from the instruction name.
+
+To simplify Anchor discriminator generation, use this helper function and construct your instruction data by concatenating the discriminator with serialized parameters:
+
+```rust
+use sha2::{Sha256, Digest};
+
+let instruction_data = &[
+    &get_anchor_discriminator_from_name("deposit"),
+    &1_000_000u64.to_le_bytes()[..],
+]
+.concat();
+
+pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("global:{}", name));
+    let result = hasher.finalize();
+
+    [
+        result[0], result[1], result[2], result[3], 
+        result[4], result[5], result[6], result[7],
+    ]
+}
+```
+
+For the `AccountMeta` struct we'll need to use the appropriate constructor based on account permissions:
+- `AccountMeta::new(pubkey, is_signer)`: For mutable accounts
+- `AccountMeta::new_readonly(pubkey, is_signer)`: For read-only accounts
+
+The boolean parameter indicates whether the account must sign the transaction. Most accounts are non-signers (false), except for payers and authorities that need to authorize operations.
+
+### Execution
+
+With accounts and instructions prepared, you can now execute and validate your program logic using Mollusk's execution APIs. Mollusk provides four different execution methods depending on whether you need validation checks and whether you're testing single or multiple instructions.
+
+The simplest execution method processes a single instruction without validation:
+
+```rust
+mollusk.process_instruction(&instruction, &accounts);
+```
+This returns execution results that you can inspect manually, but doesn't perform automatic validation.
+
+For comprehensive testing, use the validation method that allows you to specify expected outcomes:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::success(), // Verify the transaction succeeded
+        Check::compute_units(5_000), // Expect specific compute usage
+        Check::account(&payer).data(&expected_data).build(), // Validate account data
+        Check::account(&payer).owner(&ID).build(), // Validate account owner
+        Check::account(&payer).lamports(expected_lamports).build(), // Check lamport balance
+    ],
+);
+```
+
+> We can perform multiple checks on the same account by "bundling" them together like this: `Check::account(&payer).data(&expected_data).owner(&ID).build()`
+
+The validation system supports various check types to verify different aspects of execution results. For edge case testing, you can verify that instructions fail as expected:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::err(ProgramError::MissingRequiredSignature), // Expect specific error
+    ],
+);
+```
+
+For testing complex workflows that require multiple instructions, use the instruction chain methods:
+
+```rust
+mollusk.process_instruction_chain(
+    &[
+        (&instruction, &accounts),
+        (&instruction_2, &accounts_2)    
+    ]
+);
+```
+
+Combine multiple instructions with comprehensive validation:
+
+```rust
+mollusk.process_and_validate_instruction_chain(&[
+    (&instruction, &accounts, &[Check::success()]),
+    (&instruction_2, &accounts_2, &[
+        Check::success(),
+        Check::account(&target_account).lamports(final_balance).build(),
+    ]),
+]);
+```
+
+
+
+
+
