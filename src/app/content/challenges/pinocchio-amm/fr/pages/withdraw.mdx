@@ -1,0 +1,156 @@
+# Withdraw
+
+L'instruction `withdraw` effectue trois tâches principales :
+- Retire les jetons `mint_x` et `mint_y` en fonction du montant de LP que l'utilisateur souhaite `burn`.
+- Calcule le montant à retirer et vérifie qu'il n'est pas inférieur aux valeurs `mint_x` et `mint_y` définies par l'utilisateur.
+- *Burn* la quantité appropriée de `mint_lp` provenant de l'ATA de l'utilisateur.
+
+> Comme mentionné dans la section relative à l'instruction `initialize`, nous allons initialiser tous les `Associated Token Accounts` en dehors de notre instruction à des fins d'optimisation.
+
+<ArticleSection name="Comptes Nécessaires" id="required-accounts" level="h2" />
+
+Voici les comptes nécessaires pour ce contexte :
+- `user`: L'utilisateur qui retire les jetons de la liquidité de l'Amm. Doit être `signer`.
+- `mint_lp`: Le compte de Mint qui représentera la liquidité de la *pool*. Doit être `mutable`.
+- `vault_x`: Le compte de jetons qui détient tous les jetons X déposés dans la *pool*. Doit être `mutable`.
+- `vault_y`: Le compte de jetons qui détient tous les jetons Y déposés dans la *pool*. Doit être `mutable`.
+- `user_x_ata`: Le compte de jeton associé de l'utilisateur pour le jeton X. Il s'agit du compte source à partir duquel le jeton X de l'utilisateur sera transféré dans la *pool*. Doit être `mutable`.
+- `user_y_ata`: Le compte de jeton associé de l'utilisateur pour le jeton Y. Il s'agit du compte source à partir duquel le jeton Y de l'utilisateur sera transféré dans la *pool*. Doit être `mutable`.
+- `config`: Le compte de configuration de la *pool* de l'AMM. Stocke tous les paramètres pertinents et l'état de la *pool*.
+- `token program`: Le compte du program SPL-Token. Cela est nécessaire pour effectuer des opérations liées aux jetons telles que les transferts et la création. Doit être `executable`.
+
+Ici encore, je vous laisse le soin de l'implémenter :
+
+<Codeblock lang="rust">
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub user: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub vault_x: &'a AccountInfo,
+    pub vault_y: &'a AccountInfo,
+    pub user_x_ata: &'a AccountInfo,
+    pub user_y_ata: &'a AccountInfo,
+    pub user_lp_ata: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        //.. 
+    }
+}
+```
+</Codeblock>
+
+<ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
+
+Voici les données d'instruction que nous devons transmettre :
+- `amount`: Le montant de jetons LP que l'utilisateur souhaite brûler. Doit être un `[u64]`
+- `min_x`: Le montant minimum de jetons X que l'utilisateur est prêt à retirer. Doit être un `[u64]`
+- `min_y`: Le montant minimum de jetons Y que l'utilisateur est prêt à retirer. Doit être un `[u64]`
+- `expiration`: L'expiration de cet ordre. Il est important de s'assurer que la transaction doit être effectuée dans un certain délai. Doit être un `[i64]`
+
+Nous allons gérer l'implémentation de `WithdrawInstructionData` de la même manière que l'initialisation. Je vous laisse donc le soin de l'implémenter :
+
+<Codeblock lang="rust">
+```rust
+pub struct WithdrawInstructionData {
+    pub amount: u64,
+    pub min_x: u64,
+    pub min_y: u64,
+    pub expiration: i64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+</Codeblock>
+
+> Assurez-vous que tous les montants, telles que `amount`, `max_y` et `max_x`, sont supérieurs à zéro et que l'ordre n'a pas encore expiré à l'aide de la sysvar `Clock`.
+
+<ArticleSection name="Logique d'Instruction" id="instruction-logic" level="h2" />
+
+Nous commençons par désérialiser les `instruction_data` et les `accounts`.
+
+Lorsque cela est nécessaire :
+- Chargez le compte `Config` pour récupérer toutes les données qu'il contient. Nous pouvons le faire à l'aide de `Config::load()`.
+- Vérifiez que `AmmState` est valide (donc si ce n'est pas égal à `AmmState::Disabled`).
+- Vérifiez que la dérivation de `vault_x` et `vault_y` correspond bien à des Comptes de Jetons Associés.
+- Désérialisez tous les comptes de jetons impliqués et utilisez les données qu'ils contiennent pour calculer le montant des dépôts à l'aide du crate `constant-product-curve` et vérifiez le slippage comme ceci :
+
+<Codeblock lang="rust">
+```rust
+let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
+let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
+let vault_y = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_y)? };
+
+let (x, y) = match mint_lp.supply() == self.instruction_data.amount {
+    true => (vault_x.amount(), vault_y.amount()),
+    false => {
+        let amounts = ConstantProduct::xy_withdraw_amounts_from_l(
+            vault_x.amount(),
+            vault_y.amount(),
+            mint_lp.supply(),
+            self.instruction_data.amount,
+            6,
+        )
+        .map_err(|_| ProgramError::InvalidArgument)?;
+
+        (amounts.x, amounts.y)
+    }
+};
+
+// Check for slippage
+if !(x <= self.instruction_data.min_x && y <= self.instruction_data.min_y) {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+</Codeblock>
+
+- Transférez les montants des vaults vers les comptes de jetons de l'utilisateur et brûler le montant approprié de jetons LP du compte de jetons de l'utilisateur
+
+> L'`authority` de `vault_x` et `vault_y` est le compte `config`
+
+Vous devriez être suffisamment compétent pour le faire vous-même, je vous laisse donc le soin de l'implémenter :
+
+<Codeblock lang="rust">
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+    pub instruction_data: WithdrawInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+        let instruction_data = WithdrawInstructionData::try_from(data)?;
+
+        // Return the initialized struct
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+
+    pub fn process(&mut self) -> ProgramResult {
+        //..
+
+        Ok(())
+    }
+}
+```
+</Codeblock>

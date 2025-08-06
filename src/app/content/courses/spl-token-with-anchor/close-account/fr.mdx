@@ -1,0 +1,26 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruction Close Account
+
+Ferme un compte de jeton et transfère la rente en SOL restante vers un compte de destination. Le compte de jetons doit avoir un solde nul, sauf s'il s'agit d'un compte SOL natif.
+
+> Depuis Token2022, il est possible de fermer un compte de `Mint` qui a une offre de 0
+
+Avant de pouvoir fermer un compte de jetons, nous devons déjà avoir :
+- Initialisé un compte de `Mint`
+- Initialisé un compte de `Token` ou `Associated Token` qui ne contient aucun jeton
+
+Voici à quoi ressemble le CPI à l'instruction `close_account()` : 
+
+```rust
+close_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        CloseAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            destination: ctx.accounts.authority.to_account_info(),,
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

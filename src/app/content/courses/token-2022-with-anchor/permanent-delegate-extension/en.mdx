@@ -6,11 +6,11 @@ The `PermanentDelegate` extension is a Mint account extension that allows a perm
 
 <ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
 
-To initialie the `PermanentDelegate` extension on a `Mint` account we can simply use the macro that `Anchor` created for us.
+To initialize the `PermanentDelegate` extension on a `Mint` account we can simply use the macro that `Anchor` created for us.
 
 Here's how to create a mint with the Permanent Delegate extension:
 
-```ts
+```rust
 #[derive(Accounts)]
 pub struct CreateMint<'info> {
     #[account(mut)]

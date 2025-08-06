@@ -1,0 +1,381 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Extension de Jetons
+
+Alors que le Programme de Jetons originel offrait des fonctionnalités essentielles telles que la création, le transfert et le gel de jetons, les Extension de Jetons ouvrent la voie à un nouveau paradigme de jetons programmables.
+
+Ce programme amélioré reste entièrement compatible avec les fonctionnalités existantes des Jetons SPL tout en ajoutant des fonctionnalités sophistiquées telles que des hooks de transfert pour l'exécution de logiques personnalisées, des mécanismes de frais intégrés, une prise en charge améliorée des métadonnées, des calculs d'intérêts et des contrôles de sécurité avancés.
+
+### Compatibilité des Extensions
+
+Les Extension de Jetons sont conçues pour être modulables, ce qui vous permet de combiner plusieurs extensions afin de créer des jetons qui correspondent parfaitement aux exigences de votre projet.
+
+Cependant, certaines combinaisons sont incompatibles en raison de fonctionnalités conflictuelles ou de contradictions logiques, telles que :
+- Non transférable + hooks de transfert / frais de transfert / transfert confidentiel
+- Transfert confidentiel + frais de transfert (jusqu'à 1.18)
+- Transfert confidentiel + hooks de transfert (Ces transferts ne permettent de voir que les comptes source et destination, et ne permettent donc pas d'agir sur le montant transféré)
+- Transfert confidentiel + délégué permanent
+
+<ArticleSection name="Extension Transfer Fee" id="transfer-fee-config" level="h2" />
+
+L'extension `TransferFee` (Frais de transfert) est une extension de compte de `Mint` qui permet au créateur de fixer une "taxe" sur le jeton prélevée à chaque fois que quelqu'un effectue un échange.
+
+Pour éviter que le destinataire des frais ne soit bloqué en écriture à chaque fois qu'un échange est effectué et pour garantir que nous pouvons paralléliser les transactions contenant un `Mint` avec cette extension, les frais sont mis de côté dans le compte de jetons du destinataire, que seul le `Withdraw Authority` peut retirer.
+
+C'est pour cette raison que, pour utiliser l'extension `TransferFee`, nous avons besoin de deux types d'extensions différents : une qui va directement dans le compte de `Mint` appelée `TransferFeeConfig` qui contient toutes les données nécessaires pour effectuer un échange, et une autre qui va dans le compte de`Token` appelée `TransferFeeAmount` qui "enregistre" la quantité de jetons conservée par le compte de jetons.
+
+Voici à quoi ressemblent les données de l'extension `TransferFee` :
+
+```rust
+/// TransferFeeConfig Extension
+pub const transfer_fee_config_header: [u8; 4] = [1, 0, 108, 0];
+
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Quelques points à souligner :
+- La `config_authority` peut être différente de la personne qui peut effectivement retirer les jetons des comptes de `Token`.
+- Nous avons à la fois une structure de frais de transfert `older` (ancienne) et `newer` (nouvelle).
+
+Le dernier point est dû au fait qu'il existe une période de "récupération" lorsque nous fixons un nouveau `TransferFee` de 2 époques afin d'éviter les escroqueries à la fin d'une époque. Cela signifie que pendant les deux premières époques d'un nouveau `TransferFee`, c'est l'ancien `TransferFee` qui est actif.
+
+De plus, vous pouvez voir que `TransferFeeConfig`comporte un champ `withheld_amount`. Cela peut sembler étrange car nous venons de dire que les frais liés aux jetons sont accumulés dans le `Token Account` mais en réalité, la récupération de ces frais se fait en deux étapes :
+- Récupérer les frais depuis le `Token Account` vers le `Mint`. Cela peut être fait sans autorisation.
+- Récupérer les frais depuis le `Mint` vers le compte de destination. Il s'agit d'une action autorisée que seul la `Withdraw Authority` peut exécuter.
+
+Pour cette extension, nous avons besoin d'un processus en deux étapes afin de prendre en compte le cas particulier où quelqu'un souhaite fermer un `Token Account` alors qu'il reste des frais à l'intérieur. Étant donné que la destination de ces frais peut être "différente" de celle de la `Withdraw Authority` nous devons tenir compte du fait que ces frais doivent être envoyés quelque part avant de clôturer le `Token Account`.
+
+Voici à quoi ressemblent les données de l'extension `TransferFeeAmount` :
+
+```rust
+/// TransferFeeAmount Extension
+pub const transfer_amount_config_header: [u8; 4] = [2, 0, 8, 0];
+
+pub struct TransferFeeAmount {
+    pub withheld_amount: u64,
+}
+```
+
+<ArticleSection name="Extension Mint Close Authority" id="mint-close-authority-config" level="h2" />
+
+L'extension `MintCloseAuthority` (Autorité de fermeture du mint) est une extension de compte de `Mint` qui permet à l'autorité de fermer et de récupérer la rente d'un compte de `Mint` donc l'offre actuelle est de 0.
+
+Cette extension est utile pour nettoyer les mints inutilisés et récupérer les SOL qui ont été utilisés pour rendre le compte exempt de rente. Le mint ne peut être fermée que lorsqu'il n'y a plus de jetons en circulation.
+
+Voici à quoi ressemblent les données de l'extension `MintCloseAuthority` :
+
+```rust
+/// MintCloseAuthority Extension
+pub const mint_close_authority_extension_header: [u8; 4] = [3, 0, 32, 0];
+
+pub struct MintCloseAuthority {
+    pub close_authority: Pubkey,
+}
+```
+
+<ArticleSection name="Extension Default Account State" id="default-account-state-extension" level="h2" />
+
+
+L'extension `DefaultAccountState` (état par défaut du compte) est une extension de compte de `Mint` qui permet de geler par défaut tous les comptes de `Token` nouvellement créés pour un mint précis. La `Freeze Authority` du mint peut ensuite débloquer (dégeler) ces comptes de `Token` afin qu'ils puissent être utilisés.
+
+Cette fonctionnalité permet aux créateurs de jetons d'exercer un contrôle accru sur la distribution des jetons en limitant le nombre de personnes pouvant les détenir. Cela est particulièrement utile pour des scénarios de conformité, des exigences KYC/AML ou la création de distributions de jetons basées sur des listes blanches, où les comptes doivent être explicitement approuvés avant de pouvoir recevoir ou transférer des jetons.
+
+Voici à quoi ressemblent les données de l'extension `DefaultAccountState` :
+
+```rust
+/// DefaultAccountState Extension
+pub const default_account_state_extension_header: [u8; 4] = [6, 0, 1, 0];
+
+pub struct DefaultAccountState {
+    pub account_state: AccountState,
+}
+
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+```
+
+<ArticleSection name="Extension Immutable Owner" id="immutable-owner-extension" level="h2" />
+
+L'extension `ImmutableOwner` (Propriétaire immuable) est une extension de compte de `Token` qui empêche toute modification de la propriété du compte de `Token`. Cela protège les comptes contre les accès non autorisés et les tentatives de transfert.
+
+Cette extension est particulièrement utile pour les Comptes de Jetons Associés (ATAs) et autres comptes dont la propriété ne doit jamais changer. Cela protège contre les programmes malveillants qui pourraient tenter de voler la propriété des comptes de jetons et offre des garanties de sécurité supplémentaires aux utilisateurs et aux applications.
+
+> Toutes les extensions de `Token` du programme ATAs ont des propriétaires immuables activés par défaut
+
+Voici à quoi ressemblent les données de l'extension `ImmutableOwner` :
+
+```rust
+/// ImmutableOwner Extension
+pub const immutable_owner_extension_header: [u8; 4] = [7, 0, 0, 0];
+```
+
+<ArticleSection name="Memo Transfer Extension" id="memo-transfer-extension" level="h2" />
+
+The `MemoTranfer Extension` is a `Token` account extension that enforces that all incoming transfers to a token account include a memo, facilitating enhanced transaction tracking and user identification.
+
+This extension is particularly useful for exchanges, regulated institutions, and applications that need to track the purpose or source of incoming transfers for compliance, accounting, or customer service purposes. When enabled, any transfer to the account will fail unless it includes a memo instruction in the same transaction.
+
+Voici à quoi ressemblent les données de l'extension `MemoTranfer` :
+
+```rust
+/// MemoTranfer Extension
+pub const memo_transfer_extension_header: [u8; 4] = [8, 0, 1, 0];
+
+pub struct MemoTranfer {
+    pub require_incoming_transfer_memos: bool,
+}
+```
+
+<ArticleSection name="Extension Non Transferable" id="non-transferable-extension" level="h2" />
+
+L'extension `NonTransferable` (Non transférable) est une extension de compte de `Mint` qui empêche le transfert de jetons entre comptes, les rendant ainsi liés de manière permanente à leurs détenteurs actuels.
+
+Cette extension est utile pour créer des jetons liés à un utilisateur, des badges de réussite, des certificats ou tout autre jeton représentant un droit ou un statut non transférable. Une fois créés dans un compte, ces jetons ne peuvent être ni déplacés, ni vendus, ni transférés vers un autre portefeuille, ce qui garantit qu'ils restent associés de manière permanente au destinataire d'origine.
+
+De plus, le compte de `Token` associé au `Mint` qui possède l'extension `NonTransferable` sera accompagné de l'extension `NonTransferableAccount`.
+
+Voici à quoi ressemblent les données de l'extension `NonTransferable` et `NonTransferableAccount` :
+
+```rust
+/// NonTransferable Extension
+pub const non_transferable_extension_header: [u8; 4] = [9, 0, 0, 0];
+
+/// NonTransferableAccount Extension
+pub const non_transferable_account_extension_header: [u8; 4] = [13, 0, 0, 0];
+```
+
+Les deux extensions ne sont que des drapeaux ; leur simple présence impose la restriction.
+
+<ArticleSection name="Extension Interest Bearing" id="interest-bearing-extension" level="h2" />
+
+L'extension `InterestBearing` (Porteur d'Intérêts) est une extension de compte de `Mint` qui permet aux utilisateurs d'appliquer un taux d'intérêt à leurs jetons et de récupérer le total mis à jour, intérêts compris, à tout moment.
+
+> L'extension `InterestBearing` ne génère pas de nouveaux jetons. Le montant affiché inclut simplement les intérêts cumulés via la fonction `amount_to_ui_amount`, ce qui rend le changement purement esthétique. Cela étant dit, il s'agit d'une valeur stockée dans le compte de mint et les programmes peuvent en tirer parti pour créer des fonctionnalités qui vont au-delà de la simple esthétique.
+
+Voici à quoi ressemblent les données de l'extension `InterestBearing` :
+
+```rust
+/// InterestBearing Extension
+pub const interest_bearing_extension_header: [u8; 4] = [10, 0, 52, 0];
+
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+Étant donné que le taux peut être mis à jour, afin de garantir l'exactitude des calculs, un champ `pre_update_average_rate` est utilisé lors du calcul pour déterminer comment réagir en cas de mise à jour du taux.
+
+<ArticleSection name="Extension Cpi Guard" id="cpi-guard-extension" level="h2" />
+
+L'extension `CpiGuard` (garde CPI) est une extension de compte de `Token` qui interdit certaines actions dans les Invocations de Programme Croisé, protégeant ainsi les utilisateurs contre les programmes malveillants qui pourraient tenter de manipuler leurs Comptes de Jeton sans leur consentement explicite.
+
+Cette extension est essentielle pour la sécurité lors de l'interaction avec les protocoles DeFi, les DEX ou tout programme qui demande l'accès à un compte de token. Cela empêche les programmes d'effectuer des actions non autorisées telles que modifier la propriété, définir des délégués non souhaités ou rediriger des fonds vers des destinataires non prévus lors de CPIs.
+
+Lorsque l'extension `CpiGuard` est activée, les CPIs suivants fonctionnent comme ceci :
+- Transfer: l'autorité signataire doit être le propriétaire ou un délégué du compte préalablement désigné
+- Burn: l'autorité signataire doit être le propriétaire ou un délégué du compte préalablement désigné
+- Approve: interdit - aucun délégué ne peut être approuvé au sein du CPI
+- Close Account: la destination des lamports doit être le propriétaire du compte
+- Set Close Authority: interdit sauf en cas de désactivation
+- Set Owner: toujours interdit, y compris en dehors du CPI
+
+Voici à quoi ressemblent les données de l'extension `CpiGuard` :
+
+```rust
+/// CpiGuard Extension
+pub const cpi_guard_extension_header: [u8; 4] = [11, 0, 1, 0];
+
+pub struct CpiGuard {
+    pub lock_cpi: bool,
+}
+```
+
+<ArticleSection name="Extension Permanent Delegate" id="permanent-delegate-extension" level="h2" />
+
+L'extension `PermanentDelegate` (Délégué permanent) est une extension de compte de `Mint` qui permet à un délégué permanent de tous les jetons d'un mint de transférer ou de brûler n'importe quel jeton de ce mint, à partir de n'importe quel compte de jetons.
+
+Cette extension est utile pour créer des jetons avec un contrôle administratif intégré, tels que les stablecoins qui nécessitent des capacités de gel d'urgence, les jetons de jeu qui requièrent une gestion centralisée ou les jetons de conformité pour lesquels un organisme de réglementation doit exercer une surveillance permanente.
+
+> Contrairement aux délégués classiques qui peuvent être révoqués, cette délégation d'autorité est permanente et immuable.
+
+Voici à quoi ressemblent les données de l'extension `PermanentDelegate` :
+
+```rust
+/// PermanentDelegate Extension
+pub const permanent_delegate_extension_header: [u8; 4] = [12, 0, 32, 0];
+
+pub struct PermanentDelegate {
+    delegate: Pubkey,
+}
+```
+
+<ArticleSection name="Extension Transfer Hook" id="transfer-hook-extension" level="h2" />
+
+L'extension `TransferHook` (Hook de transfert) est une extension de compte de `Mint` qui introduit la possibilité de créer des comptes de `Mint` qui exécutent une logique d'instructions personnalisée à chaque transfert de jetons.
+
+Cette extension permet des cas d'utilisation puissants tels que la collecte automatique des taxes, le paiement des royalties, les restrictions de transfert basées sur une logique personnalisée, les contrôles de conformité ou tout autre comportement programmable qui doit se produire lors des transferts. The hook program is invoked automatically by the extension program whenever a transfer occurs.
+
+Pour ce faire, les développeurs doivent créer un programme qui implémente l'[Interface Transfer Hook](https://github.com/solana-program/transfer-hook/tree/main/program) et initialiser un compte de `Mint` avec l'extension `Transfer Hook` activée.
+
+De plus, le compte de `Token` associé au `Mint` qui possède l'extension `TransferHook` sera accompagné de l'extension `TransferHookAccount`.
+
+Voici à quoi ressemblent les données de l'extension `TransferHook` et `TransferHookAccount` :
+
+```rust
+/// TransferHook Extension
+pub const transfer_hook_extension_header: [u8; 4] = [14, 0, 64, 0];
+
+pub struct TransferHook {
+    // The transfer hook update authority
+    authority: Pubkey,
+    // The transfer hook program account
+    programId: Pubkey,
+}
+
+/// TransferHookAccount Extension
+pub const transfer_hook_account_extension_header: [u8; 4] = [15, 0, 1, 0];
+
+pub struct TransferHookAccount {
+    // Whether or not this account is currently transferring tokens
+    transferring: bool,
+}
+```
+
+<ArticleSection name="Extension Metadata" id="metadata-extension" level="h2" />
+
+L'extension `Metadata` (Métadonnées) est une extension de compte de `Mint` qui introduit la possibilité d'intégrer directement des métadonnées dans les comptes de Mint de manière native, sans avoir à utiliser un autre programme.
+
+Cette extension est particulièrement utile pour les NFTs, les jetons et autres actifs qui nécessitent des métadonnées on-chain, telles que des noms, des symboles, des images et des attributs personnalisés. By embedding metadata directly in the mint account, it eliminates the need for external metadata programs and ensures the metadata is permanently associated with the token.
+
+L'extension `Metadata` est composée de deux extensions différentes qui s'appliquent toutes deux à un compte de Mint :
+- L'extension `Metadata` qui contient toutes les métadonnées telles que le nom, le symbole, l'URI et les comptes supplémentaires.
+- L'extension `MetadataPointer` qui fait référence au compte de `Mint` où se trouve l'extension `Metadata`.
+
+En général, lorsque ces deux extensions sont utilisées, elles cohabitent dans le même compte de `Mint`. Mais il peut arriver que les mêmes métadonnées soient utilisées pour différents actifs, et dans ce cas, il serait plus économique de séparer les deux extensions et de référencer le `Mint`avec l'extension `Metadata`.
+
+> Contrairement aux autres extensions, pour créer l'extension `Metadata` nous devrons utiliser l'[Interface Token Metadata](https://github.com/solana-program/token-metadata/tree/main). L'extension Metadata Pointer utilise le programme Token2022.
+
+Cette fois-ci, nous ne pouvons pas créer d'en-tête d'extension pour l'extension `Metadata` puisqu'elle contient des données variables, ce qui signifie que la longueur variera en fonction du champ.
+
+Voici à quoi ressemblent les données de l'extension `Metadata` et `MetadataPointer` :
+
+```rust
+/// Metadata Pointer Extension
+pub const metadata_pointer_extension_header: [u8; 4] = [18, 0, 64, 0]
+
+pub struct MetadataPointer {
+    // Authority that can set the metadata address
+    authority: Pubkey;
+    // Account Address that holds the metadata
+    metadata_address: Pubkey;
+}
+
+/// Metadata Extension (Discriminator: 19)
+pub struct TokenMetadata {
+    /// The authority that can sign to update the metadata
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that metadata
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The longer name of the token
+    pub name: String,
+    /// The shortened symbol for the token
+    pub symbol: String,
+    /// The URI pointing to richer metadata
+    pub uri: String,
+    /// Any additional metadata about the token as key-value pairs. The program
+    /// must avoid storing the same key twice.
+    pub additional_metadata: Vec<(String, String)>,
+}
+```
+
+<ArticleSection name="Extension Group and Member" id="group-and-member-extension" level="h2" />
+
+Les extensions `Group` (groupe) et `Member` (membre) sont des extension de compte de `Mint` qui introduisent la possibilité de créer des groupes, comme des collections pour les NFT, qui sont liés à plusieurs actifs.
+
+Ce système d'extension est idéal pour créer des collections NFTs, des familles de jetons ou tout autre regroupement d'actifs liés pour lesquels vous devez suivre l'adhésion et appliquer des limites de collection. Les groupes peuvent représenter des collections, tandis que les membres représentent des éléments individuels au sein de ces collections.
+
+Les extensions Group et Member sont toutes deux composées de deux extensions différentes qui sont toutes deux associées à un compte de `Mint` tout comme l'extension `Metadata` :
+- L'`Extension` qui contient toutes les informations sur le groupe ou le membre.
+- Le `Pointer Extension` (extension pointeur) qui fait référence au compte de `Mint` où se trouvent les `Group` ou `Member`.
+
+La relation entre un groupe et un membre est telle qu'un groupe peut avoir plusieurs membres, mais l'inverse n'est pas vrai.
+
+Comme pour l'extension Metadata, nous plaçons généralement l'`Extension` et le `Pointer` dans le même compte de `Mint`. Pour créer les extensions `Group` et `Member` nous devons utiliser l'[Interface Token Group](https://github.com/solana-program/token-group/tree/main).
+
+> Nous ne pouvons pas avoir l'extension `Group` dans le même compte de `Mint` où se trouve l'extension `Member`.
+
+Voici à quoi ressemblent les données de l'extension `Group` et `GroupPointer` :
+
+```rust
+/// GroupPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [20, 0, 64, 0]
+
+pub struct GroupPointer {
+    // Authority that can set the group address
+    authority: Pubkey;
+    // Account Address that holds the group
+    group_address: Pubkey;
+}
+
+/// Group Extension
+pub const group_extension_header: [u8; 4] = [21, 0, 80, 0]
+
+pub struct TokenGroup {
+    /// The authority that can sign to update the group
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that group
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The current number of group members
+    pub size: u64,
+    /// The maximum number of group members
+    pub max_size: u64,
+}
+```
+
+Voici à quoi ressemblent les données de l'extension `Member` et `MemberPointer` :
+
+```rust
+/// MemberPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [22, 0, 64, 0]
+
+pub struct MemberPointer {
+    // Authority that can set the member address
+    authority: Pubkey;
+    // Account Address that holds the member
+    member_address: Pubkey;
+}
+
+/// Member Extension
+pub const group_extension_header: [u8; 4] = [23, 0, 72, 0]
+
+pub struct TokenGroupMember {
+    /// The associated mint, used to counter spoofing to be sure that member
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The pubkey of the `TokenGroup`
+    pub group: Pubkey,
+    /// The member number
+    pub member_number: u64,
+}
+```

@@ -1,0 +1,49 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruction Burn
+
+Détruit définitivement des jetons en les retirant de la circulation. Cela réduit l'offre totale du jeton.
+
+Avant de pouvoir détruire un jeton, nous devons déjà avoir :
+- Initialisé un compte de `Mint`
+- Un compte de `Token` ou `Associated Token` qui contient déjà au moins la quantité que nous voulons détruire
+
+> Le nombre de jetons que nous détruisons est "normalisé" au niveau des décimales. Cela signifie que si nous voulons détruire 1 jeton comportant 6 décimales, nous devrons en réalité saisir `1e6` comme montant
+
+<ArticleSection name="Instruction Brute" id="raw-instruction" level="h2" />
+
+En utilisant uniquement une instruction "brute" sans aucune abstraction, voici à quoi ressemble la destruction d'un jeton :
+
+```ts
+// Burn tokens to ATA 
+const burnInstruction = createBurnInstruction(
+    tokenAccount, // token account
+    mint, // mint
+    keypair.publicKey // owner
+    1e6, // amount
+);
+
+const transaction = new Transaction().add(burnInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens Burned! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Instruction Abstraite" id="abstracted-instruction" level="h2" />
+
+Voici à quoi ressemble la même instruction si elle est abstraite à l'aide de l'instruction `burn()` :
+
+```ts  
+let tx = await burn(
+    connection, // connection
+    keypair, // payer
+    tokenAccount, // token account
+    keypair.publicKey, // owner of the token account
+    1e6, // amount to transfer
+);
+
+console.log(`Succesfully Burned!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+<ArticleSection name="Instruction Vérifiée" id="checked-instruction" level="h2" />

@@ -6,7 +6,8 @@
   },
   "locales_native_name": {
     "en": "English",
-    "zh-hant": "繁體中文"
+    "zh-hant": "繁體中文",
+    "fr": "Français"
   },
   "header": {
     "lessons": "Lessons",

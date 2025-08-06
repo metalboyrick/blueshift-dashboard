@@ -8,9 +8,9 @@ The `ImmutableOwner` extension is a `Token` account extension that prevents any 
 
 <ArticleSection name="Initializing the Token Account" id="initializing-the-token-account" level="h2" />
 
-To initialie the `ImmutableOwner` extension on a `Token` account we're going to need the `initializeImmutableOwner()` function. 
+To initialize the `ImmutableOwner` extension on a `Token` account we're going to need the `initializeImmutableOwner()` function. 
 
-Here's how to create a mint with the Immutable Owner extension:
+Here's how to create a token with the Immutable Owner extension:
 
 ```ts
 import {
@@ -29,7 +29,7 @@ import {
 
 const tokenAccount = Keypair.generate();
 
-// Calculate the size needed for a Token account with Transfer Fee extension
+// Calculate the size needed for a Token account with Immutable Owner extension
 const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
 
 // Calculate minimum lamports required for rent exemption
