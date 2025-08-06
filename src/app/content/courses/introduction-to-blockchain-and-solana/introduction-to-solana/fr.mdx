@@ -1,0 +1,226 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Introduction à Solana
+
+Avant de développer sur Solana, vous devez comprendre plusieurs concepts fondamentaux qui rendent Solana unique. Ce guide traite des comptes, des transactions, des programmes et de leurs interactions.
+
+<ArticleSection name="Comptes sur Solana" id="accounts-on-solana" level="h2" />
+
+L'architecture de Solana s'articule autour des comptes : des conteneurs de données qui stockent des informations sur la blockchain. Considérez les comptes comme des fichiers individuels dans un système de fichiers, où chaque fichier possède des propriétés spécifiques et un propriétaire qui le contrôle.
+
+Chaque compte Solana a la même structure de base :
+
+```rust
+pub struct Account {
+    /// lamports in the account
+    pub lamports: u64,
+    /// data held in this account
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
+    pub data: Vec<u8>,
+    /// the program that owns this account. If executable, the program that loads this account.
+    pub owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+    /// the epoch at which this account will next owe rent
+    pub rent_epoch: Epoch,
+}
+```
+
+Chaque compte dispose d'une adresse unique de 32 octets, affichée sous la forme d'une chaîne codée en base 58 (par exemple, `14grJpemFaf88c8tiVb77W7TYg2W3ir6pfkKz3YjhhZ5`). Cette adresse sert d'identifiant au compte sur la blockchain et permet de localiser des données spécifiques.
+
+Les comptes peuvent stocker jusqu'à 10 Mio de données, qui peuvent contenir soit du code de programme exécutable, soit des données spécifiques au programme.
+
+Tous les comptes doivent effectuer un dépôt de lamport proportionnel à la taille de leurs données pour être "exempt de rente". Le terme "rente" est historique, car les lamports étaient à l'origine déduits des comptes à chaque époque, mais cette fonctionnalité est désormais désactivée. Aujourd'hui, le dépôt fonctionne davantage comme une caution remboursable. Tant que votre compte maintient le solde minimum correspondant à sa taille de données, il reste exempt de rente et persiste indéfiniment. Lorsque vous n'avez plus besoin d'un compte, vous pouvez le fermer et récupérer l'intégralité de ce dépôt.
+
+Chaque compte appartient à un programme, et seul ce programme propriétaire peut modifier les données du compte ou retirer ses lamports. Cependant, n'importe qui peut augmenter le solde de lamport d'un compte, ce qui est utile pour financer des opérations ou payer une rente sans avoir à faire appel au programme lui-même.
+
+L'autorité de signature fonctionne différemment selon la propriété. Les comptes appartenant au Programme Système peuvent signer des transactions afin de modifier leurs propres données, transférer la propriété ou récupérer les lamports stockés. Une fois que la propriété est transférée à un autre programme, ce dernier obtient le contrôle total du compte, que vous possédiez toujours la clé privée ou non. Ce transfert de contrôle est permanent et irréversible.
+
+### Types de Comptes
+
+Le type de compte le plus courant est le Compte Système (*System Account*), qui stocke les lamports (la plus petite unité de SOL) et appartient au Programme Système (*System Program*). Ces comptes fonctionnent comme des comptes de portefeuille de base avec lesquels les utilisateurs interagissent directement pour envoyer et recevoir des SOL.
+
+Les Comptes de Jetons (*Token Account*) ont une fonction spécifique : ils stockent les informations relatives aux jetons SPL, notamment les données de propriété et les métadonnées des jetons. Le Programme de Jetons (*Token Program*) est propriétaire de ces comptes et gère toutes les opérations liées aux tokens dans l'écosystème Solana. Les Comptes de Jetons sont des _Data Accounts_.
+
+Les comptes de données stockent des informations spécifiques à une application et appartiennent à des programmes personnalisés. Ces comptes contiennent l'état de votre application et peuvent être structurés selon les besoins de votre programme, qu'il s'agisse de simples profils utilisateur ou de données financières complexes.
+
+Enfin, les Comptes de Programme (*Program Accounts*) contiennent le code exécutable qui s'exécute sur Solana, où réside le contrat intelligent. Ces comptes sont marqués comme `executable: true` et stocke la logique du programme qui traite les instructions et gère l'état.
+
+### Travailler avec les Données de Compte
+
+Voici comment les programmes interagissent avec les données de compte :
+
+```rust
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct UserAccount {
+    pub name: String,
+    pub balance: u64,
+    pub posts: Vec<u32>,
+}
+
+pub fn update_user_data(accounts: &[AccountInfo], new_name: String) -> ProgramResult {
+    let user_account = &accounts[0];
+    
+    // Deserialize existing data
+    let mut user_data = UserAccount::try_from_slice(&user_account.data.borrow())?;
+    
+    // Modify the data
+    user_data.name = new_name;
+    
+    // Serialize back to account
+    user_data.serialize(&mut &mut user_account.data.borrow_mut()[..])?;
+    
+    Ok(())
+}
+```
+
+Contrairement aux bases de données où vous insérez simplement des enregistrements, les comptes Solana doivent être explicitement créés et approvisionnés avant utilisation.
+
+<ArticleSection name="Transactions sur Solana" id="transactions-on-solana" level="h2" />
+
+Les transactions Solana sont des opérations atomiques pouvant contenir plusieurs instructions. Toutes les instructions d'une transaction sont soit toutes exécutées, soit toutes rejetées : il n'y a pas d'exécution partielle.
+
+Une transaction comprend :
+- Instructions: Opérations individuelles à effectuer
+- Accounts: Comptes spécifiques à partir desquels chaque instruction lira ou écrira
+- Signers: Comptes qui autorisent la transaction
+
+```rust
+Transaction {
+    instructions: [
+        // Instruction 1: Transfer SOL
+        system_program::transfer(from_wallet, to_wallet, amount),
+        
+        // Instruction 2: Update user profile  
+        my_program::update_profile(user_account, new_name),
+        
+        // Instruction 3: Log activity
+        my_program::log_activity(activity_account, "transfer", amount),
+    ],
+    accounts: [from_wallet, to_wallet, user_account, activity_account]
+    signers: [user_keypair],
+}
+```
+
+### Exigences des Transaction et Frais
+
+Les transactions sont limitées à un total de 1 232 octets, ce qui restreint le nombre d'instructions et de comptes que vous pouvez inclure.
+
+Chaque instruction au sein d'une transaction nécessite trois composants essentiels : l'adresse du programme à invoquer, tous les comptes dans lesquels l'instruction lira ou écrira, et toutes les données supplémentaires telles que les arguments de fonction. 
+
+Les instructions s'exécutent séquentiellement dans l'ordre que vous spécifiez dans la transaction.
+
+Chaque transaction entraîne des frais de base de 5 000 lamports par signature afin de rémunérer les validateurs pour le traitement de votre transaction. 
+
+Vous pouvez également payer des frais de priorité facultatifs afin d'augmenter les chances que le leader actuel traite rapidement votre transaction. Ces frais de priorité sont calculés en multipliant votre limite d'unités de calcul par le prix de vos unités de calcul (mesuré en micro-lamports).
+
+```
+prioritization_fee = compute_unit_limit × compute_unit_price
+```
+
+> Le compte qui paie les frais de transaction doit appartenir au Programme Système, afin de garantir qu'il puisse autoriser correctement le paiement
+
+<ArticleSection name="Programmes sur Solana" id="programs-on-solana" level="h2" />
+
+Les programmes sur Solana sont fondamentalement sans état, ce qui signifie qu'ils ne conservent aucun état interne entre les appels de fonction. Au lieu de cela, ils reçoivent des comptes en entrée, traitent les données contenues dans ces comptes et renvoient les résultats modifiés.
+
+Cette conception sans état garantit un comportement prévisible et permet des modèles de composabilité puissants.
+
+Les programmes eux-mêmes sont stockés dans des comptes spéciaux marqués comme `executable: true` contenant le code binaire compilé qui s'exécute lorsqu'il est invoqué.
+
+Les utilisateurs interagissent avec ces programmes en envoyant des transactions contenant des instructions spécifiques, chacune ciblant des fonctions particulières du programme avec les données de comptes et paramètres nécessaires.
+
+```rust
+use solana_program::prelude::*;
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct User {
+    pub name: String,
+    pub created_at: i64,
+}
+
+pub fn create_user(
+    accounts: &[AccountInfo],
+    name: String,
+) -> ProgramResult {
+    let user_account = &accounts[0];
+    
+    let user = User {
+        name,
+        created_at: Clock::get()?.unix_timestamp,
+    };
+    
+    user.serialize(&mut &mut user_account.data.borrow_mut()[..])?;
+    Ok(())
+}
+```
+
+Les programmes peuvent être mis à jour par l'autorité de mise à jour désignée, ce qui permet aux développeurs de corriger les bogues et d'ajouter des fonctionnalités après le déploiement. Cependant, la suppression de cette autorité de mise à jour rend le programme définitivement immutable, garantissant ainsi aux utilisateurs que le code ne changera jamais.
+
+Pour plus de transparence et de sécurité, les utilisateurs peuvent vérifier que les programmes sur la chaîne correspondent à leur code source public grâce à des versions vérifiables, garantissant ainsi que le bytecode déployé correspond exactement au code source publié.
+
+<ArticleSection name="Adresses Dérivées de Programme (PDAs)" id="program-derived-addresses" level="h2" />
+
+Les PDAs sont des adresses générées de manière déterministe qui permettent des modèles de programmabilité puissants. Ils sont créés à partir de *seeds* et d'un identifiant de programme, produisant des adresses sans clés privées correspondantes.
+
+Les PDAs utilisent le hachage `SHA-256` avec des entrées précises, notamment vos *seeds* personnalisées, une valeur de saut (*bump*) pour garantir que le résultat est hors courbe, l'ID du programme qui sera propriétaire du PDA et un marqueur constant.
+
+Lorsque le hachage produit une adresse sur la courbe (ce qui arrive environ 50 % du temps), le système itère du bump 255 à 254, 253, et ainsi de suite jusqu'à trouver un résultat hors courbe.
+
+```rust
+use solana_nostd_sha256::hashv;
+
+const PDA_MARKER: &[u8; 21] = b"ProgramDerivedAddress";
+
+let pda = hashv(&[
+    seed_data.as_ref(),    // Your custom seeds
+    &[bump],               // Bump to ensure off-curve
+    program_id.as_ref(),   // Program that owns this PDA
+    PDA_MARKER,
+]);
+```
+
+### Avantages
+
+La nature déterministe des PDAs élimine le besoin de stocker les adresses : vous pouvez les générer à nouveau à partir des mêmes seeds chaque fois que nécessaire.
+
+Cela crée des schémas d'adressage prévisibles qui fonctionnent comme des structures de table de hachage sur la chaîne. Plus important encore, les programmes peuvent signer pour leurs propres PDAs, ce qui permet une gestion autonome des actifs sans exposer les clés privées :
+
+```rust
+let seeds = &[b"vault", user.as_ref(), &[bump]];
+
+invoke_signed(
+    &transfer_instruction,
+    &[from_pda, to_account, token_program],
+    &[&seeds[..]], // Program proves PDA control
+)?;
+```
+
+<ArticleSection name="Invocation de Programme Croisé (CPI)" id="cross-program-invocation" level="h2" />
+
+Les CPIs permettent aux programmes d'appeler d'autres programmes au sein d'une même transaction, créant ainsi une véritable composabilité où plusieurs programmes peuvent interagir de manière atomique sans coordination externe.
+
+Cela permet aux développeurs de créer des applications complexes en combinant des programmes existants plutôt que de reconstruire les fonctionnalités à partir de zéro.
+
+Les CPIs suivent le même modèle que les instructions classiques, vous obligeant à spécifier le programme cible, les comptes dont il a besoin et les données d'instruction, la principale différence étant qu'elles peuvent être exécutées à l'intérieur d'autres programmes.
+
+Le programme appelant conserve le contrôle du flux tout en déléguant certaines opérations à des programmes spécialisés :
+
+```rust
+let cpi_accounts = TransferAccounts {
+    from: source_account.clone(),
+    to: destination_account.clone(), 
+    authority: authority_account.clone(),
+};
+
+let cpi_ctx = CpiContext::new(token_program.clone(), cpi_accounts);
+token_program::cpi::transfer(cpi_ctx, amount)?;
+```
+
+### Contraintes et Capacités
+
+Les signataires originaux de la transaction conservent leur autorité tout au long des chaînes CPIs, ce qui permet aux programmes d'agir de manière transparente au nom des utilisateurs.
+
+Cependant, les programmes ne peuvent créer que des CPIs jusqu'à 4 niveaux de profondeur (`A → B → C → D`) afin d'éviter une récursivité infinie. Les programmes peuvent également signer pour leurs PDAs dans les CPIs à l'aide de `CpiContext::new_with_signer`, ce qui permet des opérations autonomes sophistiquées.
+
+Cette composabilité permet d'effectuer des opérations complexes sur plusieurs programmes au sein d'une seule transaction atomique, rendant les applications Solana hautement modulaires et interopérables.

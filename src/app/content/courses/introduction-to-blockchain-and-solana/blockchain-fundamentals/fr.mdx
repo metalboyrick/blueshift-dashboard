@@ -1,0 +1,128 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Principes Fondamentaux de la Blockchain
+
+Maintenant que vous comprenez pourquoi les systèmes distribués sont fondamentalement complexes et pourquoi le problème des généraux byzantins semblait insoluble, explorons comment fonctionne réellement la blockchain.
+
+La percée est venue de la combinaison de deux innovations clés : des mécanismes de consensus novateurs et une utilisation intelligente des primitives cryptographiques.
+
+<ArticleSection name="Mécanismes de Consensus" id="consensus-mechanisms" level="h2" />
+
+Les informaticiens ont en fait résolu mathématiquement le problème des généraux byzantins dans les années 1980, démontrant que pour tolérer f traîtres, il faut au moins `3f+1` participants au total.
+
+Prenons le cas classique d'un traître parmi quatre généraux. Si le général commandant est le traître, il pourrait ordonner à deux généraux "attaque" et à un autre "retraite". Si les généraux se contentaient de suivre leurs ordres, le plan échouerait. La solution nécessite une communication supplémentaire au cours de laquelle tous les généraux se communiquent mutuellement les ordres qu'ils ont reçus.
+
+Cette communication supplémentaire révèle la supercherie du commandant. Chaque général loyal constate que "attaque" est l'ordre majoritaire (deux contre un) et agit en conséquence. Comme tous les généraux loyaux parviennent à la même conclusion, un consensus est atteint et le traître est vaincu.
+
+La solution mathématique derrière cela fonctionne, mais n'est pas pratique :
+- Vous devez connaître à l'avance l'identité exacte de tous les participants
+- Plusieurs séries d'échanges de messages entre chaque paire de participants
+- La complexité de la communication augmente de manière exponentielle
+- Dans un système sans autorisation, les attaquants peuvent créer un nombre illimité de fausses identités
+
+Pour résoudre ce problème, au lieu de compter les identités, les blockchains comptent quelque chose qui coûte cher à falsifier : le travail de calcul ou l'argent mis en jeu.
+
+### Proof of Work (Preuve de Travail ou POW)
+
+Dans les systèmes POW, pour proposer ce qui devrait se passer ensuite, vous devez prouver que vous avez effectué un travail de calcul coûteux :
+- Les mineurs regroupent les transactions en attente dans un "bloc"
+- Les mineurs doivent trouver un nombre aléatoire (appelé "nonce") qui, lorsqu'il est combiné avec les données du bloc et haché, produit un résultat commençant par plusieurs zéros
+- Le premier mineur à trouver ce nombre diffuse sa solution sur le réseau
+- Les autres participants peuvent instantanément vérifier que la solution est correcte et accepter le nouveau bloc
+
+Cela fonctionne parce que trouver le nonce peut nécessiter des milliards de tentatives aléatoires, mais vérifier la solution ne prend que quelques millisecondes.
+
+Chaque bloc fait également référence au hachage du bloc précédent, créant ainsi une chaîne. Pour réécrire l'histoire, un attaquant devrait refaire tout le travail de calcul ultérieur, tandis que les mineurs honnêtes continueraient à prolonger la chaîne réelle.
+
+L'hypothèse de sécurité est que les coûts en électricité liés à l'attaque sont supérieurs aux gains que l'attaquant pourrait en tirer.
+
+### Proof of Stake (Preuve d'Enjeu)
+
+Dans les systèmes POS, au lieu de gaspiller de l'électricité, les participants mettent leur propre argent en jeu :
+- Les participants bloquent des jetons de cryptomonnaie à titre de garantie
+- Le protocole sélectionne aléatoirement des validateurs pour proposer des blocs, pondérés en fonction de leur mise
+- Les validateurs sélectionnés proposent des blocs et les autres validateurs votent pour les accepter ou les rejeter
+- Un comportement honnête est récompensé et un comportement malhonnête entraîne une "sanction" (*slashing*), où une partie des jetons misés est perdue ou confisquée. La sanction exacte varie selon le réseau et la gravité de l'infraction.
+
+Cela fonctionne parce que les validateurs "jouent leur peau". Une attaque contre le réseau détruirait la valeur de leurs jetons mis en jeu (par le biais du slashing). De plus, contrairement à la Preuve de Travail, la Preuve d'Enjeu peut garantir la finalité économique. Une fois qu'un bloc est finalisé par une supermajorité de validateurs, l'annuler nécessiterait qu'un attaquant détruise de toute évidence une quantité considérable de capital, ce qui rendrait l'annulation extrêmement coûteuse.
+
+### Le Trilemme de la Blockchain
+
+Tout comme les systèmes distribués sont confrontés au théorème CAP, les blockchains sont confrontées à leur propre compromis impossible. Le Trilemme de la Blockchain stipule que le consensus d'une blockchain peut optimiser au maximum deux de ces trois propriétés :
+- Sécurité : Résistance aux attaques et à la censure
+- Scalabilité : Débit de transactions élevé
+- Décentralisation : aucun point de contrôle unique
+
+Bitcoin a privilégié la sécurité et la décentralisation plutôt que la scalabilité. Les systèmes de paiement traditionnels comme Visa ont privilégié la scalabilité et la sécurité plutôt que la décentralisation. Le défi permanent consiste à trouver des moyens de réaliser ces trois objectifs simultanément.
+
+<ArticleSection name="Primitives Cryptographiques" id="cryptographic-primitives" level="h2" />
+
+Les mécanismes de consensus résolvent le problème de "qui décide", mais comment garantir la fiabilité des données elles-mêmes ?
+
+C'est là qu'interviennent les primitives cryptographiques : des outils mathématiques qui ont fait leurs preuves depuis des décennies.
+
+Les blockchains s'appuient sur trois outils cryptographiques clés qui fonctionnent ensemble pour créer un système immuable et vérifiable :
+
+### Fonctions de Hachage
+
+Imaginez que vous deviez vérifier qu'un document volumineux n'a pas été modifié mais que vous ne pouvez envoyer qu'une infime partie des informations pour le prouver. C'est exactement ce que font les fonctions de hachage.
+
+Une fonction de hachage prend n'importe quelle entrée (qu'il s'agisse du mot "Bonjour", de l'œuvre complète de Shakespeare ou d'un bloc contenant des milliers de transactions) et produit une sortie de taille fixe qui sert d'empreinte numérique unique.
+
+Les fonctions de hachage ont trois propriétés clés :
+
+- **Déterministe:** Une même entrée produit toujours la même sortie.
+- **Irréversible:** La fonction est facile à calculer dans un sens, mais impossible à calculer dans l'autre sens. À partir d'un hachage, il est impossible de retrouver facilement la donnée d'origine, sauf en utilisant la force brute ou une table de correspondance.
+- **Effet Avalanche:** Une modification minime de l'entrée (comme mettre une lettre en majuscule) entraîne un hachage de sortie complètement différent.
+
+Considérez ces hachages SHA-256, qui illustrent l'effet avalanche :
+
+```plaintext
+SHA-256("Hello") = 185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969
+SHA-256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+```
+
+Remarquez comment le simple fait de changer la casse d'une lettre crée un hachage complètement différent.
+
+Bien qu'il soit trivial de calculer un hachage à partir de n'importe quelle entrée, il est impossible, d'un point de vue computationnel, d'inverser le processus. À partir d'un hachage, il est impossible de déterminer quelle était la donnée d'origine car cela prendrait plus de temps que l'âge de l'univers pour une fonction de hachage sécurisée.
+
+Dans les blockchains, les hachages sont utilisés pour garantir l'intégrité. Chaque bloc contient le hachage du bloc précédent, créant ainsi une chaîne inviolable. Si quelqu'un modifiait une transaction de la semaine dernière, il modifierait le hachage de ce bloc. Comme le bloc suivant fait référence à l'ancien hachage, la modification rompra la chaîne. Pour corriger cela, ils devraient recalculer le hachage de chaque bloc suivant pendant que le réseau continue d'ajouter de nouveaux blocs, ce qui est pratiquement impossible à rattraper.
+
+### Signatures Numériques
+
+L'authentification traditionnelle repose sur des informations confidentielles partagées telles que les mots de passe, mais la blockchain fonctionne sans autorités de confiance ni canaux sécurisés pour partager ces informations. Pour cette raison, elle utilise des signatures numériques, qui permettent l'authentification sans révéler aucune information confidentielle.
+
+Les signatures numériques utilisent la cryptographie asymétrique, qui repose sur des relations mathématiques faciles à calculer dans un sens, mais pratiquement impossibles à inverser. Lorsque vous créez une signature numérique, vous générez deux nombres mathématiquement liés appelés clé privée et clé publique ; la clé privée doit rester secrète tandis que la clé publique peut être partagée librement.
+
+- La clé privée peut être utilisée pour créer une signature numérique pour une transaction précise.
+- La signature est unique à la fois pour votre clé privée et pour le contenu exact de la transaction.
+- N'importe qui peut utiliser votre clé publique pour vérifier que la signature n'a pu être créée que par quelqu'un disposant de la clé privée correspondante.
+
+Sans votre clé privée, il est mathématiquement impossible de créer une signature valide, même en ayant accès à des millions de signatures précédentes. Pour empêcher un attaquant de rejouer une ancienne transaction, chaque signature doit inclure une donnée unique, souvent un simple compteur appelé "nonce", garantissant ainsi que chaque signature est unique.
+
+Cela crée une "non-répudiation" : une fois que vous avez signé une transaction, vous ne pouvez plus prétendre ne pas l'avoir autorisée. La preuve mathématique est irréfutable.
+
+Dans les blockchains, c'est ainsi que fonctionnent les portefeuilles. Votre "portefeuille" ne stocke pas de cryptomonnaie, les pièces existent sous forme d'entrées dans la blockchain. Au lieu de cela, les portefeuilles stockent les clés privées et aident à créer des signatures numériques pour prouver que vous pouvez dépenser ces pièces. Il s'agit essentiellement de gestionnaires de signatures numériques.
+
+### Arbres de Merkle
+
+Comment vérifier qu'une transaction précise existe dans un bloc contenant des milliers d'autres transactions sans télécharger l'intégralité du bloc ?
+
+Les arbres Merkle organisent les données dans un arbre binaire où chaque feuille représente une transaction et chaque nœud parent contient le hachage de ses deux enfants. Ce processus se poursuit jusqu'à ce que vous atteigniez un hachage racine unique représentant l'ensemble des données.
+
+Pour cette raison, pour prouver l'existence d'une transaction dans l'arbre, vous n'avez besoin que de la transaction et du "chemin de Merkle" c'est à dire les hachages "frères" nécessaires pour reconstruire la racine. Cela signifie que pour un arbre contenant un million de transactions, vous n'avez besoin que d'environ 20 hachages pour prouver l'inclusion.
+
+Dans les blockchains, les arbres de Merkle permettent de vérifier très facilement les transactions à l'aide de quelques kilo-octets de preuves seulement. La garantie de sécurité reste identique : si le chemin Merkle est vérifié correctement, vous pouvez être mathématiquement certain que la transaction a été incluse dans ce bloc.
+
+<ArticleSection name="La Création d'un Système sans Tiers de Confiance" id="the-creation-of-a-trustless-system" level="h2" />
+
+Le consensus et les primitives cryptographiques fonctionnent ensemble pour créer un système "sans tiers de confiance". Pour la première fois dans l'histoire, on fait confiance aux mathématiques et non aux personnes :
+- Les fonctions de hachage garantissent que toute altération des données historiques est immédiatement détectée.
+- Les signatures numériques prouvent l'autorisation sans nécessiter l'intervention d'une autorité de confiance pour vérifier l'identité.
+- Les arbres de Merkle permettent de vérifier facilement des affirmations complexes sans avoir à télécharger d'énormes quantités de données.
+
+Lorsqu'ils sont associés à des mécanismes de consensus, ces outils créent un système dans lequel chaque participant peut vérifier de manière indépendante l'historique complet du système en utilisant uniquement ses propres ressources informatiques. Pas d'autorités de confiance, pas d'informations confidentielles partagées, pas de points de défaillance centraux.
+
+C'est pourquoi la blockchain représente un changement aussi fondamental. Les systèmes traditionnels assurent la sécurité en contrôlant l'accès et en limitant la participation. La blockchain assure la sécurité en rendant la vérification peu coûteuse et universelle, tout en rendant la fraude coûteuse et évidente.
+
+Il est essentiel de comprendre ces primitives car elles définissent ce que la blockchain peut et ne peut pas faire. Elles expliquent pourquoi les transactions blockchain sont irréversibles (le coût économique pour annuler une transaction finalisée est conçu pour être prohibitif), pourquoi les systèmes blockchain peuvent fonctionner sans autorités centrales (tout le monde peut tout vérifier de manière indépendante) et pourquoi le système reste sécurisé même lorsqu'il est entièrement ouvert à la participation du public.
