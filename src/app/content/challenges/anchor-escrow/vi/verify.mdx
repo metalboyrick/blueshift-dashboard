@@ -4,23 +4,23 @@ import { Requirement } from "../../../../components/Challenges/Requirement";
 
 <ChallengeTitle>Anchor Escrow</ChallengeTitle>
 
-It's now time to put what you've learned to the test. Using what you've learned from the lesson, build an escrow program using the Anchor framework that satisfies the following requirements:
+Bây giờ là lúc để kiểm tra những gì bạn đã học. Sử dụng những gì bạn có được từ bài học, hãy xây dựng một chương trình escrow sử dụng framework Anchor đáp ứng các yêu cầu sau:
 
-> Your state account should be defined using an account discriminator with a value of `1`.
+> Tài khoản state của bạn nên được định nghĩa bằng account discriminator với giá trị `1`.
 
 <RequirementList>
   <Requirement
-    title="Challenge 1: Making an escrow offer"
-    description="Your program should allow a maker to make an escrow offer. Define an instruction to do this using an instruction discriminator with value `0`."
+    title="Thử thách 1: Tạo đề nghị escrow"
+    description="Chương trình của bạn nên cho phép maker tạo đề nghị escrow. Định nghĩa một lệnh để thực hiện điều này bằng instruction discriminator với giá trị `0`."
   />
 
-  <Requirement
-    title="Challenge 2: Taking an escrow offer"
-    description="Your program should allow a taker to take an escrow offer. Define an instruction to do this using an instruction discriminator value of `1`."
-  />
+<Requirement
+  title='Thử thách 2: Nhận đề nghị escrow'
+  description='Chương trình của bạn nên cho phép taker nhận đề nghị escrow. Định nghĩa một lệnh để thực hiện điều này bằng instruction discriminator với giá trị `1`.'
+/>
 
   <Requirement
-    title="Challenge 3: Canceling an escrow offer"
-    description="Your program should allow the maker to cancel an escrow offer and refund the escrowed funds. Make sure your instruction is defined with an instruction discriminator value of `2`."
+    title="Thử thách 3: Hủy đề nghị escrow"
+    description="Chương trình của bạn nên cho phép maker hủy đề nghị escrow và hoàn lại tiền đã ký gửi. Đảm bảo lệnh của bạn được định nghĩa với instruction discriminator có giá trị `2`."
   />
 </RequirementList>

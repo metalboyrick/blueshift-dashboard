@@ -3,26 +3,26 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Anchor Flash Loan
 
-Instruction introspection is a powerful feature that allows a blockchain program to examine and analyze other instructions within the same transaction bundle. This includes instructions that haven't been executed yet, giving your program the ability to "look ahead" and make decisions based on what will happen later in the transaction.
+Instruction introspection là một tính năng mạnh mẽ cho phép một chương trình blockchain kiểm tra và phân tích các instruction khác trong cùng một transaction bundle. Điều này bao gồm cả những instruction chưa được thực thi, giúp chương trình của bạn có khả năng "nhìn trước" và đưa ra quyết định dựa trên những gì sẽ xảy ra sau đó trong transaction.
 
-Think of it like having X-ray vision for transactions: your program can see through the entire transaction to understand the complete sequence of operations before deciding how to proceed.
+Hãy nghĩ về nó như việc có tầm nhìn tia X cho các transaction: chương trình của bạn có thể nhìn xuyên qua toàn bộ transaction để hiểu được chuỗi hoạt động hoàn chỉnh trước khi quyết định cách tiến hành.
 
-The most compelling application of instruction introspection is flash loans. These are a unique type of loan that exists only within the boundaries of a single transaction.
+Ứng dụng hấp dẫn nhất của instruction introspection là flash loan. Đây là một loại khoản vay độc đáo chỉ tồn tại trong phạm vi của một transaction duy nhất.
 
-Here's how flash loans work:
-- **Borrow**: At the beginning of a transaction, you can instantly borrow a large amount of capital using a `loan` instruction
-- **Use**: You can use this borrowed capital for trading, arbitrage, or other operations within the same transaction
-- **Repay**: Before the transaction ends, you must repay the loan plus a small fee using a `repay` instruction
+Cách thức hoạt động của flash loan:
+- **Borrow**: Ở đầu transaction, bạn có thể ngay lập tức vay một lượng vốn lớn bằng cách sử dụng instruction `loan`
+- **Use**: Bạn có thể sử dụng vốn vay này để giao dịch, arbitrage, hoặc các hoạt động khác trong cùng transaction đó
+- **Repay**: Trước khi transaction kết thúc, bạn phải trả lại khoản vay cộng với một khoản phí nhỏ bằng cách sử dụng instruction `repay`
 
-The key insight is that flash loans rely on the atomic nature of blockchain transactions. If any part of the transaction fails (including the repayment), the entire transaction is rolled back as if it never happened. This means the lender has zero risk: either they get repaid, or the loan never actually occurred.
+Điểm quan trọng là flash loan dựa vào tính chất atomic của blockchain transaction. Nếu bất kỳ phần nào của transaction thất bại (bao gồm cả việc trả nợ), toàn bộ transaction sẽ được rollback như thể nó chưa bao giờ xảy ra. Điều này có nghĩa là người cho vay không có rủi ro: hoặc họ được trả nợ, hoặc khoản vay thực sự chưa bao giờ xảy ra.
 
-In this challenge, you'll create a simple flash loan program that demonstrates instruction introspection in action. The program will examine instruction data and accounts across different instructions within the same transaction to ensure loan terms are met.
+Trong thử thách này, bạn sẽ tạo một chương trình flash loan đơn giản để minh họa instruction introspection trong thực tế. Chương trình sẽ kiểm tra dữ liệu instruction và các account qua các instruction khác nhau trong cùng một transaction để đảm bảo các điều khoản vay được đáp ứng.
 
-If you're new to instruction introspection, we recommend starting with the[ Instruction Introspection Course](/en/courses/instruction-introspection) to understand the fundamental concepts used in this program.
+Nếu bạn mới làm quen với instruction introspection, chúng tôi khuyên bạn nên bắt đầu với [Khóa học Instruction Introspection](/vi/courses/instruction-introspection) để hiểu các khái niệm cơ bản được sử dụng trong chương trình này.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+<ArticleSection name="Cài đặt" id="installation" level="h2" />
 
-Before you begin, ensure you have Rust and Anchor installed. If you need setup instructions, refer to the [official anchor documentation](https://www.anchor-lang.com/docs/installation). Then in your terminal run:
+Trước khi bắt đầu, hãy đảm bảo bạn đã cài đặt Rust và Anchor. Nếu bạn cần hướng dẫn thiết lập, hãy tham khảo [tài liệu chính thức của anchor](https://www.anchor-lang.com/docs/installation). Sau đó chạy lệnh sau trong terminal:
 
 <Codeblock lang="terminal">
 ```bash
@@ -30,8 +30,8 @@ anchor init blueshift_anchor_flash_loan
 ```
 </Codeblock>
 
-Add the required dependencies:
-- `anchor-spl`: Provides utilities for working with SPL tokens (Solana's token standard)
+Thêm các dependency cần thiết:
+- `anchor-spl`: Cung cấp các tiện ích để làm việc với SPL token (tiêu chuẩn token của Solana)
 
 <Codeblock lang="terminal">
 ```bash
@@ -40,13 +40,13 @@ cargo add anchor-spl
 ```
 </Codeblock>
 
-Now you're ready to dive into building your flash loan program!
+Bây giờ bạn đã sẵn sàng để bắt đầu xây dựng chương trình flash loan của mình!
 
 <ArticleSection name="Template" id="template" level="h2" />
 
-Let's build the foundation of our flash loan program by setting up the basic structure, accounts, and error handling that both our borrow and repay instructions will use.
+Hãy xây dựng nền tảng cho chương trình flash loan bằng cách thiết lập cấu trúc cơ bản, các account và xử lý lỗi mà cả hai instruction borrow và repay sẽ sử dụng.
 
-We'll implement everything in `lib.rs` since we only have two instructions that share the same account structure. Here's our starting template with all the essential components:
+Chúng ta sẽ triển khai mọi thứ trong `lib.rs` vì chỉ có hai instruction chia sẻ cùng một cấu trúc account. Đây là template khởi đầu với tất cả các thành phần thiết yếu:
 
 <Codeblock lang="rust">
 ```rust
@@ -94,22 +94,22 @@ pub enum ProtocolError {
 ```
 </Codeblock>
 
-**Note**: remember to change the program ID to `22222222222222222222222222222222222222222222` since we use this under the hood to test your program.
+**Lưu ý**: nhớ thay đổi program ID thành `22222222222222222222222222222222222222222222` vì chúng tôi sử dụng ID này để test chương trình của bạn.
 
 <ArticleSection name="Accounts" id="accounts" level="h2" />
 
-Since both the `borrow` and `repay` instructions work with the same accounts, we can create a single `Loan` context that serves both functions. This makes our code more maintainable and easier to understand.
+Vì cả hai instruction `borrow` và `repay` đều làm việc với cùng các account, chúng ta có thể tạo một context `Loan` duy nhất phục vụ cho cả hai chức năng. Điều này giúp code dễ bảo trì và hiểu hơn.
 
-Our `Loan` account struct needs these components:
-- `borrower`: the user requesting the flash loan.
-- `protocol`: a Program Derived Address (PDA) that owns the protocol's liquidity pool.
-- `mint`: the specific token being borrowed.
-- `borrower_ata`: the borrower's Associated Token Account that will receive the borrowed tokens.
-- `protocol_ata`: the protocol's Associated Token Account that will provide the borrowed tokens.
-- `instructions`: the Instructions Sysvar account for introspection.
-- `token_program`, `associated_token_program`, and `system_program`: required programs for the program.
+Struct account `Loan` của chúng ta cần các thành phần sau:
+- `borrower`: người dùng yêu cầu flash loan.
+- `protocol`: một Program Derived Address (PDA) sở hữu liquidity pool của protocol.
+- `mint`: token cụ thể được vay.
+- `borrower_ata`: Associated Token Account của người vay sẽ nhận token được vay.
+- `protocol_ata`: Associated Token Account của protocol sẽ cung cấp token được vay.
+- `instructions`: account Instructions Sysvar cho introspection.
+- `token_program`, `associated_token_program`, và `system_program`: các program cần thiết cho chương trình.
 
-Here's how we define the account struct:
+Đây là cách chúng ta định nghĩa account struct:
 
 <Codeblock lang="rust">
 ```rust
@@ -148,15 +148,15 @@ pub struct Loan<'info> {
 ```
 </Codeblock>
 
-As you can see, the accounts needed for this instruction and their constraint are quite straightforward:
-- `protocol`: uses `seeds = [b"protocol".as_ref()]` to create a deterministic address that owns all protocol liquidity. This ensures only our program can control these funds.
-- `borrower_ata`: uses `init_if_needed` because the borrower might not have an associated token account for this specific token yet. The constraint automatically creates one if needed.
-- `protocol_ata`: must already exist and be mutable since we'll be transferring tokens from it. The `associated_token::authority = protocol` constraint ensures only the protocol PDA can authorize transfers.
-- `instructions`: uses the `address` constraint to verify we're accessing the correct system account that contains transaction instruction data.
+Như bạn có thể thấy, các account cần thiết cho instruction này và các ràng buộc của chúng khá đơn giản:
+- `protocol`: sử dụng `seeds = [b"protocol".as_ref()]` để tạo một địa chỉ xác định sở hữu toàn bộ liquidity của protocol. Điều này đảm bảo chỉ chương trình của chúng ta mới có thể kiểm soát các khoản tiền này.
+- `borrower_ata`: sử dụng `init_if_needed` vì người vay có thể chưa có associated token account cho token cụ thể này. Ràng buộc này sẽ tự động tạo một account nếu cần.
+- `protocol_ata`: phải đã tồn tại và có thể thay đổi vì chúng ta sẽ chuyển token từ đó. Ràng buộc `associated_token::authority = protocol` đảm bảo chỉ protocol PDA mới có quyền chuyển token.
+- `instructions`: sử dụng càng buộc `address` để xác minh chúng ta đang truy cập đúng system account chứa dữ liệu instruction của transaction.
 
 <ArticleSection name="Errors" id="errors" level="h2" />
 
-Flash loans require precise validation at multiple steps, so we need comprehensive error handling. Here's our complete error enum:
+Flash loan yêu cầu validation chính xác ở nhiều bước, vì vậy chúng ta cần xử lý lỗi toàn diện. Đây là error enum hoàn chỉnh của chúng ta:
 
 <Codeblock lang="rust">
 ```rust
@@ -188,6 +188,6 @@ pub enum ProtocolError {
 ```
 </Codeblock>
 
-With this foundation in place, we're ready to implement the core logic for our flash loan instructions. The account structure ensures proper token handling, while the error system provides clear feedback for debugging and security validation.
+Với nền tảng này, chúng ta sẵn sàng triển khai logic cốt lõi cho các instruction flash loan. Cấu trúc account đảm bảo xử lý token đúng cách, trong khi hệ thống lỗi cung cấp phản hồi rõ ràng cho việc debug và validation bảo mật.
 
-> The program does't quite compile yet. Can you figure out why?
+> Chương trình chưa biên dịch được. Bạn có thể tìm ra lý do không?

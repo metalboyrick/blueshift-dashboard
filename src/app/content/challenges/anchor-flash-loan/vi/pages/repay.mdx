@@ -1,12 +1,12 @@
 # Repay
 
-The repay instruction completes our flash loan cycle by ensuring the borrowed funds are returned with appropriate fees. This instruction performs two essential steps:
-1. Extract loan amount: Use instruction introspection to retrieve the original `amount_borrowed` from the borrow instruction's data
-2. Transfer funds back: Calculate the `fee` and transfer the borrowed amount plus fee back to the protocol
+Instruction repay hoàn thành chu kỳ flash loan bằng cách đảm bảo các khoản tiền vay được trả lại cùng với phí phù hợp. Instruction này thực hiện hai bước thiết yếu:
+1. Trích xuất số tiền vay: Sử dụng instruction introspection để lấy `amount_borrowed` gốc từ dữ liệu của instruction borrow
+2. Chuyển tiền trở lại: Tính toán `fee` và chuyển số tiền vay cộng phí trở lại protocol
 
 <ArticleSection name="Instruction Introspection" id="instruction-introspection" level="h2" />
 
-First, we need to examine the first instruction in the transaction to extract the original loan amount:
+Đầu tiên, chúng ta cần kiểm tra instruction đầu tiên trong transaction để trích xuất số tiền vay gốc:
 
 <Codeblock lang="rust">
 ```rust
@@ -26,11 +26,11 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
 ```
 </Codeblock>
 
-> We're not checking that this is the actual `borrow_ix` using the program ID and discriminator because it doesn't matter if they actually construct a "fake" instruction; it's safe for the protocol since it's just getting paid. At the same time, if we loaned the money we know that it's going to be the first instruction and that the `amount_borrowed` will be there.
+> Chúng ta không kiểm tra rằng đây là `borrow_ix` thực tế bằng cách sử dụng program ID và discriminator vì không quan trọng nếu họ thực sự tạo một instruction "giả"; điều này an toàn cho protocol vì nó chỉ được trả tiền. Đồng thời, nếu chúng ta đã cho vay tiền, chúng ta biết rằng nó sẽ là instruction đầu tiên và `amount_borrowed` sẽ ở đó.
 
-<ArticleSection name="Transfer Funds" id="transfer-funds" level="h2" />
+<ArticleSection name="Chuyển tiền" id="transfer-funds" level="h2" />
 
-Next, we calculate the protocol fee and transfer the total amount back:
+Tiếp theo, chúng ta tính phí protocol và chuyển tổng số tiền trở lại:
 
 <Codeblock lang="rust">
 ```rust
@@ -44,10 +44,10 @@ transfer(
         from: ctx.accounts.borrower_ata.to_account_info(),
         to: ctx.accounts.protocol_ata.to_account_info(),
         authority: ctx.accounts.borrower.to_account_info(),
-    }), 
+    }),
     amount_borrowed
 )?;
 ```
 </Codeblock>
 
-Our fee is hard coded to 500 basis point, and we perform "checked" math to make sure that the amount doesn't overflow which could be exploited with very large numbers. Additionally, we convert the amount to `u128` for the multiplication to prevent intermediate overflow, then we safely cast back to `u64`
+Phí của chúng ta được hardcode thành 500 basis point, và chúng ta thực hiện phép toán "checked" để đảm bảo rằng số tiền không bị overflow có thể bị khai thác với các số rất lớn. Ngoài ra, chúng ta chuyển đổi số tiền thành kiểu `u128` cho phép nhân để ngăn overflow trung gian, sau đó chúng ta safely cast trở lại kiểu `u64`

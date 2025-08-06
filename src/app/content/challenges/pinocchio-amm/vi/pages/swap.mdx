@@ -1,23 +1,23 @@
 # Swap
 
-The `swap` instruction performs two main tasks:
-- Calculate the amount of `mint_x` that we're going to receive by sending a certain amount of `mint_y` into the amm (and vice versa) including the fee.
-- Transfer the `from` token to the vault and the `to` token to the user token account
+Instruction `swap` thực hiện hai nhiệm vụ chính:
+- Tính toán số lượng `mint_x` mà chúng ta sẽ nhận được bằng cách gửi một số lượng nhất định `mint_y` vào AMM (và ngược lại) bao gồm phí.
+- Chuyển token `from` đến vault và token `to` đến tài khoản token của người dùng
 
-> As mentioned in the `initialize` instruction section; we're going to initialize all the `Associated Token Accounts` outside of our instruction for optimization purposes.
+> Như đã đề cập trong phần instruction `initialize`; chúng ta sẽ khởi tạo tất cả `Associated Token Accounts` bên ngoài instruction của chúng ta vì mục đích tối ưu hóa.
 
-<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+<ArticleSection name="Các tài khoản cần thiết" id="required-accounts" level="h2" />
 
-Below are the accounts required for this context:
-- `user`: The user that is swapping the token into the liquidity of the Amm. Must be a `signer`.
-- `vault_x`: The token account that holds all of token X deposited into the pool. Must be passed as `mutable`.
-- `vault_y`: The token account that holds all of token Y deposited into the pool. Must be passed as `mutable`.
-- `user_x_ata`: The user's associated token account for token X. This is the account that will receive or send token X into the pool. Must be passed as `mutable`.
-- `user_y_ata`: The user's associated token account for token Y. This is the account that will receive or send token Y into the pool. Must be passed as `mutable`.
-- `config`: The configuration account for the AMM pool. Stores all relevant pool parameters and state.
-- `token program`: The SPL Token program account. This is required to perform token operations such as transfers and minting. Must be `executable`.
+Dưới đây là các tài khoản cần thiết cho context này:
+- `user`: Người dùng đang hoán đổi token trong thanh khoản của AMM. Phải là `signer`.
+- `vault_x`: Tài khoản token chứa tất cả token X được gửi vào pool. Phải được truyền vào như `mutable`.
+- `vault_y`: Tài khoản token chứa tất cả token Y được gửi vào pool. Phải được truyền vào như `mutable`.
+- `user_x_ata`: Tài khoản token liên kết của người dùng cho token X. Đây là tài khoản sẽ nhận hoặc gửi token X vào pool. Phải được truyền vào như `mutable`.
+- `user_y_ata`: Tài khoản token liên kết của người dùng cho token Y. Đây là tài khoản sẽ nhận hoặc gửi token Y vào pool. Phải được truyền vào như `mutable`.
+- `config`: Tài khoản cấu hình cho AMM pool. Lưu trữ tất cả các tham số và trạng thái pool liên quan.
+- `token program`: Tài khoản chương trình SPL Token. Điều này cần thiết để thực hiện các hoạt động token như chuyển khoản và minting. Phải là `executable`.
 
-Here, again, I’ll leave the implementation to you:
+Ở đây, một lần nữa, tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -41,15 +41,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for SwapAccounts<'a> {
 ```
 </Codeblock>
 
-<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+<ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
-Here's the instruction data we need to pass in:
-- `is_x`: If this swap is being performed from token X to token Y or vice versa; needed to line up the accounts correctly. Must be a `[u8]`
-- `amount`: The amount of token the user is willing to send in exchange of the other token on the pair. Must be a `[u64]`
-- `min`: The min amount of token that the user is willing to receive in the exchange of the `amount`. Must be a `[u64]`
-- `expiration`: The expiration of this order. Important to make sure that the transaction has to be played in a certain amount of time. Must be a `[i64]`
+Đây là dữ liệu cho instruction mà chúng ta cần truyền vào:
+- `is_x`: Liệu swap này có được thực hiện từ token X sang token Y hay ngược lại; cần thiết để sắp xếp các tài khoản một cách chính xác. Phải là `[u8]`
+- `amount`: Số lượng token mà người dùng sẵn sàng gửi để đổi lấy token khác trong cặp. Phải là `[u64]`
+- `min`: Số lượng tối thiểu token mà người dùng sẵn sàng nhận để đổi lấy `amount`. Phải là `[u64]`
+- `expiration`: Thời gian hết hạn của lệnh này. Quan trọng để đảm bảo rằng giao dịch phải được thực hiện trong một khoảng thời gian nhất định. Phải là `[i64]`
 
-We're going to handle the implementation for the `SwapInstructionData` same as initialization. So I’ll leave the implementation to you:
+Chúng ta sẽ xử lý việc triển khai cho `SwapInstructionData` như khởi tạo. Vì vậy tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -70,17 +70,17 @@ impl<'a> TryFrom<&'a [u8]> for SwapInstructionData {
 ```
 </Codeblock>
 
-> Make sure that any of the amount, like `amount` and `mint` are greater than zero and that the order has not expired yet using the `Clock` sysvar.
+> Đảm bảo rằng bất kỳ số lượng nào, như `amount` và `mint` đều lớn hơn zero và lệnh chưa hết hạn bằng cách sử dụng sysvar `Clock`.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
-We begin by deserializing both the `instruction_data` and the `accounts`.
+Chúng ta bắt đầu bằng cách deserialize cả `instruction_data` và `accounts`.
 
-We then need to:
-- Load the `Config` account to grab all the data inside of it. We can do so using the `Config::load()` helper.
-- Verify that the `AmmState` is valid (so if it's equal to `AmmState::Initialized`).
-- Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts.
-- Deserialize all the token accounts involved and use the data inside of them to calculate the amount to swap using the `constant-product-curve` crate and checking for slippage like this: 
+Sau đó chúng ta cần:
+- Tải tài khoản `Config` để lấy tất cả dữ liệu bên trong nó. Chúng ta có thể làm điều này bằng cách sử dụng helper `Config::load()`.
+- Xác minh rằng `AmmState` hợp lệ (vì vậy nếu nó bằng `AmmState::Initialized`).
+- Kiểm tra việc tạo `vault_x` và `vault_y` để trở thành Associated Token Accounts.
+- Deserialize tất cả các tài khoản token liên quan và sử dụng dữ liệu bên trong chúng để tính toán số lượng cần swap bằng cách sử dụng crate `constant-product-curve` và kiểm tra slippage như thế này:
 <Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
@@ -106,14 +106,14 @@ let swap_result = curve
     .swap(p, self.instruction_data.amount, self.instruction_data.min)
     .map_err(|_| ProgramError::Custom(1))?;
 
-// Check for correct values
+// Kiểm tra các giá trị chính xác
 if swap_result.deposit == 0 || swap_result.withdraw == 0 {
     return Err(ProgramError::InvalidArgument);
 }
 ```
 </Codeblock>
 
-- Create the transfer logic checking the `is_x` value and transfer the `from` amounts to the vaults and the `to` amounts to the user token accounts like this:
+- Tạo logic chuyển khoản kiểm tra giá trị `is_x` và chuyển số lượng `from` đến các vault và số lượng `to` đến tài khoản token của người dùng như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -142,7 +142,7 @@ if self.instruction_data.is_x {
 ```
 </Codeblock>
 
-You should be proficient enough to do this on your own, so I’ll leave the implementation to you:
+Bạn đủ khả năng triển khai logic này, vì vậy tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -158,7 +158,7 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Swap<'a> {
         let accounts = SwapAccounts::try_from(accounts)?;
         let instruction_data = SwapInstructionData::try_from(data)?;
 
-        // Return the initialized struct
+        // Trả về struct đã khởi tạo
         Ok(Self {
             accounts,
             instruction_data,

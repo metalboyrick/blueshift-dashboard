@@ -3,35 +3,37 @@ import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
 
 <ArticleSection name="Refund" id="refund" level="h2" />
 
-We can now move to the `refund` instruction, that lives in the `refund.rs` and will perform these actions:
-- Close the escrow PDA and send its rent lamports back to the maker.
-- Move the full Token A balance out of the vault and back to the maker, then close the vault account.
+Bây giờ chúng ta có thể chuyển đến lệnh `refund`, nằm trong `refund.rs` và sẽ thực hiện các hành động sau:
 
-### Accounts 
+- Đóng tài khoản PDA escrow và gửi rent lamports của nó trở lại cho maker.
+- Chuyển toàn bộ số dư Token A ra khỏi vault và chuyển trả lại cho maker, sau đó đóng tài khoản vault.
 
-The accounts needed in this context are:
-- `maker`: the user that decided the terms of the exchange
-- `escrow`: the account where all the terms of this exchange lives
-- `mint_a`: the token that the `maker` has deposited
-- `vault`: the token account associated with the `escrow` and `mint_a` where the tokens have been deposited
-- `maker_ata_a`: the token account associated with the `maker` and `mint_a` that will receive the tokens from the `vault`
-- `associated_token_program`: the associated token program used to create the associated token accounts
-- `token_program`: the token program used to CPI the transfer
-- `system_program`: the system program used to create the `Escrow`
+### Các tài khoản
 
-This time we're not going to help you by creating the `Context`, so try doing it yourself! Please make sure to use the right order of accounts or our tests will fail.
+Các tài khoản cần thiết trong ngữ cảnh này là:
 
-### Logic 
+- `maker`: người dùng đã quyết định các điều khoản của việc trao đổi
+- `escrow`: tài khoản nơi tất cả các điều khoản của việc trao đổi này tồn tại
+- `mint_a`: token mà `maker` đã gửi
+- `vault`: tài khoản token liên kết với `escrow` và `mint_a` nơi các token đã được giữ
+- `maker_ata_a`: tài khoản token liên kết với `maker` và `mint_a` sẽ nhận token từ `vault`
+- `associated_token_program`: chương trình associated token được sử dụng để tạo các tài khoản associated token
+- `token_program`: chương trình token được sử dụng để gọi CPI việc chuyển
+- `system_program`: chương trình hệ thống được sử dụng để tạo `Escrow`
 
-The logic is similar to the `take` instruction but this time we just move the tokens from the `vault` to the `maker_ata_a` before closing the now empty vault. 
+Lần này chúng tôi sẽ không giúp bạn bằng cách tạo `Context`, vì vậy hãy thử tự làm! Vui lòng đảm bảo sử dụng đúng thứ tự tài khoản hoặc các bài kiểm tra của chúng tôi sẽ thất bại.
 
-This time it's your turn to learn how to do it yourself, so we're not going to tell you what the solution is.
+### Logic
 
-Just know that once this executes, the offer is void, the vault is gone, and the maker has their Token A and rent back in their wallet.
+Logic tương tự như lệnh `take` nhưng lần này chúng ta chỉ chuyển token từ `vault` đến `maker_ata_a` trước khi đóng vault hiện đã trống.
+
+Lần này đến lượt bạn học cách tự làm, vì vậy chúng tôi sẽ không cho bạn biết giải pháp là gì.
+
+Chỉ cần biết rằng một khi điều này thực thi, đề nghị sẽ vô hiệu, vault sẽ biến mất, và maker sẽ có Token A và rent của họ trở lại trong ví.
 
 <ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
 
-Now that we created all the function in the different instruction, we can finally populate the `lib.rs` with all the function we created; like this:
+Bây giờ chúng ta đã tạo tất cả các hàm trong các lệnh khác nhau, cuối cùng chúng ta có thể điền vào `lib.rs` với tất cả các hàm mà chúng ta đã tạo; như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -50,20 +52,22 @@ pub mod blueshift_anchor_escrow {
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         instructions::refund::handler(ctx)
     }
+
 }
+
 ```
 </Codeblock>
 
-<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+<ArticleSection name="Kết luận" id="conclusion" level="h2" />
 
-You can now test your program against our unit tests and claim your NFTs!
+Bây giờ bạn có thể kiểm tra chương trình của mình với các unit test của chúng tôi và nhận NFT!
 
-Start by building your program using the following command in your terminal
+Bắt đầu bằng cách build chương trình của bạn bằng lệnh sau trong terminal
 
 ```bash
 anchor build
 ```
 
-This generated a `.so` file directly in your `target/deploy` folder. 
+Lệnh này sẽ tạo ra file `.so` trực tiếp trong thư mục `target/deploy`.
 
-Now click on the `take challenge` button and drop the file there!
+Bây giờ hãy click vào nút `take challenge` và thả file vào đó!

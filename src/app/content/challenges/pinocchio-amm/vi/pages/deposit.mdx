@@ -1,25 +1,25 @@
 # Deposit
 
-The `deposit` instruction performs three main tasks:
-- Deposit the `mint_x` and `mint_y` token based on the amount of LP the user wants to `mint`.
-- Calculate the amount to deposit and check that the amount isn't greater than `max_x` and `max_y` designated by the user.
-- Mint the right amount of `mint_lp` in the user ata.
+Instruction `deposit` thực hiện ba nhiệm vụ chính:
+- Deposit token `mint_x` và `mint_y` vào pool dựa trên số lượng LP mà người dùng muốn `mint`.
+- Tính toán số lượng token `mint_x` và `mint_y` cần deposit và kiểm tra rằng số lượng không vượt quá `max_x` và `max_y` được chỉ định bởi người dùng.
+- Đúc đúng số lượng token `mint_lp` vào tài khoản liên kết của người dùng. 
 
-> As mentioned in the `initialize` instruction section; we're going to initialize all the `Associated Token Accounts` outside of our instruction for optimization purposes.
+> Như đã nhắc đến ở phần `initialize`, chúng ta sẽ khởi tạo tất cả các tài khoản liên kết (`Associated Token Accounts`) bên ngoài instruction để tối ưu hóa.
 
-<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+<ArticleSection name="Các tài khoản cần thiết" id="required-accounts" level="h2" />
 
-Below are the accounts required for this context:
-- `user`: The user that is depositing the token into the liquidity of the Amm. Must be a `signer`.
-- `mint_lp`: The Mint account that will represent the pool’s liquidity. Must be passed as `mutable`.
-- `vault_x`: The token account that holds all of token X deposited into the pool. Must be passed as `mutable`.
-- `vault_y`: The token account that holds all of token Y deposited into the pool. Must be passed as `mutable`.
-- `user_x_ata`: The user's associated token account for token X. This is the source account from which the user's token X will be transferred into the pool. Must be passed as `mutable`.
-- `user_y_ata`: The user's associated token account for token Y. This is the source account from which the user's token Y will be transferred into the pool. Must be passed as `mutable`.
-- `config`: The configuration account for the AMM pool. Stores all relevant pool parameters and state.
-- `token program`: The SPL Token program account. This is required to perform token operations such as transfers and minting. Must be `executable`.
+Bên dưới là các tài khoản cần thiết cho ngữ cảnh này:
+- `user`: Tài khoản của người dùng đang thực hiện deposit vào thanh khoản của AMM. Đây phải là `signer`.
+- `mint_lp`: Tài khoản Mint đại diện cho thanh khoản của pool. Phải là `mutable`.
+- `vault_x`: Tài khoản chứa số lượng token X đã được deposit vào pool. Phải là `mutable`.
+- `vault_y`: Tài khoản chứa số lượng token Y đã được deposit vào pool. Phải là `mutable`.
+- `user_x_ata`: Tài khoản token liên kết của người dùng cho token X. Đây là tài khoản nguồn từ đó số lượng token X của người dùng sẽ được chuyển vào pool. Phải là `mutable`.
+- `user_y_ata`: Tài khoản token liên kết của người dùng cho token Y. Đây là tài khoản nguồn từ đó số lượng token Y của người dùng sẽ được chuyển vào pool. Phải là `mutable`.
+- `config`: Tài khoản cấu hình cho pool AMM. Lưu trữ tất cả các tham số và trạng thái liên quan đến pool.
+- `token program`: Tài khoản chương trình SPL Token. Đây là tài khoản cần thiết để thực hiện các hoạt động liên quan đến token như chuyển và đúc. Phải là `executable`.
 
-Here, again, I’ll leave the implementation to you:
+Ở đây, tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -45,15 +45,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
 ```
 </Codeblock>
 
-<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+<ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
-Here's the instruction data we need to pass in:
-- `amount`: The amount of LP token that the user wishes to receive. Must be a `[u64]`
-- `max_x`: The max amount of token X that the user is willing to deposit. Must be a `[u64]`
-- `max_y`: The max amount of token Y that the user is willing to deposit. Must be a `[u64]`
-- `expiration`: The expiration of this order. Important to make sure that the transaction has to be played in a certain amount of time. Must be a `[i64]`
+Đây là những dữ liệu chúng ta cần truyền vào cho instruction `deposit`:
+- `amount`: Số lượng LP token mà người dùng muốn nhận. Phải là `[u64]`
+- `max_x`: Số lượng tối đa của token X mà người dùng sẵn sàng deposit. Phải là `[u64]`
+- `max_y`: Số lượng tối đa của token Y mà người dùng sẵn sàng deposit. Phải là `[u64]`
+- `expiration`: Thời gian hết hạn của lệnh này. Quan trọng để đảm bảo rằng giao dịch phải được thực hiện trong một khoảng thời gian nhất định. Phải là `[i64]`
 
-We're going to handle the implementation for the `DepositInstructionData` same as initialization. So I’ll leave the implementation to you:
+Chúng ta sẽ xử lý việc triển khai cho `DepositInstructionData` như khi khởi tạo. Vì vậy, tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -74,16 +74,16 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
 ```
 </Codeblock>
 
-> Make sure that any of the amount, like `amount`, `max_y` and `max_x` are greater than zero and that the order has not expired yet using the `Clock` sysvar.
+> Đảm bảo rằng bất kỳ số lượng nào, như `amount`, `max_y` và `max_x` đều lớn hơn zero và lệnh này chưa hết hạn bằng cách sử dụng `Clock` sysvar.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
-We begin by deserializing both the `instruction_data` and the `accounts`.
+Chúng ta bắt đầu bằng cách deserialize cả `instruction_data` và `accounts`.
 
-When then need to:
-- Load the `Config` account to grab all the data inside of it. We can do so using the `Config::load()` helper.
-- Verify that the `AmmState` is valid (so if it's equal to `AmmState::Initialized`)
-- Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts like this:
+Chúng ta cần phải:
+- Load tài khoản `Config` để lấy tất cả dữ liệu bên trong nó. Chúng ta có thể làm điều này bằng cách sử dụng hàm hỗ trợ `Config::load()`.
+- Xác định rằng trạng thái của AMM là hợp lệ (nghĩa là nó phải bằng `AmmState::Initialized`).
+- Kiểm tra tài khoản `vault_x` và `vault_y` là các tài khoản token liên kết hợp lệ như thế này:
 <Codeblock lang="rust">
 ```rust
 // Check if the vault_x is valid
@@ -101,7 +101,7 @@ if vault_x.ne(self.accounts.vault_x.key()) {
 }
 ```
 </Codeblock>
-- Deserialize all the token accounts involved and use the data inside of them to calculate the amount to deposits using the `constant-product-curve` crate and checking for slippage like this: 
+- Deserialize các tài khoản liên quan đến token và sử dụng dữ liệu bên trong chúng để tính toán số lượng token cần deposit sử dụng crate `constant-product-curve` và kiểm tra slippage như thế này: 
 <Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
@@ -133,11 +133,11 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
 ```
 </Codeblock>
 
-> If it's the first deposit, we can skip the calculation of LP tokens and deposits and just go with the value that the user suggest
+> Nếu đó là lần đầu thực hiện deposit, chúng ta có thể bỏ qua việc tính toán số lượng LP token và số lượng deposit và chỉ sử dụng giá trị mà người dùng đề xuất
 
-- Transfer the amounts from the token accounts of the user to the vaults and mint the appropriate amount of LP tokens to the user token account
+- Chuyển số lượng token từ các tài khoản token của người dùng vào các vault và đúc số lượng LP token thích hợp vào tài khoản token của người dùng
 
-You should be proficient enough to this on your own, so I’ll leave the implementation to you:
+Bạn đủ khả năng triển khai logic này, vì vậy tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust

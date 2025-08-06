@@ -1,30 +1,32 @@
-import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
+import { ArticleSection } from '../../../../../components/ArticleSection/ArticleSection';
+import { Codeblock } from '../../../../../components/Codeblock/Codeblock';
 
 <ArticleSection name="Take" id="take" level="h2" />
 
-We can now move to the `take` instruction, that lives in the `take.rs` and will perform these actions:
-- Close the escrow record, sending its rent lamports back to the maker.
-- Move Token A from the vault to the taker, then close the vault.
-- Move the agreed amount of Token B from the taker to the maker.
+Bây giờ chúng ta có thể chuyển đến lệnh `take`, nằm trong `take.rs` và sẽ thực hiện các hành động sau:
 
-### Accounts 
+- Đóng bản ghi escrow, gửi rent lamports của nó trở lại cho maker.
+- Chuyển Token A từ vault đến taker, sau đó đóng vault.
+- Chuyển số lượng Token B đã thỏa thuận từ taker đến maker.
 
-The accounts needed in this context are:
-- `taker: the user that accepts the terms of the `maker` and is making the exchange
-- `maker`: the user that initially set the terms
-- `escrow`: the account where all the terms of this exchange lives
-- `mint_a`: the token that the `maker` has deposited
-- `mint_b`: the token that the `maker` wants in exchange
-- `vault`: the token account associated with the `escrow` and `mint_a` that will send the tokens to the `taker`
-- `taker_ata_a`: the token account associated with the `taker` and `mint_a` that will receive the tokens from the `vault`
-- `taker_ata_b`: the token account associated with the `taker` and `mint_b` that will send the tokens to the `maker`
-- `maker_ata_b`: the token account associated with the `maker` and `mint_b` that will receive the tokens to the `taker`
-- `associated_token_program`: the associated token program used to create the associated token accounts
-- `token_program`: the token program used to CPI the transfer
-- `system_program`: the system program used to create the `Escrow`
+### Tài khoản
 
-And with all the constraint it will look something like this:
+Các tài khoản cần thiết trong ngữ cảnh này là:
+
+- `taker`: người dùng chấp nhận các điều khoản của `maker` và đang thực hiện trao đổi
+- `maker`: người dùng ban đầu đặt ra các điều khoản
+- `escrow`: tài khoản nơi tất cả các điều khoản của việc trao đổi này tồn tại
+- `mint_a`: token mà `maker` đã gửi
+- `mint_b`: token mà `maker` muốn đổi lấy
+- `vault`: tài khoản token liên kết với `escrow` và `mint_a` sẽ gửi token đến `taker`
+- `taker_ata_a`: tài khoản token liên kết với `taker` và `mint_a` sẽ nhận token từ `vault`
+- `taker_ata_b`: tài khoản token liên kết với `taker` và `mint_b` sẽ gửi token đến `maker`
+- `maker_ata_b`: tài khoản token liên kết với `maker` và `mint_b` sẽ nhận token từ `taker`
+- `associated_token_program`: chương trình associated token được sử dụng để tạo các tài khoản associated token
+- `token_program`: chương trình token được sử dụng để CPI việc chuyển
+- `system_program`: chương trình hệ thống được sử dụng để tạo `Escrow`
+
+Và với tất cả các ràng buộc, nó sẽ trông như thế này:
 
 <Codeblock lang="rust">
   ```rust
@@ -83,78 +85,81 @@ pub struct Take<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+
 }
-  ```
+
+```
 </Codeblock>
 
-### Logic 
+### Logic
 
-In the logic we then start by transferring the tokens from the `taker_ata_b` to the `maker_ata_b`; we then move onto transferring the tokens from the `vault` to the `taker_ata_a` before closing the now empty vault like this:
+Trong logic, chúng ta bắt đầu bằng cách chuyển token từ `taker_ata_b` đến `maker_ata_b`; sau đó chúng ta chuyển sang chuyển token từ `vault` đến `taker_ata_a` trước khi đóng vault hiện đã trống như thế này:
 
 <Codeblock lang="rust">
 ```rust
 impl<'info> Take<'info> {
-    fn transfer_to_maker(&mut self) -> Result<()> {
-        transfer_checked(
-            CpiContext::new(
-                self.token_program.to_account_info(),
-                TransferChecked {
-                    from: self.taker_ata_b.to_account_info(),
-                    to: self.maker_ata_b.to_account_info(),
-                    mint: self.mint_b.to_account_info(),
-                    authority: self.taker.to_account_info(),
-                },
-            ),
-            self.escrow.receive,
-            self.mint_b.decimals,
-        )?;
+  fn transfer_to_maker(&mut self) -> Result<()> {
+      transfer_checked(
+          CpiContext::new(
+              self.token_program.to_account_info(),
+              TransferChecked {
+                  from: self.taker_ata_b.to_account_info(),
+                  to: self.maker_ata_b.to_account_info(),
+                  mint: self.mint_b.to_account_info(),
+                  authority: self.taker.to_account_info(),
+              },
+          ),
+          self.escrow.receive,
+          self.mint_b.decimals,
+      )?;
 
-        Ok(())
-    }
+      Ok(())
+  }
 
-    fn withdraw_and_close_vault(&mut self) -> Result<()> {
-        // Create the signer seeds for the Vault
-        let signer_seeds: [&[&[u8]]; 1] = [&[
-            b"escrow",
-            self.maker.to_account_info().key.as_ref(),
-            &self.escrow.seed.to_le_bytes()[..],
-            &[self.escrow.bump],
-        ]];
+  fn withdraw_and_close_vault(&mut self) -> Result<()> {
+      // Create the signer seeds for the Vault
+      let signer_seeds: [&[&[u8]]; 1] = [&[
+          b"escrow",
+          self.maker.to_account_info().key.as_ref(),
+          &self.escrow.seed.to_le_bytes()[..],
+          &[self.escrow.bump],
+      ]];
 
-        // Transfer Token A (Vault -> Taker)
-        transfer_checked(
-            CpiContext::new_with_signer(
-                self.token_program.to_account_info(),
-                TransferChecked {
-                    from: self.vault.to_account_info(),
-                    to: self.taker_ata_a.to_account_info(),
-                    mint: self.mint_a.to_account_info(),
-                    authority: self.escrow.to_account_info(),
-                },
-                &signer_seeds,
-            ),
-            self.vault.amount,
-            self.mint_a.decimals,
-        )?;
+      // Transfer Token A (Vault -> Taker)
+      transfer_checked(
+          CpiContext::new_with_signer(
+              self.token_program.to_account_info(),
+              TransferChecked {
+                  from: self.vault.to_account_info(),
+                  to: self.taker_ata_a.to_account_info(),
+                  mint: self.mint_a.to_account_info(),
+                  authority: self.escrow.to_account_info(),
+              },
+              &signer_seeds,
+          ),
+          self.vault.amount,
+          self.mint_a.decimals,
+      )?;
 
-        // Close the Vault
-        close_account(CpiContext::new_with_signer(
-            self.token_program.to_account_info(),
-            CloseAccount {
-                account: self.vault.to_account_info(),
-                authority: self.escrow.to_account_info(),
-                destination: self.maker.to_account_info(),
-            },
-            &signer_seeds,
-        ))?;
+      // Close the Vault
+      close_account(CpiContext::new_with_signer(
+          self.token_program.to_account_info(),
+          CloseAccount {
+              account: self.vault.to_account_info(),
+              authority: self.escrow.to_account_info(),
+              destination: self.maker.to_account_info(),
+          },
+          &signer_seeds,
+      ))?;
 
-        Ok(())
-    }
+      Ok(())
+  }
 }
 ```
+
 </Codeblock>
 
-We now create the `handler` function and this time luckily we don't need to perform any additional checks so it will look like this:
+Bây giờ chúng ta tạo hàm `handler` và lần này may mắn là chúng ta không cần thực hiện thêm kiểm tra nào nên nó sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -166,6 +171,8 @@ pub fn handler(ctx: Context<Take>) -> Result<()> {
     ctx.accounts.withdraw_and_close_vault()?;
 
     Ok(())
+
 }
+
 ```
 </Codeblock>

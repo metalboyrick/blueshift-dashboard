@@ -1,23 +1,23 @@
 ![Pinocchio Escrow Challenge](/graphics/challenge-banners/pinocchio-escrow.png)
 
-# The Escrow
+# Escrow
 
-An escrow is a powerful financial tool that enables secure token swaps between two parties.
+Escrow là một công cụ tài chính mạnh mẽ cho phép hoán đổi token an toàn giữa hai bên.
 
-Think of it as a digital safe deposit box where one user can lock up Token A, waiting for another user to deposit Token B before the swap is completed.
+Hãy nghĩ về nó như một két an toàn kỹ thuật số, nơi một người dùng có thể khóa Token A, chờ người dùng khác gửi Token B trước khi hoàn tất việc hoán đổi.
 
-This creates a trustless environment where neither party needs to worry about the other backing out of the deal.
+Điều này tạo ra một môi trường không cần tin tưởng, nơi không bên nào phải lo lắng về việc bên kia rút lui khỏi thỏa thuận.
 
-In this challenge, we're going to implement this concept through three simple but powerful instructions:
-- **Make**: The maker (first user) defines the trade terms and deposits the agreed amount of Token A into a secure vault. This is like putting your item in the safe deposit box and setting the terms of the exchange.
-- **Take**: The taker (second user) accepts the offer by transferring the promised amount of Token B to the maker, and in return, receives the locked Token A. This is the moment when both parties complete their side of the deal.
-- **Refund**: If the maker changes their mind or no suitable taker is found, they can cancel the offer and retrieve their Token A. This is like getting your item back from the safe deposit box if the deal falls through.
+Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qua ba instruction đơn giản nhưng mạnh mẽ:
+- **Make**: Người tạo (người dùng đầu tiên) xác định điều khoản giao dịch và gửi số lượng Token A đã thỏa thuận vào một vault an toàn. Điều này giống như đặt vật phẩm của bạn vào két an toàn và thiết lập điều khoản trao đổi.
+- **Take**: Người nhận (người dùng thứ hai) chấp nhận đề nghị bằng cách chuyển số lượng Token B đã hứa cho người tạo, và đổi lại, nhận được Token A đã bị khóa. Đây là thời điểm cả hai bên hoàn thành phần việc của mình.
+- **Refund**: Nếu người tạo thay đổi ý định hoặc không tìm thấy người nhận phù hợp, họ có thể hủy đề nghị và lấy lại Token A của mình. Điều này giống như lấy lại vật phẩm từ két an toàn nếu thỏa thuận thất bại.
 
-**Note**: If you're not familiar with Pinocchio, you should start by reading the [Introduction to Pinocchio](/en/courses/introduction-to-pinocchio) to familiarize with the core concepts that we're going to use in this program.
+**Lưu ý**: Nếu bạn chưa quen với Pinocchio, bạn nên bắt đầu bằng cách đọc [Giới thiệu về Pinocchio](/vi/courses/introduction-to-pinocchio) để làm quen với khái niệm cốt lõi mà chúng ta sẽ sử dụng trong chương trình này.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+<ArticleSection name="Cài đặt" id="installation" level="h2" />
 
-Let's start by creating a fresh Rust environment:
+Hãy bắt đầu bằng cách tạo một môi trường Rust mới:
 
 <Codeblock lang="terminal">
 ```bash
@@ -27,7 +27,7 @@ cd blueshift_escrow
 ```
 </Codeblock>
 
-Add pinocchio, pinocchio-system, pinocchio-token and pinocchio-associated-token:
+Thêm pinocchio, pinocchio-system, pinocchio-token và pinocchio-associated-token:
 
 <Codeblock lang="terminal">
 ```bash
@@ -35,7 +35,7 @@ cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-
 ```
 </Codeblock>
 
-Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
+Khai báo các loại crate trong `Cargo.toml` để tạo ra các artifact triển khai trong `target/deploy`:
 
 <Codeblock lang="toml">
 ```toml
@@ -44,11 +44,11 @@ crate-type = ["lib", "cdylib"]
 ```
 </Codeblock>
 
-You're now ready to write your escrow program.
+Bây giờ bạn đã sẵn sàng để viết chương trình escrow của mình.
 
 <ArticleSection name="Template" id="template" level="h2" />
 
-This time we'll split the program into small, focused modules instead of cramming everything into the `lib.rs`. The folder tree will look roughly like this:
+Lần này chúng ta sẽ chia chương trình thành các module nhỏ, tập trung thay vì nhồi nhét mọi thứ vào `lib.rs`. Cây thư mục sẽ trông giống như thế này:
 
 ```
 src
@@ -63,7 +63,7 @@ src
 └── state.rs
 ```
 
-The entrypoint, that lives in the `lib.rs` looks very similar to what we did in the last lessons so we're going to go over it very quickly:
+Điểm vào (entrypoint) nằm trong `lib.rs` trông rất giống với những gì chúng ta đã làm trong các bài học trước, vì vậy chúng ta sẽ xem qua nó một cách nhanh chóng:
 
 <Codeblock lang="rust">
 ```rust
@@ -101,9 +101,9 @@ fn process_instruction(
 
 <ArticleSection name="State" id="state" level="h2" />
 
-We're going to move into the `state.rs` where all the data for our `Escrow` lives. Let's break this down into two parts: the struct definition and its implementation.
+Chúng ta sẽ chuyển sang `state.rs` nơi chứa tất cả dữ liệu cho `Escrow` của chúng ta. Hãy chia điều này thành hai phần: định nghĩa struct và việc triển khai nó.
 
-First, let's look at the struct definition:
+Đầu tiên, hãy xem định nghĩa struct:
 
 <Codeblock lang="rust">
 ```rust
@@ -122,15 +122,15 @@ pub struct Escrow {
 ```
 </Codeblock>
 
-The `#[repr(C)]` attribute ensures our struct has a predictable memory layout, which is crucial for on-chain data. Each field serves a specific purpose:
-- **seed**: A random number that allows one maker to create multiple escrows with the same token pair
-- **maker**: The wallet address that created the escrow and will receive the tokens
-- **mint_a**: The SPL token mint address for the token being deposited
-- **mint_b**: The SPL token mint address for the token being requested
-- **receive**: The exact amount of token B that the maker wants to receive
-- **bump**: A single byte used in PDA derivation to ensure the address is not on the Ed25519 curve
+Thuộc tính `#[repr(C)]` đảm bảo struct của chúng ta có bố cục bộ nhớ có thể dự đoán được, điều này rất quan trọng đối với dữ liệu on-chain. Mỗi trường phục vụ một mục đích cụ thể:
+- **seed**: Một số ngẫu nhiên cho phép một maker tạo nhiều escrow với cùng một cặp token
+- **maker**: Địa chỉ ví đã tạo escrow và sẽ nhận token
+- **mint_a**: Địa chỉ mint của SPL token cho token được gửi vào
+- **mint_b**: Địa chỉ mint của SPL token cho token được yêu cầu
+- **receive**: Số lượng chính xác token B mà maker muốn nhận
+- **bump**: Một byte duy nhất được sử dụng trong việc tạo PDA để đảm bảo địa chỉ không nằm trên đường cong Ed25519
 
-Now, let's look at the implementation with all its helper methods:
+Bây giờ, hãy xem việc triển khai với tất cả các phương thức hỗ trợ:
 
 <Codeblock lang="rust">
 ```rust
@@ -201,14 +201,14 @@ impl Escrow {
 ```
 </Codeblock>
 
-The implementation provides several key features:
-1. **Exact Size Calculation**: `LEN` precisely calculates the account size by summing each field's size
-2. **Safe Loading**: `load` provides a safe way to load and validate escrow data
-3. **Performance Optimizations**:
-   - `#[inline(always)]` on getters for maximum performance
-   - Unsafe methods for when we know the borrow is safe
-   - Efficient field setting with `set_inner`
-4. **Memory Safety**: Proper validation of account data length and ownership
-5. **Documentation**: Clear comments explaining the purpose and safety considerations of each method
+Việc triển khai cung cấp một số tính năng chính:
+1. **Tính toán kích thước chính xác**: `LEN` tính toán chính xác kích thước tài khoản bằng cách cộng kích thước của từng trường
+2. **Tải an toàn**: `load` cung cấp một cách an toàn để tải và xác thực dữ liệu escrow
+3. **Tối ưu hóa hiệu suất**:
+   - `#[inline(always)]` trên các getter để có hiệu suất tối đa
+   - Các phương thức unsafe được dùng khi chúng ta biết việc mượn là an toàn
+   - Thiết lập trường hiệu quả với `set_inner`
+4. **An toàn bộ nhớ**: Xác thực đúng cách độ dài dữ liệu tài khoản và quyền sở hữu
+5. **Tài liệu**: Các comment rõ ràng giải thích mục đích và các cân nhắc về an toàn của từng phương thức
 
-This implementation ensures our escrow state is both safe and efficient, with proper validation and performance optimizations where appropriate.
+Việc triển khai này đảm bảo trạng thái escrow của chúng ta vừa an toàn vừa hiệu quả, với xác thực đúng cách và tối ưu hóa hiệu suất khi thích hợp.

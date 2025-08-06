@@ -1,24 +1,24 @@
 ![Pinocchio Amm Challenge](/graphics/challenge-banners/pinocchio-amm.png)
 
-# The Amm
+# AMM
 
-An Automated Market Maker (AMM) is a foundational building block of decentralized finance, enabling users to swap tokens directly with a smart contract rather than relying on a traditional order book or centralized exchange.
+Automated Market Maker (AMM) là một khối xây dựng cơ bản của tài chính phi tập trung, cho phép người dùng hoán đổi token trực tiếp với hợp đồng thông minh thay vì dựa vào sổ lệnh truyền thống hoặc sàn giao dịch tập trung.
 
-Think of an AMM as a self-operating liquidity pool: users deposit pairs of tokens, and the AMM uses a mathematical formula to determine the price and facilitate swaps between them. This allows anyone to trade tokens instantly, at any time, without needing a counterparty.
+Hãy nghĩ về AMM như một bể thanh khoản (liquidity pool) tự vận hành: người dùng gửi các cặp token, và AMM sử dụng công thức toán học để xác định giá và tạo điều kiện hoán đổi giữa chúng. Điều này cho phép bất kỳ ai giao dịch token ngay lập tức, bất cứ lúc nào, mà không cần đối tác giao dịch.
 
-If you look closely, you'll notice that an AMM is nothing other than an Escrow with additional steps, calculation and logic. So if you missed it, go through the [Pinocchio Escrow Challenge](/en/challenges/pinocchio-escrow) before going through this course.
+Nếu bạn quan sát kỹ, bạn sẽ nhận thấy rằng AMM không gì khác một Escrow với các bước, tính toán và logic bổ sung. Vì vậy nếu bạn bỏ lỡ, hãy xem qua [Thử thách Pinocchio Escrow](/vi/challenges/pinocchio-escrow) trước khi thực hiện khóa học này.
 
-In this challenge, you'll implement a simple AMM with four core instructions:
-- **Initialize**: Set up the AMM by creating its configuration account and minting the LP (liquidity provider) token that represents shares in the pool.
-- **Deposit**: Allow users to supply both `token_x` and `token_y` to the pool. In return, they’ll receive a proportional amount of LP tokens, representing their share of the liquidity.
-- **Withdraw**: Enable users to redeem their LP tokens to withdraw their share of `token_x` and `token_y` from the pool, effectively removing liquidity.
-- **Swap**: Let anyone trade token_x for `token_y` (or vice versa) using the pool, with a small fee paid to liquidity providers.
+Trong thử thách này, bạn sẽ triển khai một AMM đơn giản với bốn instruction cốt lõi:
+- **Initialize**: Thiết lập AMM bằng cách tạo configuration account và mint LP (liquidity provider) token đại diện cho cổ phần trong pool.
+- **Deposit**: Cho phép người dùng gửi `token_x` và `token_y` vào pool. Họ sẽ nhận được một lượng LP token đại diện cho cổ phần của họ trong pool.
+- **Withdraw**: Cho phép người dùng đổi LP token để rút cổ phần `token_x` và `token_y` từ pool, thực sự loại bỏ liquidity của họ.
+- **Swap**: Cho phép bất kỳ ai giao dịch token_x lấy `token_y` (hoặc ngược lại) bằng cách sử dụng pool, với một khoản phí nhỏ trả cho các liquidity provider.
 
-**Note**: If you're not familiar with Pinocchio, you should start by reading the [Introduction to Pinocchio](/en/courses/introduction-to-pinocchio) to familiarize with the core concepts that we're going to use in this program.
+**Lưu ý**: Nếu bạn chưa quen với Pinocchio, bạn nên bắt đầu bằng cách đọc [Giới thiệu về Pinocchio](/vi/courses/introduction-to-pinocchio) để làm quen với các khái niệm cốt lõi mà chúng ta sẽ sử dụng trong chương trình này.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+<ArticleSection name="Cài đặt" id="installation" level="h2" />
 
-Let's start by creating a fresh Rust environment:
+Hãy bắt đầu bằng cách tạo một môi trường Rust mới:
 
 <Codeblock lang="terminal">
 ```bash
@@ -28,7 +28,7 @@ cd blueshift_native_amm
 ```
 </Codeblock>
 
-Add `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` and the `constant-product-curve` created by [Dean](https://x.com/deanmlittle) to handle all calculation for our Amm:
+Thêm `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` và `constant-product-curve` được tạo bởi [Dean](https://x.com/deanmlittle) để xử lý tất cả tính toán cho AMM của chúng ta:
 
 <Codeblock lang="terminal">
 ```bash
@@ -37,7 +37,7 @@ cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant
 ```
 </Codeblock>
 
-Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
+Khai báo các crate type trong `Cargo.toml` để tạo deployment artifact trong `target/deploy`:
 
 <Codeblock lang="toml">
 ```toml
@@ -46,46 +46,46 @@ crate-type = ["lib", "cdylib"]
 ```
 </Codeblock>
 
-You're now ready to write your amm program.
+Bây giờ bạn đã sẵn sàng để viết chương trình AMM của mình.
 
 <ArticleSection name="Constant Product Curve" id="constant-product-curve" level="h2" />
 
-At the heart of most AMMs is a simple but powerful formula known as the constant product curve. This formula ensures that the product of the two token reserves in the pool always remains constant, even as users trade or provide liquidity.
+Trung tâm của hầu hết các AMM là một công thức đơn giản nhưng mạnh mẽ được gọi là constant product curve. Công thức này đảm bảo rằng tích của hai token dự trữ trong pool luôn không đổi, ngay cả khi người dùng giao dịch hoặc cung cấp liquidity.
 
-### The formula
+### Công thức
 
-The most common AMM formula is: `x * y = k` where: 
-- `x` = amount of token X in the pool
-- `y` = amount of token Y in the pool
-- `k` = a constant (never changes)
+Công thức AMM phổ biến nhất là: `x * y = k` trong đó:
+- `x` = số lượng token X trong pool
+- `y` = số lượng token Y trong pool
+- `k` = một hằng số (không bao giờ thay đổi)
 
-Whenever someone swaps one token for another, the pool adjusts the reserves so that the product `k` remains unchanged. This creates a price curve that automatically adjusts based on supply and demand.
+Bất cứ khi nào ai đó hoán đổi một token lấy token khác, pool sẽ điều chỉnh reserve để tích `k` không thay đổi. Điều này tạo ra một đường cong giá tự động điều chỉnh dựa trên cung và cầu.
 
-### Example
+### Ví dụ
 
-Suppose the pool starts with 100 token X and 100 token Y: `100 * 100 = 10,000`.
+Giả sử pool bắt đầu với 100 token X và 100 token Y: `100 * 100 = 10,000`.
 
-If a user wants to swap 10 token X for token Y, the pool must keep `k = 10,000`. So, if `x_new` = 110 (after deposit), solve for `y_new`: `110 * y_new = 10,000` so `y_new = 10,000 / 110 ≈ 90.91`. 
+Nếu một người dùng muốn hoán đổi 10 token X lấy token Y, pool phải giữ `k = 10,000`. Vậy, nếu `x_new` = 110 (sau khi gửi), tìm ra `y_new` sao cho: `110 * y_new = 10,000` nên `y_new = 10,000 / 110 ≈ 90.91`.
 
-The user will receive `100 - 90.91 = 9.09` token Y (minus any fees).
+Người dùng sẽ nhận được `100 - 90.91 = 9.09` token Y (trừ đi các khoản phí).
 
-### Liquidity Provision
+### Cung cấp Liquidity
 
-When users deposit both tokens into the pool, they become liquidity providers (LPs). In return, they receive LP tokens that represent their share of the pool.
-- LP tokens are minted in proportion to how much liquidity you add.
-- When you withdraw, you burn your LP tokens to reclaim your share of both tokens (plus a share of the fees collected from swaps).
+Khi người dùng gửi cả hai token vào pool, họ trở thành nhà cung cấp thanh khoản liquidity provider (LP). Đổi lại, họ nhận được LP token đại diện cho cổ phần chia sẻ của họ trong pool.
+- LP token được mint tỷ lệ với lượng liquidity bạn thêm vào.
+- Khi bạn rút tiền, bạn burn LP token để lấy lại phần chia sẻ của cả hai token (cộng với phần chia sẻ phí thu được từ các giao dịch hoán đổi).
 
-The first liquidity provider sets the initial ratio. For example, if you deposit 100 X and 100 Y, you might receive 100 LP tokens. 
+Liquidity provider đầu tiên thiết lập tỷ lệ ban đầu. Ví dụ, nếu bạn gửi 100 X và 100 Y, bạn có thể nhận được 100 LP token.
 
-After that, if the pool already has 100 X and 100 Y, and you add 10 X and 10 Y, you get LP tokens proportional to your contribution: `share = deposit_x / total_x = 10 / 100 = 10%` so the Amm will mint to the user wallet, 10% of total LP supply.
+Sau đó, nếu pool đã có 100 X và 100 Y, và bạn thêm 10 X và 10 Y, bạn nhận được LP token tỷ lệ với đóng góp của mình: `share = deposit_x / total_x = 10 / 100 = 10%` vậy AMM sẽ mint cho ví người dùng 10% tổng LP supply.
 
-### Fees
+### Phí
 
-Each swap usually charges a small fee (e.g., 0.3%), which is added to the pool. This means LPs earn a share of the trading fees, increasing the value of their LP tokens over time and incentivizing people to provide liquidity.
+Mỗi giao dịch hoán đổi thường tính một khoản phí nhỏ (ví dụ: 0.3%), được thêm vào pool. Điều này có nghĩa là các LP kiếm được một phần phí giao dịch, tăng giá trị LP token của họ theo thời gian và khuyến khích mọi người cung cấp liquidity.
 
 <ArticleSection name="Template" id="template" level="h2" />
 
-This time we'll split the program into small, focused modules instead of cramming everything into the `lib.rs`. The folder tree will look roughly like this:
+Lần này chúng ta sẽ chia chương trình thành các module nhỏ, tập trung thay vì nhồi nhét mọi thứ vào `lib.rs`. Cây thư mục sẽ trông như thế này:
 
 ```
 src
@@ -99,7 +99,7 @@ src
 └── state.rs
 ```
 
-The entrypoint, that lives in the `lib.rs` looks always the same:
+Entrypoint, nằm trong file `lib.rs` sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -141,11 +141,11 @@ fn process_instruction(
 
 <ArticleSection name="State" id="state" level="h2" />
 
-We're going to move into the `state.rs` where all the data for our `Escrow` lives. 
+Chúng ta sẽ chuyển vào `state.rs` nơi tất cả dữ liệu cho `AMM` của chúng ta tồn tại.
 
-Let's break this down into three parts: the struct definition, reading helpers, and writing helpers
+Hãy chia điều này thành ba phần: định nghĩa struct, các hàm hỗ trợ đọc và ghi.
 
-First, let's look at the struct definition:
+Đầu tiên, hãy xem định nghĩa struct:
 
 <Codeblock lang="rust">
 ```rust
@@ -183,24 +183,25 @@ impl Config {
 ```
 </Codeblock>
 
-The `#[repr(C)]` attribute ensures our struct has a predictable, C-compatible memory layout that remains consistent across different platforms and Rust compiler versions. This is crucial for on-chain programs where data must be serialized and deserialized reliably.
+Thuộc tính `#[repr(C)]` đảm bảo rằng cấu trúc của chúng ta có thể dự đoán được, bố cục của bộ nhớ tương thích với C duy trì tính nhất quán trên các nền tảng và các phiên bản biên dịch khác nhau của Rust. Điều này rất quan trọng đối với các chương trình on-chain vì dữ liệu phải được serialized và deserialized một cách đáng tin cậy.
 
-We store `seed` (u64) and `fee` (u16) as byte arrays instead of their native types to ensure safe deserialization. When data is read from account storage, there's no guarantee about memory alignment and reading a `u64` from an unaligned memory address can cause undefined behavior. By using byte arrays and converting with `from_le_bytes()`, we ensure the data can be safely read regardless of alignment, while also guaranteeing consistent little-endian byte ordering across all platforms.
+Chúng ta lưu trữ `seed` (u64) và `fee` (u16) ở dạng một mảng byte thay vì ở dạng kiểu dữ liệu native để đảm bảo tính an toàn khi deserialization. Khi dữ liệu được đọc từ độ nhớ tài khoản, không có gì đảm bảo rằng việc căn chỉnh bộ nhớ và việc đọc `u64` từ một địa chỉ bộ nhớ không được căn chỉnh có thể gây ra hành vi không xác định. Bằng cách sử dụng mảng byte và chuyển đổi với `from_le_bytes()`, chúng ta đảm bảo dữ liệu có thể được đọc an toàn bất kể căn chỉnh, đồng thời đảm bảo thứ tự byte little-endian nhất quán trên mọi nền tảng. 
 
-Each field in the `Config` struct serves a specific purpose:
-- **state**: Tracks the current status of the AMM (e.g., uninitialized, initialized, disabled, or withdraw-only). 
-- **seed**: A unique value used for program-derived address (PDA) generation, allowing multiple AMMs to exist with different configurations.
-- **authority**: The public key with administrative control over the AMM (e.g., for pausing or upgrading the pool). Can be set to immutable by passing `[0u8; 32]`.
-- **mint_x**: The SPL token mint address for token X in the pool.
-- **mint_y**: The SPL token mint address for token Y in the pool.
-- **fee**: The swap fee, expressed in basis points (1 basis point = 0.01%), which is collected on each trade and distributed to liquidity providers.
-- **config_bump**: The bump seed used in PDA derivation to ensure the config account address is valid and unique. Saved to make PDA derivation more efficient.
 
-The `AmmState` enum defines the possible states for the AMM, making it easy to manage the pool’s lifecycle and restrict certain actions based on its status.
+Mỗi trường trong cấu trúc `Config` phục cho cho các mục đích sau:
+- **state**: Theo dõi trạng thái hiện tại của AMM (e.g., uninitialized, initialized, disabled, or withdraw-only). 
+- **seed**: Một giá trị duy nhất được sử dụng cho việc tạo ra PDA, cho phép nhiều AMM tồn tại với các cấu hình khác nhau.
+- **authority**: Public key để quản trị AMM (e.g., dừng hoặc cập nhật các pool). Có thể không cho phép thay đổi bằng cách set giá trị `[0u8; 32]`.
+- **mint_x**: Địa chỉ mint của token X trong pool.
+- **mint_y**: Địa chỉ mint của token Y trong pool.
+- **fee**: Phí chuyển đổi, thể hiện dưới dạng basis points (1 basis point = 0.01%), được thu trên mỗi giao dịch và phân phối cho các nhà cung cấp thanh khoản.
+- **config_bump**: Số bump được sử dụng trong quá trình tìm PDA để đảm bảo địa chỉ tài khoản cấu hình là hợp lệ và duy nhất. Được lưu lại để quá trình tìm PDA hiệu quả hơn.
 
-### Reading helpers
+Enum `AmmState` định nghĩa các trạng thái có thể của AMM, nó khiến chúng ta dễ dàng quản lý vòng đời của pool và ngăn chặn một số hành động dựa trên trạng thái của nó.
 
-The reading helpers provide safe, efficient access to the `Config` data with proper validation and borrowing:
+### Các hàm hỗ trợ đọc
+
+Các hàm hỗ trợ đọc cung cấp một cách truy cập vào dữ liệu `Config` một cách an toàn và hiệu quả với những kiểm tra phù hợp:
 
 <Codeblock lang="rust">
 ```rust
@@ -281,15 +282,14 @@ impl Config {
 ```
 </Codeblock>
 
-Key features of the reading helpers:
-- Safe Borrowing: The `load` method returns a `Ref<Self>` that safely manages borrowing from the account data, preventing data races and ensuring memory safety.
-- Validation: Both `load` and `load_unchecked` validate the account data length and owner before allowing access to the struct.
-- Getter Methods: All fields are accessed through getter methods that handle the conversion from byte arrays to their proper types (e.g., `u64::from_le_bytes` for the `seed`).
-- Performance: The `#[inline(always)]` attribute ensures these frequently-called methods are inlined for optimal performance.
+Chức năng chính của các hàm hỗ trợ đọc:
+- Safe Borrowing: Phương thức `load` trả về một `Ref<Self>` quản lý việc vay mượn dữ liệu tài khoản một cách an toàn, ngăn chặn tình trạng chạy đua dữ liệu (data race) và đảm bảo an toàn bộ nhớ.
+- Validation: Cả 2 phương thức `load` và `load_unchecked` đều kiểm tra độ dài của dữ liệu và chủ sở hữu trước khi cho phép truy cập vào cấu trúc.
+- Getter Methods: Tất cả các trường được truy cập thông qua các phương thức get, các phương thức này xử lý việc chuyển đổi từ các mảng byte sang các kiểu dữ liệu phù hợp (ví dụ: `u64::from_le_bytes` cho `seed`).
 
-### Writing helpers
+### Các hàm hỗ trợ ghi
 
-The writing helpers provide safe, validated methods for modifying the `Config` data:
+Các hàm hỗ trợ ghi cung cấp các phương thức an toàn và được kiểm tra cho việc thay đổi dữ liệu `Config`:
 
 <Codeblock lang="rust">
 ```rust
@@ -361,9 +361,9 @@ impl Config {
 ```
 </Codeblock>
 
-Key features of the writing helpers:
-- Mutable Borrowing: The `load_mut` method returns a `RefMut<Self>` that safely manages mutable borrowing from the account data.
-- Input Validation: Methods like `set_state` and `set_fee` include validation to ensure only valid values are stored (e.g., fee cannot exceed 10,000 basis points).
-- Atomic Updates: The `set_inner` method allows for efficient, atomic updates of all struct fields at once, minimizing the risk of inconsistent state.
-- Authority Checking: The `has_authority` method provides an efficient way to check if an authority is set (non-zero) or if the AMM is immutable (all zeros).
-- Byte Conversion: Multi-byte values are properly converted to little-endian byte arrays using methods like `to_le_bytes()` to ensure consistent cross-platform behavior.
+Các tính năng chính của các hàm hỗ trợ ghi:
+- Mutable Borrowing: Phương thức `load_mut` trả về `RefMut<Self>` quản lý an toàn việc mutable borrowing từ account data.
+- Input Validation: Các phương thức như `set_state` và `set_fee` bao gồm validation để đảm bảo chỉ các giá trị hợp lệ được lưu trữ (ví dụ: fee không thể vượt quá 10,000 basis point).
+- Atomic Update: Phương thức `set_inner` cho phép cập nhật atomic hiệu quả tất cả các field của struct cùng một lúc, giảm thiểu rủi ro trạng thái không nhất quán.
+- Authority Checking: Phương thức `has_authority` cung cấp cách hiệu quả để kiểm tra xem authority có được xác định (khác không) hay AMM là bất biến (tất cả đều bằng không).
+- Byte Conversion: Các giá trị multi-byte được chuyển đổi đúng cách thành little-endian byte array bằng các phương thức như `to_le_bytes()` để đảm bảo hành vi nhất quán trên các nền tảng.

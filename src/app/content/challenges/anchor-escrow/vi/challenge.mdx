@@ -3,62 +3,63 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
 
-# The Escrow
+# Escrow
 
-An escrow is a powerful financial tool that enables secure token swaps between two parties. 
+Escrow là một công cụ tài chính mạnh mẽ cho phép hoán đổi token an toàn giữa hai bên.
 
-Think of it as a digital safe deposit box where one user can lock up Token A, waiting for another user to deposit Token B before the swap is completed. 
+Hãy nghĩ về nó như một két an toàn kỹ thuật số, nơi một người dùng có thể khóa Token A, chờ người dùng khác gửi Token B trước khi hoàn tất việc hoán đổi.
 
-This creates a trustless environment where neither party needs to worry about the other backing out of the deal.
+Điều này tạo ra một môi trường không cần tin tưởng, nơi không bên nào phải lo lắng về việc bên kia rút lui khỏi thỏa thuận.
 
-In this challenge, we're going to implement this concept through three simple but powerful instructions:
-- **Make**: The maker (first user) defines the trade terms and deposits the agreed amount of Token A into a secure vault. This is like putting your item in the safe deposit box and setting the terms of the exchange.
-- **Take**: The taker (second user) accepts the offer by transferring the promised amount of Token B to the maker, and in return, receives the locked Token A. This is the moment when both parties complete their side of the deal.
-- **Refund**: If the maker changes their mind or no suitable taker is found, they can cancel the offer and retrieve their Token A. This is like getting your item back from the safe deposit box if the deal falls through.
+Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qua ba lệnh đơn giản nhưng mạnh mẽ:
 
-**Note**: If you're not familiar with Anchor, you should start by reading the [Introduction to Anchor](/en/courses/introduction-to-anchor) to familiarize with the core concept that we're going to use in this program.
+- **Make**: Người tạo (người dùng đầu tiên) xác định điều khoản giao dịch và gửi số lượng Token A đã thỏa thuận vào một vault an toàn. Điều này giống như đặt vật phẩm của bạn vào két an toàn và thiết lập điều khoản trao đổi.
+- **Take**: Người nhận (người dùng thứ hai) chấp nhận đề nghị bằng cách chuyển số lượng Token B đã hứa cho người tạo, và đổi lại, nhận được Token A đã bị khóa. Đây là thời điểm cả hai bên hoàn thành phần việc của mình.
+- **Refund**: Nếu người tạo thay đổi ý định hoặc không tìm thấy người nhận phù hợp, họ có thể hủy đề nghị và lấy lại Token A của mình. Điều này giống như lấy lại vật phẩm từ két an toàn nếu thỏa thuận thất bại.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+**Lưu ý**: Nếu bạn chưa quen với Anchor, bạn nên bắt đầu bằng cách đọc [Giới thiệu về Anchor](/vi/courses/introduction-to-anchor) để làm quen với khái niệm cốt lõi mà chúng ta sẽ sử dụng trong chương trình này.
 
-Let's start by creating a fresh Anchor workspace:
+<ArticleSection name="Cài đặt" id="installation" level="h2" />
 
-<Codeblock lang="terminal">
-```bash
-anchor init blueshift_anchor_escrow
-cd blueshift_anchor_escrow
-```
+Hãy bắt đầu bằng cách tạo một workspace Anchor mới:
+
+<Codeblock lang='terminal'>
+  ```bash 
+  anchor init blueshift_anchor_escrow 
+  cd blueshift_anchor_escrow 
+  ```
 </Codeblock>
 
-We then continue by enabling `init-if-needed` on the `anchor-lang` crate and by adding the `anchor-spl` crate as well:
+Sau đó chúng ta tiếp tục bằng cách kích hoạt `init-if-needed` trên crate `anchor-lang` và thêm crate `anchor-spl`:
 
-<Codeblock lang="terminal">
-```bash
-cargo add anchor-lang --features init-if-needed
-cargo add anchor-spl
-```
+<Codeblock lang='terminal'>
+  ```bash 
+  cargo add anchor-lang --features init-if-needed 
+  cargo add anchor-spl
+  ```
 </Codeblock>
 
-Since we're using `anchor-spl`, we also need to update the `Cargo.toml` file to include `anchor-spl/idl-build` in the `idl-build` feature. 
+Vì chúng ta đang sử dụng `anchor-spl`, chúng ta cũng cần cập nhật file `Cargo.toml` để bao gồm `anchor-spl/idl-build` trong tính năng `idl-build`.
 
-Open `Cargo.toml` and you'll see an existing `idl-build` line that looks like this:
+Mở `Cargo.toml` và bạn sẽ thấy dòng `idl-build` hiện có trông như thế này:
 
 ```toml
 idl-build = ["anchor-lang/idl-build"]
 ```
 
-Modify it to add `anchor-spl/idl-build` as well:
+Sửa đổi nó để thêm `anchor-spl/idl-build`:
 
 ```toml
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 ```
 
-You can now open  the newly generated folder, and you're ready to start coding! 
+Bây giờ bạn có thể mở thư mục mới được tạo và sẵn sàng bắt đầu lập trình!
 
 <ArticleSection name="Template" id="template" level="h2" />
 
-This time, since the program is quite complex, we're going to split it into small, focused modules instead of cramming everything into the `lib.rs`. 
+Lần này, vì chương trình khá phức tạp, chúng ta sẽ chia nó thành các module nhỏ, tập trung thay vì nhồi nhét mọi thứ vào `lib.rs`.
 
-The folder tree will look roughly like this:
+Cây thư mục sẽ trông như thế này:
 
 ```
 src
@@ -72,7 +73,7 @@ src
 └── state.rs
 ```
 
-Which the `lib.rs` will look roughly like this:
+Trong đó `lib.rs` sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -87,7 +88,7 @@ declare_id!("22222222222222222222222222222222222222222222");
 
 #[program]
 pub mod blueshift_anchor_escrow {
-    use super::*;
+use super::*;
 
     #[instruction(discriminator = 0)]
     pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
@@ -103,15 +104,17 @@ pub mod blueshift_anchor_escrow {
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         //...
     }
+
 }
+
 ```
 </Codeblock>
 
-As you see, we implemented custom discriminator for the instructions. So make sure to use an anchor version 0.31.0 or older.
+Như bạn thấy, chúng ta đã triển khai discriminator tùy chỉnh cho các lệnh. Vì vậy hãy đảm bảo sử dụng phiên bản anchor 0.31.0 hoặc mới hơn.
 
 <ArticleSection name="State" id="state" level="h2" />
 
-We're going to move into the `state.rs` where all the data for our `Escrow` lives. To do so we're going to give it a custom discriminator and wrap the struct into the `#[account]` macro like this:
+Chúng ta sẽ chuyển đến `state.rs` nơi tất cả dữ liệu cho `Escrow` của chúng ta tồn tại. Để làm điều này, chúng ta sẽ cung cấp cho nó một discriminator tùy chỉnh và bao bọc struct vào macro `#[account]` như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -127,40 +130,42 @@ pub struct Escrow {
     pub receive: u64,
     pub bump: u8,
 }
-  ```
+```
+
 </Codeblock>
 
-What each field does:
-- **seed**: Random number used during seed derivation so one maker can open multiple escrows with the same token pair; stored on-chain so we can always re-derive the PDA.
-- **maker**: The wallet that created the escrow; needed for refunds and to receive payment.
-- **mint_a** & **mint_b**: The SPL mints addresses for the "give" and "get" sides of the swap.
-- **receive**: How much of token B the maker wants. (The vault's balance itself shows how much token A was deposited, so we don't store that.)
-- **bump**: Cached bump byte; deriving it on the fly costs compute, so we save it once.
+Ý nghĩa của từng trường:
 
-We could pack in more info, but extra bytes mean extra rent. Storing only the essentials keeps deposits cheap while still letting the program enforce every rule it needs.
+- **seed**: Số ngẫu nhiên được sử dụng trong quá trình tạo seed để một maker có thể mở nhiều escrow với cùng một cặp token; được lưu trữ on-chain để chúng ta luôn có thể tái tạo PDA.
+- **maker**: Ví đã tạo escrow; cần thiết để hoàn tiền và nhận thanh toán.
+- **mint_a** & **mint_b**: Địa chỉ SPL mint cho phía "cho" và "nhận" của việc hoán đổi.
+- **receive**: Số lượng token B mà maker muốn. (Số dư của vault cho thấy bao nhiêu token A đã được gửi, vì vậy chúng ta không lưu trữ điều đó.)
+- **bump**: Byte bump được cache; tạo nó ngay lập tức tốn compute, vì vậy chúng ta lưu nó một lần.
 
-We finish by adding the `#[derive(InitSpace)]` macro so we don't have to manually calculate the rent of this struct.
+Chúng ta có thể đóng gói thêm thông tin, nhưng thêm byte có nghĩa là thêm phí thuê. Chỉ lưu trữ những thứ cần thiết giúp phí rẻ trong khi vẫn cho phép chương trình thực thi mọi quy tắc cần thiết.
+
+Chúng ta kết thúc bằng cách thêm macro `#[derive(InitSpace)]` để không phải tính toán thủ công rent của struct này.
 
 <ArticleSection name="Errors" id="errors" level="h2" />
 
-We can now move to the `errors.rs` file where we're going to add some errors that we're going to use later like this: 
+Bây giờ chúng ta có thể chuyển đến file `errors.rs` nơi chúng ta sẽ thêm một số thông báo lỗi mà chúng ta sẽ sử dụng sau đó như thế này:
 
 <Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum EscrowError {
+pub enum EscrowError { 
     #[msg("Invalid amount")]
-    InvalidAmount,
+    InvalidAmount, 
     #[msg("Invalid maker")]
-    InvalidMaker,
+    InvalidMaker, 
     #[msg("Invalid mint a")]
-    InvalidMintA,
+    InvalidMintA, 
     #[msg("Invalid mint b")]
     InvalidMintB,
 }
 ```
 </Codeblock>
 
-Each enum maps to a clear, human-readable message that Anchor will surface whenever a constraint or `require!()` fails.
+Mỗi enum ánh xạ đến một thông báo rõ ràng, dễ đọc mà Anchor sẽ hiển thị bất cứ khi nào một ràng buộc hoặc `require!()` không được đáp ứng.

@@ -1,14 +1,14 @@
-# Repay
+# Hoàn trả (Repay)
 
-The `repay` instruction is the second half of our flash loan system. Thanks to the design of the `loan` instruction, the logic for `repay` is quite simple, as it only needs to:
-1. Check that all balances have been correctly repaid using the `loan` account.
-2. Close the `loan` account, since it's no longer needed.
+Lệnh `repay` (hoàn trả) là nửa thứ hai của hệ thống flash loan. Nhờ vào thiết kế của lệnh `loan`, logic cho `repay` khá đơn giản, vì nó chỉ cần:
+1. Kiểm tra rằng tất cả số dư đã được hoàn trả đúng cách bằng cách sử dụng tài khoản `loan`.
+2. Đóng tài khoản `loan`, vì nó không còn cần thiết nữa.
 
-<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
-- `borrower`: The user who requested the flash loan. They provide the lamports for creating the `loan` account. Must be mutable.
-- `loan`: The temporary account used to store the `protocol_token_account` and the final `balance` required. Must be mutable as it will be closed at the end of the instruction.
+<ArticleSection name="Các tài khoản cần thiết" id="required-accounts" level="h2" />
+- `borrower`: Người dùng đã yêu cầu flash loan. Họ cung cấp lamports để tạo tài khoản `loan`. Phải có thể thay đổi (mutable).
+- `loan`: Tài khoản tạm thời được sử dụng để lưu trữ `protocol_token_account` và `balance` cuối cùng được yêu cầu. Phải có thể thay đổi (mutable) vì nó sẽ được đóng ở cuối lệnh.
 
-Here's the implementation:
+Đây là cách triển khai:
 
 <Codeblock lang="rust">
 ```rust
@@ -36,15 +36,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
 ```
 </Codeblock>
 
-The `token_accounts` field is a dynamic array of accounts representing the protocol token accounts associated with the borrower's loan.
+Trường `token_accounts` là một mảng động các tài khoản đại diện cho các tài khoản token giao thức liên quan đến khoản vay của người vay.
 
-<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+<ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
-No instruction data is needed because we use the `balance` field in the `loan` account to verify if the loan has been repaid.
+Không cần dữ liệu cho Instruction nào vì chúng ta sử dụng trường `balance` trong tài khoản `loan` để xác minh xem khoản vay đã được hoàn trả hay chưa.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
-We begin by parsing the accounts into the `RepayAccounts` struct.
+Chúng ta bắt đầu bằng cách phân tích các tài khoản thành struct `RepayAccounts`.
 
 <Codeblock lang="rust">
 ```rust
@@ -65,7 +65,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
 ```
 </Codeblock>
 
-Next, we check if all loans have been repaid. We do this by retrieving the number of loans from the `loan` account and iterating through them. For each loan, we verify that the `protocol_token_account` is correct and that its balance is greater than or equal to the amount loaned.
+Tiếp theo, chúng ta kiểm tra xem tất cả các khoản vay đã được hoàn trả hay chưa. Chúng ta thực hiện điều này bằng cách lấy số lượng khoản vay từ tài khoản `loan` và lặp qua chúng. Đối với mỗi khoản vay, chúng ta xác minh rằng `protocol_token_account` là đúng và số dư của nó lớn hơn hoặc bằng số tiền đã vay.
 
 <Codeblock lang="rust">
 ```rust
@@ -104,7 +104,7 @@ impl<'a> Repay<'a> {
 ```
 </Codeblock>
 
-We can then proceed to close the `loan` account and reclaim the rent, as it's no longer needed:
+Sau đó chúng ta có thể tiến hành đóng tài khoản `loan` và thu hồi tiền thuê, vì nó không còn cần thiết nữa:
 
 <Codeblock lang="rust">
 ```rust
@@ -118,4 +118,4 @@ unsafe {
 ```
 </Codeblock>
 
-> As you can see, for optimization purposes and by design, the repayment doesn't happen in this instruction. This is because the `borrower` can choose to repay the token account in another instruction, such as when performing a swap or executing a series of CPIs from their arbitrage program.
+> Như bạn có thể thấy, vì mục đích tối ưu hóa và theo thiết kế, việc hoàn trả không xảy ra trong lệnh này. Điều này là do `borrower` có thể chọn hoàn trả tài khoản token trong một lệnh khác, chẳng hạn như khi thực hiện swap hoặc thực thi một loạt CPI từ chương trình arbitrage của họ.

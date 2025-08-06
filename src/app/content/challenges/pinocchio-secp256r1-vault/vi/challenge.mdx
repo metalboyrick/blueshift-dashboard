@@ -3,19 +3,19 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Pinocchio Secp256r1 Vault Challenge](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
 
-# The Secp256r1 Vault
+# Secp256r1 Vault
 
-A vault is a fundamental building block in DeFi that provides a secure way for users to store their assets. 
+Vault là một khối xây dựng cơ bản trong DeFi cung cấp cách thức an toàn cho người dùng lưu trữ tài sản của họ.
 
-In this challenge, we'll build a vault that uses Secp256r1 signatures for transaction verification. This is particularly interesting because Secp256r1 is the same elliptic curve used by modern authentication methods like passkeys, which allow users to sign transactions using biometric authentication (like Face ID or Touch ID) instead of traditional wallet-based signatures.
+Trong thử thách này, chúng ta sẽ xây dựng một vault sử dụng chữ ký Secp256r1 để xác minh giao dịch. Điều này đặc biệt thú vị vì Secp256r1 là cùng một đường cong elliptic được sử dụng bởi các phương thức xác thực hiện đại như passkey, cho phép người dùng ký giao dịch bằng xác thực sinh trắc học (như Face ID hoặc Touch ID) thay vì chữ ký dựa trên ví truyền thống.
 
-The key innovation here is that we're decoupling the payment of transaction fees from the actual user authentication. This means that while users can authenticate transactions using their Secp256r1 signatures (which can be generated through modern authentication methods), the actual transaction fees can be paid by a service provider. This creates a more seamless user experience while maintaining security.
+Đổi mới chính ở đây là chúng ta đang tách rời việc thanh toán phí giao dịch khỏi xác thực người dùng thực tế. Điều này có nghĩa là trong khi người dùng có thể xác thực giao dịch bằng chữ ký Secp256r1 của họ (có thể được tạo thông qua các phương thức xác thực hiện đại), phí giao dịch thực tế có thể được thanh toán bởi nhà cung cấp dịch vụ. Điều này tạo ra trải nghiệm người dùng mượt mà hơn trong khi vẫn duy trì tính bảo mật.
 
-In this challenge, we'll update the simple lamport vault that we built in the [Pinocchio Vault Challenge](/en/challenges/pinocchio-vault) to allow Secp256r1 signatures as a verification method for transactions.
+Trong thử thách này, chúng ta sẽ cập nhật vault lamport đơn giản mà chúng ta đã xây dựng trong [Thử thách Pinocchio Vault](/vi/challenges/pinocchio-vault) để cho phép chữ ký Secp256r1 như một phương thức xác minh cho các giao dịch.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+<ArticleSection name="Cài đặt" id="installation" level="h2" />
 
-Before you begin, be sure Rust and Pinocchio are installed. Then in your terminal run:
+Trước khi bắt đầu, hãy đảm bảo Rust và Pinocchio đã được cài đặt. Sau đó trong terminal của bạn chạy:
 
 <Codeblock lang="terminal">
 ```bash
@@ -25,14 +25,15 @@ cd blueshift_secp256r1_vault
 ```
 </Codeblock>
 
-Add Pinocchio and the Pinocchio-compatible `Secp256r1` crate
+Thêm crate Pinocchio và Pinocchio-compatible `Secp256r1`
 <Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
 ```
 </Codeblock>
 
-Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
+Khai báo các loại crate trong `Cargo.toml` để tạo ra các artifact triển khai trong `target/deploy`:
+
 <Codeblock lang="toml">
 ```toml
 [lib]
@@ -42,7 +43,7 @@ crate-type = ["lib", "cdylib"]
 
 <ArticleSection name="Template" id="template" level="h2" />
 
-Let's start with the basic program structure. We'll implement everything in `lib.rs` since this is a straightforward program. Here's the initial template with the core components we'll need:
+Hãy bắt đầu với cấu trúc chương trình cơ bản. Chúng ta sẽ triển khai mọi thứ trong `lib.rs` vì đây là một chương trình đơn giản. Đây là template ban đầu với các thành phần cốt lõi mà chúng ta sẽ cần:
 
 <Codeblock lang="rust">
 ```rust
@@ -81,16 +82,16 @@ fn process_instruction(
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
 
-The deposit instruction performs the following steps:
-1. Verifies the vault is empty (has zero lamports) to prevent double deposits
-2. Ensures the deposit amount exceeds the rent-exempt minimum for a basic account
-3. Transfers lamports from the payer to the vault using a CPI to the System Program
+Instruction `deposit` thực hiện các bước sau:
+1. Xác minh vault trống (có zero lamport) để ngăn chặn deposit kép
+2. Đảm bảo số tiền deposit vượt quá mức tối thiểu phí thuê cho tài khoản cơ bản
+3. Chuyển lamport từ payer đến vault bằng lệnh CPI gọi đến System Program
 
-The main difference between a normal vault and the Secp256r1 vault is the way that we derive the PDA and who is considered an "owner".
+Sự khác biệt chính giữa một vault thông thường và một vault Secp256r1 là cách chúng ta derive PDA và ai được coi là "owner".
 
-Since with Secp256r1 signatures the owner of the actual wallet doesn't need to pay for the transaction fees, we change the `owner` account to a more general naming convention like `payer`.
+Bởi vì với chữ ký Secp256r1, chủ sở hữu của ví thực tế không cần phải trả phí giao dịch, chúng ta thay đổi tài khoản `owner` thành một quy ước đặt tên chung hơn như `payer`.
 
-So the account struct for `deposit` will look like this:
+Nên cấu trúc của tài khoản `deposit` sẽ trông như thế này: 
 
 <Codeblock lang="rust">
 ```rust
@@ -127,18 +128,18 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
 ```
 </Codeblock>
 
-Let's break down each account check:
-1. `payer`: Must be a signer since they need to authorize the transfer of lamports
+Hãy phân tích từng mã kiểm tra tài khoản:
+1. `payer`: phải là signer vì họ cần ủy quyền cho chuyển tiền lamport.
 2. `vault`: 
-   - Must be owned by the System Program
-   - Must have zero lamports (ensures "fresh" deposit)
+   - Phải thuộc sở hữu của System Program
+   - Phải có zero lamport (đảm bảo deposit "mới")
 
-For the `vault` we're going to then check if:
-- It's derived from the correct seeds
-- Match the expected PDA address
-Since part of the seed is in the `instruction_data` that we don't have access at this time.
+Đối với `vault`, chúng ta sẽ kiểm tra xem:
+- Nó được suy ra từ các seed chính xác.
+- Trùng khớp với địa chỉ PDA mong đợi.
+Bởi vì phần seed nằm trong `instruction_data`, chúng ta sẽ không truy cập vào nó lúc này.
 
-Now let's implement the instruction data struct:
+Bây giờ hãy triển khai struct dữ liệu cho instruction: 
 
 <Codeblock lang="rust">
 ```rust
@@ -167,13 +168,13 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
 ```
 </Codeblock>
 
-We deserialize the instruction data into a `DepositInstructionData` struct that contains:
-- `pubkey`: The Secp256r1 public key of the user making the deposit
-- `amount`: The amount of lamports to deposit
+Chúng ta giải tuần tự hóa dữ liệu instruction vào một struct `DepositInstructionData` bao gồm:
+- `pubkey`: public key Secp256r1 của người dùng thực hiện deposit
+- `amount`: Số lượng lamport để deposit
 
-While unwrap is generally discouraged in production code, in this case, it is used safely because we already validated the length of the data in the `try_from` method. If the data length doesn't match, it will return an error before reaching this point.
+Thông thường, unwrap không được khuyến khích sử dụng trong mã production, nhưng trong trường hợp này, unwrap được sử dụng an toàn vì chúng ta đã xác minh độ dài dữ liệu trong phương thức `try_from`. Nếu độ dài dữ liệu không khớp, một lỗi sẽ được trả về trước khi đến điểm này.
 
-Finally, let's implement the deposit instruction:
+Cuối cùng, hãy triển khai instruction deposit:
 
 <Codeblock lang="rust">
 ```rust
@@ -224,24 +225,26 @@ impl<'a> Deposit<'a> {
 ```
 </Codeblock>
 
-As mentioned earlier, we need to verify that the vault PDA is derived from the correct seeds. In this Secp256r1-based vault, we use the `Secp256r1Pubkey` as part of the seeds instead of the traditional owner's public key. This is a crucial security measure that ensures only the holder of the corresponding Secp256r1 key can access the vault.
+Như đã nhắc đến trước đó, chúng ta cần xác minh rằng PDA của vault được derive từ các seed chính xác. Trong vault dựa trên Secp256r1 này, chúng ta sử dụng `Secp256r1Pubkey` làm một phần của các seed thay vì public key của chủ sở hữu truyền thống. Đây là một biện pháp bảo mật quan trọng đảm bảo chỉ người nắm giữ khóa Secp256r1 tương ứng mới có thể truy cập vào vault.
 
-The `Secp256r1Pubkey` is 33 bytes long because it uses compressed point representation for elliptic curve public keys. This format consists of:
-- 1 byte for the point's parity (indicating whether the y-coordinate is even or odd)
-- 32 bytes for the x-coordinate
+`Secp256r1Pubkey` được biểu diễn dưới dạng mảng byte có độ dài 33 bởi vì nó dùng để đại diện cho một điểm trên đường cong elliptic Secp256r1. Định dạng này bao gồm:
+- 1 byte thể hiện tính chẵn lẻ của điểm (xác định xem tọa độ y là chẵn hay lẻ)
+- 32 bytes cho tọa độ x
 
-Since Solana's `find_program_address` function has a 32-byte limit for each seed, we need to split the `Secp256r1Pubkey` into two parts:
-1. The parity byte (`pubkey[..1]`)
-2. The x-coordinate bytes (`pubkey[1..33]`)
+Bởi vì hàm `find_program_address` của Solana có giới hạn là 32 byte cho mỗi seed, chúng ta cần chia `Secp256r1Pubkey` thành hai phần:
+1. Byte tính chẵn lẻ (`pubkey[..1]`)
+2. Các byte biểu diễn của tọa độ x (`pubkey[1..33]`)
+
 
 <ArticleSection name="Withdraw" id="withdraw" level="h2" />
 
-The withdraw instruction performs the following steps:
-1. Verifies the vault contains lamports (is not empty)
-2. Uses the vault's PDA to sign the transfer on its own behalf
-3. Transfers all lamports from the vault back to the owner
+Widthdraw instruction thực hiện các bước sau:
+1. Xác minh vault chứa lamport (không trống)
+2. Sử dụng PDA của vault để ký chuyển khoản thay mặt cho chính nó
+3. Chuyển tất cả lamport từ vault trở lại cho người dùng
 
-First, let's define the account struct for withdraw:
+
+Đầu tiên, hãy định nghĩa struct tài khoản cho withdraw:
 
 <Codeblock lang="rust">
 ```rust
@@ -277,7 +280,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
 ```
 </Codeblock>
 
-Now let's implement the instruction data struct:
+Bây giờ hãy triển khai struct dữ liệu cho instruction: 
 
 <Codeblock lang="rust">
 ```rust
@@ -297,9 +300,9 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
 ```
 </Codeblock>
 
-As you can see, for optimization purposese we passed the bump as instruction data to not have to derive it in the `process()` that is already "heavy" because of all the other checks needed.
+Như bạn thấy, để tối ưu hóa chúng ta đã truyền bump vào trong dữ liệu instruction để không phải derive nó trong `process()` việc này khá "nặng" vì chúng ta phải kiểm tra nhiều thứ khác.
 
-Finally, let's implement the `withdraw` instruction:
+Cuối cùng, hãy triển khai instruction `withdraw`:
 
 <Codeblock lang="rust">
 ```rust
@@ -381,14 +384,14 @@ impl<'a> Withdraw<'a> {
 ```
 </Codeblock>
 
-The withdrawal process involves several security checks to ensure the transaction is legitimate. Let's break down how we verify the Secp256r1 signature and protect against potential attacks:
+Quá trình withdraw đòi hỏi một vài bước kiểm tra bảo mật để đảm bảo rằng giao dịch là hợp lệ. Hãy xem chúng ta làm thế nào để xác minh chữ ký Secp256r1 và bảo vệ trước các cuộc tấn công tiềm năng:
 
 1. **Instruction Introspection**
-- We use the instruction sysvar to inspect the next instruction in the transaction
-- This allows us to verify the Secp256r1 signature that proves ownership of the signing key
-- The signature verification for Secp256r1 always happens in a separate instruction
+- Chúng ta sử dụng instruction sysvar để kiểm tra instruction tiếp theo trong transaction
+- Điều này cho phép chúng ta xác minh chữ ký Secp256r1, chứng minh quyền sở hữu của khóa ký
+- Xác minh chữ ký Secp256r1 luôn xảy ra trong một instruction riêng biệt
 
-2. **Signature Verification**
+2. **Xác minh chữ ký**
 ```rust
 let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
 if secp256r1_ix.num_signatures() != 1 {
@@ -396,8 +399,8 @@ if secp256r1_ix.num_signatures() != 1 {
 }
 let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
 ```
-- We verify that there's exactly one signature
-- We extract the signer's public key, which must match the one used to create the vault PDA for verification purposes
+- Chúng ta kiểm tra xem có đúng một chữ ký hay không
+- Chúng ta trích xuất public key của người ký, nó phải khớp với khóa được sử dụng để tạo PDA của vault vì mục đích xác minh
 
 3. **Message Validation**
 ```rust
@@ -406,12 +409,12 @@ if self.accounts.payer.key().ne(payer) {
     return Err(ProgramError::InvalidAccountOwner);
 }
 ```
-- The signed message contains two critical pieces of information:
-    - The intended recipient's address (32 bytes)
-    - A timestamp for when the signature expires (8 bytes)
-- This prevents MEV attacks where someone could intercept and reuse a valid signature by passing another `payer` and claiming the amount that sits in the vault
+- Thông điệp được ký chứa hai thông tin quan trọng:
+    - Địa chỉ của người nhận (32 bytes)
+    - Thời gian hết hạn của chữ ký (8 bytes)
+- Điều này ngăn chặn các cuộc tấn công MEV mà ai đó có thể chặn và tái sử dụng một chữ ký hợp lệ bằng cách chuyển một `payer` khác và lấy đi số lượng lamport trong vault
 
-4. **Expiry Check**
+4. **Kiểm tra thời hạn**
 ```rust
 let now = Clock::get()?.unix_timestamp;
 let expiry = i64::from_le_bytes(expiry.try_into()?);
@@ -419,9 +422,9 @@ if now > expiry {
     return Err(ProgramError::InvalidInstructionData);
 }
 ```
-- We verify the signature hasn't expired
-- This adds a time-based security layer to prevent signature reuse
-- The expiry time should be considered a "refractory period"; no new vault can be created until it expires or it could be reused without the knowledge of the actual owner.
+- Chúng ta xác minh chữ ký chưa hết hạn
+- Việc này thêm vào một lớp bảo mật dựa trên thời gian để ngăn chặn việc tái sử dụng chữ ký
+- Thời gian hết hạn phải được xem xét là một "refractory period"; không thể tạo vault mới cho đến khi hết hạn hoặc nó có thể được tái sử dụng mà không cần sự đồng ý của chủ sở hữu thực tế.
 
 5. **PDA Signing**
 ```rust
@@ -432,16 +435,15 @@ let seeds = [
     Seed::from(&self.instruction_data.bump),
 ];
 ```
-- Finally, we use the verified public key to create the PDA seeds
-- This ensures only the legitimate Secp256r1 key holder can sign the withdrawal transaction
+- Cuối cùng, chúng ta sử dụng khóa công khai đã xác minh để tạo các seed PDA
+- Điều này đảm bảo chỉ người nắm giữ khóa Secp256r1 hợp lệ mới có thể ký giao dịch rút tiền
 
 
+<ArticleSection name="Kết luận" id="conclusion" level="h2" />
 
-<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+Bạn có thể kiểm tra chương trình của mình với các bài kiểm tra đơn vị của chúng tôi và yêu cầu NFT của mình!
 
-You can now test your program against our unit tests and claim your NFTs!
-
-Start by building your program using the following command in your terminal:
+Bắt đầu bằng cách build chương trình của bạn bằng lệnh sau trong terminal:
 
 <Codeblock lang="terminal">
 ```bash
@@ -449,6 +451,6 @@ cargo build-sbf
 ```
 </Codeblock>
 
-This generated a `.so` file directly in your `target/deploy` folder. 
+Điều này tạo ra một file `.so` trực tiếp trong thư mục `target/deploy` của bạn.
 
-Now click on the `take challenge` button and drop the file there!
+Bây giờ hãy nhấp vào nút `làm thử thách` và thả file vào đó!

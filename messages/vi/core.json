@@ -5,8 +5,9 @@
     "keywords": "Solana, Blueshift, học tập, chứng chỉ, vault, escrow, AMM, native, pinocchio, quantum, SPL token"
   },
   "locales_native_name": {
-    "en": "English",
-    "zh-hant": "繁體中文",
+    "en": "Tiếng Anh",
+    "zh-hant": "Tiếng Trung",
+    "fr": "Tiếng Pháp",
     "vi": "Tiếng Việt"
   },
   "header": {
@@ -88,7 +89,7 @@
   },
   "wallet_recommended": {
     "title": "Kết nối ví của bạn",
-    "description": "Kết nối ví để tiến bộ qua các khóa học và nhận phần thưởng NFT!",
+    "description": "Kết nối ví để theo dõi tiến độ các khóa học và nhận phần thưởng NFT!",
     "connect_wallet": "Kết nối ví",
     "dont_show_again": "Không hiển thị lại"
   },

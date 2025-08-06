@@ -3,25 +3,27 @@ import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
 
 <ArticleSection name="Make" id="make" level="h2" />
 
-We can now move to the `make` instruction, that lives in the `make.rs` and will perform these actions:
-- Initializes the Escrow record and stores all the terms.
-- Creates the Vault (an ATA for `mint_a` owned by the `escrow`).
-- Moves the maker's Token A into that vault with a CPI to the SPL-Token program.
+Bây giờ chúng ta có thể chuyển đến lệnh `make`, nằm trong `make.rs` và sẽ thực hiện các hành động sau:
 
-### Accounts 
+- Khởi tạo bản ghi Escrow và lưu trữ tất cả các điều khoản.
+- Tạo Vault (một ATA cho `mint_a` thuộc sở hữu của `escrow`).
+- Chuyển Token A của maker vào vault đó bằng cách tạo một CPI đến chương trình SPL-Token.
 
-The accounts needed in this context are:
-- `maker`: the user that decides the terms and deposit the `mint_a` into the `Escrow`
-- `escrow`: the account where all the terms of this exchange lives
-- `mint_a`: the token that the `maker` is depositing
-- `mint_b`: the token that the `maker` wants in exchange
-- `maker_ata_a`: the token account associated with the `maker` and `mint_a` used to the deposit tokens in the `vault`
-- `vault`: the token account associated with the `escrow` and `mint_a` where the tokens deposits gets parked
-- `associated_token_program`: the associated token program used to create the associated token accounts
-- `token_program`: the token program used to CPI the transfer
-- `system_program`: the system program used to create the `Escrow`
+### Tài khoản
 
-And with all the constraint it will look something like this:
+Các tài khoản cần thiết trong ngữ cảnh này là:
+
+- `maker`: người dùng quyết định các điều khoản và gửi `mint_a` vào `Escrow`
+- `escrow`: tài khoản nơi tất cả các điều khoản của việc trao đổi này tồn tại
+- `mint_a`: token mà `maker` đang gửi
+- `mint_b`: token mà `maker` muốn đổi lấy
+- `maker_ata_a`: tài khoản token liên kết với `maker` và `mint_a` được sử dụng để gửi token vào `vault`
+- `vault`: tài khoản token liên kết với `escrow` và `mint_a` nơi các token gửi được lưu trữ
+- `associated_token_program`: chương trình associated token được sử dụng để tạo các tài khoản associated token
+- `token_program`: chương trình token được sử dụng để gọi CPI chuyển token
+- `system_program`: chương trình hệ thống được sử dụng để tạo `Escrow`
+
+Và với tất cả các ràng buộc, nó sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -67,17 +69,19 @@ pub struct Make<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+
 }
+
 ```
 </Codeblock>
 
-**Note**: Since we supply only one `token_program` to make sure that the CPI doesn't fail in the `take` instruction, where we perform transfer with both mint, we need to check that the two mint are owned by the same program.
+**Lưu ý**: Vì chúng ta chỉ cung cấp một `token_program` để đảm bảo rằng CPI không thất bại trong lệnh `take`, nơi chúng ta thực hiện chuyển với cả hai mint, chúng ta cần kiểm tra rằng hai mint được sở hữu bởi cùng một chương trình.
 
-### Logic 
+### Logic
 
-After initializing the Accounts, we can finally handle the logic by creating smaller helper function as an implementation of the account struct.
+Sau khi khởi tạo các Tài khoản, cuối cùng chúng ta có thể xử lý logic bằng cách tạo các hàm helper nhỏ hơn như một implementation của account struct.
 
-We start by populating the `Escrow` using the `set_inner()` helper, and we then move onto depositing the tokens through the `transfer` CPI like this:
+Chúng ta bắt đầu bằng cách điền vào `Escrow` bằng helper `set_inner()`, và sau đó chuyển sang gửi token thông qua CPI `transfer` như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -116,13 +120,15 @@ impl<'info> Make<'info> {
     }
 }
 ```
+
 </Codeblock>
 
-We can see that Anchor helps us in multiple ways:
-- `set_inner()`: guarantees every field is populated.
-- `transfer_checked`: wraps the Token CPI just like the System helpers we used earlier.
+Chúng ta có thể thấy rằng Anchor giúp chúng ta bằng nhiều cách:
 
-And now we can move onto creating an `handler` function where we perform some checks before using the helpers, like this:
+- `set_inner()`: đảm bảo mọi trường đều được điền.
+- `transfer_checked`: bao bọc Token CPI giống như các hàm hỗ trợ của System mà chúng ta đã sử dụng trước đó.
+
+Và bây giờ chúng ta có thể chuyển sang tạo hàm `handler` nơi chúng ta thực hiện một số kiểm tra trước khi sử dụng các hàm hỗ trợ, như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -138,17 +144,18 @@ pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Resu
     ctx.accounts.deposit_tokens(amount)?;
 
     Ok(())
+
 }
-  ```
+
+```
 </Codeblock>
 
-Here we add two validation checks; one on the `amount` and one on the `receive` arguments to ensure we're not passing a zero value for either.
+Ở đây chúng ta thêm hai kiểm tra xác thực cho các đối số; một cho `amount` và một cho `receive` để đảm bảo chúng ta không truyền giá trị zero cho cả hai.
 
-### Warning
+### Lưu ý
 
-Certain extensions from SPL Token-2022 e.g., transfer hooks, confidential transfers, default account states can introduce vulnerabilities like blocking transfers , locking funds and causing rug pulls in escrow logic, vaults, or CPIs.
+Một số extension từ SPL Token-2022 ví dụ như transfer hooks, confidential transfers, default account states có thể gây ra các lỗ hổng như chặn chuyển, khóa tiền và gây ra rug pulls trong logic escrow, vault, hoặc CPI.
 
-
-- Ensure `mint_a` and `mint_b` are owned by the same token program to prevent CPI failures.
-- Use well-audited tokens (e.g., USDC, wSOL) from the standard SPL Token program.
-- Avoid unverified or complex Token-2022 mints.
+- Đảm bảo `mint_a` và `mint_b` được sở hữu bởi cùng một token program để ngăn chặn lỗi khi gọi CPI.
+- Sử dụng các token đã được xác minh kỹ (ví dụ: USDC, wSOL) từ chương trình SPL Token tiêu chuẩn.
+- Tránh các mint Token-2022 phức tạp hoặc chưa được xác minh.

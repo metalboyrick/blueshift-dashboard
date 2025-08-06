@@ -1,27 +1,27 @@
 # Take
 
-The `take` instruction finalizes the swap:
-  - Close the escrow record, sending its rent lamports back to the maker.
-- Move Token A from the vault to the taker, then close the vault.
-- Move the agreed amount of Token B from the taker to the maker.
+Instruction `take` hoàn thiện việc hoán đổi:
+- Đóng bản ghi escrow, gửi lamport tiền thuê về cho maker.
+- Chuyển Token A từ vault đến taker, sau đó đóng vault.
+- Chuyển số lượng Token B đã thỏa thuận từ taker đến maker.
 
-<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+<ArticleSection name="Các tài khoản cần thiết" id="required-accounts" level="h2" />
 
-Below are the accounts the context needs:
+Dưới đây là các tài khoản mà context cần:
 
-- taker: the person that wants to take the deal. Must be a signer and mutable.
-- maker: the creator of the escrow. Must be mutable.
-- escrow: the escrow account that we're initializing. Must be mutable.
-- mint_a: the token we're depositing in the escrow
-- mint_b: the token we want to receive
-- vault: the associated token account owned by the escrow. Must be mutable
-- taker_ata_a: the associated token account owned by the taker for mint_a. Must be mutable
-- taker_ata_b: the associated token account owned by the taker for mint_b. Must be mutable
-- maker_ata_b: the associated token account owned by the maker for mint_b. Must be mutable
-- system_program: the system program. Must be executable
-- token_program: the token program. Must be executable
+- taker: người muốn nhận giao dịch. Phải là signer và mutable.
+- maker: người tạo escrow. Phải là mutable.
+- escrow: tài khoản escrow mà chúng ta đang khởi tạo. Phải là mutable.
+- mint_a: token mà chúng ta đang gửi vào escrow
+- mint_b: token mà chúng ta muốn nhận
+- vault: tài khoản token liên kết thuộc sở hữu của escrow. Phải là mutable
+- taker_ata_a: tài khoản token liên kết thuộc sở hữu của taker cho mint_a. Phải là mutable
+- taker_ata_b: tài khoản token liên kết thuộc sở hữu của taker cho mint_b. Phải là mutable
+- maker_ata_b: tài khoản token liên kết thuộc sở hữu của maker cho mint_b. Phải là mutable
+- system_program: chương trình hệ thống. Phải là executable
+- token_program: chương trình token. Phải là executable
 
-And we perform these checks on it:
+Và chúng ta thực hiện các kiểm tra này trên nó:
 
 <Codeblock lang="rust">
 ```rust
@@ -74,15 +74,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
 ```
 </Codeblock>
 
-<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+<ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
-All the data that we need to perform the logic already lives in the Escrow account or on the accounts that we're deserializing. For this reason we don't need any `instruction_data` for this instruction.
+Tất cả dữ liệu mà chúng ta cần để thực hiện logic đã tồn tại trong tài khoản Escrow hoặc trên các tài khoản mà chúng ta đang deserialize. Vì lý do này, chúng ta không cần bất kỳ `instruction_data` nào cho instruction này.
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
-We begin by initializing the required accounts in the `TryFrom` implementation, after we've deserialized the accounts.
+Chúng ta bắt đầu bằng cách khởi tạo các tài khoản cần thiết trong việc triển khai `TryFrom`, sau khi chúng ta đã deserialize các tài khoản.
 
-For this step, we ensure both the taker's Token A account and the maker's Token B account are initialized using the `AssociatedTokenAccount::init_if_needed` since we're not sure that they already exists
+Đối với bước này, chúng ta đảm bảo cả tài khoản Token A của taker và tài khoản Token B của maker đều được khởi tạo bằng cách sử dụng `AssociatedTokenAccount::init_if_needed` vì chúng ta không chắc chắn rằng chúng đã tồn tại
 
 <Codeblock lang="rust">
 ```rust
@@ -123,10 +123,10 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
 ```
 </Codeblock>
 
-We can now focus on the logic itself that will:
-- Transfer the tokens from the `taker_ata_b` to the `maker_ata_b`.
-- Transfer the tokens from the `vault` to the `taker_ata_a`.
-- Close the now empty `vault` and withdraw the rent from the account.
+Bây giờ chúng ta có thể tập trung vào logic chính sẽ:
+- Chuyển token từ `taker_ata_b` đến `maker_ata_b`.
+- Chuyển token từ `vault` đến `taker_ata_a`.
+- Đóng `vault` hiện đã trống và rút tiền thuê từ tài khoản.
 
 <Codeblock lang="rust">
 ```rust

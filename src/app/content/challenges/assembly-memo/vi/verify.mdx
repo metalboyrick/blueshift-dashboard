@@ -1,6 +1,6 @@
-# sBPF Assembly Memo Program
-Welcome to your first challenge using sBPF Assembly! Your goal is to create a simple memo program that logs a message to the blockchain. This is a great introduction to how instructions work in sBPF Assembly.
+# Chương trình sBPF Assembly Memo
+Chào mừng bạn đến với thử thách đầu tiên sử dụng sBPF Assembly! Mục tiêu của bạn là tạo một chương trình memo đơn giản để ghi lại một thông điệp lên blockchain. Đây là một giới thiệu tuyệt vời về cách các instruction hoạt động trong sBPF Assembly.
 
-The program only has one instruction and no accounts. It sets the `r0` register to the number of accounts in the instruction data, `r2` to the length of the instruction data, and `r1` to the offset of the instruction data, then invokes the `sol_log_` syscall.
+Chương trình chỉ có một instruction và không có account nào. Nó đặt register `r0` thành số lượng account trong instruction data, `r2` thành độ dài của instruction data, và `r1` thành offset của instruction data, sau đó gọi syscall `sol_log_`.
 
-Your program should also have a program Id of `22222222222222222222222222222222222222222222` to pass the challenge.
+Chương trình của bạn cũng phải có program ID là `22222222222222222222222222222222222222222222` để vượt qua thử thách.

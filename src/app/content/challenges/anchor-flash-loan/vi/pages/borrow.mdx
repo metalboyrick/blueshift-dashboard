@@ -1,12 +1,12 @@
 # Borrow
 
-The borrow instruction is the first half of our flash loan system. It performs three critical steps to ensure safe and atomic lending:
-1. Transfer funds: Move the requested `borrow_amount` from the protocol's treasury to the borrower's account
-2. Verify repayment: Use instruction introspection to confirm that a valid repayment instruction exists at the end of the transaction
+Instruction borrow là nửa đầu của hệ thống flash loan. Nó thực hiện ba bước quan trọng để đảm bảo việc cho vay an toàn và atomic:
+1. Chuyển tiền: Di chuyển `borrow_amount` được yêu cầu từ kho bạc của protocol đến account của người vay
+2. Xác minh việc trả nợ: Sử dụng instruction introspection để xác nhận rằng một instruction trả nợ hợp lệ tồn tại ở cuối transaction
 
-<ArticleSection name="Fund Transfer" id="fund-transfer" level="h2" />
+<ArticleSection name="Chuyển tiền" id="fund-transfer" level="h2" />
 
-First, we implement the actual transfer of funds with proper validation:
+Đầu tiên, chúng ta triển khai việc chuyển tiền thực tế với validation phù hợp:
 
 <Codeblock lang="rust">
 ```rust
@@ -36,13 +36,13 @@ transfer(
 ```
 </Codeblock>
 
-This code ensures we're transferring a valid amount and uses the protocol's Program Derived Address (PDA) to authorize the transfer.
+Mã này đảm bảo chúng ta đang chuyển một số tiền hợp lệ và sử dụng Program Derived Address (PDA) của protocol để ủy quyền chuyển tiền.
 
 <ArticleSection name="Instruction Introspection" id="instruction-introspection" level="h2" />
 
-Now comes the security-critical part: using instruction introspection to verify the transaction's structure and ensure our flash loan will be repaid.
+Bây giờ đến phần quan trọng về bảo mật: sử dụng instruction introspection để xác minh cấu trúc transaction và đảm bảo flash loan sẽ được trả lại.
 
-We start by accessing the `instructions` sysvar, which contains information about all instructions in the current transaction:
+Chúng ta bắt đầu bằng cách truy cập `instructions` sysvar, chứa thông tin về tất cả instruction trong transaction hiện tại:
 
 
 <Codeblock lang="rust">
@@ -58,10 +58,10 @@ let ixs = ctx.accounts.instructions.to_account_info();
 ```
 </Codeblock>
 
-Finally, we perform the most critical check: ensuring that the last instruction in the transaction is a valid repayment instruction:
-- We start by checking the number of instruction and making sure that we're loading the last instruction of the transaction
-- Then we verify that it's the repay instruction by verifying the program ID and the discriminator of the instruction
-- We finish by verifying that the ATAs passed in the repay instruction are the same that we're passing in our `Borrow` instruction
+Cuối cùng, chúng ta thực hiện kiểm tra quan trọng nhất: đảm bảo rằng instruction cuối cùng trong transaction là một instruction trả nợ hợp lệ:
+- Chúng ta bắt đầu bằng cách kiểm tra số lượng instruction và đảm bảo rằng chúng ta đang load instruction cuối cùng của transaction
+- Sau đó chúng ta xác minh rằng đó là instruction repay bằng cách kiểm tra program ID và discriminator của instruction
+- Chúng ta kết thúc bằng cách xác minh rằng các ATA được truyền trong instruction repay giống với những gì chúng ta đang truyền trong instruction `Borrow`
 
 <Codeblock lang="rust">
 ```rust

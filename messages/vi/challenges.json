@@ -12,7 +12,7 @@
       "title": "Anchor Vault",
       "requirements": {
         "deposit": {
-          "title": "Thử thách 1: Nhận tiền gửi"
+          "title": "Thử thách 1: Gửi tiền"
         },
         "withdraw": {
           "title": "Thử thách 2: Cho phép rút tiền"
@@ -23,13 +23,13 @@
       "title": "Anchor Escrow",
       "pages": {
         "make": {
-          "title": "Tạo"
+          "title": "Make"
         },
         "take": {
-          "title": "Nhận"
+          "title": "Take"
         },
         "refund": {
-          "title": "Hoàn tiền"
+          "title": "Refund"
         }
       },
       "requirements": {
@@ -48,10 +48,10 @@
       "title": "Anchor Flash Loan",
       "pages": {
         "borrow": {
-          "title": "Vay"
+          "title": "Borrow"
         },
         "repay": {
-          "title": "Trả"
+          "title": "Repay"
         }
       },
       "requirements": {
@@ -72,7 +72,7 @@
       "title": "Pinocchio Vault",
       "requirements": {
         "deposit": {
-          "title": "Thử thách 1: Nhận tiền gửi"
+          "title": "Thử thách 1: Gửi tiền"
         },
         "withdraw": {
           "title": "Thử thách 2: Cho phép rút tiền"
@@ -83,13 +83,13 @@
       "title": "Pinocchio Escrow",
       "pages": {
         "make": {
-          "title": "Tạo"
+          "title": "Make"
         },
         "take": {
-          "title": "Nhận"
+          "title": "Take"
         },
         "refund": {
-          "title": "Hoàn tiền"
+          "title": "Refund"
         },
         "conclusion": {
           "title": "Kết luận"
@@ -114,13 +114,13 @@
           "title": "Khởi tạo"
         },
         "deposit": {
-          "title": "Gửi"
+          "title": "Deposit"
         },
         "withdraw": {
-          "title": "Rút"
+          "title": "Withdraw"
         },
         "swap": {
-          "title": "Hoán đổi"
+          "title": "Swap"
         },
         "conclusion": {
           "title": "Kết luận"
@@ -145,7 +145,7 @@
       "title": "Pinocchio Secp256r1 Vault",
       "requirements": {
         "deposit": {
-          "title": "Thử thách 1: Nhận tiền gửi"
+          "title": "Thử thách 1: Gửi tiền"
         },
         "withdraw": {
           "title": "Thử thách 2: Cho phép rút tiền"
@@ -156,10 +156,10 @@
       "title": "Pinocchio Flash Loan",
       "pages": {
         "borrow": {
-          "title": "Vay"
+          "title": "Borrow"
         },
         "repay": {
-          "title": "Trả"
+          "title": "Repay"
         }
       },
       "requirements": {

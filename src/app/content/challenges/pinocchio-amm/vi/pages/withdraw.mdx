@@ -1,25 +1,25 @@
 # Withdraw
 
-The `withdraw` instruction performs two main tasks:
-- Withdraw the `mint_x` and `mint_y` token based on the amount of LP the user wants to `burn`.
-- Calculate the amount to withdraw and check that the amount isn't less than `mint_x` and `mint_y` designated by the user.
-- Burn the right amount of `mint_lp` from the user ata.
+Instruction `withdraw` thực hiện hai nhiệm vụ chính:
+- Rút token `mint_x` và `mint_y` dựa trên số lượng LP mà người dùng muốn `burn`.
+- Tính toán số lượng cần rút và kiểm tra rằng số lượng không ít hơn `mint_x` và `mint_y` được người dùng chỉ định.
+- Đốt đúng số lượng `mint_lp` từ ata của người dùng.
 
-> As mentioned in the `initialize` instruction section; we're going to initialize all the `Associated Token Accounts` outside of our instruction for optimization purposes.
+> Như đã đề cập trong phần instruction `initialize`; chúng ta sẽ khởi tạo tất cả `Associated Token Accounts` bên ngoài instruction của chúng ta vì mục đích tối ưu hóa.
 
 <ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
 
-Below are the accounts required for this context:
-- `user`: The user that is withdrawing the token into the liquidity of the Amm. Must be a `signer`.
-- `mint_lp`: The Mint account that will represent the pool’s liquidity. Must be passed as `mutable`.
-- `vault_x`: The token account that holds all of token X deposited into the pool. Must be passed as `mutable`.
-- `vault_y`: The token account that holds all of token Y deposited into the pool. Must be passed as `mutable`.
-- `user_x_ata`: The user's associated token account for token X. This is the destination account from which the user's token X will be transferred into the pool. Must be passed as `mutable`.
-- `user_y_ata`: The user's associated token account for token Y. This is the destination account from which the user's token Y will be transferred into the pool. Must be passed as `mutable`.
-- `config`: The configuration account for the AMM pool. Stores all relevant pool parameters and state.
-- `token program`: The SPL Token program account. This is required to perform token operations such as transfers and minting. Must be `executable`.
+Dưới đây là các tài khoản cần thiết cho context này:
+- `user`: Người dùng đang rút token từ thanh khoản của AMM. Phải là `signer`.
+- `mint_lp`: Tài khoản mint đại diện cho thanh khoản của pool. Phải là `mutable`.
+- `vault_x`: Tài khoản token chứa tất cả token X được gửi vào pool. Phải được truyền vào như `mutable`.
+- `vault_y`: Tài khoản token chứa tất cả token Y được gửi vào pool. Phải được truyền vào như `mutable`.
+- `user_x_ata`: Tài khoản token liên kết của người dùng cho token X. Đây là tài khoản đích mà token X của người dùng sẽ được chuyển từ pool. Phải được truyền vào như `mutable`.
+- `user_y_ata`: Tài khoản token liên kết của người dùng cho token Y. Đây là tài khoản đích mà token Y của người dùng sẽ được chuyển từ pool. Phải được truyền vào như `mutable`.
+- `config`: Tài khoản cấu hình cho AMM pool. Lưu trữ tất cả các tham số và trạng thái pool liên quan.
+- `token program`: Tài khoản chương trình SPL Token. Điều này cần thiết để thực hiện các hoạt động token như chuyển khoản và minting. Phải là `executable`.
 
-Here, again, I’ll leave the implementation to you:
+Ở đây, một lần nữa, tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -45,15 +45,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
 ```
 </Codeblock>
 
-<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+<ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
-Here's the instruction data we need to pass in:
-- `amount`: The amount of LP token that the user wishes to burn. Must be a `[u64]`
-- `min_x`: The min amount of token X that the user is willing to withdraw. Must be a `[u64]`
-- `min_y`: The min amount of token Y that the user is willing to withdraw. Must be a `[u64]`
-- `expiration`: The expiration of this order. Important to make sure that the transaction has to be played in a certain amount of time. Must be a `[i64]`
+Đây là dữ liệu cho instruction mà chúng ta cần truyền vào:
+- `amount`: Số lượng LP token mà người dùng muốn đốt. Phải là `[u64]`
+- `min_x`: Số lượng tối thiểu của token X mà người dùng sẵn sàng rút. Phải là `[u64]`
+- `min_y`: Số lượng tối thiểu của token Y mà người dùng sẵn sàng rút. Phải là `[u64]`
+- `expiration`: Thời gian hết hạn của lệnh này. Quan trọng để đảm bảo rằng giao dịch phải được thực hiện trong một khoảng thời gian nhất định. Phải là `[i64]`
 
-We're going to handle the implementation for the `WithdrawInstructionData` same as initialization. So I’ll leave the implementation to you:
+Chúng ta sẽ xử lý việc triển khai cho `WithdrawInstructionData` như khởi tạo. Vì vậy tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -74,17 +74,17 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
 ```
 </Codeblock>
 
-> Make sure that any of the amount, like `amount`, `min_y` and `min_x` are greater than zero and that the order has not expired yet using the `Clock` sysvar.
+> Đảm bảo rằng bất kỳ số lượng nào, như `amount`, `min_y` và `min_x` đều lớn hơn zero và lệnh chưa hết hạn bằng cách sử dụng sysvar `Clock`.
 
-<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+<ArticleSection name="Logic Instruction" id="instruction-logic" level="h2" />
 
-We begin by deserializing both the `instruction_data` and the `accounts`.
+Chúng ta bắt đầu bằng cách deserialize cả `instruction_data` và `accounts`.
 
-We then need to:
-- Load the `Config` account to grab all the data inside of it. We can do so using the `Config::load()` helper.
-- Verify that the `AmmState` is valid (so if it's not equal to `AmmState::Disabled`).
-- Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts.
-- Deserialize all the token accounts involved and use the data inside of them to calculate the amount to withdraw using the `constant-product-curve` crate and checking for slippage like this: 
+Sau đó chúng ta cần:
+- Tải tài khoản `Config` để lấy tất cả dữ liệu bên trong nó. Chúng ta có thể làm điều này bằng cách sử dụng helper `Config::load()`.
+- Xác minh rằng `AmmState` hợp lệ (vì vậy nếu nó không bằng `AmmState::Disabled`).
+- Kiểm tra việc tạo `vault_x` và `vault_y` để trở thành Associated Token Accounts.
+- Deserialize tất cả các tài khoản token liên quan và sử dụng dữ liệu bên trong chúng để tính toán số lượng cần rút bằng cách sử dụng crate `constant-product-curve` và kiểm tra slippage như thế này:
 <Codeblock lang="rust">
 ```rust
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
@@ -107,17 +107,17 @@ let (x, y) = match mint_lp.supply() == self.instruction_data.amount {
     }
 };
 
-// Check for slippage
+// Kiểm tra slippage
 if !(x <= self.instruction_data.min_x && y <= self.instruction_data.min_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
 </Codeblock>
-- Transfer the amounts from the vaults to the token accounts of the user and burn the appropriate amount of LP tokens from the user token account
+- Chuyển số lượng từ các vault đến tài khoản token của người dùng và burn số lượng LP token thích hợp từ tài khoản token của người dùng
 
-> The `authority` of `vault_x` and `vault_y` is the `config` account
+> `authority` của `vault_x` và `vault_y` là tài khoản `config`
 
-You should be proficient enough to do this on your own, so I’ll leave the implementation to you:
+Bạn đủ khả năng triển khai logic này, vì vậy tôi sẽ để việc triển khai cho bạn:
 
 <Codeblock lang="rust">
 ```rust
@@ -133,7 +133,7 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
         let accounts = WithdrawAccounts::try_from(accounts)?;
         let instruction_data = WithdrawInstructionData::try_from(data)?;
 
-        // Return the initialized struct
+        // Trả về struct đã khởi tạo
         Ok(Self {
             accounts,
             instruction_data,
