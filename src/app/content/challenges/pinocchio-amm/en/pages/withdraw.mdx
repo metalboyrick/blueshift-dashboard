@@ -109,7 +109,7 @@ let (x, y) = match mint_lp.supply() == self.instruction_data.amount {
 };
 
 // Check for slippage
-if !(x <= self.instruction_data.min_x && y <= self.instruction_data.min_y) {
+if !(x >= self.instruction_data.min_x && y >= self.instruction_data.min_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
