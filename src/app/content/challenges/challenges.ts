@@ -169,7 +169,7 @@ const allChallenges: ChallengeMetadata[] = [
     unitName: "Assembly Slippage",
     apiPath: "/v1/verify/assembly/slippage",
     requirements: [
-      { instructionKey: "log" },
+      { instructionKey: "slippage" },
     ],
     collectionMintAddress: "EEzodaKLa7KKbWdUAtjTJxjQXgrfQkkDEnQWzGTYFBBf",
   },
