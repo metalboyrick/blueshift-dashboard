@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Jetons sur Solana
+
+Les jetons sont des actifs numériques qui représentent la propriété, les droits d'accès ou la valeur sur un réseau blockchain. Considérez-les comme des certificats programmables qui existent entièrement sous forme numérique : ils peuvent représenter n'importe quoi, de l'argent et des parts de propriété aux droits de vote et aux badges d'accès.
+
+À son niveau le plus élémentaire, un jeton est une entrée dans le registre d'une blockchain qui indique "cette adresse possède X quantité de cet actif". Contrairement aux actifs traditionnels qui nécessitent des certificats physiques ou des bases de données centralisées pour suivre la propriété, les jetons utilisent la technologie blockchain pour créer des registres transparents et inviolables indiquant qui possède quoi.
+
+<ArticleSection name="Pourquoi les Jetons sont Importants" id="why-token-matters" level="h2" />
+
+Les jetons permettent une propriété programmable : n'importe qui peut créer des actifs numériques avec des règles personnalisées concernant leur transfert, les droits qu'ils confèrent ou leur interaction avec d'autres systèmes.
+
+Cela ouvre des possibilités telles que la distribution automatique de dividendes, les transferts conditionnels ou les instruments financiers complexes qui s'exécutent automatiquement en fonction de conditions prédéfinies.
+
+La principale innovation réside dans le fait que les jetons peuvent être transférés instantanément à travers le monde sans intermédiaires, qu'ils sont transparents (tout le monde peut vérifier leur propriété) et qu'ils peuvent être programmés avec une logique complexe tout en conservant les garanties de sécurité de la blockchain sous-jacente.
+
+<ArticleSection name="Différents types de Jetons" id="different-types-of-tokens" level="h2" />
+
+Les jetons peuvent être classés en différentes catégories, par exemple selon leur utilité ou leurs caractéristiques intrinsèques.
+
+### Selon leurs caractéristiques
+
+Il existe deux groupes de jetons classés selon leurs caractéristiques "techniques" : les Jetons Fongibles et les Jetons Non Fongibles.
+
+- Jetons Fongibles: signifie interchangeable. Tous les jetons sont identiques et chaque jeton peut être remplacé par n'importe quelle autre unité du même jeton et être divisée en unités fractionnaires (comme avoir 0,5 jeton).
+- Jetons Non Fongibles: signifie unique et non interchangeable. Chaque jeton est unique, indivisible et possède des propriétés distinctes qui le différencient de tous les autres.
+
+### Selon leur utilité
+
+En fonction des fonctionnalités de ces jetons, nous avons différents groupes :
+
+- Jetons Utilitaires: donne accès à un produit ou à un service. Par exemple, détenir certains jetons peut vous donner accès à une plateforme, à des frais réduits ou à des fonctionnalités spéciales.
+- Jetons de Gouvernance: accorde aux détenteurs des droits de vote dans des organisations décentralisées. Les détenteurs de jetons peuvent voter sur les modifications du protocole, les dépenses de trésorerie ou d'autres décisions.
+- Jetons *Security*: représentent la propriété d'actifs réels tels que des actions d'entreprise, des biens immobiliers ou des matières premières, mais sous forme numérique.
+- Stablecoins: sont des jetons conçus pour maintenir une valeur stable, généralement indexés sur une devise telle que le dollar américain (USDC, USDT).
+- Meme/Jetons Communautaires: existent principalement à des fins de spéculation, de création de communautés ou de divertissement.
+
+<ArticleSection name="Différence par rapport aux autres blockchains" id="difference-between-other-blockchains" level="h2" />
+
+Sur Solana, tout ce qui concerne les jetons est géré par le [Programme SPL-Token](https://github.com/solana-program/token) et le [Programme Token2022](/en/courses/token-2022-program) : framework de jeton natif de Solana qui définit la manière dont tous les jetons sont créés, gérés et transférés.
+
+Il s'agit d'un programme unique et unifié qui gère toutes les opérations liées aux jetons sur l'ensemble du réseau, garantissant ainsi la cohérence et l'interopérabilité.
+
+> La décision d'avoir une interface unique et unifiée pour tous les jetons sur Solana permet une implémentation facile qui peut être reproduite dans toutes les dApps (applications décentralisées) et les intégrations (comme les portefeuilles, etc.)
+
+Contrairement aux blockchains qui suivent les transactions, Solana dispose d'un modèle basé sur les comptes. Cela signifie qu'il suit l'état des comptes. Pour chaque jeton détenu, il existe un compte spécifique qui stocke le solde et qui détient ce jeton.
+
+La relation entre tous ces comptes est la suivante :
+- `Mint`: Chaque type de jeton dispose d'un compte de "mint" unique qui stocke la configuration du jeton : `supply` totale, `decimal`, `mintAuthority`, et `freezeAuthority`. Il fonctionne comme le "certificat de naissance" du jeton sur Solana.
+- `Token`: Un compte qui détient le solde d'un jeton en particulier pour chaque propriétaire. Contrairement à l'adresse de votre portefeuille principal (qui contient des SOL), vous avez besoin de comptes distincts pour chaque jeton que vous souhaitez détenir. C'est comme si vous aviez des poches différentes pour chaque monnaie.
+- `Associated Token`: La façon standard de détenir des jetons sur Solana. Il s'agit de comptes de `Token` normaux qui sont "associés" car ils sont liés de manière permanente à l'adresse de votre portefeuille principal grâce à une génération d'adresse déterministe qui combine l'adresse de l'`owner` et celle du `Mint`.
+
+### Différence avec Ethereum
+
+Pour chaque jeton, Ethereum nécessite le déploiement d'un contrat intelligent (*smart contract*) qui contient toute la logique du jeton, la gestion de l'état et les règles de transfert.
+
+Chaque jeton est essentiellement son propre mini-programme avec un code personnalisé, bien que la plupart suivent la norme `ERC-20` pour des raisons de compatibilité.
+
+L'adresse du contrat devient l'identifiant du jeton, et tous les soldes sont stockés dans l'état de ce contrat qui dispose d'un mappage interne des soldes.
+
+> C'est à la fois une bénédiction et une malédiction : cela laisse aux développeurs la possibilité de créer des composants personnalisés sans avoir à dépendre d'une implémentation standard qui ne répond pas à tous leurs besoins, mais cela peut également introduire des bugs et générer différentes interfaces, ce qui rend l'intégration et l'interaction difficiles.
+
+Sur Ethereum, le concept de `Token Factory` (usine à jetons) est très populaire : un contrat intelligent ou un programme qui crée d'autres jetons. Au lieu de déployer manuellement chaque contrat de jeton ou de créer des comptes de mint un par un, une usine à jetons automatise le processus de création de jetons via une interface standardisée.
+
+Ceci est réalisé avec :
+- Création à partir d'un modèle : L'usine contient des modèles de code pré-écrits ou des procédures standardisées pour la création de jetons. Lorsque vous souhaitez créer un nouveau jeton, vous fournissez à l'usine les paramètres nécessaires (nom, symbole, offre, etc.) et celle-ci génère le jeton pour vous.
+- Traitement par lots: Les usines peuvent créer plusieurs jetons en une seule transaction ou un seul processus, ce qui est plus efficace que la création individuelle.
+- Sortie normalisée : Tous les jetons créés par la même usine suivent des modèles et des normes identiques, garantissant ainsi la cohérence et la compatibilité.
+
+Ceci n'est pas nécessaire sur Solana puisque le `Token Factory` est le programme SPL-Token lui-même.
+
+### Différence avec Bitcoin
+
+Bitcoin ne dispose pas de mécanisme natif de création de jetons. Les jetons doivent être créés "au-dessus" de Bitcoin à l'aide de protocoles superposés ou d'approches plus récentes telles que `Ordinals` et `BRC-20`. Ces méthodes consistent soit à intégrer les données des jetons dans les transactions Bitcoin à l'aide des sorties `OP_RETURN` soit à inscrire directement les données sur les satoshis.
+
+> Le réseau Bitcoin lui-même ne reconnaît pas ces éléments comme des jetons. Il ne voit que des transactions Bitcoin avec des données supplémentaires.
+
+Le transfert nécessite la création d'une transaction Bitcoin qui inclut à la fois les frais du réseau Bitcoin et des données supplémentaires indiquant le transfert du jeton. Pour les protocoles superposés, vous envoyez une petite quantité de Bitcoin tout en intégrant des instructions de transfert de jetons dans les données de la transaction.
+
+Le réseau Bitcoin traite cela comme une transaction Bitcoin classique, tandis qu'un logiciel spécialisé interprète les données du jeton intégré.

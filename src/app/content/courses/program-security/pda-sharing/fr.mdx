@@ -1,0 +1,97 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Partage de PDA
+
+Les attaques par partage de PDA exploitent les programmes qui utilisent la même Adresse Dérivée de Programme (PDA) pour plusieurs utilisateurs ou domaines, permettant ainsi aux attaquants d'accéder à des fonds, des données ou des autorisations qui ne leur appartiennent pas. Bien que l'utilisation d'un PDA global puisse sembler élégante pour les opérations à l'échelle du programme, elle crée un risque de contamination croisée dangereux, où les actions d'un utilisateur peuvent affecter les actifs d'un autre utilisateur.
+
+La vulnérabilité provient d'une spécificité insuffisante des seeds lors du calcul des PDAs. Lorsque plusieurs comptes partagent la même autorité de PDA, le programme perd la capacité de distinguer les tentatives d'accès légitimes des tentatives illégitimes. Un attaquant peut créer ses propres comptes qui font référence au même PDA partagé, puis utiliser l'autorité de signature de ce PDA pour manipuler les actifs appartenant à d'autres utilisateurs.
+
+Cela est particulièrement dévastateur dans les protocoles DeFi où les PDAs contrôlent les vaults de jetons, les soldes des utilisateurs ou les autorisations de retrait. Un PDA partagé crée essentiellement une clé principale qui déverrouille les actifs de plusieurs utilisateurs, transformant ainsi les opérations individuelles des utilisateurs en attaques potentielles contre l'ensemble du protocole.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Considérez ce système de retrait vulnérable qui utilise un PDA basé sur le Mint pour la signature :
+
+```rust
+#[program]
+pub mod insecure_withdraw{
+    use super::*;
+    //..
+
+    pub fn withdraw(ctx: Context<WithdrawTokens>) -> Result<()> {
+        let amount = ctx.accounts.vault.amount;
+        
+        let seeds = &[
+            ctx.accounts.pool.withdraw_destination.as_ref(),
+            &[ctx.accounts.pool.bump],
+        ];
+
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.withdraw_destination.to_account_info(),
+                    authority: ctx.accounts.pool.to_account_info(),
+                },
+            ),
+            &amount,
+            seeds,
+        )?;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(has_one = vault, has_one = withdraw_destination)]
+    pool: Account<'info, TokenPool>,
+    vault: Account<'info, TokenAccount>,
+    withdraw_destination: Account<'info, TokenAccount>,
+    /// CHECK: This is the PDA that signs for the transfer
+    authority: UncheckedAccount<'info>,
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool {
+    pub vault: Pubkey,
+    pub mint: Pubkey,
+    pub withdraw_destination: Pubkey,
+    pub bump: u8,
+}
+```
+
+Ce code présente une faille critique : le PDA est dérivé en utilisant uniquement l'adresse de mint. Cela signifie que toutes les pools pour le même type de jeton partagent la même autorité de signature, ce qui crée un vecteur d'attaque dangereux.
+
+Un attaquant peut exploiter cette faille en :
+- Créant son propre TokenPool pour le même mint
+- Définissant sa propre adresse comme `withdraw_destination`
+- Utilisant l'autorité de PDA partagée pour retirer des jetons de n'importe quel vault qui utilise le même mint
+- Vidant les fonds d'autres utilisateurs vers sa propre destination
+
+L'attaque réussit parce que l'autorité de PDA ne fait pas la distinction entre les différentes instances de pool, elle ne se soucie que du type de mint, et non de l'utilisateur oude la pool spécifique qui devrait avoir accès à ces fonds.
+
+La première amélioration consiste à rendre les PDAs propres à chaque utilisateur ou destination et à utiliser les seeds et les contraintes de saut d'Anchor pour valider la dérivation des PDA :
+
+```rust
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        seeds = [withdraw_destination.key().as_ref()],
+        bump = pool.bump,                             
+        has_one = vault,                              
+        has_one = withdraw_destination,              
+    )]
+    pool: Account<'info, TokenPool>,
+    #[account(mut)]
+    vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    withdraw_destination: Account<'info, TokenAccount>,
+    token_program: Program<'info, Token>,
+}
+```

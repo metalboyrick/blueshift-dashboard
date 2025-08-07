@@ -1,0 +1,207 @@
+# Make
+
+L'instruction `make` a trois fonctions :
+- Initialise le compte Escrow et stocke toutes les conditions de l'échange.
+- Crée le vault (un ATA pour le `mint_a` appartenant à l'`escrow`).
+- Déplace le jeton A du créateur dans ce vault graàce à un CPI vers le programme SPL-Token.
+
+<ArticleSection name="Comptes Nécessaires" id="required-accounts" level="h2" />
+
+Voici les comptes dont le contexte a besoin :
+
+- maker: le créateur de l'escrow. Doit être un signataire et mutable
+- escrow: le compte d'escrow que nous initialisons. Doit être mutable
+- mint_a: le jeton que nous déposons dans l'escrow
+- mint_b: le jeton que nous souhaitons recevoir
+- maker_ata_a: le compte de jetons associé appartenant au créateur. Doit être mutable
+- vault: le compte de jetons associé appartenant à l'escrow. Doit être mutable
+- system_program: le programme système. Doit être executable
+- token_program: le programme de jeton. Doit être executable
+
+**Remarque** : Nous allons utiliser les types introduits dans l'[Introduction à Pinocchio](/en/courses/introduction-to-pinocchio/pinocchio-accounts).
+
+Cela se présente donc ainsi :
+
+<Codeblock lang="rust">
+```rust
+pub struct MakeAccounts<'a> {
+  pub maker: &'a AccountInfo,
+  pub escrow: &'a AccountInfo,
+  pub mint_a: &'a AccountInfo,
+  pub mint_b: &'a AccountInfo,
+  pub maker_ata_a: &'a AccountInfo,
+  pub vault: &'a AccountInfo,
+  pub system_program: &'a AccountInfo,
+  pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for MakeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    let [maker, escrow, mint_a, mint_b, maker_ata_a, vault, system_program, token_program, _] = accounts else {
+      return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    // Basic Accounts Checks
+    SignerAccount::check(maker)?;
+    MintInterface::check(mint_a)?;
+    MintInterface::check(mint_b)?;
+    AssociatedTokenAccount::check(maker_ata_a, maker, mint_a, token_program)?;
+
+    // Return the accounts
+    Ok(Self {
+      maker,
+      escrow,
+      mint_a,
+      mint_b,
+      maker_ata_a,
+      vault,
+      system_program,
+      token_program,
+    })
+  }
+}
+```
+</Codeblock>
+
+<ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
+
+Voici les données d'instruction que nous devons transmettre :
+- seed: le nombre aléatoire utilisé lors de la dérivation des seeds. Doit être un u64
+- receive: le montant que le créateur souhaite recevoir. Doit être un u64
+- amount: le montant que le créateur souhaite déposer. Doit être un u64
+
+Nous vérifierons que l'`amount` n'est pas nul puisque cela n'aurait pas de sens pour un escrow.
+
+Voilà ce que cela donne :
+
+<Codeblock lang="rust">
+```rust
+pub struct MakeInstructionData {
+  pub seed: u64,
+  pub receive: u64,
+  pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for MakeInstructionData {
+  type Error = ProgramError;
+
+  fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+    if data.len() != size_of::<u64>() * 3 {
+      return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let seed = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    let receive = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    let amount = u64::from_le_bytes(data[16..24].try_into().unwrap());
+
+    // Instruction Checks
+    if amount == 0 {
+      return Err(ProgramError::InvalidInstructionData);
+    }
+
+    Ok(Self {
+      seed,
+      receive,
+      amount,
+    })
+  }
+}
+```
+</Codeblock>
+
+<ArticleSection name="Logique d'Instruction" id="instruction-logic" level="h2" />
+
+Tout d'abord, après avoir désérialisé les `instruction_data` et les `accounts` dans l'implémentation du `TryFrom`, nous initialisons les comptes nécessaires.
+
+Pour cette étape, nous créons le compte `Escrow` en utilisant le trait `ProgramAccount::init::<Escrow>` des fonctions d'aide introduites dans l'[Introduction à Pinocchio](/en/courses/introduction-to-pinocchio/pinocchio-accounts). De même, nous initialisons le compte du Vault :
+
+<Codeblock lang="rust">
+```rust
+pub struct Make<'a> {
+  pub accounts: MakeAccounts<'a>,
+  pub instruction_data: MakeInstructionData,
+  pub bump: u8,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Make<'a> {
+  type Error = ProgramError;
+  
+  fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+    let accounts = MakeAccounts::try_from(accounts)?;
+    let instruction_data = MakeInstructionData::try_from(data)?;
+
+    // Initialize the Accounts needed
+    let (_, bump) = find_program_address(&[b"escrow", accounts.maker.key(), &instruction_data.seed.to_le_bytes()], &crate::ID);
+
+    let seed_binding = instruction_data.seed.to_le_bytes();
+    let bump_binding = [bump];
+    let escrow_seeds = [
+      Seed::from(b"escrow"),
+      Seed::from(accounts.maker.key().as_ref()),
+      Seed::from(&seed_binding),
+      Seed::from(&bump_binding),
+    ];
+            
+    ProgramAccount::init::<Escrow>(
+      accounts.maker,
+      accounts.escrow,
+      &escrow_seeds,
+      Escrow::LEN
+    )?;
+
+    // Initialize the vault
+    AssociatedTokenAccount::init(
+      accounts.vault,
+      accounts.mint_a,
+      accounts.maker,
+      accounts.escrow,
+      accounts.system_program,
+      accounts.token_program,
+    )?;
+
+    Ok(Self {
+      accounts,
+      instruction_data,
+      bump,
+    })
+  }
+}
+```
+</Codeblock>
+
+Nous pouvons maintenant nous concentrer sur la logique elle-même. Celle-ci consiste à remplir le compte d'escrow à transférer les jetons vers le vault.
+
+<Codeblock lang="rust">
+```rust
+impl<'a> Make<'a> {
+  pub const DISCRIMINATOR: &'a u8 = &0;
+  
+  pub fn process(&mut self) -> ProgramResult {
+    // Populate the escrow account
+    let mut data = self.accounts.escrow.try_borrow_mut_data()?;
+    let escrow = Escrow::load_mut(data.as_mut())?;
+    
+    escrow.set_inner(
+      self.instruction_data.seed,
+      *self.accounts.maker.key(),
+      *self.accounts.mint_a.key(),
+      *self.accounts.mint_b.key(),
+      self.instruction_data.receive,
+      [self.bump],
+    );
+
+    // Transfer tokens to vault
+    Transfer {
+      from: self.accounts.maker_ata_a,
+      to: self.accounts.vault,
+      authority: self.accounts.maker,
+      amount: self.instruction_data.amount
+    }.invoke()?;
+
+    Ok(())
+  }
+}
+```
+</Codeblock>

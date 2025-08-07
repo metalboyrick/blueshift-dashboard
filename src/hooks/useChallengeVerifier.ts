@@ -134,6 +134,15 @@ export function useChallengeVerifier({
           }
           setCertificate(challenge.slug, result.certificate);
         } else {
+            
+          if (response.status === 401) {
+            const errorMessage = "Session expired. Please reconnect your wallet and try again.";
+            console.error("Session expired:", errorMessage);
+            setError(errorMessage);
+            setVerificationData(null);
+            return;
+          }
+
           let errorMessage = `Verification failed: ${response.statusText}`;
 
           try {

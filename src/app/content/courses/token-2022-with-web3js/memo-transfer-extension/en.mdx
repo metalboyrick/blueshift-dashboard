@@ -6,9 +6,9 @@ The `MemoTranfer` Extension is a `Token` account extension that enforces that al
 
 <ArticleSection name="Initializing the Token Account" id="initializing-the-token-account" level="h2" />
 
-To initialie the `MemoTransfer` extension on a `Token` account we're going to need the `enableRequiredMemoTransfers()` function. 
+To initialize the `MemoTransfer` extension on a `Token` account we're going to need the `enableRequiredMemoTransfers()` function. 
 
-Here's how to create a token with the Immutable Owner extension:
+Here's how to create a token with the Memo Transfer Extension:
 
 ```ts
 import {
@@ -19,7 +19,7 @@ import {
 } from '@solana/web3.js';
 import {
     createInitializeAccountInstruction,
-    createInitializeImmutableOwnerInstruction,
+    createEnableRequiredMemoTransfersInstruction,
     getAccountLen,
     ExtensionType,
     TOKEN_2022_PROGRAM_ID,
@@ -27,8 +27,8 @@ import {
 
 const tokenAccount = Keypair.generate();
 
-// Calculate the size needed for a Token account with Transfer Fee extension
-const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
+// Calculate the size needed for a Token account with Memo Transfer extension
+const accountLen = getAccountLen([ExtensionType.MemoTransfer]);
 
 // Calculate minimum lamports required for rent exemption
 const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
@@ -71,7 +71,7 @@ console.log(`Token accounts created! Check out your TX here: https://explorer.so
 
 <ArticleSection name="Transferring Token with a Memo" id="transferring-token-with-a-memo" level="h2" />
 
-To use the Memo program on Solana we have to viable path. 
+To use the Memo program on Solana we have two viable path. 
 
 Building our own "raw" memo instruction like this: 
 
@@ -83,6 +83,7 @@ new TransactionInstruction({
     data: Buffer.from(message, "utf-8"), // Memo message. In this case it is "Hello, Solana"
     programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), // Memo program that validates keys and memo message
 }),
+```
 
 Or we can use the Memo program SDK after downloading the package like this: 
 

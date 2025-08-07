@@ -1,0 +1,72 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Secp256r1 sur Solana
+
+![Secp256r1 on Solana](/graphics/course-banners/secp256r1-on-solana.png)
+
+<ArticleSection name="Qu'est-ce que Secp256r1" id="what-is-secp256r1" level="h2" />
+
+Secp256r1, également connu sous le nom de P-256 ou prime256v1, est une courbe elliptique définie par le *Standards for Efficient Cryptography Group* (SECG) et adoptée par le NIST dans le cadre de leurs courbes elliptiques recommandées.
+
+Il s'agit de la courbe elliptique la plus largement déployée dans les applications cryptographiques modernes, qui alimente tout, des connexions TLS aux clés de sécurité matérielles.
+
+La courbe offre une sécurité d'environ 128 bits avec une clé de 256 bits, ce qui la rend nettement plus efficace que le RSA tout en offrant une sécurité équivalente.
+
+Ses propriétés mathématiques, associées à une optimisation matérielle poussée, en ont fait la norme pour la cryptographie à courbe elliptique.
+
+### Pourquoi est-elle si dominante ?
+
+Secp256r1 a atteint une position dominante grâce à une combinaison de standardisation précoce, de prise en charge matérielle universelle et d'approbation par les autorités réglementaires.
+
+Contrairement aux courbes plus récentes qui peuvent être mathématiquement supérieures, secp256r1 représente l'équilibre optimal entre la puissance cryptographique, l'efficacité d'implémentation et la compatibilité avec l'écosystème dont les systèmes réels ont besoin.
+
+De plus, sa structure mathématique spécifique permet des implémentations hautement optimisées qui fonctionnent efficacement sur tous les supports, des éléments sécurisés des smartphones aux serveurs haute performance.
+
+<ArticleSection name="Comment ça marche ?" id="how-does-it-work" level="h2" />
+
+Secp256r1 définit une courbe mathématique qui ressemble à <code>y<sup>2</sup> = x<sup>3</sup> - 3x + b</code>. Cela crée une forme ovale dotée de propriétés mathématiques particulières. Il y a exactement <code>2<sup>256</sup></code> points valides sur cette courbe, ce qui représente un nombre astronomique.
+
+Chaque point de cette courbe est défini par deux coordonnées (x, y), et la structure mathématique de la courbe garantit que certaines opérations peuvent être effectuées efficacement tandis que d'autres restent impossibles à calculer.
+
+### Génération de Clés
+
+Le processus commence par la sélection d'un nombre aléatoire cryptographiquement sécurisé compris entre 1 et 2<sup>256</sup> qui devient votre clé privée.
+
+Le système prend ensuite un point de départ prédéterminé sur la courbe, appelé point générateur, qui sert de référence universelle convenue par tous.
+
+À l'aide d'une opération mathématique spéciale appelée multiplication scalaire, votre clé privée est utilisée pour "naviguer" depuis ce point générateur vers un nouvel emplacement unique sur la courbe.
+
+Ce point de destination devient votre clé publique, qui peut être partagée en toute sécurité avec toute personne ayant besoin de vérifier vos signatures numériques.
+
+> Cela est sûr en raison de la nature asymétrique de l'opération. Bien qu'il soit simple, d'un point de vue calculatoire, de passer du point générateur à votre clé publique en utilisant votre clé privée comme guide, le chemin inverse est pratiquement impossible.
+
+### Signature
+
+Lorsque vous souhaitez créer une signature numérique, le processus commence par prendre votre message et le faire passer par une fonction de hachage cryptographique, généralement SHA-256, qui produit une représentation numérique de taille fixe du contenu de votre message. Ce hachage sert d'empreinte digitale unique à votre message. 
+
+L'algorithme de signature combine ensuite ce hachage du message avec votre clé privée et un nombre généré aléatoirement appelé nonce afin de produire deux valeurs mathématiques, traditionnellement appelées `r` et `s`. Ces valeurs sont intrinsèquement liées à votre clé privée et au contenu précis du message, créant ainsi une preuve cryptographique que vous seul auriez pu générer.
+
+> Le nonce aléatoire joue un rôle essentiel dans la sécurité de ce processus. Il garantit que même en signant deux fois le même message, les valeurs de signature seront différentes, empêchant ainsi diverses attaques cryptographiques. Cependant, ce caractère aléatoire doit être véritablement imprédictible et ne jamais être réutilisé car toute compromission du nonce peut permettre aux attaquants de récupérer la clé privée.
+
+### Vérification
+
+Le processus de vérification démontre l'élégante asymétrie de la cryptographie à courbe elliptique. N'importe qui peut prendre votre clé publique, le message original et les valeurs de signature (r, s) et effectuer une série d'opérations mathématiques qui ne produiront un résultat valide que si la signature a été créée par quelqu'un possédant la clé privée correspondante.
+
+Le vérificateur calcule plusieurs valeurs intermédiaires et effectue des opérations de multiplication scalaire supplémentaires sur la courbe, pour finalement arriver à un point qui devrait correspondre à des propriétés précises de la signature si celle-ci est authentique.
+
+Ce processus de vérification ne nécessite jamais la connaissance de la clé privée, mais il fournit une certitude mathématique quant à l'authenticité de la signature.
+
+<ArticleSection name="Secp256r1 sur Solana" id="secp256r1-on-solana" level="h2" />
+
+Solana offre une prise en charge native de la vérification des signatures Secp256r1 grâce à sa précompilation intégrée introduite avec le [SIMD-0075](https://github.com/solana-foundation/solana-improvement-documents/pull/75) par [Orion](https://x.com/BasedOrion_).
+
+Il s'agit d'une étape cruciale vers la mise en place de méthodes d'authentification modernes telles que les passkeys sur Solana. En effet, Secp256r1 est la même courbe elliptique que celle utilisée par WebAuthn et les implémentations de passkeys. Grâce à ce support, nous pouvons enfin utiliser une combinaison de méthodes d'authentification modernes et de PDAs pour gérer les actions des utilisateurs.
+
+### Le défi de l'authentification Web3
+
+La dépendance du Web3 à l'égard des phrases de récupération (*seed phrases*) crée un obstacle fondamental à son adoption. Le processus d'intégration traditionnel des portefeuilles enregistre un taux d'abandon de 60 à 80 % des utilisateurs pour cette raison.
+
+Le problème est que les phrases de récupération exigent une sécurité parfaite de la part d'êtres humains imparfaits. Les utilisateurs doivent mémoriser 12 à 24 mots aléatoires, les conserver pour toujours en toute sécurité et ne jamais être victimes d'hameçonnage, ce qui est un standard impossible pour une adoption généralisée.
+
+La solution pourrait résider dans des méthodes d'authentification modernes telles que les passkeys qui éliminent les erreurs humaines en transférant les clés privées vers un matériel de sécurité dédié. Cependant, pour prendre en charge ces éléments sur Solana, nous avons besoin des primitives cryptographiques appropriées.

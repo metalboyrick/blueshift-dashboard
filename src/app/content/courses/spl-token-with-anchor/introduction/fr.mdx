@@ -1,0 +1,87 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Le Programme de Jetons
+
+Sur Solana, tout ce qui concerne les jetons est géré par le [Programme SPL-Token](https://github.com/solana-program/token) et [Token2022 Program](/en/courses/token-2022-program) : framework de jeton natif de Solana qui définit la manière dont tous les jetons sont créés, gérés et transférés.
+
+Il s'agit d'un programme unique et unifié qui gère toutes les opérations liées aux jetons sur l'ensemble du réseau, garantissant ainsi la cohérence et l'interopérabilité.
+
+> La décision d'avoir une interface unique et unifiée pour tous les jetons sur Solana permet une implémentation facile qui peut être reproduite dans toutes les dApps (applications décentralisées) et les intégrations (comme les portefeuilles, etc.)
+
+Pour Anchor, tout ce qui concerne les jetons se trouve dans la crate `anchor-spl`. Pour cette raison, après avoir initialisé un espace de travail `Anchor`, nous pouvons simplement faire :
+
+
+```
+cargo add anchor-spl
+```
+
+> Si vous n'êtes pas familier avec Anchor, vous devriez commencer par lire l'[Introduction à Anchor](/en/courses/introduction-to-anchor) avant de continuer
+
+<ArticleSection name="Comptes de Mint et Comptes de Jeton" id="mint-and-token-accounts" level="h2" />
+
+Si vous êtes familier avec `Anchor`, vous savez qu'il dispose d'un ensemble de macros qui aident l'utilisateur à simplifier bon nombre des complexités liées à l'initialisation des comptes.
+
+Il en va de même ici pour les comptes de `Mint`, de `Token` et `Associated Token`.
+
+### Compte de Mint
+
+Grâce aux macros proposées par `Anchor`, voici comment créer facilement un compte de `Mint` :
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+    )]
+    pub mint: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Compte de Token
+
+Il en va de même pour le compte de `Token`. La création d'un compte de `Token` à l'aide de macros ressemble à ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Compte Associated Token
+
+Il en va de même pour le compte `Associated Token`. La création de comptes `Associated Token` à l'aide de macros est similaire à la création d'un compte de `Token`. La seule différence est dans la contrainte. Voici à quoi cela ressemble :
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+```
