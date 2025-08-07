@@ -112,42 +112,7 @@ end:
 
 This approach requires passing `SysvarC1ock11111111111111111111111111` as an account, but eliminates stack management and having to call the syscall since the `Clock` account data is already deserialized and available at a known offset (`CURRENT_SLOT_HEIGHT`).
 
-### Additional Checks 
-
-To make this approach safe we would need to add some validation: 
-
-```sbpf
-// Check if account count is exactly 1
-ldxb r2, [r1+0x0]                  // Load account count
-jne r2, 1, error                   // If not 1 account, error
-
-// Get pointer to first account key
-mov r3, r1
-add r3, ACCOUNT1_KEY               // r3 points to account key
-
-// Validate Clock sysvar address using direct 64-bit comparisons
-ldxdw r4, [r3+0x0]                 // Load first 8 bytes
-jne r4, 0x06a7d51718c774c9, error  // Compare with constant
-
-ldxdw r4, [r3+0x8]                 // Load second 8 bytes  
-jne r4, 0x28566398691d5eb6, error  // Compare with constant
-
-ldxdw r4, [r3+0x10]                // Load third 8 bytes
-jne r4, 0x8b5eb8a39b4b6d5c, error  // Compare with constant
-
-ldxdw r4, [r3+0x18]                // Load fourth 8 bytes
-jne r4, 0x73555b2100000000, error  // Compare with constant
-```
-
-Here we check if we only have one account, to make sure that `.equ CURRENT_SLOT_HEIGHT, 0x0060` is at the right offset and we then check if the address is correct (.equ ACCOUNT1_KEY, 0x0010).
-
-We can set errors like this:
-
-```sbpf
-error:
-  lddw r0, 1                         // Set error code
-  exit
-```
+> This is not "safe" alone. We don't check if the `MAX_SLOT_HEIGHT` will be at the right offset since we don't check that we only have on account. Additionally we don't check that the address of the `Clock` account is correct. But this is an add-on instruction meaning that it should be ran in good fate.
 
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
 
