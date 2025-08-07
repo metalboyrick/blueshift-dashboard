@@ -15,7 +15,7 @@ import { getPathname } from "@/i18n/navigation";
 import { Metadata } from "next";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { decodeCoreCollectionNumMinted } from "@/lib/nft/decodeCoreCollectionNumMinted";
-import LessonContent from "@/app/components/CoursesContent/LessonContent";
+import ContentFallbackNotice from "@/app/components/ContentFallbackNotice";
 
 interface LessonPageProps {
   params: Promise<{
@@ -203,9 +203,11 @@ export default async function LessonPage({ params }: LessonPageProps) {
           />
           <div className="pb-8 pt-[36px] -mt-[36px] order-2 lg:order-1 col-span-1 md:col-span-7 flex flex-col gap-y-8 lg:border-border lg:border-x border-border lg:px-6">
             <MdxLayout>
-              <LessonContent locale={lessonLocale} originalLocale={locale}>
-                <Lesson />
-              </LessonContent>
+              <ContentFallbackNotice
+                locale={locale}
+                originalLocale={lessonLocale}
+              />
+              <Lesson />
             </MdxLayout>
 
             <div className=" w-full flex items-center flex-col gap-y-10">

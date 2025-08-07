@@ -104,7 +104,7 @@
       "network_error": "Could not connect to the server. Please check your internet connection.",
       "auth_generic": "An unexpected error occurred. Please try again."
     },
-    "content_fallback": "This content is not yet available in your language, so we are showing you the English version."
+    "content_fallback": "This content is being translated and will be available here when ready."
   },
   "course_levels": {
     "1": "Beginner",
