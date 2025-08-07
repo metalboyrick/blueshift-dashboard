@@ -3,14 +3,11 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Instruction Introspection
 
-Instruction introspection is a powerful capability on Solana that allows a program to analyze other instructions
-within the same transaction, including those not yet executed. This enables you to dynamically respond to or augment
-these instructions — for example, by injecting safeguards, validating behavior, or integrating instructions from
-external programs into your own logic.
+Instruction introspection là một khả năng mạnh mẽ trên Solana cho phép một chương trình phân tích các instruction khác trong cùng một transaction, bao gồm cả những instruction chưa được thực thi. Điều này cho phép bạn phản hồi động hoặc bổ sung cho các instruction này — ví dụ như chèn các biện pháp bảo vệ, xác thực hành vi, hoặc tích hợp các instruction từ chương trình bên ngoài vào logic của riêng bạn.
 
-This is made possible by a special system account called the `Instructions` sysvar. Sysvars are read-only accounts maintained by the Solana runtime that expose internal state to programs (e.g., clock, rent, epoch schedule, etc.). The Instructions sysvar specifically exposes the full list of instructions in the current transaction, along with their metadata and serialized data.
+Điều này được thực hiện nhờ một tài khoản hệ thống đặc biệt gọi là `Instructions` sysvar. Sysvars là các tài khoản chỉ đọc được duy trì bởi Solana runtime để hiển thị trạng thái nội bộ cho các chương trình (ví dụ: clock, rent, epoch schedule, v.v.). Instructions sysvar cụ thể hiển thị danh sách đầy đủ các instruction trong transaction hiện tại, cùng với metadata và dữ liệu đã được serialize của chúng.
 
-Here’s how Solana serializes this information at runtime:
+Đây là cách Solana serialize thông tin này trong runtime:
 
 ```rust
 // First encode the number of instructions:
@@ -60,47 +57,48 @@ fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
 }
 ```
 
-This means that by reading the `Instructions` sysvar account inside your program, you can access all the instructions included in the current transaction.
+Điều này có nghĩa là bằng cách đọc tài khoản `Instructions` sysvar bên trong chương trình của bạn, bạn có thể truy cập tất cả các instruction được bao gồm trong transaction hiện tại.
 
-You don’t need to parse the raw bytes manually. Solana provides helper functions:
-- `load_current_index_checked`: returns the index of the currently executing instruction.
-- `load_instruction_at_checked`: lets you load a specific instruction by its index in a parsed, deserialized format.
+Bạn không cần phải phân tích các byte thô bằng tay. Solana cung cấp các hàm để hỗ trợ điều đó:
+- `load_current_index_checked`: trả về chỉ số của instruction hiện đang được thực thi.
+- `load_instruction_at_checked`: cho phép bạn tải một instruction cụ thể theo chỉ số của nó ở định dạng đã được phân tích và deserialize.
 
-<ArticleSection name="How does it work?" id="how-does-it-work" level="h2" />
+<ArticleSection name="Nó hoạt động như thế nào?" id="how-does-it-work" level="h2" />
 
-Each Solana instruction contains:
-- the program ID it targets,
-- the accounts it interacts with (including metadata like signer/writable),
-- and the data payload (typically a discriminator + arguments).
+Mỗi instruction Solana chứa:
+- program ID mà nó nhắm đến,
+- các tài khoản mà nó tương tác (bao gồm metadata như signer/writable),
+- và dữ liệu (thường là một discriminator + các tham số).
 
-And this is exactly what the `load_instruction_at_checked` function from the Instructions sysvar gives you:
-- program_id: the program this instruction is calling.
-- accounts: a list of involved accounts with metadata.
-- data: the raw input payload (if we're introspecting an anchor instruction, it often starts with an 8-byte discriminator followed by parameters).
+Và đây chính xác là những gì hàm `load_instruction_at_checked` từ Instructions sysvar cung cấp cho bạn:
+- program_id: chương trình mà instruction này đang gọi.
+- accounts: danh sách các tài khoản liên quan với metadata.
+- data: dũ liệu đầu vào thô (nếu chúng ta đang introspect một anchor instruction, nó thường bắt đầu với một discriminator 8-byte theo sau là các tham số).
 
-To safely and efficiently introspect other instructions, follow these steps:
-- Determine the Current Instruction Index: Use `load_current_index_checked` to find the index of the currently executing instruction.
-> Keep in mind: your instruction may not be the first one (index 0) in the transaction.
+Để introspect các instruction khác một cách an toàn và hiệu quả, hãy làm theo các bước sau:
+- Xác định Chỉ số Instruction Hiện tại: Sử dụng `load_current_index_checked` để tìm chỉ số của instruction hiện đang được thực thi.
+> Hãy nhớ: instruction của bạn có thể không phải là instruction đầu tiên (chỉ số 0) trong transaction.
 
-- Load a Target Instruction to Analyze: With the index in hand, use `load_instruction_at_checked(index)` to load another instruction in the same transaction—either the one before, after, or at a specific position.
-> This is useful for validating behavior, ensuring expected inputs, or composing securely across programs.
+- Tải một Instruction Mục tiêu để Phân tích: Với chỉ số trong tay, sử dụng `load_instruction_at_checked(index)` để tải một instruction khác trong cùng transaction có thể là instruction trước đó, sau đó, hoặc tại một vị trí cụ thể.
+> Điều này hữu ích để xác thực hành vi, đảm bảo các đầu vào mong đợi, hoặc kết hợp một cách an toàn giữa các chương trình.
 
-- Build Constraints to Prevent Malicious Behavior: Instruction introspection is powerful, but it introduces new attack surfaces. Make sure to: validate that the introspected instruction is targeting the expected program, confirm that account addresses and data match expected patterns, and avoid assumptions about instruction order unless explicitly enforced.
+- Xây dựng Ràng buộc để Ngăn chặn Hành vi Độc hại: Instruction introspection rất mạnh mẽ, nhưng nó cũng tạo ra các cách tấn công mới. Hãy đảm bảo: xác thực rằng instruction được introspect đang nhắm đến chương trình mong đợi, xác nhận rằng địa chỉ tài khoản và dữ liệu khớp với các mẫu mong đợi, và tránh các giả định về thứ tự instruction trừ khi được thực thi một cách rõ ràng.
 
-By taking these precautions, you can safely leverage instruction introspection to build powerful, composable, and secure Solana programs.
+Bằng cách thực hiện những biện pháp phòng ngừa này, bạn có thể tận dụng instruction introspection một cách an toàn để xây dựng các chương trình Solana mạnh mẽ, có thể kết hợp và bảo mật.
 
-<ArticleSection name="Common Constraints for Introspection" id="common-constraints-for-introspection" level="h2" />
+<ArticleSection name="Các Ràng buộc Thông thường cho Introspection" id="common-constraints-for-introspection" level="h2" />
 
-When using instruction introspection, it’s essential to enforce strict constraints to prevent malicious or unexpected behavior. The most common safeguards include:
-- Instruction Verification: Validate the instruction’s program ID and discriminator to ensure it's the correct one. The discriminator (usually the first 1, 4, or 8 bytes of the instruction data) uniquely identifies which function is being called.
-> This step ensures you're inspecting the intended instruction and not a spoofed or malformed one.
+Khi sử dụng instruction introspection, việc áp dụng các ràng buộc nghiêm ngặt là rất quan trọng để ngăn chặn hành vi độc hại hoặc bất ngờ. Những biện pháp bảo vệ phổ biến nhất bao gồm:
 
-- Variable Validation: After the discriminator, parse and check critical variables used by the instruction. These may include amounts, directions (e.g., long/short), or IDs, and you should always confirm that these fields align with the expected logic of your integration or safeguard.
-- Account Verification: Validate the structure and identity of the instruction’s accounts. Check that expected accounts appear at specific positions (e.g., signer, vault, collateral) and ensure that roles like signer/writable status match your assumptions.
+- Instruction Verification: Xác minh ID chương trình và discriminator của instruction để đảm bảo rằng đó là nó đúng. Discriminator (thường là 1, 4 hoặc 8 byte đầu tiên của dữ liệu instruction) định danh một cách độc nhất các hàm được gọi.
 
-By applying these constraints, you ensure that your program is responding only to valid and trusted instructions, making your logic more robust, composable, and secure.
+> Bước này đảm bảo rằng bạn đang kiểm tra đúng instruction và không phải là một instruction giả mạo hoặc bị hỏng.
 
-Together with transaction atomicity, these checks allow you to build robust, composable logic that can safely interact
-with other programs and instructions within the same transaction.
+- Variable Validation: Sau discriminator, phân tích và kiểm tra các biến quan trọng được sử dụng bởi instruction. Điều này có thể bao gồm số lượng, hướng (ví dụ: long/short) hoặc ID, và bạn luôn phải xác nhận rằng các trường này phù hợp với logic mong đợi của tích hợp hoặc biện pháp bảo vệ của bạn.
+- Account Verification: Xác minh cấu trúc và danh tính của các tài khoản trong instruction. Kiểm tra các tài khoản mong đợi xuất hiện ở các vị trí cụ thể (ví dụ: signer, vault, collateral) và đảm bảo rằng vai trò như signer/writable status khớp với các giả định của bạn.
 
-> Remember, transactions in Solana are atomic. If any instruction fails, the entire transaction is rolled back.
+Bằng cách áp dụng những ràng buộc này, bạn đảm bảo rằng chương trình của bạn chỉ phản hồi với các instruction hợp lệ và đáng tin cậy, làm cho logic của bạn mạnh mẽ hơn, có thể kết hợp và bảo mật hơn.
+
+Cùng với tính nguyên tử của transaction, những kiểm tra này cho phép bạn xây dựng logic mạnh mẽ, có thể kết hợp mà có thể tương tác an toàn với các chương trình và instruction khác trong cùng transaction.
+
+> Nhớ rằng transaction trong Solana là nguyên tử. Nếu bất kỳ instruction nào thất bại, toàn bộ transaction sẽ được rollback.
