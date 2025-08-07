@@ -39,7 +39,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
   type Error = ProgramError;
 
   fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
-    //.. 
+    //..
   }
 }
 ```
@@ -80,7 +80,7 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
 
 We begin by deserializing both the `instruction_data` and the `accounts`.
 
-When then need to:
+We then need to:
 - Load the `Config` account to grab all the data inside of it. We can do so using the `Config::load()` helper.
 - Verify that the `AmmState` is valid (so if it's equal to `AmmState::Initialized`)
 - Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts like this:
@@ -101,7 +101,7 @@ if vault_x.ne(self.accounts.vault_x.key()) {
 }
 ```
 </Codeblock>
-- Deserialize all the token accounts involved and use the data inside of them to calculate the amount to deposits using the `constant-product-curve` crate and checking for slippage like this: 
+- Deserialize all the token accounts involved and use the data inside of them to calculate the amount to deposits using the `constant-product-curve` crate and checking for slippage like this:
 <Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
@@ -166,7 +166,7 @@ impl<'a> Deposit<'a> {
 
     pub fn process(&mut self) -> ProgramResult {
       //..
-    
+
       Ok(())
     }
 }
