@@ -92,6 +92,63 @@ The core timeout logic uses a single conditional jump:
 - Temporal validation: `jle` (jump if less or equal) compares current slot (`r1`) against our deadline (`r2`). If we're within the time window, jump to `exit`
 - Timeout handling: If the deadline has passed, execution continues to load (`lddw`) error code 1 into return register `r0`
 
+<ArticleSection name="Alternative Design" id="alternative-design" level="h2" />
+
+For simpler implementation, you can pass the `Clock` sysvar account directly instead of using syscalls. This approach makes the instruction data a little bit larger but significantly reduce complexity.
+
+```sbpf
+.equ MAX_SLOT_HEIGHT, 0x2898
+.equ CURRENT_SLOT_HEIGHT, 0x0060
+
+.globl e
+e:
+  ldxdw r2, [r1+MAX_SLOT_HEIGHT]     // Store target slot height
+  ldxdw r1, [r1+CURRENT_SLOT_HEIGHT] // Load current slot from Clock account
+  jle r1, r2, end                    // If current slot <= max slot, success
+  lddw r0, 1                         // Otherwise, set error code
+end:
+  exit
+```
+
+This approach requires passing `SysvarC1ock11111111111111111111111111` as an account, but eliminates stack management and having to call the syscall since the `Clock` account data is already deserialized and available at a known offset (`CURRENT_SLOT_HEIGHT`).
+
+### Additional Checks 
+
+To make this approach safe we would need to add some validation: 
+
+```sbpf
+// Check if account count is exactly 1
+ldxb r2, [r1+0x0]                  // Load account count
+jne r2, 1, error                   // If not 1 account, error
+
+// Get pointer to first account key
+mov r3, r1
+add r3, ACCOUNT1_KEY               // r3 points to account key
+
+// Validate Clock sysvar address using direct 64-bit comparisons
+ldxdw r4, [r3+0x0]                 // Load first 8 bytes
+jne r4, 0x06a7d51718c774c9, error  // Compare with constant
+
+ldxdw r4, [r3+0x8]                 // Load second 8 bytes  
+jne r4, 0x28566398691d5eb6, error  // Compare with constant
+
+ldxdw r4, [r3+0x10]                // Load third 8 bytes
+jne r4, 0x8b5eb8a39b4b6d5c, error  // Compare with constant
+
+ldxdw r4, [r3+0x18]                // Load fourth 8 bytes
+jne r4, 0x73555b2100000000, error  // Compare with constant
+```
+
+Here we check if we only have one account, to make sure that `.equ CURRENT_SLOT_HEIGHT, 0x0060` is at the right offset and we then check if the address is correct (.equ ACCOUNT1_KEY, 0x0010).
+
+We can set errors like this:
+
+```sbpf
+error:
+  lddw r0, 1                         // Set error code
+  exit
+```
+
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
 
 This compact program accomplishes temporal validation with minimal compute unit consumption.
