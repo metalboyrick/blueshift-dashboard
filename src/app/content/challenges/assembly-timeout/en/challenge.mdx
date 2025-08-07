@@ -42,8 +42,6 @@ These constants define our memory layout:
 - `NUM_ACCOUNTS` (0x0000): Points to the account count in the instruction data header for validation
 - `MAX_SLOT_HEIGHT` (0x0010): Locates the 8-byte deadline slot height within the instruction data payload
 - `CURRENT_SLOT_HEIGHT` (-0x0028): Stack offset where the Clock sysvar's slot field will be stored. Since slot is the first field in the Clock structure, this offset points directly to it
-> 
-You can generate offsets using our tooling at [sbpf.xyz](https://sbpf.xyz)
 
 Unlike high-level languages that abstract memory layout, assembly requires knowing exactly where every piece of data lives.
 
@@ -58,9 +56,11 @@ entrypoint:
 
 Every sBPF program starts at a global `.entrypoint` symbol. The Solana runtime provides account and instruction data through register `r1`.
 
-We validate that no accounts are passed by loading the account count into `r0`. Since `r0` is the register the VM reads on exit, any non-zero value automatically fails the program (exactly what we want if accounts are passed).
+The `ldxdw` instruction loads (`ldx`) an 8-byte (double word, `dx`) value from memory into a register. Here's what happens:
+- `ldxdw r0, [r1+NUM_ACCOUNTS]`: loads the account count into `r0`. Since `r0` is the register the VM reads on exit, any non-zero value automatically fails the program (exactly what we want if accounts are passed).
+- `ldxdw r2, [r1+MAX_SLOT_HEIGHT]`: points to the maximum allowed slot height that we passed in the instruction data. This 64-bit value lands in `r2`.
 
-The second load retrieves our maximum allowed slot height from the instruction data, storing it in `r2` for later comparison.
+Both operations are zero-copy: we're reading directly from the account data without deserialization overhead.
 
 <ArticleSection name="The Clock Sysvar" id="the-clock-sysvar" level="h2" />
 
