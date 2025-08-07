@@ -5,13 +5,15 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Assembly Memo
 
-This challenge serves as an excellent introduction to sBPF assembly programming on Solana since we'll explore the simplicity of a bite-size memo program written directly in sBPF assembly. This program demonstrates fundamental concepts of Solana's assembly programming by creating a basic memo that prints instruction data to the Solana log.
+In this unit we'll use sBPF Assembly to create a logging mechanism for our prgram.
 
-If you're not familiar with how to write assembly program, follow the [introduction to Assembly course](en/courses/introduction-to-assembly)
+The simplicity of a bite-size memo program is the perfect starting point for your sBPF assembly journey!
 
-<ArticleSection name="Program Structure" id="program-structure" level="h2" />
+If you're unfamiliar with assembly programming, follow the [introduction to Assembly course](en/courses/introduction-to-assembly)
 
-Let's look at the complete program first, then break it down section by section:
+<ArticleSection name="Program Design" id="program-design" level="h2" />
+
+Our program will simply put the right memory location into the right registry and then perform the `sol_log_` syscall. It will look like this:
 
 <Codeblock lang="assembly">
 ```assembly
@@ -28,7 +30,7 @@ entrypoint:
 ```
 </Codeblock>
 
-### Constants
+<ArticleSection name="Memory Offsets" id="memory-offsets" level="h2" />
 
 The program begins by declaring three `.equ` constants that define the memory layout of our instruction data:
 
@@ -41,15 +43,13 @@ The program begins by declaring three `.equ` constants that define the memory la
 </Codeblock>
 
 These constants mark the byte-offsets relative to the entry-buffer pointer in `r1`:
-- `NUM_ACCOUNTS`: Position of the account count field
-- `DATA_LEN`: Position of the instruction data length
-- `DATA`: Position where the actual instruction data begins
+- `NUM_ACCOUNTS` (0x0000): Points to the account count in the instruction data header for validation
+- `DATA_LEN` (0x08): Points to the instruction data lenght in the instruction data header
+- `DATA` (0x10): Points to the instruction data in the instruction data header
 
-> This are all known at compilation because of the way that the `input` data that is passed in the entrypoint is structured.
+Unlike high-level languages that abstract memory layout, assembly requires knowing exactly where every piece of data lives.
 
-### Entrypoint
-
-The entrypoint is where our program begins execution:
+<ArticleSection name="Entrypoint and Initial Validation" id="entrypoint-and-validations" level="h2" />
 
 <Codeblock lang="assembly">
 ```assembly
@@ -59,11 +59,13 @@ entrypoint:
 ```
 </Codeblock>
 
-This first instruction loads the number of accounts into `r0`. Since `r0` is the register the VM reads on exit, this serves two purposes:
+Every sBPF program starts at a global `.entrypoint` symbol. The Solana runtime provides account and instruction data through register `r1`.
+
+This first instruction then loads the number of accounts into `r0`. Since `r0` is the register the VM reads on exit, this serves two purposes:
 1. It loads the account count for our use
 2. It ensures the program will fail automatically if any accounts are passed (non-zero value in r0)
 
-### Syscall
+<ArticleSection name="Sol Log Syscall" id="sol-log-syscall" level="h2" />
 
 Next, we prepare the arguments for the `sol_log_` syscall:
 
@@ -86,6 +88,8 @@ call 16   ; Call sol_log_ (helper ID 16)
 exit      ; Return using r0 value
 ```
 </Codeblock>
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
 
 The program:
 1. Calls 16 (`sol_log_`) to print the memo to the validator log
