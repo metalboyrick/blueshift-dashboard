@@ -5,52 +5,52 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Introduction to Pinocchio](/graphics/course-banners/introduction-to-pinocchio.png)
 
-<ArticleSection name="What is Pinocchio" id="what-is-pinocchio" level="h2" />
+<ArticleSection name="Pinocchio là gì" id="what-is-pinocchio" level="h2" />
 
-While most Solana developers lean on Anchor, there are plenty of good reasons to write a program without it. Perhaps you need finer-grained control over every account field, or you're chasing maximum performance, or you just simply want to avoid macros.
+Mặc dù hầu hết các nhà phát triển Solana dựa vào Anchor, nhưng có rất nhiều lý do chính đáng để viết chương trình mà không cần nó. Có thể bạn cần kiểm soát chi tiết hơn đối với mọi trường account, hoặc bạn đang theo đuổi hiệu suất tối đa, hoặc bạn chỉ đơn giản muốn tránh sử dụng macro.
 
-Writing Solana programs without a framework like Anchor is known as **native development**. It is more demanding, yet in this course you'll learn to craft a Solana program from scratch with Pinocchio; a lightweight library that lets you skip external frameworks and own every byte of your code.
+Viết các chương trình Solana mà không có framework như Anchor được gọi là **native development**. Nó đòi hỏi bạn làm nhiều hơn, nhưng trong khóa học này bạn sẽ học cách tạo ra một chương trình Solana từ đầu với Pinocchio; một thư viện nhẹ cho phép bạn bỏ qua các framework bên ngoài và sở hữu từng byte code của mình.
 
-Pinocchio is a minimalist Rust library that lets you craft Solana programs without pulling in the heavyweight `solana-program` crate. It works by treating the incoming transaction payload (accounts, instruction data, everything) as a single byte slice and reads it in-place via zero-copy techniques. 
+Pinocchio là một thư viện Rust tối giản cho phép bạn tạo các chương trình Solana mà không cần sửu dụng crate `solana-program` nặng nề. Nó hoạt động bằng cách xem xét các transaction đến (account, instruction data, mọi thứ) như một byte slice duy nhất và đọc nó tại chỗ thông qua các kỹ thuật zero-copy.
 
-### Key advantages
+### Ưu điểm chính
 
-The minimalist design unlocks three big benefits:
-- Fewer compute units. No extra deserialization or memory copies.
-- Smaller binaries. Leaner code paths mean a lighter `.so` on-chain.
-- Zero dependency drag. No external crates to update (or break).
+Thiết kế tối giản của nó chứa đựng ba lợi ích lớn:
+- Ít compute unit hơn. Không có thêm việc deserialization hoặc sao chép bộ nhớ.
+- Binary nhỏ hơn. code gọn gàng hơn có nghĩa là file `.so` nhẹ hơn onchain.
+- Không có nhiều dependency. Không có các crate bên ngoài để cập nhật (hoặc bị hỏng).
 
-The project was started by [Febo](https://x.com/0x_febo) at [Anza](https://www.anza.xyz) with core contribution from the Solana ecosystem and the Blueshift team, and lives [here](https://github.com/anza-xyz/pinocchio). 
+Dự án được khởi đầu bởi [Febo](https://x.com/0x_febo) tại [Anza](https://www.anza.xyz) với sự đóng góp cốt lõi từ hệ sinh thái Solana và team Blueshift, và tồn tại [tại đây](https://github.com/anza-xyz/pinocchio).
 
-Alongside the core crate, you'll find `pinocchio-system` and `pinocchio-token`, which provide zero-copy helpers and CPI utilities for Solana's native System and SPL-Token programs.
+Bên cạnh crate cốt lõi, bạn sẽ tìm thấy `pinocchio-system` và `pinocchio-token`, cung cấp các hàm hỗ trợ zero-copy và tiện ích CPI cho các chương trình System và SPL-Token gốc của Solana.
 
 ### Native Development
 
-Native development might sound daunting, but it's exactly why this chapter exists. By the end you'll understand every byte that crosses the program boundary and how to keep your logic tight, secure, and fast.
+Native development có thể nghe có vẻ đáng sợ, nhưng đó chính xác là lý do tại sao chương này tồn tại. Cho đến cuối cùng bạn sẽ hiểu từng byte đi qua ranh giới chương trình và cách giữ logic của bạn chặt chẽ, an toàn và nhanh chóng.
 
-Anchor uses **Procedural and Derive Macros** to simplify the boilerplate of dealing with accounts, instruction data, and error handling that are the core of building Solana Programs. 
+Anchor sử dụng **Procedural và Derive Macro** để đơn giản hóa boilerplate của việc xử lý account, instruction data và error handling là cốt lõi của việc xây dựng Solana Program.
 
-Going Native means we don't have that luxury anymore and that we will need to:
-- Create our own Discriminator and Entrypoint for the different Instructions
-- Create our own Account, Instruction and deserialization logic
-- Implement all the security checks that Anchor was doing for us before
+Theo hướng Native có nghĩa là chúng ta không còn sự xa xỉ đó nữa và chúng ta sẽ cần:
+- Tạo Discriminator và Entrypoint riêng cho các Instruction khác nhau
+- Tạo logic Account, Instruction và deserialization riêng
+- Triển khai tất cả các kiểm tra bảo mật mà Anchor đã làm cho chúng ta trước đây
 
-**Note**: There is no "framework" yet for building Pinocchio programs. For this reason we're going to present what we believe is the best way of writing pinocchio programs based on our experience.
+**Lưu ý**: Chưa có "framework" nào để xây dựng các chương trình Pinocchio. Vì lý do này, chúng tôi sẽ trình bày những gì chúng tôi tin là cách tốt nhất để viết các chương trình pinocchio dựa trên kinh nghiệm của chúng tôi.
 
 <ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
 
-In Anchor, the `#[program]` macro hides a lot of wiring. Under the hood it builds an 8-byte discriminator (size customizable since version 0.31) for every instruction and accounts 
+Trong Anchor, macro `#[program]` ẩn đi rất nhiều mối nối. Bên dưới nó xây dựng một discriminator 8-byte (kích thước có thể tùy chỉnh từ phiên bản 0.31) cho mọi instruction và account
 
 <AnchorDiscriminatorCalculator value={"Test"} />
 
-Native programs usually keep things leaner. A single-byte discriminator (values 0x01…0xFF) is enough for up to 255 instructions, which is sufficient for most use cases. If you need more, you can switch to a two-byte variant, expanding to 65,535 possible variants.
+Các chương trình native thường giữ mọi thứ gọn gàng hơn. Một discriminator single-byte (giá trị 0x01…0xFF) đủ cho tối đa 255 instruction, đủ cho hầu hết các trường hợp sử dụng. Nếu bạn cần nhiều hơn, bạn có thể chuyển sang biến thể two-byte, mở rộng lên 65,535 biến thể có thể.
 
-The `entrypoint!` macro is where the program execution begins. It provides three raw slices:
-- **program_id**: the public key of the deployed program
-- **accounts**: every account passed in the instruction
-- **instruction_data**: an opaque byte array containing your discriminator plus any user-supplied data
+Macro `entrypoint!` là nơi việc thực thi chương trình bắt đầu. Nó cung cấp ba raw slice:
+- **program_id**: public key của chương trình đã triển khai
+- **accounts**: mọi account được truyền trong instruction
+- **instruction_data**: một byte array mờ chứa discriminator của bạn cộng với bất kỳ dữ liệu do người dùng cung cấp
 
-This means that after the entrypoint we can create a pattern that executes all the different instructions through an appropriate handler, which we'll call `process_instruction`. Here's how it typically looks:
+Điều này có nghĩa là sau entrypoint chúng ta có thể tạo một mẫu thực thi tất cả các instruction khác nhau thông qua một handler thích hợp, mà chúng ta sẽ gọi là `process_instruction`. Nó thường trông như thế này:
 
 ```rust
 entrypoint!(process_instruction);
@@ -68,29 +68,29 @@ fn process_instruction(
 }
 ```
 
-Behind the scenes, this handler:
-1. Uses `split_first()` to extract the discriminator byte
-2. Uses `match` to determine which instruction struct to instantiate
-3. Each instruction's `try_from` implementation validates and deserializes its inputs
-4. A call to `process()` executes the business logic
+Đằng sau hậu trường, handler này:
+1. Sử dụng `split_first()` để trích xuất discriminator byte
+2. Sử dụng `match` để xác định instruction struct nào cần khởi tạo
+3. Triển khai `try_from` của mỗi instruction  có nhiệm vụ xác thực và deserialize các đầu vào của nó
+4. Một lời gọi đến `process()` thực thi business logic
 
-### The difference between `solana-program` and `pinocchio`
+### Sự khác biệt giữa `solana-program` và `pinocchio`
 
-The main difference and optimization stand in how the `entrypoint()` behaves. 
-- The Standard Solana entrypoints use traditional serialization patterns where the runtime deserializes input data upfront, creating owned data structures in memory. This approach uses Borsh serialization extensively, copies data during deserialization, and allocates memory for structured data types.
-- Pinocchio entrypoints implement zero-copy operations by reading data directly from the input byte array without copying. The framework defines zero-copy types that reference the original data, eliminates serialization/deserialization overhead, and uses direct memory access to avoid abstraction layers.
+Sự khác biệt và tối ưu hóa chính nằm ở cách `entrypoint()` hoạt động.
+- Các entrypoint Solana tiêu chuẩn sử dụng các pattern serialization truyền thống nơi runtime deserialize dữ liệu đầu vào trước, tạo các cấu trúc dữ liệu owned trong memory. Cách tiếp cận này sử dụng Borsh serialization rộng rãi, copy dữ liệu trong quá trình deserialization và phân bổ memory cho các kiểu dữ liệu có cấu trúc.
+- Các entrypoint Pinocchio triển khai các thao tác zero-copy bằng cách đọc dữ liệu trực tiếp từ input byte array mà không copy. Framework định nghĩa các kiểu zero-copy tham chiếu đến dữ liệu gốc, loại bỏ overhead serialization/deserialization và sử dụng truy cập bộ nhớ một cách trực tiếp để tránh các lớp trừ tượng.
 
-<ArticleSection name="Accounts and Instructions" id="accounts-and-instructions" level="h2" />
+<ArticleSection name="Account và Instruction" id="accounts-and-instructions" level="h2" />
 
-Since we don't have macros, and we want to avoid them to keep the program lean and efficient, every byte of instruction data and accounts must be validated manually. 
+Vì chúng ta không có macro, và chúng ta muốn tránh chúng để giữ chương trình gọn gàng và hiệu quả, mọi byte của instruction data và account phải được xác thực thủ công.
 
-To keep this process organized, we use a pattern that provides Anchor-style ergonomics without the macros, keeping the actual `process()` method nearly boilerplate-free by implementing Rust's `TryFrom` trait.
+Để giữ quá trình này có tổ chức, chúng ta sử dụng một mẫu công thái học giống kiểu Anchor mà không có macro, giữ phương thức `process()` thực tế gần như không có boilerplate bằng cách triển khai trait `TryFrom` của Rust.
 
-### The `TryFrom` Trait
+### Trait `TryFrom`
 
-`TryFrom` is part of Rust's standard conversion family. Unlike `From`, which assumes a conversion can't fail, `TryFrom` returns a `Result`, allowing you to surface errors early - perfect for on-chain validation.
+`TryFrom` là một phần của họ conversion tiêu chuẩn của Rust. Không giống như `From`, giả định rằng một conversion không thể thất bại, `TryFrom` trả về một `Result`, cho phép bạn hiển thị lỗi sớm - hoàn hảo cho validation onchain.
 
-The trait is defined like this:
+Trait được định nghĩa như thế này:
 
 ```rust
 pub trait TryFrom<T>: Sized {
@@ -99,17 +99,17 @@ pub trait TryFrom<T>: Sized {
 }
 ```
 
-In a Solana program, we implement `TryFrom` to convert raw account slices (and, when needed, instruction bytes) into strongly-typed structs while enforcing every constraint.
+Trong một chương trình Solana, chúng ta triển khai `TryFrom` để chuyển đổi các raw account slice (và, khi cần thiết, cả instruction byte) thành các struct có kiểu  trong khi thực thi mọi ràng buộc.
 
-<ArticleSection name="Accounts Validation" id="accounts-validation" level="h2" />
+<ArticleSection name="Xác thực Account" id="accounts-validation" level="h2" />
 
-We typically handle all specific checks that don't require a double borrow (borrowing both in the account validation and potentially in the process) in each `TryFrom` implementation. This keeps the `process()` function, where all the instruction logic happens, as clean as possible.
+Chúng ta thường xử lý tất cả các kiểm tra cụ thể không yêu cầu double borrow (borrowing cả trong account validation và có thể trong process) trong mỗi triển khai `TryFrom`. Điều này giữ hàm `process()`, nơi tất cả logic instruction xảy ra, càng gọn gàng càng tốt.
 
-We start by implementing the account struct needed for the instruction, similar to Anchor's `Context`. 
+Chúng ta bắt đầu bằng cách triển khai account struct cần thiết cho instruction, tương tự như `Context` của Anchor.
 
-**Note**: Unlike Anchor, in this account struct we only include the accounts we want to use in the process, and we mark as `_` the remaining accounts that are needed in the instruction but won't be used (like the `SystemProgram`).
+**Lưu ý**: Không giống như Anchor, trong account struct này chúng ta chỉ bao gồm các account mà chúng ta muốn sử dụng trong process, và chúng ta đánh dấu là `_` các account còn lại tuy cần thiết trong instruction nhưng sẽ không được sử dụng (như `SystemProgram`).
 
-For something like a `Vault`, it would look like this:
+Đối với một cái gì đó như `Vault`, nó sẽ trông như thế này:
 
 ```rust
 pub struct DepositAccounts<'a> {
@@ -118,7 +118,7 @@ pub struct DepositAccounts<'a> {
 }
 ```
 
-Now that we know which accounts we want to use in our instruction, we can use the `TryFrom` trait to deserialize and perform all necessary checks:
+Bây giờ chúng ta biết những account nào chúng ta muốn sử dụng trong instruction của mình, chúng ta có thể sử dụng trait `TryFrom` để deserialize và thực hiện tất cả các kiểm tra cần thiết:
 
 ```rust
 impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
@@ -145,15 +145,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
 }
 ```
 
-As you can see, in this instruction we're going to use a `SystemProgram` CPI to transfer lamports from the owner to the vault, but we don't need to use the SystemProgram in the instruction itself. The program just needs to be included in the instruction, so we can pass it as `_`.
+Như bạn có thể thấy, trong instruction này chúng ta sẽ sử dụng CPI của `SystemProgram` để chuyển lamport từ owner đến vault, nhưng chúng ta không cần sử dụng SystemProgram trong chính instruction đó. Chương trình chỉ cần được bao gồm trong instruction, vì vậy chúng ta có thể truyền nó ở dạng `_`.
 
-We then perform custom checks on the accounts, similar to Anchor's `Signer` and `SystemAccount` checks, and return the validated struct.
+Sau đó chúng ta thực hiện các kiểm tra tùy chỉnh trên các account, tương tự như kiểm tra `Signer` và `SystemAccount` của Anchor, và trả về struct đã được xác thực.
 
-<ArticleSection name="Instruction Validation" id="instruction-validation" level="h2" />
+<ArticleSection name="Xác thực Instruction" id="instruction-validation" level="h2" />
 
-Instruction validation follows a similar pattern to account validation. We use the `TryFrom` trait to validate and deserialize instruction data into strongly-typed structs, keeping the business logic in `process()` clean and focused.
+Xác thực instruction tuân theo một pattern tương tự như xác thực account. Chúng ta sử dụng trait `TryFrom` để xác thực và deserialize instruction data thành các struct strongly-typed, giữ business logic trong `process()` gọn gàng và tập trung.
 
-Let's start by defining the struct that represents our instruction data:
+Hãy bắt đầu bằng cách định nghĩa struct đại diện cho instruction data của chúng ta:
 
 ```rust
 pub struct DepositInstructionData {
@@ -161,12 +161,12 @@ pub struct DepositInstructionData {
 }
 ```
 
-We then implement `TryFrom` to validate the instruction data and convert it into our structured type. This involves:
-1. Verifying the data length matches our expected size
-2. Converting the byte slice into our concrete type
-3. Performing any necessary validation checks
+Sau đó chúng ta triển khai `TryFrom` để xác thực instruction data và chuyển đổi nó thành kiểu có cấu trúc của chúng ta. Điều này bao gồm:
+1. Xác minh độ dài dữ liệu khớp với kích thước mong đợi của chúng ta
+2. Chuyển đổi byte slice thành kiểu cụ thể của chúng ta
+3. Thực hiện bất kỳ kiểm tra xác thực cần thiết nào
 
-Here's how the implementation looks:
+Cách triển khai trông như thế này:
 
 ```rust
 impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
@@ -191,8 +191,8 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
 }
 ```
 
-This pattern allows us to:
-- Validate instruction data before it reaches the business logic
-- Keep the validation logic separate from the core functionality
-- Provide clear error messages when validation fails
-- Maintain type safety throughout the program
+Pattern này cho phép chúng ta:
+- Xác thực instruction data trước khi nó đến business logic
+- Giữ logic xác thực tách biệt khỏi chức năng cốt lõi
+- Cung cấp thông báo lỗi rõ ràng khi xác thực thất bại
+- Duy trì type safety trong suốt chương trình

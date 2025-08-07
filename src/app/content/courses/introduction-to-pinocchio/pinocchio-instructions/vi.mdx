@@ -1,13 +1,13 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-# Instructions
+# Các Instruction
 
-As we saw earlier, using the `TryFrom` trait allows us to cleanly separate validation from business logic, improving both maintainability and security.
+Như chúng ta đã thấy trước đó, việc sử dụng trait `TryFrom` cho phép chúng ta tách biệt validation khỏi business logic một cách sạch sẽ, cải thiện cả khả năng bảo trì và bảo mật.
 
-<ArticleSection name="Instruction Structure" id="instruction-structure" level="h2" />
+<ArticleSection name="Cấu trúc Instruction" id="instruction-structure" level="h2" />
 
-When it's time to process the logic, we can create a structure like this: 
+Khi đến lúc xử lý logic, chúng ta có thể tạo một cấu trúc như thế này:
 
 ```rust
 pub struct Deposit<'a> {
@@ -16,7 +16,7 @@ pub struct Deposit<'a> {
 }
 ```
 
-This structure defines what data will be accessible during the logic processing. We then deserialize this using the `try_from` function that you can find in the `lib.rs` file:
+Cấu trúc này định nghĩa dữ liệu nào sẽ có thể truy cập được trong quá trình xử lý logic. Sau đó chúng ta deserialize điều này bằng cách sử dụng hàm `try_from` mà bạn có thể tìm thấy trong file `lib.rs`:
 
 ```rust
 impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
@@ -34,12 +34,12 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
 }
 ```
 
-This wrapper provides three key benefits:
-1. It accepts both raw inputs (bytes and accounts)
-2. It delegates validation to the individual `TryFrom` implementations
-3. It returns a fully-typed, fully-validated Deposit struct
+Wrapper này cung cấp ba lợi ích chính:
+1. Nó chấp nhận cả raw input (byte và account)
+2. Nó ủy thác validation cho các triển khai `TryFrom` riêng lẻ
+3. Nó trả về một Deposit struct đã có kiểu cụ thể và được xác thực
 
-We can then implement the processing logic like this:
+Sau đó chúng ta có thể triển khai logic xử lý như thế này:
 
 ```rust
 impl<'a> Deposit<'a> {
@@ -52,16 +52,16 @@ impl<'a> Deposit<'a> {
 }
 ```
 
-- The `DISCRIMINATOR` is the byte we use for pattern matching in the entrypoint
-- The `process()` method contains only business logic, as all validation checks are already complete
+- `DISCRIMINATOR` là byte chúng ta sử dụng để pattern matching trong entrypoint
+- Phương thức `process()` chỉ chứa business logic, vì tất cả các kiểm tra validation đã hoàn thành
 
-The result? We get Anchor-style ergonomics with all the benefits of being fully native: explicit, predictable, and fast.
+Kết quả? Chúng ta có được các kiểu giống Anchor với tất cả lợi ích của việc hoàn toàn native: rõ ràng, có thể dự đoán và nhanh chóng.
 
 <ArticleSection name="Cross Program Invocation" id="cross-program-invocation" level="h2" />
 
-As mentioned earlier, Pinocchio provides helper crates like `pinocchio-system` and `pinocchio-token` that simplify Cross-Program Invocations (CPIs) to native programs. 
+Như đã đề cập trước đó, Pinocchio cung cấp các helper crate như `pinocchio-system` và `pinocchio-token` giúp đơn giản hóa Cross-Program Invocation (CPI) đến các chương trình native.
 
-These helper structs and methods replace Anchor's `CpiContext` approach we used previously:
+Những helper struct và method này thay thế cách tiếp cận `CpiContext` của Anchor mà chúng ta đã sử dụng trước đây:
 
 ```rust
 Transfer {
@@ -72,9 +72,9 @@ Transfer {
 .invoke()?;
 ```
 
-The `Transfer` struct (from `pinocchio-system`) encapsulates all the fields required by the System Program, and `.invoke()` executes the CPI. No context builder or extra boilerplate needed.
+Struct `Transfer` (từ `pinocchio-system`) đóng gói tất cả các trường được yêu cầu bởi System Program, và `.invoke()` thực thi CPI. Không cần context builder hoặc boilerplate bổ sung.
 
-When the caller must be a Program-Derived Address (PDA), Pinocchio maintains the same concise API:
+Khi caller phải là Program-Derived Address (PDA), Pinocchio duy trì cùng API ngắn gọn:
 
 ```rust
 let seeds = [
@@ -92,26 +92,26 @@ Transfer {
 .invoke_signed(&signers)?;
 ```
 
-**Here's how it works:**
-1. `Seeds` creates an array of Seed objects that match the PDA derivation
-2. `Signer` wraps these seeds in a Signer helper
-3. `invoke_signed` executes the CPI, passing the signer array to authorize the transfer
+**Đây là cách nó hoạt động:**
+1. `Seeds` tạo một mảng các đối tượng Seed khớp với PDA derivation
+2. `Signer` bao bọc những seed này trong một Signer helper
+3. `invoke_signed` thực thi CPI, truyền mảng signer để ủy quyền cho transfer
 
-The result? A clean, first-class interface for both regular and signed CPIs: no macros required, and no hidden magic.
+Kết quả? Một interface sạch sẽ, tối ưu cho cả CPI thông thường và signed: không cần macro, và không có ma thuật ẩn nào.
 
 <ArticleSection name="Multiple Instruction Structure" id="multiple-instruction-structure" level="h2" />
 
-Often, you’ll want to reuse the same account structure and validation logic across several instructions; such as when updating different configuration fields. 
+Thông thường, bạn sẽ muốn tái sử dụng cùng một cấu trúc account và logic validation trên nhiều instruction; chẳng hạn như khi cập nhật các trường cấu hình khác nhau. 
 
-Instead of creating a separate discriminator for each instruction, you can use a pattern that distinguishes instructions by the size of their data payload.
+Thay vì tạo một discriminator riêng cho mỗi instruction, bạn có thể sử dụng một pattern phân biệt instruction bằng kích thước của data payload của chúng.
 
-Here’s how it works:
+Đây là cách nó làm việc:
 
-We use a single instruction discriminator for all related config updates. The specific instruction is determined by the length of the incoming data.
+Chúng ta sử dụng một instruction discriminator duy nhất cho tất cả các config update liên quan. Instruction cụ thể được xác định bởi độ dài của dữ liệu đến.
 
-After that, in your processor, match on `self.data.len()`. Each instruction type has a unique data size, so you can dispatch to the correct handler accordingly.
+Sau đó, trong processor của bạn, match trên `self.data.len()`. Mỗi kiểu instruction có kích thước dữ liệu duy nhất, vì vậy bạn có thể dispatch đến handler chính xác tương ứng.
 
-It will look like this:
+Nó sẽ trông như thế này:
 
 ```rust
 pub struct UpdateConfig<'a> {
@@ -150,9 +150,9 @@ impl<'a> UpdateConfig<'a> {
 }
 ```
 
-Notice that we defer deserialization of the instruction data until after we know which handler to call. This avoids unnecessary parsing and keeps the entrypoint logic clean.
+Chú ý rằng chúng ta trì hoãn việc deserialization của instruction data cho đến sau khi chúng ta biết hàm nào cần gọi. Điều này tránh parsing không cần thiết và giữ logic entrypoint sạch sẽ.
 
-Each handler then can deserialize its specific data type and performs the update:
+Mỗi hàm sau đó có thể deserialize kiểu dữ liệu cụ thể của nó và thực hiện update:
 
 ```rust
 pub fn process_update_authority(&mut self) -> ProgramResult {
@@ -189,7 +189,7 @@ pub fn process_update_status(&mut self) -> ProgramResult {
 }
 ```
 
-This approach lets you share account validation and use a single entrypoint for multiple related instructions, reducing boilerplate and making your codebase easier to maintain. 
+Cách tiếp cận này cho phép bạn chia sẻ account validation và sử dụng một entrypoint duy nhất cho nhiều instruction liên quan, giảm boilerplate và làm cho codebase của bạn dễ bảo trì hơn.
 
-By pattern matching on data size, you can efficiently route to the correct logic without extra discriminators or complex parsing.
+Bằng cách pattern matching trên kích thước dữ liệu, bạn có thể định tuyến hiệu quả đến logic chính xác mà không cần discriminator bổ sung hoặc parsing phức tạp.
 

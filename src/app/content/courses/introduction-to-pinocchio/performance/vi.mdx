@@ -1,29 +1,29 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-# Performance
+# Hiệu suất
 
-While many developers turn to Pinocchio for its fine-grained control over account fields, its true strength lies in enabling maximum performance. 
+Mặc dù nhiều nhà phát triển chuyển sang Pinocchio vì khả năng kiểm soát chi tiết các trường account, sức mạnh thực sự của nó nằm ở việc cho phép ttoois đa hóa hiệu suất.
 
-In this section, we’ll explore practical strategies to achieve optimal efficiency in your Solana programs.
+Trong phần này, chúng ta sẽ khám phá các chiến lược thực tế để đạt được hiệu suất tối ưu trong các chương trình Solana của bạn.
 
-<ArticleSection name="Superflous Checks" id="superflous-checks" level="h2" />
+<ArticleSection name="Kiểm tra thừa" id="superflous-checks" level="h2" />
 
-Developers often add extra account constraints for safety, but these can introduce unnecessary overhead. It’s important to distinguish between essential and redundant checks.
+Các nhà phát triển thường thêm các ràng buộc account bổ sung cho mục đích an toàn, nhưng điều này có thể dẫn đến phát sinh các chi phí không cần thiết. Do đó, rất quan trọng để phân biệt giữa các kiểm tra thiết yếu và kiểm tra dư thừa.
 
-For example, when simply reading from a `Token Account` or `Mint`, deserialization and validation are necessary. But if these same accounts are later used in a CPI (Cross-Program Invocation), any mismatch or error will cause the instruction to fail at that point. Thus, preemptive checks can be redundant.
+Ví dụ, khi chỉ đọc từ `Token Account` hoặc `Mint`, deserialization và validation là cần thiết. Nhưng nếu những account tương tự này sau đó được sử dụng trong CPI (Cross-Program Invocation), bất kỳ sự không khớp hoặc lỗi nào sẽ khiến instruction thất bại tại thời điểm đó. Do đó, các kiểm tra phòng ngừa có thể là dư thừa.
 
-Similarly, verifying the "owner" of a Token Account is often superfluous; especially if the account is controlled by a PDA (Program Derived Address). If the owner is incorrect, the CPI will fail due to invalid seeds. In cases where the transfer is not executed by a PDA, you should focus on validating the recipient, particularly when depositing into a PDA-controlled account since the interested of the sender is aligned with the one of the program.
+Tương tự, việc xác minh "owner" của Token Account thường là thừa; đặc biệt nếu account được kiểm soát bởi PDA (Program Derived Address). Nếu owner không chính xác, CPI sẽ thất bại do seed không hợp lệ. Trong trường hợp transfer không được thực thi bởi PDA, bạn nên tập trung vào việc xác thực người nhận, đặc biệt khi gửi vào account được kiểm soát bởi PDA vì lợi ích của người gửi phù hợp với lợi ích của chương trình.
 
-Let's take on the example of an `Escrow`:
+Hãy lấy ví dụ về `Escrow`:
 
 ...
 
 ### Associated Token Program
 
-`Associated Token Accounts` (ATAs) are convenient but come with a performance cost. Avoid enforcing their use unless absolutely necessary, and never require their creation within your instruction logic. For most scenarios, the `init-if-needed` pattern adds avoidable complexity and resource usage (like in Amm instruction that are composed by router like Jupiter).
+Việc sử dụng `Associated Token Account` (ATA) thì thuận tiện nhưng đi kèm với chi phí hiệu suất. Tránh ép buộc sử dụng chúng trừ khi thực sự cần thiết, và không bao giờ yêu cầu tạo chúng trong logic instruction của bạn. Đối với hầu hết các kịch bản, pattern `init-if-needed` làm tăng thêm độ phức tạp và sử dụng tài nguyên có thể tránh được (như trong instruction Amm được tạo bởi router như Jupiter).
 
-If your program relies on ATAs, ensure they are created externally. Within your program, verify their correctness by deriving the expected address directly like this:
+Nếu chương trình của bạn dựa vào ATA, hãy đảm bảo chúng được tạo bên ngoài. Trong chương trình của bạn, xác minh tính đúng đắn của chúng bằng cách derive địa chỉ mong đợi trực tiếp như thế này:
 
 ```rust
 let (associated_token_account, _) = find_program_address(
@@ -36,19 +36,19 @@ let (associated_token_account, _) = find_program_address(
 );
 ```
 
-By minimizing unnecessary checks and account requirements, you reduce compute costs and streamline your program’s execution; unlocking the full performance potential of native solana development.
+Bằng cách tối giản hóa những kiểm tra và yêu cầu account không cần thiết, bạn giảm chi phí tính toán và làm cho quá trình thực thi của chương trình của bạn trở nên linh hoạt hơn; giúp bạn tận dụng tối đa tiềm năng hiệu suất của phát triển native trên Solana.
 
-> Adding checks to let the instruction fail early has its advantages, since the compute units consumed will definitely be lower. So consider whether the instruction will mainly be used with flags like `{ skipPreflight: true }`.
+> Thêm các kiểm tra để cho phép instruction thất bại sớm là một lợi thế, vì lượng compute unit tiêu thụ sẽ chắc chắn thấp hơn. Do đó, hãy cân nhắc liệu instruction có chủ yếu được sử dụng với các cờ như `{ skipPreflight: true }` hay không.
 
 <ArticleSection name="Perf Flag" id="perf-flag" level="h2" />
 
-Rust’s feature flags provide a powerful way to conditionally compile code, enabling you to toggle functionality for different build profiles; such as development, testing, or maximum performance in production. 
+Các cờ chức năng của Rust cung cấp một cách mạnh mẽ để biên dịch mã một cách điều kiện, cho phép bạn bật/tắt các tính năng cho các profile build khác nhau; chẳng hạn như development, testing, hoặc hiệu suất tối đa trong production. 
 
-This is especially useful in Solana programs, where every compute unit counts.
+Điều này đặc biệt hữu ích trong các chương trình Solana, nơi mỗi compute unit đều quan trọng.
 
-### Setting Up Feature Flags
+### Thiết lập Feature Flag
 
-Feature flags are defined in your `Cargo.toml` file under the `[features]` section. For example, you might want a `perf` flag that enables performance optimizations by disabling logging and extra checks:
+Feature flag được định nghĩa trong file `Cargo.toml` của bạn dưới phần `[features]`. Ví dụ, bạn có thể muốn một flag `perf` cho phép tối ưu hóa hiệu suất bằng cách vô hiệu hóa logging và kiểm tra bổ sung:
 
 ```
 [features]
@@ -56,11 +56,12 @@ default = ["perf"]
 perf = []
 ```
 
-Here, the perf feature is enabled by default, but you can override it when building or testing.
+Ở đây, feature perf được bật theo mặc định, nhưng bạn có thể ghi đè nó khi building hoặc testing.
 
-### Using Feature Flags in Code
+### Sử dụng Feature Flag trong Code
 
-You can use Rust’s conditional compilation attributes to include or exclude code based on the active feature. For example:
+Bạn có thể sử dụng các thuộc tính biên dịch có điều kiện của Rust để bao gồm hoặc loại trừ mã dựa trên tính năng hoạt động. Ví dụ:
+
 
 ```rust
 pub fn process(ctx: Context<'info>) -> ProgramResult {
@@ -70,9 +71,9 @@ pub fn process(ctx: Context<'info>) -> ProgramResult {
 }
 ```
 
-Most programs return the name of the instruction as a log to make debugging easier and to ensure that the correct instruction is called. 
+Hầu hết các chương trình trả về tên của instruction dưới dạng log để làm cho việc debugging dễ dàng hơn và đảm bảo rằng instruction đúng được gọi.
 
-However, this is expensive and not actually needed except to make the explorer more readable and to enhance debugging.
+Tuy nhiên, điều này tốn kém và thực sự không cần thiết ngoại trừ để làm cho explorer dễ đọc hơn và cải thiện quá trình gỡ lỗi.
 
 ```rust
 #[cfg(not(feature = "perf"))]
@@ -81,26 +82,25 @@ if name.len() > MAX_NAME_LEN {
 }
 ```
 
-Another example is the superfluous checks discussed earlier.
+Một ví dụ khác là các kiểm tra thừa đã thảo luận trước đó.
 
-If we know that our instruction is safe without these checks, we shouldn’t make them the default, but instead hide them behind a flag.
+Nếu bạn không chắc chắn rằng instruction của bạn là an toàn mà không cần các kiểm tra này, bạn không nên làm chúng mặc định, nhưng thay vào đó ẩn chúng sau một cờ.
+> Trong ví dụ này, chúng ta đã tạo một flag `perf` để chỉ ra rằng, nếu chúng ta muốn chương trình đạt được hiệu suất tối đa, chúng ta nên sử dụng flag `perf` khi biên dịch.
 
-> In this example, we created a `perf` flag to indicate that, if we want the program to be as performant as possible, we should use the perf flag while compiling it.
+### Building với các Flag khác nhau
 
-### Building with Different Flags
+Để build chương trình của bạn có hoặc không có feature `perf`, sử dụng:
 
-To build your program with or without the `perf` feature, use:
-
-- With performance optimizations (default):
+- Với tối ưu hóa hiệu suất (mặc định):
 
 ```
 cargo build-bpf
 ```
 
-- With extra checks and logging:
+- Với kiểm tra bổ sung và logging:
 
 ```
 cargo build-bpf --no-default-features
 ```
 
-This approach allows you to maintain a single codebase that can be tuned for development safety or production speed simply by toggling a feature flag.
+Cách tiếp cận này cho phép bạn duy trì một codebase duy nhất có thể được điều chỉnh cho an toàn trogn quá trình phát triển hoặc tốc độ trên production chỉ bằng cách bật/tắt các cờ chức năng.

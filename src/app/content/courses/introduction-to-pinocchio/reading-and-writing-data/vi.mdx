@@ -1,30 +1,30 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-# Reading and Writing Data
+# Đọc và Ghi Dữ liệu
 
-When building optimized Solana programs, efficient data serialization and deserialization can significantly impact performance. 
+Khi xây dựng các chương trình Solana được tối ưu hóa, serialization và deserialization dữ liệu hiệu quả có thể tác động đáng kể đến hiệu suất.
 
-While Pinocchio doesn't require low-level memory operations, understanding how to efficiently read and write account data can help you build faster programs.
+Mặc dù Pinocchio không yêu cầu các thao tác với bộ nhớ cấp thấp, việc hiểu cách đọc và ghi dữ liệu account một cách hiệu quả có thể giúp bạn xây dựng các chương trình nhanh hơn.
 
-The techniques in this guide work with any Solana development framework; whether you're using Pinocchio, Anchor, or the native SDK. The key is designing your data structures thoughtfully and handling serialization safely.
+Các kỹ thuật trong hướng dẫn này hoạt động với bất kỳ framework phát triển Solana nào; dù bạn đang sử dụng Pinocchio, Anchor, hay native SDK. Chìa khóa là thiết kế cấu trúc dữ liệu một cách chu đáo và xử lý serialization một cách an toàn.
 
-### When to Use Unsafe Code
+### Khi nào sử dụng Unsafe Code
 
-Use unsafe code only when:
-- You need maximum performance and have measured that safe alternatives are too slow
-- You can rigorously verify all safety invariants
-- You document the safety requirements clearly
+Chỉ sử dụng unsafe code khi:
+- Bạn cần hiệu suất tối đa và đã đo lường rằng các lựa chọn thay thế an toàn quá chậm
+- Bạn có thể xác minh nghiêm ngặt tất cả các bất biến an toàn
+- Bạn ghi lại các yêu cầu an toàn một cách rõ ràng
 
-> Prefer safe alternatives when possible.
+> Ưu tiên các lựa chọn thay thế an toàn khi có thể.
 
-<ArticleSection name="Safety Principles" id="safety-principles" level="h2" />
+<ArticleSection name="Nguyên tắc An toàn" id="safety-principles" level="h2" />
 
-When working with raw byte arrays and memory operations, we must be careful to avoid undefined behavior. Understanding these principles is crucial for writing correct and reliable code.
+Khi làm việc với các mảng byte thô và các thao tác với bộ nhớ, chúng ta phải cẩn thận để tránh những hành vi không xác định. Hiểu những nguyên tắc này là rất quan trọng để viết code chính xác và đáng tin cậy.
 
-### Buffer Bounds Checking
+### Kiểm tra Ranh giới Buffer
 
-Always validate that your buffer is large enough before any read or write operation. Reading or writing beyond allocated memory is undefined behavior.
+Luôn xác thực rằng buffer của bạn đủ lớn trước bất kỳ thao tác đọc hoặc ghi nào. Đọc hoặc ghi vượt quá memory được phân bổ là những hành vi không xác định.
 
 ```rust
 // Good: Check bounds first
@@ -37,21 +37,21 @@ let value = u64::from_le_bytes(data[0..8].try_into().unwrap());
 let value = u64::from_le_bytes(data[0..8].try_into().unwrap());
 ```
 
-### Alignment Requirements 
+### Yêu cầu Alignment
 
-Every type in Rust has an alignment requirement that determines where it can be placed in memory. Reading a type from memory that isn't properly aligned results in undefined behavior. Most primitive types require alignment equal to their size:
+Mỗi kiểu trong Rust có một yêu cầu alignment xác định nơi nó có thể được đặt trong bộ nhớ. Đọc một kiểu từ bộ nhớ không được align đúng cách dẫn đến hành vi không xác định. Hầu hết các kiểu nguyên thủy yêu cầu alignment bằng kích thước của chúng:
 - `u8`: 1-byte alignment
 - `u16`: 2-byte alignment
 - `u32`: 4-byte alignment
 - `u64`: 8-byte alignment
 
-This means a `u64` must be stored at memory addresses divisible by 8, while a `u16` must start at even addresses.
+Điều này có nghĩa là một `u64` phải được lưu trữ tại các địa chỉ bộ nhớ chia hết cho 8, trong khi một `u16` phải bắt đầu tại các địa chỉ chẵn.
 
-If this is not respected, the compiler will automatically inserts invisible "padding" bytes between struct fields to ensure each field meets its alignment requirements. 
+Nếu điều này không được tôn trọng, trình biên dịch sẽ tự động chèn các byte "đệm" vô hình giữa các trường struct để đảm bảo mỗi trường đáp ứng yêu cầu alignment của nó.
 
-> Additionally, the struct's total size must be a multiple of its largest field's alignment requirement.
+> Ngoài ra, tổng kích thước của struct phải là bội số của yêu cầu alignment của trường lớn nhất.
 
-This is what a bad ordered struct looks like:
+Đây là cách một struct được sắp xếp tệ trông như thế nào:
 
 ```rust
 #[repr(C)]
@@ -64,10 +64,10 @@ struct BadOrder {
 }
 ```
 
-The compiler inserts 7 padding bytes after small because big requires 8-byte alignment. It then adds 6 more bytes at the end to make the total size (24 bytes) a multiple of 8 wasting 13 bytes.
+Trình biên dịch sẽ chèn 7 byte đệm sau small vì big yêu cầu 8-byte alignment. Sau đó nó thêm 6 byte nữa ở cuối để làm cho tổng kích thước (24 byte) là bội số của 8, lãng phí 13 byte.
 
 
-A better way would be to order the field of the struct like this: 
+Một cách tốt hơn là sắp xếp trường của struct như thế này:
 
 ```rust
 #[repr(C)]
@@ -79,11 +79,11 @@ struct GoodOrder {
 }
 ```
 
-By placing larger fields first, we reduce padding from 13 bytes to just 5 bytes.
+Bằng cách đặt các trường lớn hơn trước, chúng ta giảm phần đệm từ 13 byte xuống chỉ 5 byte.
 
-> The golden rule is to order struct fields from largest to smallest alignment requirements to minimize padding and reduce memory usage.
+> Quy tắc vàng là sắp xếp các trường struct từ yêu cầu alignment lớn nhất đến nhỏ nhất để giảm thiểu phần đệm và giảm sử dụng bộ nhớ.
 
-There is another, more advanced way, to serialize and deserialize data for maximum space efficiency. We can create Zero-Padding Structs where alignment requirements are eliminated entirely:
+Có một cách khác, nâng cao hơn, để serialize và deserialize dữ liệu để có hiệu quả không gian tối đa. Chúng ta có thể tạo Zero-Padding Struct nơi các yêu cầu alignment được loại bỏ hoàn toàn:
 
 ```rust
 #[repr(C)]
@@ -94,19 +94,19 @@ struct ByteArrayStruct {
 }
 ```
 
-The size in this case is exactly 11 bytes because everything is 1 byte aligned.
+Kích thước trong trường hợp này chính xác là 11 byte vì mọi thứ đều được align 1 byte.
 
-### Valid Bit Patterns 
+### Valid Bit Pattern
 
-Not all bit patterns are valid for every type. Types like `bool`, `char`, and `enums` have restricted valid values. Reading invalid bit patterns into these types is undefined behavior.
+Không phải tất cả bit pattern đều hợp lệ cho mọi kiểu. Các kiểu như `bool`, `char`, và `enum` có các giá trị hợp lệ bị hạn chế. Việc đọc bit pattern không hợp lệ vào những kiểu này là hành vi không xác định.
 
-<ArticleSection name="Reading Data" id="reading-data" level="h2" />
+<ArticleSection name="Đọc dữ liệu" id="reading-data" level="h2" />
 
-There are several approaches to reading data from account buffers, each with different trade-offs:
+Có một số cách tiếp cận để đọc dữ liệu từ buffer account, mỗi cách có những đánh đổi khác nhau:
 
-### Field-by-Field Deserialization (Recommended)
+### Deserialization Từng trường (Được khuyến nghị)
 
-The safest approach is to deserialize each field individually. This avoids all alignment issues because you're working with byte arrays:
+Cách tiếp cận an toàn nhất là deserialize từng trường riêng lẻ. Điều này tránh tất cả các vấn đề alignment vì bạn đang làm việc với mảng byte:
 
 ```rust
 pub struct DepositInstructionData {
@@ -138,7 +138,7 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
 
 ### Zero-Copy Deserialization
 
-This can be used for maximum performance with properly aligned structs but it requires careful alignment checking:
+Điều này có thể được sử dụng để có hiệu suất tối đa với các struct được align đúng cách nhưng nó yêu cầu kiểm tra alignment cẩn thận:
 
 ```rust
 #[repr(C)]
@@ -203,11 +203,11 @@ impl ConfigSafe {
 }
 ```
 
-As you can see, both seed and fee fields are private. This is because we should always use accessor methods to read data, since their values are represented by byte arrays.
+Như bạn có thể thấy, cả hai trường seed và fee đều là private. Điều này là vì chúng ta nên luôn sử dụng các phương thức accessor để đọc dữ liệu, vì giá trị của chúng được biểu diễn bằng byte array.
 
-When you access a field directly (`config.seed`), the compiler may need to create a reference to that field's memory location, even temporarily. If that field is not properly aligned, creating the reference is undefined behavior, even if you never explicitly use the reference!
+Khi bạn truy cập trực tiếp một trường (`config.seed`), compiler có thể cần tạo một tham chiếu đến vị trí bộ nhớ của trường đó, thậm chí là tạm thời. Nếu trường đó không được align đúng cách, việc tạo tham chiếu là hành vi không mong đợi, ngay cả khi bạn không bao giờ sử dụng tham chiếu một cách rõ ràng!
 
-Accessor methods avoid this by performing the read operation within the method scope, where the compiler can optimize away any intermediate references.
+Các phương thức accessor tránh điều này bằng cách thực hiện thao tác đọc trong phạm vi phương thức, nơi trình biên dịch có thể tối ưu hóa bỏ đi bất kỳ tham chiếu trung gian nào.
 
 ```rust
 #[repr(C, packed)]  // This can cause unaligned fields!
@@ -235,9 +235,9 @@ let seed_value = config.seed; // May create temporary reference internally
 let seed_value = config.seed(); // No intermediate reference
 ```
 
-> `u8` fields are always safe to access directly since `u8` has alignment of 1 and is always aligned so we can directly use `self.state`
+> Các trường `u8` luôn an toàn để truy cập trực tiếp vì `u8` có alignment là 1 và luôn được align nên chúng ta có thể sử dụng trực tiếp `self.state`
 
-In this case we don't have any "special types", but always remember that some types require extra care due to invalid bit patterns:
+Trong trường hợp này chúng ta không có bất kỳ "kiểu đặc biệt" nào, nhưng luôn nhớ rằng một số kiểu yêu cầu chăm sóc đặc biệt do bit pattern không hợp lệ:
 
 ```rust
 pub struct StateAccount {
@@ -269,7 +269,7 @@ impl StateAccount {
         // Safely handle enum
         let state_type = match data[1] {
             0 => StateType::Inactive,
-            1 => StateType::Active, 
+            1 => StateType::Active,
             2 => StateType::Paused,
             _ => return Err(ProgramError::InvalidAccountData),
         };
@@ -286,20 +286,20 @@ impl StateAccount {
 }
 ```
 
-### Dangerous Patterns to Avoid
+### Các Pattern nguy hiểm cần tránh
 
-Here are common patterns that can lead to undefined behavior and should be avoided:
+Đây là những pattern phổ biến có thể dẫn đến những hành vi không mong muốn và nên được tránh:
 
-1. Using `transmute()` with Unaligned Data
+1. Sử dụng `transmute()` với Dữ liệu Không align
 
 ```rust
 // ❌ UNDEFINED BEHAVIOR: transmute requires proper alignment
 let value: u64 = unsafe { core::mem::transmute(bytes_slice) };
 ```
 
-`transmute()` assumes the source data is properly aligned for the target type. If you're working with arbitrary byte slices, this assumption is often violated.
+`transmute()` giả định rằng dữ liệu nguồn được align đúng cách cho kiểu đích. Nếu bạn đang làm việc với các byte slice tùy ý, giả định này thường bị vi phạm.
 
-2. Pointer Casting to Packed Structs
+2. Pointer Casting đến Packed Struct
 
 ```rust
 #[repr(C, packed)]
@@ -314,9 +314,9 @@ let config = unsafe { &*(data.as_ptr() as *const PackedConfig) };
 let seed_value = config.seed; // UB: May create reference to unaligned u64
 ```
 
-Even though the struct fits in memory, accessing multi-byte fields can create unaligned references.
+Mặc dù struct vừa với bộ nhớ, việc truy cập các trường đa-byte có thể tạo ra các tham chiếu không align.
 
-3. Direct Field Access on Packed Structs
+3. Truy cập trường trực tiếp trên Packed Struct
 
 ```rust
 #[repr(C, packed)]
@@ -332,16 +332,16 @@ let b_ref = &packed.b;
 let b_value = packed.b;
 ```
 
-4. Assuming Alignment Without Verification
+4. Giả định Alignment mà không Xác minh
 
 ```rust
 // ❌ UNDEFINED BEHAVIOR: No alignment check
 let config = unsafe { &*(data.as_ptr() as *const Config) };
 ```
 
-Just because data fits doesn't mean it's aligned properly.
+Chỉ vì dữ liệu vừa khớp không có nghĩa là nó được align đúng cách.
 
-5. Using `read_unaligned()` Incorrectly
+5. Sử dụng `read_unaligned()` Không đúng
 
 ```rust
 // ❌ WRONG: read_unaligned needs proper layout, not just size
@@ -353,13 +353,13 @@ pub struct BadStruct {
 let value = unsafe { (data.as_ptr() as *const BadStruct).read_unaligned() };
 ```
 
-`read_unaligned()` still requires the struct to have a predictable layout (`#[repr(C)]`).
+`read_unaligned()` vẫn yêu cầu struct có layout có thể dự đoán (`#[repr(C)]`).
 
-<ArticleSection name="Writing Data" id="writing-data" level="h2" />
+<ArticleSection name="Ghi Dữ liệu" id="writing-data" level="h2" />
 
-Writing data safely follows similar principles to reading:
+Ghi dữ liệu một cách an toàn tuân theo các nguyên tắc tương tự như đọc:
 
-### Field-by-Field Serialization (Recommended)
+### Serialization từng trường (Được khuyến nghị)
 
 ```rust
 impl Config {
@@ -402,15 +402,15 @@ impl Config {
 }
 ```
 
-This approach it's the safest method because explicitly serializes each field into the byte buffer:
-- No alignment concerns: you're writing into a byte array
-- Explicit endianness: you control byte order with to_le_bytes()
-- Clear memory layout: easy to debug and understand
-- No undefined behavior: all operations are on byte arrays
+Cách tiếp cận này là phương pháp an toàn nhất vì serialize rõ ràng từng trường vào byte buffer:
+- Không lo lắng về alignment: bạn đang ghi vào byte array
+- Endianness rõ ràng: bạn kiểm soát thứ tự byte với to_le_bytes()
+- Layout memory rõ ràng: dễ debug và hiểu
+- Không có hành vi bất ngờ: tất cả thao tác đều trên byte array
 
 ### Direct Mutation (Zero-Copy)
 
-For maximum performance, you can cast the byte buffer to a struct and mutate fields directly. This requires the struct to be properly aligned:
+Để có hiệu suất tối đa, bạn có thể ép byte buffer thành struct và chỉnh sửa các trường trực tiếp. Điều này yêu cầu struct được align đúng cách:
 
 ```rust
 impl Config {
@@ -419,7 +419,7 @@ impl Config {
             return Err(ProgramError::InvalidAccountData);
         }
 
-        // Check alignment
+         // Check alignment
         if (data.as_ptr() as usize) % core::mem::align_of::<Self>() != 0 {
             return Err(ProgramError::InvalidAccountData);
         }
@@ -430,11 +430,11 @@ impl Config {
 }
 ```
 
-When alignment is verified and the struct uses `#[repr(C)]`, direct field mutation doesn't create unaligned references.
+Khi alignment được xác minh và struct sử dụng `#[repr(C)]`, chỉnh sửa các trường trực tiếp không tạo ra tham chiếu unaligned.
 
-### Byte Array Approach with Setters (Safest + Fast)
+### Cách tiếp cận Byte Array với Setter (An toàn nhất + Nhanh)
 
-The best of both worlds: we can use byte arrays internally but provide ergonomic setters:
+Tốt nhất của cả hai thế giới: chúng ta có thể sử dụng byte array bên trong nhưng cung cấp setter ergonomic:
 
 ```rust
 #[repr(C)]
@@ -457,11 +457,11 @@ impl ConfigSafe {
         // No alignment check needed - everything is u8 aligned
         Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
     }
-    
+
     pub fn seed(&self) -> u64 {
         u64::from_le_bytes(self.seed)
     }
-    
+
     pub fn fee(&self) -> u16 {
         u16::from_le_bytes(self.fee)
     }
@@ -471,28 +471,28 @@ impl ConfigSafe {
     pub fn set_seed(&mut self, seed: u64) {
         self.seed = seed.to_le_bytes();
     }
-    
+
     pub fn set_fee(&mut self, fee: u16) {
         self.fee = fee.to_le_bytes();
     }
 }
 ```
 
-This is ideal because: 
-- No alignment issues: all fields are byte-aligned
-- Fast direct mutation: no serialization overhead after initial setup
-- Consistent endianness: setters handle byte order conversion
-- Type safety: setters take the expected types, not byte arrays
+Điều này lý tưởng vì:
+- Không có vấn đề alignment: tất cả trường đều được byte-aligned
+- Sửa trực tiếp nhanh: không có overhead serialization sau khi thiết lập ban đầu
+- Endianness nhất quán: setter xử lý chuyển đổi thứ tự byte
+- Type safety: setter nhận các kiểu mong đợi, không phải byte array
 
-<ArticleSection name="Dynamically Sized Data" id="dynamically-sized-data" level="h2" />
+<ArticleSection name="Dữ liệu kích thước động" id="dynamically-sized-data" level="h2" />
 
-Whenever possible, avoid storing dynamically sized data directly in accounts. However, some use cases require it.
+Bất cứ khi nào có thể, tránh lưu trữ dữ liệu kích thước động trực tiếp trong account. Tuy nhiên, một số trường hợp sử dụng yêu cầu điều đó.
 
-If your account contains dynamic data, always place all statically sized fields at the beginning of your struct, and append the dynamic data at the end.
+Nếu account của bạn chứa dữ liệu động, luôn đặt tất cả các trường kích thước tĩnh ở đầu struct của bạn, và thêm dữ liệu động ở cuối.
 
-### Single Dynamic Field
+### Các trường dộng đơn
 
-This is the simplest case: one variable-length section at the end of your account:
+Đây là trường hợp đơn giản nhất: một phần có độ dài biến đổi ở cuối account của bạn:
 
 ```rust
 #[repr(C)]
@@ -576,13 +576,13 @@ impl DynamicAccount {
 }
 ```
 
-To avoid undefined behavior, always check that the account data buffer is at least as large as the statically sized portion. The dynamic section may be empty, so this check is essential.
+Để tránh hành vi không ngờ, luôn kiểm tra rằng buffer dữ liệu account ít nhất bằng phần kích thước tĩnh. Phần động có thể trống, vì vậy kiểm tra này là thiết yếu.
 
-This layout ensures that the offsets for fixed-size fields are always known, regardless of the dynamic data’s length.
+Bố cục này đảm bảo rằng các offset cho các trường kích thước cố định luôn được biết, bất kể độ dài của dữ liệu động.
 
-There are two main scenarios when reading dynamically sized data:
+Có hai kịch bản chính khi đọc dữ liệu kích thước động:
 
-- Single dynamic field at the end: You can easily determine the size and offset of the dynamic data at runtime like this:
+- Trường động đơn ở cuối: Bạn có thể dễ dàng xác định kích thước và offset của dữ liệu động tại runtime như thế này:
 
 ```rust
 const DYNAMIC_DATA_START_OFFSET: usize = size_of::<[u8; 32]>();
@@ -616,11 +616,11 @@ impl DynamicallySizedAccount {
 }
 ```
 
-### Multiple Dynamic Fields
+### Nhiều trường động
 
-This approach is more complex since we will need a way to determine the length of each dynamic field except the last. The most common approach is to prefix each dynamic field (except the last) with its length, so we can parse the buffer correctly.
+Cách tiếp cận này phức tạp hơn vì chúng ta sẽ cần một cách để xác định độ dài của mỗi trường động ngoại trừ trường cuối cùng. Cách tiếp cận phổ biến nhất là đặt tiền tố cho mỗi trường động (ngoại trừ trường cuối cùng) với độ dài của nó, để chúng ta có thể parse buffer một cách chính xác.
 
-Here’s a simple and robust pattern: store the length of the first dynamic field as a u8 (or u16, etc. if you need larger sizes) immediately after the statically sized data. The first dynamic field follows, and the second dynamic field occupies the remainder of the buffer.
+Đây là một pattern đơn giản và nhanh: lưu trữ độ dài của trường động đầu tiên ở dạng u8 (hoặc u16, etc. nếu bạn cần kích thước lớn hơn) ngay sau dữ liệu kích thước cố định. Trường động đầu tiên theo sau, và trường động thứ hai chiếm phần còn lại của buffer.
 
 ```rust
 #[repr(C)]  

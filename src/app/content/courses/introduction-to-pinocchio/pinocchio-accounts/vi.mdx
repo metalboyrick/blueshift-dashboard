@@ -1,11 +1,11 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-# Accounts
+# Các Account
 
-As we saw in the previous section, account validation with Pinocchio differs from Anchor since we can't use Account Types that automatically perform owner, signature, and discriminator checks.
+Như chúng ta đã thấy trong phần trước, xác thực account với Pinocchio khác với Anchor vì chúng ta không thể sử dụng Account Type tự động thực hiện kiểm tra owner, signature và discriminator.
 
-In Native Rust, we need to perform these validations manually. While this requires more attention to detail, it's straightforward to implement:
+Trong Native Rust, chúng ta cần thực hiện các xác thực này thủ công. Mặc dù điều này làm nhiều chi tiết hơn, nhưng nó khá đơn giản để triển khai:
 
 ```rust
 // SignerAccount type
@@ -14,7 +14,7 @@ if !account.is_signer() {
 }
 ```
 
-Or for an owner check:
+Hoặc đối với kiểm tra owner:
 
 ```rust
 // SystemAccount type
@@ -23,29 +23,29 @@ if !account.is_owned_by(&pinocchio_system::ID) {
 }
 ```
 
-By wrapping all validations in the `TryFrom` implementation we covered earlier, we can easily identify missing checks and ensure we're writing secure code.
+Bằng cách bao bọc tất cả các xác thực trong triển khai `TryFrom` mà chúng ta đã đề cập trước đó, chúng ta có thể dễ dàng xác định các kiểm tra bị thiếu và đảm bảo rằng chúng ta đang viết code an toàn.
 
-However, writing these checks for each instruction can become repetitive. To address this, we created a `helper.rs` file that defines similar types to Anchor's to streamline these validations.
+Tuy nhiên, việc viết những kiểm tra này cho mỗi instruction có thể trở nên lặp đi lặp lại. Để giải quyết vấn đề này, chúng tôi đã tạo một file `helper.rs` định nghĩa các kiểu tương tự như của Anchor để hợp lý hóa các xác thực này.
 
-### Common Interfaces and Traits
+### Common Interface và Trait
 
-For our `helper.rs` file, we leveraged two fundamental Rust concepts: **Common Interfaces** and **Traits**.
+Đối với file `helper.rs` của chúng tôi, chúng tôi đã tận dụng hai khái niệm cơ bản của Rust: **Common Interface** và **Trait**.
 
-We chose this approach over a macro-based solution (like Anchor's) for several key reasons:
-- Traits and Interfaces provide clear, explicit code that readers can follow without having to mentally "expand" macros
-- The compiler can verify trait implementations, enabling better error detection, type inference, auto-completion, and refactoring tools
-- Traits allow for generic implementations that can be reused without code duplication, while Procedural macros duplicate code for each use
-- These traits can be packaged into a reusable crate, whereas macro-generated APIs are typically limited to the crate they're defined in
+Chúng tôi chọn cách tiếp cận này thay vì giải pháp dựa trên macro (như của Anchor) vì một số lý do chính:
+- Trait và Interface cung cấp code rõ ràng, tường minh mà người đọc có thể theo dõi mà không cần phải "mở rộng" macro trong đầu
+- Trình biên dịch có thể xác minh các triển khai trait, cho phép phát hiện lỗi tốt hơn, suy luận kiểu, auto-completion và công cụ refactoring
+- Trait cho phép các triển khai generic có thể được tái sử dụng mà không cần nhân bản code, trong khi Procedural macro nhân bản code cho mỗi lần sử dụng
+- Những trait này có thể được đóng gói thành một crate có thể tái sử dụng, trong khi các API được tạo bởi macro thường bị giới hạn trong crate mà chúng được định nghĩa
 
-Now that you understand our design decision, let's explore the syntax and functionality of these concepts.
+Bây giờ bạn đã hiểu quyết định thiết kế của chúng tôi, hãy khám phá cú pháp và chức năng của những khái niệm này.
 
-**What are Traits and Common Interfaces?**
+**Trait và Common Interface là gì?**
 
-If you're familiar with other programming languages, you might recognize traits as similar to "interfaces"; they define contracts that specify what methods a type must implement.
+Nếu bạn quen thuộc với các ngôn ngữ lập trình khác, bạn có thể nhận ra trait tương tự như "interface"; chúng định nghĩa các hợp đồng chỉ định những phương thức mà một kiểu phải triển khai.
 
-In Rust, a trait acts as a blueprint that declares "any type implementing this must provide these specific functions."
+Trong Rust, một trait hoạt động như một bản thiết kế tuyên bố "bất kỳ kiểu nào triển khai điều này phải cung cấp những hàm cụ thể này."
 
-Here's a simple example:
+Đây là một ví dụ đơn giản:
 
 ```rust
 // Define a Trait
@@ -79,15 +79,15 @@ impl AccountCheck for SystemAccount {
 }
 ```
 
-The beauty here is that now any account type that implements `AccountCheck` can be used in the same way; we can call `.check()` on any of them, and each type handles the validation logic that makes sense for it.
+Điều tuyệt vời ở đây là bây giờ bất kỳ kiểu account nào triển khai `AccountCheck` đều có thể được sử dụng theo cùng một cách; chúng ta có thể gọi `.check()` trên bất kỳ cái nào trong số chúng, và mỗi kiểu xử lý logic xác thực có ý nghĩa đối với nó.
 
-This is what we mean by "common interface": different types sharing the same method signatures.
+Đây là những gì chúng ta có ý là "common interface": các kiểu khác nhau chia sẻ cùng các method signature.
 
-Now let's see how we apply this to our account security checks:
+Bây giờ hãy xem cách chúng ta áp dụng điều này vào các kiểm tra bảo mật account của chúng ta:
 
-<ArticleSection name="Signer and System Account" id="signer-and-system-account" level="h2" />
+<ArticleSection name="Signer và System Account" id="signer-and-system-account" level="h2" />
 
-As we saw in the previous examples, `SystemAccount` and `SignerAccount` checks are straightforward and don't require any additional validation, so we're going to add the following to our `helper.rs`:
+Như chúng ta đã thấy trong các ví dụ trước, kiểm tra `SystemAccount` và `SignerAccount` rất đơn giản và không yêu cầu bất kỳ xác thực bổ sung nào, vì vậy chúng ta sẽ thêm những điều sau vào `helper.rs` của chúng ta:
 
 <Codeblock lang="rust">
 ```rust
@@ -120,11 +120,11 @@ impl AccountCheck for SystemAccount {
 ```
 </Codeblock>
 
-Here we simply check if the account is a signer or if it's owned by the system program. Notice how both structs provide the same check method, giving us that common interface we talked about.
+Ở đây chúng ta chỉ đơn giản kiểm tra xem account có phải là signer hay nó có được sở hữu bởi system program không. Chú ý cách cả hai struct đều cung cấp cùng một phương thức check, mang lại cho chúng ta common interface mà chúng ta đã nói đến.
 
-<ArticleSection name="Mint and Token Accounts" id="mint-and-token-accounts" level="h2" />
+<ArticleSection name="Mint và Token Account" id="mint-and-token-accounts" level="h2" />
 
-Now things get more interesting. We start with the usual `AccountCheck` trait, but we also add other specific traits to provide additional helpers that resemble Anchor macros like `init` and `init_if_needed`.
+Bây giờ mọi thứ trở nên thú vị hơn. Chúng ta bắt đầu với trait `AccountCheck` thông thường, nhưng chúng ta cũng thêm các trait cụ thể khác để cung cấp các helper bổ sung giống với các macro Anchor như `init` và `init_if_needed`.
 
 <Codeblock lang="rust">
 ```rust
@@ -146,7 +146,7 @@ impl AccountCheck for MintAccount {
 ```
 </Codeblock>
 
-For the `init` and `init_if_needed` functionality, we create another trait called `MintInit` that we use specifically for this purpose because of the unique fields required. We then use `CreateAccount` and `InitializeMint2` CPIs to initialize the `Mint` account:
+Đối với chức năng `init` và `init_if_needed`, chúng ta tạo một trait khác gọi là `MintInit` mà chúng ta sử dụng cụ thể cho mục đích này vì các trường duy nhất được yêu cầu. Sau đó chúng ta sử dụng CPI `CreateAccount` và `InitializeMint2` để khởi tạo account `Mint`:
 
 <Codeblock lang="rust">
 ```rust
@@ -188,7 +188,7 @@ impl MintInit for MintAccount {
 </Codeblock>
 
 
-We then exactly the same for the `TokenAccount`:
+Sau đó chúng ta làm chính xác như vậy cho `TokenAccount`:
 
 <Codeblock lang="rust">
 ```rust
@@ -247,15 +247,15 @@ impl AccountInit for TokenAccount {
 
 ### Token2022
 
-You might have noticed that for the Legacy SPL Token Program, we only performed a length check on the `Mint` and `TokenAccount`. This approach works because when you have just two account types with fixed sizes, you can distinguish between them using their length alone.
+Bạn có thể đã nhận thấy rằng đối với Legacy SPL Token Program, chúng ta chỉ thực hiện kiểm tra độ dài trên `Mint` và `TokenAccount`. Cách tiếp cận này hoạt động vì khi bạn chỉ có hai kiểu account với kích thước cố định, bạn có thể phân biệt giữa chúng chỉ bằng độ dài của chúng.
 
-For Token2022, this simple approach doesn't work. The `Mint` size can grow and potentially exceed the `TokenAccount` size when token extensions are added directly to the `Mint` data. This means we can't rely solely on size to differentiate between account types.
+Đối với Token2022, cách tiếp cận đơn giản này không hoạt động. Kích thước `Mint` có thể tăng lên và có thể vượt quá kích thước `TokenAccount` khi các token extension được thêm trực tiếp vào dữ liệu `Mint`. Điều này có nghĩa là chúng ta không thể chỉ dựa vào kích thước để phân biệt giữa các kiểu account.
 
-For Token2022, we can distinguish between a `Mint` and a `TokenAccount` in two ways:
-- **By size**: Similar to the Legacy Token Program (when accounts have standard sizes)
-- **By discriminator**: A special byte located at position 165 (one byte larger than the legacy TokenAccount to avoid conflicts)
+Đối với Token2022, chúng ta có thể phân biệt giữa `Mint` và `TokenAccount` theo hai cách:
+- **Theo kích thước**: Tương tự như Legacy Token Program (khi các account có kích thước tiêu chuẩn)
+- **Theo discriminator**: Một byte đặc biệt nằm ở vị trí 165 (lớn hơn một byte so với legacy TokenAccount để tránh xung đột)
 
-This leads to modified validation checks:
+Điều này dẫn đến các kiểm tra xác thực được sửa đổi:
 
 <Codeblock lang="rust">
 ```rust
@@ -377,7 +377,7 @@ impl AccountInit for TokenAccount2022Account {
 
 ### Token Interface
 
-Since we want to make it easy to work with both Token2022 and Legacy Token Programs without having to discriminate between them, we created a helper that follows the same basic principle:
+Vì chúng ta muốn khiến cho việc làm việc với cả Token2022 và Legacy Token Program trở nên dễ dàng mà không cần phân biệt giữa chúng, chúng ta đã tạo một helper tuân theo cùng nguyên tắc cơ bản:
 
 <Codeblock lang="rust">
 ```rust
@@ -445,7 +445,7 @@ impl AccountCheck for TokenAccountInterface {
 
 ### Associated Token Account
 
-We can create some checks for the Associated Token Program. These are very similar to the normal Token Program checks, but they include an additional derivation check to ensure the account is derived correctly.
+Chúng ta có thể tạo một số kiểm tra cho Associated Token Program. Chúng rất giống với các kiểm tra Token Program thông thường, nhưng chúng bao gồm một kiểm tra derivation bổ sung để đảm bảo account được derive một cách chính xác.
 
 <Codeblock lang="rust">
 ```rust
@@ -496,13 +496,13 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
 ```
 </Codeblock>
 
-<ArticleSection name="Program Accounts" id="program-accounts" level="h2" />
+<ArticleSection name="Các tài khoản của chương trình" id="program-accounts" level="h2" />
 
-Finally, we implement checks and helpers for program accounts, including `init` and `close` functionality.
+Cuối cùng, chúng ta triển khai các kiểm tra và helper cho các tài khoản của chương trình, bao gồm chức năng `init` và `close`.
 
-You might notice something interesting in our `close` implementation: we resize the account to almost nothing, leaving only the first byte and setting it to 255. This is a security measure to prevent reinitialization attacks.
+Bạn có thể nhận thấy điều gì đó thú vị trong triển khai `close` của chúng ta: chúng ta thay đổi kích thước account thành gần như không có gì, chỉ để lại byte đầu tiên và đặt nó thành 255. Đây là một biện pháp bảo mật để ngăn chặn các cuộc tấn công tái khởi tạo.
 
-A reinitialization attack occurs when an attacker attempts to reuse a closed account by reinitializing it with malicious data. By setting the first byte to 255 and shrinking the account to nearly zero size, we make it impossible for the account to be mistaken for any valid account type in the future. This is a common security pattern in Solana programs.
+Một cuộc tấn công tái khởi tạo xảy ra khi kẻ tấn công cố gắng tái sử dụng một account đã đóng bằng cách khởi tạo lại nó với dữ liệu độc hại. Bằng cách đặt byte đầu tiên thành 255 và thu nhỏ account xuống gần như kích thước bằng không, chúng ta làm cho account không thể bị nhầm lẫn với bất kỳ kiểu account hợp lệ nào trong tương lai. Đây là một pattern bảo mật phổ biến trong các chương trình Solana.
 
 <Codeblock lang="rust">
   ```rust
@@ -577,11 +577,11 @@ A reinitialization attack occurs when an attacker attempts to reuse a closed acc
   ```
 </Codeblock>
 
-### Optimizing Account Data Access
+### Tối ưu hóa việc truy cập dữ liệu của Account
 
-While we could implement a generalized `Trait` to read from the `ProgramAccount`, it's more efficient to create specific `readers` and `setters` that access only the required fields instead of deserializing the entire account. This approach reduces computational overhead and gas costs.
+Mặc dù chúng ta có thể triển khai một `Trait` tổng quát để đọc từ `ProgramAccount`, nhưng hiệu quả hơn là tạo các `reader` và `setter` cụ thể chỉ truy cập các trường cần thiết thay vì deserialize toàn bộ account. Cách tiếp cận này giảm overhead tính toán và chi phí gas.
 
-Here's an example of how to implement this optimization:
+Đây là một ví dụ về cách triển khai tối ưu hóa này:
 
 ```rust
 #[repr(C)]
@@ -645,12 +645,12 @@ impl AccountExample {
 }
 ```
 
-This implementation provides three methods for accessing account data:
-1. `from_account_info`: A safe method that performs full validation and borrow checking
-2. `from_account_info_unchecked`: An unsafe method that skips borrow checking but still validates account properties
-3. `from_bytes`: An unsafe method for direct byte access, used internally by the other methods
+Triển khai này cung cấp ba phương thức để truy cập dữ liệu account:
+1. `from_account_info`: Một phương thức an toàn thực hiện xác thực đầy đủ và kiểm tra borrow
+2. `from_account_info_unchecked`: Một phương thức unsafe bỏ qua kiểm tra borrow nhưng vẫn xác thực các thuộc tính account
+3. `from_bytes`: Một phương thức unsafe để truy cập byte trực tiếp, được sử dụng nội bộ bởi các phương thức khác
 
-We can also implement a `set_inner` helper for updating account data:
+Chúng ta cũng có thể triển khai một helper `set_inner` để cập nhật dữ liệu account:
 
 ```rust
 #[inline(always)]
@@ -660,7 +660,7 @@ pub fn set_inner(&mut self, seed: u64, bump: [u8;1]) {
 }
 ```
 
-For more granular control and efficiency, we can implement specific getters and setters using fixed offsets:
+Để kiểm soát chi tiết hơn và hiệu quả hơn, chúng ta có thể triển khai các getter và setter cụ thể sử dụng offset cố định:
 
 ```rust
 const SEED_OFFSET: usize = 0;
@@ -715,12 +715,12 @@ pub fn set_seeds_unchecked(account_info: &AccountInfo, seed: u64) -> Result<(), 
 }
 ```
 
-This implementation provides:
-1. A constant `SEED_OFFSET` to track the position of the seed data
-2. A validation function `check_program_id_and_discriminator`
-3. Safe and unsafe versions of getters and setters
-4. Inline optimizations for better performance
+Triển khai này cung cấp:
+1. Một hằng số `SEED_OFFSET` để theo dõi vị trí của dữ liệu seed
+2. Một hàm xác thực `check_program_id_and_discriminator`
+3. Các phiên bản an toàn và không an toàn của getter và setter
+4. Sử dụng inline để có hiệu suất tốt hơn
 
-The unsafe versions skip validation checks for better performance when you're certain the account is valid, while the safe versions ensure proper validation before accessing the data.
+Các phiên bản khoogn an toàn bỏ qua kiểm tra xác thực để có hiệu suất tốt hơn khi bạn chắc chắn account hợp lệ, trong khi các phiên bản an toàn đảm bảo xác thực thích hợp trước khi truy cập dữ liệu.
 
 
