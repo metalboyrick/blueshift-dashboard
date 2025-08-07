@@ -179,7 +179,7 @@
     "assembly-slippage": {
       "title": "Assembly Slippage",
       "requirements": {
-        "log": {
+        "slippage": {
           "title": "Challenge: Slippage check and prevention"
         }
       }
