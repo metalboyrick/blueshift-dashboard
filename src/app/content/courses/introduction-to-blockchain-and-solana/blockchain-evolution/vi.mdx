@@ -1,101 +1,101 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Blockchain Evolution
+# Sự phát triển của Blockchain
 
-Now that you understand how consensus mechanisms and cryptographic primitives work, let's explore how these concepts evolved from Bitcoin's simple value transfer to today's programmable blockchain platforms. 
+Bây giờ bạn đã hiểu cách các cơ chế đồng thuận và mật mã học nguyên thủy hoạt động, hãy khám phá cách những khái niệm này phát triển từ việc chuyển giá trị đơn giản của Bitcoin đến các nền tảng blockchain có thể lập trình ngày nay.
 
-Each major blockchain represents different engineering decisions and tradeoffs, shaped by the fundamental constraints we've learned about.
+Mỗi blockchain chính đại diện cho các quyết định kỹ thuật và đánh đổi khác nhau, được định hình bởi các ràng buộc cơ bản mà chúng ta đã học.
 
 <ArticleSection name="Bitcoin" id="bitcoin" level="h2" />
 
-Bitcoin wasn't designed to be a general-purpose computer; it was built to solve one specific problem: creating digital money that works without banks or governments. Every design decision in Bitcoin reflects this singular focus.
+Bitcoin không được thiết kế để trở thành một máy tính đa mục đích; nó được xây dựng để giải quyết một vấn đề cụ thể: tạo ra tiền kỹ thuật số hoạt động mà không cần ngân hàng hoặc chính phủ. Mọi quyết định thiết kế trong Bitcoin đều phản ánh trọng tâm duy nhất này.
 
-### Consensus
+### Đồng thuận
 
-Bitcoin uses the original Proof of Work implementation that Satoshi designed. Miners compete to find a nonce (random number) that, when hashed with the block data, produces a hash starting with a specific number of zeros. 
+Bitcoin sử dụng triển khai Proof of Work gốc mà Satoshi đã thiết kế. Thợ mỏ cạnh tranh để tìm một nonce (số ngẫu nhiên) mà khi được băm với dữ liệu khối, tạo ra một hash bắt đầu bằng một số lượng số rezo cụ thể.
 
-The network automatically adjusts the difficulty every 2,016 blocks (approximately two weeks) to maintain an average block time of 10 minutes.
+Mạng tự động điều chỉnh độ khó mỗi 2,016 khối (khoảng hai tuần) để duy trì thời gian khối trung bình là 10 phút.
 
-This timing isn't arbitrary. Faster blocks would cause network splits where miners work on different blockchain versions. Slower blocks would make transactions painfully slow.
+Thời gian này không phải là tùy ý. Các khối nhanh hơn sẽ gây ra sự phân tách mạng nơi thợ mỏ làm việc trên các phiên bản blockchain khác nhau. Các khối chậm hơn sẽ làm cho giao dịch chậm một cách đau đớn.
 
-### The UTXO Model 
+### Mô hình UTXO
 
-Bitcoin doesn't track account balances like banks do. Instead, it tracks individual "coins" using UTXOs (Unspent Transaction Outputs), which function similarly to physical cash.
+Bitcoin không theo dõi số dư tài khoản như ngân hàng làm. Thay vào đó, nó theo dõi từng "đồng tiền" riêng lẻ bằng cách sử dụng UTXO (Unspent Transaction Outputs), hoạt động tương tự như tiền mặt vật lý.
 
-Imagine you have three $20 bills in your wallet and want to buy something that costs $35. You can't split a $20 bill, so you give the cashier two bills ($40) and receive $5 in change. Bitcoin works exactly the same:
+Hãy tưởng tượng bạn có ba tờ 20 đô la trong ví và muốn mua thứ gì đó có giá 35 đô la. Bạn không thể chia một tờ 20 đô la, vì vậy bạn đưa cho thu ngân hai tờ (40 đô la) và nhận lại 5 đô la tiền thối. Bitcoin hoạt động hoàn toàn giống như vậy:
 
-Let's say Alice has received bitcoin in three separate transactions:
-- UTXO #1: 0.5 BTC (from Bob)
-- UTXO #2: 0.3 BTC (from Carol)
-- UTXO #3: 0.8 BTC (from Dave)
+Giả sử Alice đã nhận bitcoin trong ba giao dịch riêng biệt:
+- UTXO #1: 0.5 BTC (từ Bob)
+- UTXO #2: 0.3 BTC (từ Carol)
+- UTXO #3: 0.8 BTC (từ Dave)
 
-Alice's "balance" is 1.6 BTC, but there's no single account storing this number. Instead, the blockchain records three separate UTXOs that Alice can spend.
+"Số dư" của Alice là 1.6 BTC, nhưng không có tài khoản đơn lẻ nào lưu trữ con số này. Thay vào đó, blockchain ghi lại ba UTXO riêng biệt mà Alice có thể chi tiêu.
 
-When Alice wants to send 1.0 BTC to Eve, she must:
-- Select UTXOs that total at least 1.0 BTC (she chooses UTXO #1 and #3, totaling 1.3 BTC)
-- Create a transaction where she sends 1.0 BTC to Eve and 0.3 BTC back to herself as change
-- Sign the transaction with her private key to prove she owns the input UTXOs
+Khi Alice muốn gửi 1.0 BTC cho Eve, cô ấy phải:
+- Chọn các UTXO có tổng ít nhất 1.0 BTC (cô ấy chọn UTXO #1 và #3, tổng cộng 1.3 BTC)
+- Tạo một giao dịch nơi cô ấy gửi 1.0 BTC cho Eve và 0.3 BTC trở lại cho chính mình như tiền thối
+- Ký giao dịch bằng private key của mình để chứng minh cô ấy sở hữu các UTXO đầu vào
 
-The transaction consumes UTXOs #1 and #3 (they're now "spent") and creates two new UTXOs: one for Eve and one change UTXO for Alice.
+Giao dịch tiêu thụ UTXO #1 và #3 (bây giờ chúng đã "được chi tiêu") và tạo ra hai UTXO mới: một cho Eve và một UTXO tiền thối cho Alice.
 
-This model enables powerful features:
-- Parallelizable Processing: Since each UTXO can only be spent once, transactions using different UTXOs don't conflict. Miners can validate thousands of transactions simultaneously without worrying about double-spending, as long as each transaction references different UTXOs.
-- Privacy: There's no global account that reveals your total balance. Your bitcoins are spread across multiple UTXOs, making it harder for observers to determine your total wealth. Each UTXO might be linked to a different address, further obscuring ownership patterns.
-- Simple Verification: Each transaction can be verified independently by checking that the input UTXOs exist and haven't been spent, and that the digital signatures are valid. You don't need to maintain complex account state or worry about the order of transactions affecting balances.
-- Atomic Operations: Either a transaction succeeds completely (consuming all inputs and creating all outputs) or fails completely. There's no risk of partial state where some money is deducted but not transferred.
+Mô hình này cho phép các tính năng mạnh mẽ:
+- Xử lý Song song: Vì mỗi UTXO chỉ có thể được chi tiêu một lần, các giao dịch sử dụng UTXO khác nhau không xung đột. Thợ mỏ có thể xác thực hàng nghìn giao dịch đồng thời mà không lo lắng về chi tiêu kép, miễn là mỗi giao dịch tham chiếu đến UTXO khác nhau.
+- Quyền riêng tư: Không có tài khoản toàn cầu nào tiết lộ tổng số dư của bạn. Bitcoin của bạn được phân tán trên nhiều UTXO, khiến người quan sát khó xác định tổng tài sản của bạn. Mỗi UTXO có thể được liên kết với một địa chỉ khác nhau, che khuất thêm các mẫu sở hữu.
+- Xác minh Đơn giản: Mỗi giao dịch có thể được xác minh độc lập bằng cách kiểm tra rằng các UTXO đầu vào tồn tại và chưa được chi tiêu, và các chữ ký số hợp lệ. Bạn không cần duy trì trạng thái tài khoản phức tạp hoặc lo lắng về thứ tự giao dịch ảnh hưởng đến số dư.
+- Thao tác Nguyên tử: Hoặc một giao dịch thành công hoàn toàn (tiêu thụ tất cả đầu vào và tạo tất cả đầu ra) hoặc thất bại hoàn toàn. Không có rủi ro trạng thái một phần nơi một số tiền bị khấu trừ nhưng không được chuyển.
 
 <ArticleSection name="Ethereum" id="ethereum" level="h2" />
 
-While Bitcoin solved digital payments, Vitalik Buterin recognized a bigger opportunity: what if the blockchain could run any program, not just transfer money? This vision led to Ethereum: the first general-purpose blockchain computer.
+Trong khi Bitcoin giải quyết thanh toán kỹ thuật số, Vitalik Buterin nhận ra một cơ hội lớn hơn: điều gì sẽ xảy ra nếu blockchain có thể chạy bất kỳ chương trình nào, không chỉ chuyển tiền? Tầm nhìn này dẫn đến Ethereum: máy tính blockchain đa mục đích đầu tiên.
 
-Bitcoin's UTXO model works perfectly for payments but becomes clunky for complex applications that need persistent state, complex logic, and composability between different programs.
+Mô hình UTXO của Bitcoin hoạt động hoàn hảo cho thanh toán nhưng trở nên cồng kềnh cho các ứng dụng phức tạp cần trạng thái bền vững, logic phức tạp và khả năng kết hợp giữa các chương trình khác nhau.
 
-### Consensus
+### Đồng thuận
 
-Ethereum originally used Proof of Work but switched to Proof of Stake in 2022 during "The Merge." This transition maintained security while gaining crucial benefits:
-- Mathematical Finality: After about 13 minutes, transactions become mathematically irreversible
-- Energy Efficiency: No more massive electricity consumption
-- Future Upgrades: Proof of Stake enables sharding: splitting the network into parallel chains for higher throughput
+Ethereum ban đầu sử dụng Proof of Work nhưng đã chuyển sang Proof of Stake vào năm 2022 thông qua "The Merge." Quá trình chuyển đổi này duy trì bảo mật trong khi đạt được những lợi ích quan trọng:
+- Tính thống nhất cuối cùng về mặt toán học: Sau khoảng 13 phút, các giao dịch trở nên không thể đảo ngược về mặt toán học
+- Hiệu quả về mặt năng lượng: Không còn tiêu thụ điện năng khổng lồ
+- Có khả năng nâng cấp trong tương lai: Proof of Stake cho phép sharding: chia mạng thành các chuỗi song song để có thông lượng cao hơn
 
-### The Account Model
+### Mô hình Account
 
-Ethereum replaced Bitcoin's UTXO system with familiar account-based balances, enabling:
-- Smart Contracts: Programs that live on the blockchain and maintain their own state
-- External Accounts: User-controlled accounts like Bitcoin addresses
-- Inter-Contract Calls: Smart contracts can interact with each other seamlessly
+Ethereum thay thế hệ thống UTXO của Bitcoin bằng số dư dựa trên tài khoản quen thuộc, cho phép:
+- Smart Contract: Các chương trình sống trên blockchain và duy trì trạng thái riêng của chúng
+- External Account: Các tài khoản do người dùng kiểm soát như địa chỉ Bitcoin
+- Lời gọi Inter-Contract: Smart contract có thể tương tác với nhau một cách liền mạch
 
-In Ethereum, there are two types of accounts:
-- Externally Owned Accounts (EOAs): Controlled by users with private keys, similar to Bitcoin addresses. They have a balance and can send transactions.
-- Contract Accounts: Controlled by code, not private keys. They have a balance AND store executable code plus persistent data.
+Trong Ethereum, có hai loại tài khoản:
+- Externally Owned Account (EOA): Được kiểm soát bởi người dùng với private key, tương tự như địa chỉ Bitcoin. Chúng có số dư và có thể gửi giao dịch.
+- Contract Account: Được kiểm soát bởi code, không có private key. Chúng có số dư VÀ lưu trữ code có thể thực thi cộng với dữ liệu bền vững.
 
-For this reason, on Ethereum, smart contracts are autonomous programs that live on the blockchain, maintain their own state, and can be called by other accounts.
+Vì lý do này, trên Ethereum, smart contract là các chương trình tự động sống trên blockchain, duy trì trạng thái riêng của chúng và có thể được gọi bởi các tài khoản khác.
 
-This account model enables persistent state—data that survives across transactions. A smart contract can remember information from previous interactions, maintain complex data structures, and evolve over time. 
+Mô hình tài khoản này đảm bảo sự bền vững cho dữ liệu trạng thái tồn tại qua các giao dịch. Một smart contract có thể nhớ thông tin từ các tương tác trước đó, duy trì cấu trúc dữ liệu phức tạp và phát triển theo thời gian.
 
-This makes applications like lending protocols, governance systems, and complex financial instruments possible.
+Điều này làm cho các ứng dụng như giao thức cho vay, hệ thống quản trị và các công cụ tài chính phức tạp trở nên khả thi.
 
-All of this is possible thanks to the Ethereum Virtual Machine (EVM), which runs on every node and makes the blockchain programmable. It defines what programs can run, how they execute, and what resources they consume.
+Tất cả điều này có thể nhờ Ethereum Virtual Machine (EVM), chạy trên mọi node và làm cho blockchain có thể lập trình. Nó định nghĩa những chương trình nào có thể chạy, cách chúng thực thi và tài nguyên nào chúng tiêu thụ.
 
 <ArticleSection name="Solana" id="solana" level="h2" />
 
-Ethereum demonstrated that blockchains could support general-purpose computation, but this success revealed scalability constraints. As decentralized applications gained adoption, network congestion led to high transaction fees and slower confirmation times. 
+Ethereum chứng minh rằng blockchain có thể hỗ trợ tính toán đa mục đích, nhưng thành công này tiết lộ các ràng buộc về khả năng mở rộng. Khi các ứng dụng phi tập trung được áp dụng rộng rãi, tắc nghẽn mạng dẫn đến phí giao dịch cao và thời gian xác nhận chậm hơn.
 
-These limitations stemmed from fundamental architectural decisions in Ethereum's design, which Solana attempts to address through architectural innovations by redesigning core blockchain components from first principles.
+Những hạn chế này xuất phát từ các quyết định kiến trúc cơ bản trong thiết kế của Ethereum, mà Solana cố gắng giải quyết thông qua các đổi mới kiến trúc bằng cách thiết kế lại các thành phần blockchain cốt lõi từ các nguyên tắc đầu tiên.
 
-### Consensus
+### Đồng thuận
 
-Solana uses Proof of Stake but adds a crucial innovation: Proof of History. Instead of waiting for consensus on when events happened, Solana creates a cryptographic clock that timestamps all transactions before consensus, allowing validators to process transactions in parallel since they already know the correct order.
+Solana sử dụng Proof of Stake nhưng thêm một đổi mới quan trọng: Proof of History. Thay vì chờ đợi sự đồng thuận về thời điểm các sự kiện xảy ra, Solana tạo ra một đồng hồ mật mã đánh dấu thời gian tất cả các giao dịch trước khi đồng thuận, cho phép các validator xử lý giao dịch song song vì họ đã biết thứ tự đúng.
 
-This temporal ordering enables much faster consensus: Solana produces blocks every 400 milliseconds compared to Ethereum's 12 seconds.
+Việc sắp xếp thời gian này cho phép đồng thuận nhanh hơn nhiều: Solana tạo ra các khối mỗi 400 mili giây so với 12 giây của Ethereum.
 
-### Solana Virtual Machine 
+### Solana Virtual Machine
 
-The EVM processes transactions sequentially because smart contracts share global state: when one contract modifies shared data, all other transactions must wait. This creates bottlenecks as network usage grows.
+EVM xử lý giao dịch tuần tự vì smart contract chia sẻ trạng thái toàn cầu: khi một contract sửa đổi dữ liệu chung, tất cả các giao dịch khác phải chờ. Điều này tạo ra nút thắt khi việc sử dụng mạng tăng lên.
 
-Solana fundamentally rethinks this architecture:
-- Stateless Programs: Unlike Ethereum where smart contracts store data internally, Solana programs are stateless. All data lives in separate accounts that programs read from and write to. This separation enables parallel processing since programs don't compete for shared state.
-- Transaction Parallelization: Solana transactions must declare upfront which accounts they'll read and modify. The runtime can then execute non-conflicting transactions simultaneously across multiple CPU cores. If Transaction A modifies Account X and Transaction B modifies Account Y, they can run in parallel.
-- Optimized Execution: The SVM uses a register-based architecture instead of the EVM's stack-based approach, reducing the overhead of moving data around during computation. Programs compile to native machine code rather than bytecode, eliminating interpretation overhead.
-- Predictable Costs: Instead of Ethereum's fixed gas prices determined years ago, Solana uses dynamic fee markets where transaction costs reflect actual network demand and computational resources consumed.
+Solana suy nghĩ lại kiến trúc này một cách cơ bản:
+- Chương trình Stateless: Không giống như Ethereum nơi smart contract lưu trữ dữ liệu bên trong, các chương trình Solana là stateless. Tất cả dữ liệu sống trong các tài khoản riêng biệt mà các chương trình đọc từ và ghi vào. Sự tách biệt này cho phép xử lý song song vì các chương trình không cạnh tranh cho trạng thái chung.
+- Song song hóa Giao dịch: Các giao dịch Solana phải khai báo trước những tài khoản nào chúng sẽ đọc và sửa đổi. Runtime sau đó có thể thực thi các giao dịch không xung đột đồng thời trên nhiều lõi CPU. Nếu Giao dịch A sửa đổi Tài khoản X và Giao dịch B sửa đổi Tài khoản Y, chúng có thể chạy song song.
+- Thực thi Tối ưu: SVM sử dụng kiến trúc dựa trên register thay vì cách tiếp cận dựa trên stack của EVM, giảm overhead của việc di chuyển dữ liệu trong quá trình tính toán. Các chương trình biên dịch thành native machine code thay vì bytecode, loại bỏ overhead diễn giải.
+- Chi phí Có thể Dự đoán: Thay vì giá gas cố định của Ethereum được xác định từ nhiều năm trước, Solana sử dụng thị trường phí động nơi chi phí giao dịch phản ánh nhu cầu mạng thực tế và tài nguyên tính toán được tiêu thụ.
 
-The result is that Solana can process over 5,000 transactions per second (TPS) compared to Ethereum's 15 TPS, while maintaining sub-second finality and decentralization. This performance comes from architectural decisions that prioritize parallel execution over the sequential processing model inherited from single-threaded computing.
+Kết quả là Solana có thể xử lý hơn 5,000 giao dịch mỗi giây (TPS) so với 15 TPS của Ethereum, trong khi duy trì tính thống nhất cuối cùng dưới một giây và phi tập trung. Hiệu suất này đến từ các quyết định kiến trúc ưu tiên thực thi song song hơn mô hình xử lý tuần tự được kế thừa từ tính toán đơn luồng.

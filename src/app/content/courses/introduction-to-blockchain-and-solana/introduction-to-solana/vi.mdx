@@ -1,14 +1,14 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Introduction to Solana
+# Giới thiệu về Solana
 
-Before building on Solana, you need to understand several fundamental concepts that make Solana unique. This guide covers accounts, transactions, programs, and their interactions.
+Trước khi xây dựng trên Solana, bạn cần hiểu một số khái niệm cơ bản làm cho Solana trở nên độc đáo. Hướng dẫn này bao gồm accounts, transactions, programs và các tương tác của chúng.
 
-<ArticleSection name="Accounts on Solana" id="accounts-on-solana" level="h2" />
+<ArticleSection name="Các Account trên Solana" id="accounts-on-solana" level="h2" />
 
-Solana's architecture centers around accounts: data containers that store information on the blockchain. Think of accounts as individual files in a filesystem, where each file has specific properties and an owner who controls it.
+Kiến trúc của Solana tập trung xung quanh các account: các thùng chứa dữ liệu lưu trữ thông tin trên blockchain. Hãy nghĩ về các account như các file riêng lẻ trong một hệ thống file, nơi mỗi file có các thuộc tính cụ thể và một owner kiểm soát nó.
 
-Every Solana account has the same basic structure:
+Mỗi account Solana có cùng một cấu trúc cơ bản:
 
 ```rust
 pub struct Account {
@@ -26,29 +26,29 @@ pub struct Account {
 }
 ```
 
-Every account has a unique 32-byte address, displayed as a base58-encoded string (e.g., `14grJpemFaf88c8tiVb77W7TYg2W3ir6pfkKz3YjhhZ5`). This address serves as the account's identifier on the blockchain and is how you locate specific data.
+Mỗi account có một địa chỉ 32-byte duy nhất, được hiển thị dưới dạng chuỗi được mã hóa base58 (ví dụ: `14grJpemFaf88c8tiVb77W7TYg2W3ir6pfkKz3YjhhZ5`). Địa chỉ này phục vụ như định danh của account trên blockchain và là cách bạn định vị dữ liệu cụ thể.
 
-Accounts can store up to 10 MiB of data, which can contain either executable program code or program-specific data.
+Các account có thể lưu trữ tối đa 10 MiB dữ liệu, có thể chứa code chương trình có thể thực thi hoặc dữ liệu cụ thể của chương trình.
 
-All accounts require a lamport deposit proportional to their data size to become "rent-exempt." The term "rent" is historical, as lamports were originally deducted from accounts each epoch, but this feature is now disabled. Today, the deposit works more like a refundable deposit. As long as your account maintains the minimum balance for its data size, it remains rent-exempt and persists indefinitely. When you no longer need an account, you can close it and recover this deposit entirely.
+Tất cả các account yêu cầu một khoản tiền gửi lamport tỷ lệ với kích thước dữ liệu của chúng để trở thành "miễn rent." Thuật ngữ "rent" mang tính lịch sử, vì lamport ban đầu được khấu trừ từ các account mỗi epoch, nhưng tính năng này hiện đã bị vô hiệu hóa. Ngày nay, khoản tiền gửi hoạt động giống như một khoản tiền gửi có thể hoàn lại. Miễn là account của bạn duy trì số dư tối thiểu cho kích thước dữ liệu của nó, nó vẫn miễn rent và tồn tại vô thời hạn. Khi bạn không còn cần một account, bạn có thể đóng nó và thu hồi hoàn toàn khoản tiền gửi này.
 
-Every account is owned by a program, and only that owning program can modify the account's data or withdraw its lamports. However, anyone can increase an account's lamport balance, which is useful for funding operations or paying rent without relying on calling the program itself.
+Mỗi account được sở hữu bởi một chương trình, và chỉ chương trình sở hữu đó mới có thể sửa đổi dữ liệu của account hoặc rút lamport của nó. Tuy nhiên, bất kỳ ai cũng có thể tăng số dư lamport của account, điều này hữu ích để tài trợ cho các hoạt động hoặc trả rent mà không cần dựa vào việc gọi chính chương trình đó.
 
-Signing authority works differently depending on ownership. Accounts owned by the System Program can sign transactions to modify their own data, transfer ownership, or reclaim stored lamports. Once ownership transfers to another program, that program gains complete control over the account regardless of whether you still possess the private key. This transfer of control is permanent and irreversible.
+Quyền ký hoạt động khác nhau tùy thuộc vào quyền sở hữu. Các account được sở hữu bởi System Program có thể ký giao dịch để sửa đổi dữ liệu của chính chúng, chuyển quyền sở hữu, hoặc thu hồi lamport đã lưu trữ. Một khi quyền sở hữu chuyển sang chương trình khác, chương trình đó sẽ có toàn quyền kiểm soát account bất kể bạn có còn sở hữu private key hay không. Việc chuyển quyền kiểm soát này là vĩnh viễn và không thể đảo ngược.
 
-### Account Types
+### Các loại Account
 
-The most common account type is the System Account, which stores lamports (the smallest unit of SOL) and is owned by the System Program. These function as basic wallet accounts that users interact with directly for sending and receiving SOL.
+Loại account phổ biến nhất là System Account, lưu trữ lamport (đơn vị nhỏ nhất của SOL) và được sở hữu bởi System Program. Chúng hoạt động như các account ví cơ bản mà người dùng tương tác trực tiếp để gửi và nhận SOL.
 
-Token Accounts serve a specialized purpose, storing SPL token information, including ownership and token metadata. The Token Program owns these accounts and manages all token-related operations across the Solana ecosystem. Token Accounts are _Data Accounts_.
+Token Account phục vụ mục đích chuyên biệt, lưu trữ thông tin SPL token, bao gồm quyền sở hữu và metadata token. Token Program sở hữu các account này và quản lý tất cả các hoạt động liên quan đến token trong hệ sinh thái Solana. Token Account là _Data Account_.
 
-Data Accounts store application-specific information and are owned by custom programs. These accounts hold your application's state and can be structured however your program requires, from simple user profiles to complex financial data.
+Data Account lưu trữ thông tin cụ thể của ứng dụng và được sở hữu bởi các chương trình tùy chỉnh. Các account này giữ trạng thái của ứng dụng bạn và có thể được cấu trúc theo bất kỳ cách nào mà chương trình của bạn yêu cầu, từ hồ sơ người dùng đơn giản đến dữ liệu tài chính phức tạp.
 
-Finally, Program Accounts contain the executable code that runs on Solana, which is where the smart contract lives. These accounts are marked as `executable: true` and store the program's logic that processes instructions and manages state.
+Cuối cùng, Program Account chứa code có thể thực thi chạy trên Solana, đây là nơi smart contract tồn tại. Các account này được đánh dấu là `executable: true` và lưu trữ logic của chương trình xử lý instruction và quản lý trạng thái.
 
-### Working with Account Data
+### Làm việc với Dữ liệu Account
 
-Here's how programs interact with account data:
+Đây là cách các chương trình tương tác với dữ liệu account:
 
 ```rust
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -74,16 +74,16 @@ pub fn update_user_data(accounts: &[AccountInfo], new_name: String) -> ProgramRe
 }
 ```
 
-Unlike databases where you simply insert records, Solana accounts must be explicitly created and funded before use.
+Không giống như cơ sở dữ liệu nơi bạn chỉ đơn giản chèn bản ghi, các account Solana phải được tạo và tài trợ một cách rõ ràng trước khi sử dụng.
 
-<ArticleSection name="Transactions on Solana" id="transactions-on-solana" level="h2" />
+<ArticleSection name="Các Transaction trên Solana" id="transactions-on-solana" level="h2" />
 
-Solana transactions are atomic operations that can contain multiple instructions. All instructions within a transaction either succeed together or fail together: there's no partial execution.
+Các transaction Solana là các thao tác nguyên tử có thể chứa nhiều instruction. Tất cả các instruction trong một transaction hoặc thành công cùng nhau hoặc thất bại cùng nhau: không có thực thi một phần.
 
-A transaction consists of:
-- Instructions: Individual operations to perform
-- Accounts: Specific accounts each instruction will read from or write to
-- Signers: Accounts that authorize the transaction
+Một transaction bao gồm:
+- Instruction: Các thao tác riêng lẻ cần thực hiện
+- Account: Các account cụ thể mà mỗi instruction sẽ đọc từ hoặc ghi vào
+- Signer: Các account ủy quyền cho transaction
 
 ```rust
 Transaction {
@@ -102,33 +102,33 @@ Transaction {
 }
 ```
 
-### Transaction Requirements and Fees
+### Yêu cầu và Phí Transaction
 
-Transactions are limited to 1,232 bytes total, which constrains how many instructions and accounts you can include.
+Các transaction bị giới hạn tổng cộng 1,232 byte, điều này hạn chế số lượng instruction và account bạn có thể bao gồm.
 
-Each instruction within a transaction requires three essential components: the program address to invoke, all accounts the instruction will read from or write to, and any additional data such as function arguments. 
+Mỗi instruction trong một transaction yêu cầu ba thành phần thiết yếu: địa chỉ chương trình để gọi, tất cả các account mà instruction sẽ đọc từ hoặc ghi vào, và bất kỳ dữ liệu bổ sung nào như tham số hàm.
 
-Instructions execute sequentially in the order you specify within the transaction.
+Các instruction thực thi tuần tự theo thứ tự bạn chỉ định trong transaction.
 
-Every transaction incurs a base fee of 5,000 lamports per signature to compensate validators for processing your transaction. 
+Mỗi transaction phải chịu phí cơ bản 5,000 lamport cho mỗi chữ ký để bù đắp cho các validator xử lý transaction của bạn.
 
-You can also pay an optional prioritization fee to increase the likelihood that the current leader processes your transaction quickly. This prioritization fee is calculated as your compute unit limit multiplied by your compute unit price (measured in micro-lamports). 
+Bạn cũng có thể trả phí ưu tiên tùy chọn để tăng khả năng leader hiện tại xử lý transaction của bạn một cách nhanh chóng. Phí ưu tiên này được tính bằng giới hạn compute unit của bạn nhân với giá compute unit của bạn (đo bằng micro-lamport).
 
 ```
 prioritization_fee = compute_unit_limit × compute_unit_price
 ```
 
-> The account paying transaction fees must be owned by the System Program, ensuring it can properly authorize the payment.
+> Account trả phí transaction phải được sở hữu bởi System Program, đảm bảo nó có thể ủy quyền thanh toán một cách thích hợp.
 
-<ArticleSection name="Programs on Solana" id="programs-on-solana" level="h2" />
+<ArticleSection name="Các Program trên Solana" id="programs-on-solana" level="h2" />
 
-Programs on Solana are fundamentally stateless, meaning they don't maintain any internal state between function calls. Instead, they receive accounts as input, process the data within those accounts, and return the modified results. 
+Các program trên Solana về cơ bản là stateless, có nghĩa là chúng không duy trì bất kỳ trạng thái nội bộ nào giữa các lời gọi hàm. Thay vào đó, chúng nhận các account làm đầu vào, xử lý dữ liệu trong những account đó, và trả về kết quả đã được sửa đổi.
 
-This stateless design ensures predictable behavior and enables powerful composability patterns.
+Thiết kế stateless này đảm bảo hành vi có thể dự đoán và cho phép các mẫu khả năng kết hợp mạnh mẽ.
 
-The programs themselves are stored in special accounts marked as `executable: true`, containing the compiled binary code that executes when invoked. 
+Bản thân các program được lưu trữ trong các account đặc biệt được đánh dấu là `executable: true`, chứa code binary đã biên dịch thực thi khi được gọi.
 
-Users interact with these programs by sending transactions that contain specific instructions, each targeting particular program functions with the necessary account data and parameters.
+Người dùng tương tác với những program này bằng cách gửi các transaction chứa các instruction cụ thể, mỗi instruction nhắm đến các hàm program cụ thể với dữ liệu account và tham số cần thiết.
 
 ```rust
 use solana_program::prelude::*;
@@ -155,17 +155,17 @@ pub fn create_user(
 }
 ```
 
-Programs can be updated by their designated upgrade authority, allowing developers to fix bugs and add features after deployment. However, removing this upgrade authority makes the program permanently immutable, providing users with guarantees that the code will never change. 
+Các program có thể được cập nhật bởi upgrade authority được chỉ định của chúng, cho phép các nhà phát triển sửa lỗi và thêm tính năng sau khi triển khai. Tuy nhiên, việc loại bỏ upgrade authority này làm cho program trở nên bất biến vĩnh viễn, cung cấp cho người dùng đảm bảo rằng code sẽ không bao giờ thay đổi.
 
-For transparency and security, users can verify that on-chain programs match their public source code through verifiable builds, ensuring the deployed bytecode corresponds exactly to the published source.
+Để minh bạch và bảo mật, người dùng có thể xác minh rằng các program onchain khớp với source code công khai của chúng thông qua các bản build có thể xác minh, đảm bảo bytecode đã triển khai tương ứng chính xác với source đã xuất bản.
 
-<ArticleSection name="Program Derived Addresses (PDAs)" id="program-derived-addresses" level="h2" />
+<ArticleSection name="Program Derived Address (PDA)" id="program-derived-addresses" level="h2" />
 
-PDAs are deterministically generated addresses that enable powerful programmability patterns. They're created using seeds and a program ID, producing addresses without corresponding private keys.
+PDA là các địa chỉ được tạo ra một cách xác định cho phép các mẫu khả năng lập trình mạnh mẽ. Chúng được tạo bằng cách sử dụng seed và program ID, tạo ra các địa chỉ mà không có private key tương ứng.
 
-PDAs use `SHA-256` hashing with specific inputs, including your custom seeds, a bump value to ensure the result is off-curve, the program ID that will own the PDA, and a constant marker.
+PDA sử dụng hàm băm `SHA-256` với các đầu vào cụ thể, bao gồm seed tùy chỉnh của bạn, giá trị bump để đảm bảo kết quả là không nằm trên đường cong elliptic, program ID sẽ sở hữu PDA, và một marker không đổi.
 
-When the hash produces an on-curve address (which happens approximately 50% of the time), the system iterates from bump 255 down to 254, 253, and so on until finding an off-curve result.
+Khi hash tạo ra một địa chỉ nằm trên đường cong elliptic (điều này xảy ra khoảng 50% thời gian), hệ thống lặp từ bump 255 xuống 254, 253, và cứ thế cho đến khi tìm thấy kết quả nằm ngoài đường cong.
 
 ```rust
 use solana_nostd_sha256::hashv;
@@ -180,11 +180,11 @@ let pda = hashv(&[
 ]);
 ```
 
-### Benefits
+### Lợi ích
 
-The deterministic nature of PDAs eliminates the need to store addresses: you can regenerate them from the same seeds whenever needed. 
+Bản chất xác định của PDA loại bỏ nhu cầu lưu trữ địa chỉ: bạn có thể tái tạo chúng từ cùng các seed bất cứ khi nào cần.
 
-This creates predictable addressing schemes that function like hashmap structures on-chain. More importantly, programs can sign for their own PDAs, enabling autonomous asset management without exposing private keys:
+Điều này tạo ra các sơ đồ địa chỉ có thể dự đoán hoạt động như cấu trúc hashmap onchain. Quan trọng hơn, các program có thể ký cho PDA của riêng chúng, cho phép quản lý tài sản tự động mà không cần tiết lộ private key:
 
 ```rust
 let seeds = &[b"vault", user.as_ref(), &[bump]];
@@ -198,13 +198,13 @@ invoke_signed(
 
 <ArticleSection name="Cross Program Invocation (CPI)" id="cross-program-invocation" level="h2" />
 
-CPIs enable programs to call other programs within the same transaction, creating true composability where multiple programs can interact atomically without external coordination. 
+CPI cho phép các program gọi các program khác trong cùng một transaction, tạo ra khả năng kết hợp thực sự nơi nhiều program có thể tương tác một cách nguyên tử mà không cần điều phối bên ngoài.
 
-This allows developers to build complex applications by combining existing programs rather than rebuilding functionality from scratch.
+Điều này cho phép các nhà phát triển xây dựng các ứng dụng phức tạp bằng cách kết hợp các program hiện có thay vì xây dựng lại chức năng từ đầu.
 
-CPIs follow the same pattern as regular instructions, requiring you to specify the target program, the accounts it needs, and the instruction data, with the main difference being that they can be performed inside other programs.
+CPI tuân theo cùng một mẫu như các instruction thông thường, yêu cầu bạn chỉ định program đích, các account mà nó cần, và dữ liệu instruction, với sự khác biệt chính là chúng có thể được thực hiện bên trong các program khác.
 
-The calling program maintains control over the flow while delegating specific operations to specialized programs:
+Program đang được gọi duy trì quyền kiểm soát luồng trong khi ủy thác các thao tác cụ thể cho các program chuyên biệt:
 
 ```rust
 let cpi_accounts = TransferAccounts {
@@ -217,10 +217,10 @@ let cpi_ctx = CpiContext::new(token_program.clone(), cpi_accounts);
 token_program::cpi::transfer(cpi_ctx, amount)?;
 ```
 
-### Constraints and Capabilities
+### Ràng buộc và Khả năng
 
-Original transaction signers maintain their authority throughout CPI chains, allowing programs to act on behalf of users seamlessly. 
+Các signer của transaction gốc duy trì quyền hạn của họ trong suốt chuỗi CPI, cho phép các program hành động thay mặt người dùng một cách liền mạch.
 
-However, programs can only make CPIs up to 4 levels deep (`A → B → C → D`) to prevent infinite recursion. Programs can also sign for their PDAs in CPIs using `CpiContext::new_with_signer`, enabling sophisticated autonomous operations.
+Tuy nhiên, các program chỉ có thể thực hiện CPI sâu tối đa 4 cấp (`A → B → C → D`) để ngăn chặn đệ quy vô hạn. Các program cũng có thể ký cho PDA của chúng trong CPI bằng cách sử dụng `CpiContext::new_with_signer`, cho phép các thao tác tự động phức tạp.
 
-This composability enables complex operations across multiple programs within a single atomic transaction, making Solana applications highly modular and interoperable.
+Khả năng kết hợp này cho phép các thao tác phức tạp trên nhiều program trong một transaction nguyên tử duy nhất, làm cho các ứng dụng Solana có tính mô-đun cao và có thể tương tác.

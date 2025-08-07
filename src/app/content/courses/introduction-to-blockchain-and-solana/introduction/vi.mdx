@@ -1,24 +1,24 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Introduction to Blockchain
+# Giới thiệu về Blockchain
 
-You've probably heard blockchain described as "digital money" or "the future of the internet." These explanations miss the point entirely.
+Có lẽ bạn đã nghe blockchain được mô tả là "tiền kỹ thuật số" hoặc "tương lai của internet." Những giải thích này hoàn toàn bỏ lỡ điểm chính.
 
-Blockchains are distributed systems: networks of computers that must agree on shared data without trusting each other. This course teaches blockchain from first principles: the distributed systems problems it solves, how it solves them, and why the tradeoffs matter.
+Blockchain là các hệ thống phân tán: mạng lưới các máy tính phải đồng ý về dữ liệu chung mà không cần tin tưởng lẫn nhau. Khóa học này dạy blockchain từ các nguyên lý cơ bản: các vấn đề hệ thống phân tán mà nó giải quyết, cách nó giải quyết chúng, và tại sao những đánh đổi lại quan trọng.
 
-Let's start by understanding why building distributed systems is one of the hardest problems in computer science.
+Hãy bắt đầu bằng việc hiểu tại sao xây dựng hệ thống phân tán là một trong những vấn đề khó nhất trong khoa học máy tính.
 
-<ArticleSection name="Distributed Systems" id="distributed-systems" level="h2" />
+<ArticleSection name="Hệ thống Phân tán" id="distributed-systems" level="h2" />
 
-Most people think scaling from one computer to many is just "more of the same." That's like thinking coordinating one person is the same as coordinating a thousand people across different time zones who might not always be reachable.
+Hầu hết mọi người nghĩ rằng việc mở rộng từ một máy tính lên nhiều máy chỉ là "nhiều hơn cùng một thứ." Điều đó giống như nghĩ rằng điều phối một người cũng giống như điều phối một nghìn người trên các múi giờ khác nhau và có thể không phải lúc nào cũng liên lạc được.
 
-When you write code on a single computer, you live in a predictable world:
-- Operations either succeed or fail immediately
-- Data doesn't mysteriously change between reads
-- Time moves forward consistently
-- When you save something, it's actually saved
+Khi bạn viết code trên một máy tính duy nhất, bạn sống trong một thế giới có thể dự đoán:
+- Các thao tác hoặc thành công hoặc thất bại ngay lập tức
+- Dữ liệu không thay đổi một cách bí ẩn giữa các lần đọc
+- Thời gian tiến về phía trước một cách nhất quán
+- Khi bạn lưu thứ gì đó, nó thực sự được lưu
 
-Let's take a simple banking system. Transferring $100 from Alice to Bob in that case is extremely easy:
+Hãy lấy một hệ thống ngân hàng đơn giản. Chuyển $100 từ Alice cho Bob trong trường hợp đó cực kỳ dễ dàng:
 
 ```python
 def transfer(from_account, to_account, amount):
@@ -29,14 +29,14 @@ def transfer(from_account, to_account, amount):
     return "Insufficient funds"
 ```
 
-This works perfectly... until you need to scale.
+Điều này hoạt động hoàn hảo... cho đến khi bạn cần mở rộng quy mô.
 
-Your bank grows beyond what one computer can handle, so you now split accounts evenly across different databases:
-- Server A: Accounts 1 to 1,000,000
-- Server B: Accounts 1,000,001 to 2,000,000
-- Server C: Accounts 2,000,001 to 3,000,000
+Ngân hàng của bạn phát triển vượt quá khả năng xử lý của một máy tính, vì vậy bây giờ bạn chia tài khoản đều trên các cơ sở dữ liệu khác nhau:
+- Server A: Tài khoản từ 1 đến 1,000,000
+- Server B: Tài khoản từ 1,000,001 đến 2,000,000
+- Server C: Tài khoản từ 2,000,001 đến 3,000,000
 
-Now Alice (on Server A) wants to send $100 to Bob (on Server B). That simple transfer becomes:
+Bây giờ Alice (trên Server A) muốn gửi $100 cho Bob (trên Server B). Việc chuyển tiền đơn giản đó trở thành:
 
 ```python
 def distributed_transfer(alice_server, bob_server, amount):
@@ -47,50 +47,50 @@ def distributed_transfer(alice_server, bob_server, amount):
         return "Transfer successful"
     return "Insufficient funds"
 ```
-Still seems straightforward? Here's what can go wrong:
-- Network Partition: The connection between servers fails right after Step 1 but before Step 2. Alice's $100 vanishes into the digital void.
-- Server Crash: Server B crashes after receiving the "add money" command but before confirming it processed. Did Bob get the money? Nobody knows.
-- Race Conditions: Two transfers from Alice happen simultaneously. Both check her $100 balance, see that she has sufficient funds, and both proceed. Alice has now spent $100 that she did not have.
+Vẫn có vẻ đơn giản? Đây là những gì có thể xảy ra sai:
+- Phân mảnh Mạng: Kết nối giữa các server thất bại ngay sau Bước 1 nhưng trước Bước 2. $100 của Alice biến mất vào khoảng không kỹ thuật số.
+- Server Crash: Server B crash sau khi nhận lệnh "thêm tiền" nhưng trước khi xác nhận đã xử lý. Bob có nhận được tiền không? Không ai biết.
+- Race Condition: Hai giao dịch chuyển tiền từ Alice xảy ra đồng thời. Cả hai đều kiểm tra số dư $100 của cô ấy, thấy rằng cô ấy có đủ tiền, và cả hai đều tiến hành. Alice bây giờ đã chi $100 mà cô ấy không có.
 
-### CAP Theorem
+### Định lý CAP
 
-In 1999, computer scientist Eric Brewer formulated the CAP Theorem, which states that any distributed system can guarantee at most two of these three properties:
-- Consistency (C): All servers always show the same data. When Alice's balance changes on Server A, every other server immediately reflects this.
-- Availability (A): The system keeps working even when servers crash. If Server A goes down, users can still access accounts through Servers B and C.
-- Partition Tolerance (P): The system survives network failures that split servers into isolated groups.
+Năm 1999, nhà khoa học máy tính Eric Brewer đã công thức hóa Định lý CAP, nói rằng bất kỳ hệ thống phân tán nào chỉ có thể đảm bảo tối đa hai trong ba thuộc tính sau:
+- Tính nhất quán (Consistency - C): Tất cả server luôn hiển thị cùng một dữ liệu. Khi số dư của Alice thay đổi trên Server A, mọi server khác ngay lập tức phản ánh điều này.
+- Tính khả dụng (Availability - A): Hệ thống tiếp tục hoạt động ngay cả khi server crash. Nếu Server A ngừng hoạt động, người dùng vẫn có thể truy cập tài khoản thông qua Server B và C.
+- Khả năng chịu phân mảnh (Partition Tolerance - P): Hệ thống tồn tại qua các lỗi mạng chia server thành các nhóm bị cô lập.
 
-We must guarantee partition tolerance since network partitions are inevitable: cables get cut, routers fail, data centers lose power. This leaves us choosing between Consistency OR Availability.
+Chúng ta phải đảm bảo khả năng chịu phân mảnh vì phân vùng mạng là không thể tránh khỏi: cáp bị cắt, router hỏng, trung tâm dữ liệu mất điện. Điều này khiến chúng ta phải chọn giữa Tính nhất quán HOẶC Tính khả dụng.
 
-Traditional banking systems usually choose Consistency + Partition Tolerance (CP Systems). They'd rather shut down than show incorrect account balances.
+Các hệ thống ngân hàng truyền thống thường chọn Tính nhất quán + Khả năng chịu phân mảnh (Hệ thống CP). Họ thà tắt hệ thống còn hơn hiển thị số dư tài khoản không chính xác.
 
-Social media platforms often choose Availability + Partition Tolerance (AP Systems). They'd rather let you post (even if friends can't see it immediately) than prevent you from posting at all.
+Các nền tảng mạng xã hội thường chọn Tính khả dụng + Khả năng chịu phân mảnh (Hệ thống AP). Họ thà để bạn đăng bài (ngay cả khi bạn bè không thể thấy ngay lập tức) còn hơn ngăn bạn đăng bài hoàn toàn.
 
-### The Byzantine Generals Problem
+### Bài toán Byzantine Generals
 
-In addition to the CAP Theorem, most distributed systems assume participants are honest: they might fail or disconnect, but they won't actively deceive each other. This assumption breaks down when participants can be malicious.
+Ngoài Định lý CAP, hầu hết các hệ thống phân tán giả định rằng những người tham gia là trung thực: họ có thể thất bại hoặc ngắt kết nối, nhưng họ sẽ không chủ động lừa dối lẫn nhau. Giả định này bị phá vỡ khi những người tham gia có thể là độc hại.
 
-The Byzantine Generals Problem, formulated by computer scientists in 1982, illustrates this challenge:
+Bài toán Byzantine Generals, được các nhà khoa học máy tính công thức hóa năm 1982, minh họa thách thức này:
 
-You're a Byzantine general planning to attack a fortified city. You have several allied generals positioned around the city, each commanding their own army. To succeed, you must coordinate a simultaneous attack. If some attack while others retreat, the attacking forces will be slaughtered.
+Bạn là một tướng Byzantine đang lên kế hoạch tấn công một thành phố kiên cố. Bạn có một số tướng đồng minh được bố trí xung quanh thành phố, mỗi người chỉ huy quân đội riêng của họ. Để thành công, bạn phải điều phối một cuộc tấn công đồng thời. Nếu một số tấn công trong khi những người khác rút lui, lực lượng tấn công sẽ bị tàn sát.
 
-You communicate only through messengers, and some generals might be traitors who want the attack to fail. Traitors can:
-- Send "attack" messages to some generals and "retreat" to others
-- Modify messages from loyal generals as they pass through
-- Coordinate with other traitors to maximize confusion
+Bạn chỉ giao tiếp thông qua sứ giả, và một số tướng có thể là kẻ phản bội muốn cuộc tấn công thất bại. Kẻ phản bội có thể:
+- Gửi tin nhắn "tấn công" cho một số tướng và "rút lui" cho những người khác
+- Sửa đổi tin nhắn từ các tướng trung thành khi chúng đi qua
+- Phối hợp với các kẻ phản bội khác để tối đa hóa sự nhầm lẫn
 
-How do you reach consensus on "attack" or "retreat" when you can't distinguish loyal generals from traitors, and you can't trust the communication channels?
+Làm thế nào bạn đạt được sự đồng thuận về "tấn công" hoặc "rút lui" khi bạn không thể phân biệt tướng trung thành với kẻ phản bội, và bạn không thể tin tưởng các kênh giao tiếp?
 
-This seemed impossible. For decades, computer scientists believed you couldn't build a system that was simultaneously:
-- Byzantine fault tolerant (works despite malicious participants)
-- Permissionless (anyone can join without approval)
-- Decentralized (no central authority)
+Điều này có vẻ không thể. Trong nhiều thập kỷ, các nhà khoa học máy tính tin rằng bạn không thể xây dựng một hệ thống đồng thời:
+- Chịu được lỗi Byzantine (hoạt động bất chấp các thành phần độc hại)
+- Không cần phép (bất kỳ ai cũng có thể tham gia mà không cần phê duyệt)
+- Phi tập trung (không có cơ quan trung ương)
 
-Then in 2008, someone calling themselves Satoshi Nakamoto proved them wrong.
+Sau đó vào năm 2008, một người tự gọi mình là Satoshi Nakamoto đã chứng minh họ sai.
 
-### Bitcoin: the first blockchain
+### Bitcoin: blockchain đầu tiên
 
-Bitcoin was the first practical implementation of blockchain technology. While the individual components existed before (cryptographic hashing, digital signatures, peer-to-peer networks), Satoshi was the first to combine them to solve the double-spending problem for digital currency.
+Bitcoin là triển khai thực tế đầu tiên của công nghệ blockchain. Mặc dù các thành phần riêng lẻ đã tồn tại trước đó (băm mật mã, chữ ký số, mạng ngang hàng), Satoshi là người đầu tiên kết hợp chúng để giải quyết vấn đề chi tiêu kép cho tiền tệ kỹ thuật số.
 
-Blockchain, or a "chain of blocks" as it was called in the original Bitcoin [whitepaper](https://bitcoin.org/bitcoin.pdf), finally created a system that was distributed, Byzantine fault tolerant, and permissionless simultaneously.
+Blockchain, hay "chuỗi các khối" như được gọi trong [whitepaper](https://bitcoin.org/bitcoin.pdf) Bitcoin gốc, cuối cùng đã tạo ra một hệ thống vừa phân tán, vừa chịu được lỗi Byzantine, và vừa không cần phép đồng thời.
 
-The breakthrough wasn't trying to identify who to trust; it was making lying more economically expensive than telling the truth. Proof of Work accomplishes this by requiring participants to spend real computational energy to propose changes. An attacker would need to spend more on electricity than they could gain from an attack.
+Đột phá không phải là cố gắng xác định ai đáng tin cậy; mà là làm cho việc nói dối tốn kém về mặt kinh tế hơn việc nói thật. Proof of Work thực hiện điều này bằng cách yêu cầu những người tham gia tiêu thụ năng lượng tính toán thực để đề xuất thay đổi. Kẻ tấn công sẽ cần tiêu thụ nhiều tiền điện hơn những gì họ có thể thu được từ một cuộc tấn công.
