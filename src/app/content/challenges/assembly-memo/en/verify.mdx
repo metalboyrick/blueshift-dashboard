@@ -1,4 +1,6 @@
 import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
 
 <ChallengeTitle>sBPF Assembly Memo</ChallengeTitle>
 
@@ -16,6 +18,18 @@ sbpf light-build
 This will generate a `.so` file in your `target/deploy` folder. 
 
 Now click on the `take challenge` button and drop the file there!
+
+<RequirementList>
+  <Requirement
+    title="Challenge 1: Testing the Memo"
+    description="Your program should suceed and log `Hello, Solana!`"
+  />
+
+  <Requirement
+    title="Challenge 2: Testing the Memo with different input"
+    description="To make sure that you didn't hardcode the `Hello, Solana!` string, we try again with another input: `Hello, Solana, but different!`"
+  />
+</RequirementList>
 
 
 
