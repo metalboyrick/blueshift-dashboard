@@ -34,7 +34,7 @@ sBPF programs receive account data as contiguous memory regions. These constants
 
 **MINIMUM_BALANCE (0x2918)** locates where Solana places your instruction data payload. This offset is part of the runtime's account info structure.
 
-You can generate offsets using our tooling at [sbpf.xyz](https://sbpf.xyzsbpf.xyz)
+You can generate offsets using our tooling at [sbpf.xyz](https://sbpf.xyz)
 
 Unlike high-level languages that abstract memory layout, assembly requires you to know exactly where every piece of data lives.
 
@@ -48,11 +48,11 @@ entrypoint:
 Every SBPF program starts at the global `entrypoint` symbol. The Solana runtime loads your program and jumps here, with account information pre-loaded into memory.
 
 SBPF provides 11 general-purpose registers (r0-r10). By convention:
-- **r0** holds return values
-- **r1** points to the program's input data structure  
+- **r0** is our return register
+- **r1** points to the program's serialized program data
 - **r0-r5** are commonly used for function arguments
 - **r6-r9** are general-purpose scratch registers
-- **r10** is the stack pointer
+- **r10** is a read-only stack pointer
 
 <ArticleSection name="Data Loading and Validation Logic" id="data-loading-and-validation-logic" level="h2" />
 
@@ -61,7 +61,7 @@ ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
 ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
 ```
 
-The `ldxdw` instruction loads an 8-byte (double word) value from memory into a register. Here's what happens:
+The `ldxdw` instruction loads (`ldx`) an 8-byte (double word, `dx`) value from memory into a register. Here's what happens:
 
 **First load:** `r1+MINIMUM_BALANCE` calculates the memory address containing our required amount. The value gets loaded into `r3`.
 
@@ -114,7 +114,7 @@ Unlike high-level languages with automatic cleanup, assembly programs must expli
     e: .ascii "Slippage exceeded"
 ```
 
-The `.rodata` (read-only data) section contains our error message string. The assembler places this in the program's data segment, separate from executable code.
+The `.rodata` (read-only data) section contains our error message string.
 
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
   

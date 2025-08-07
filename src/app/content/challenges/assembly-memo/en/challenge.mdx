@@ -78,16 +78,15 @@ These instructions set up the arguments for `sol_log_`:
 - `r2` receives the length of the memo data
 - `r1` is adjusted to point directly to the memo bytes
 
-And after that, we make the system call and exit:
+And after that, we call `sol_log_` and exit:
 
 <Codeblock lang="assembly">
 ```assembly
-
 call 16   ; Call sol_log_ (helper ID 16)
 exit      ; Return using r0 value
 ```
 </Codeblock>
 
 The program:
-1. Calls helper ID 16 (`sol_log_`) to print the memo to the validator log
+1. Calls 16 (`sol_log_`) to print the memo to the validator log
 2. Exits using the value in `r0`
