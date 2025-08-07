@@ -3,11 +3,11 @@ import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDisc
 
 # Instructions & CPIs
 
-Instructions are the building blocks of Solana programs, defining the actions that can be performed. In Anchor, instructions are implemented as functions with specific attributes and constraints. Let's explore how to work with them effectively.
+Instruction là các khối xây dựng của các chương trình Solana, định nghĩa các hành động có thể được thực hiện. Trong Anchor, instruction được triển khai như các hàm với các thuộc tính và ràng buộc cụ thể. Hãy khám phá cách làm việc với chúng một cách hiệu quả.
 
-<ArticleSection name="Instruction Structure" id="instruction-structure" level="h2" />
+<ArticleSection name="Cấu trúc Instruction" id="instruction-structure" level="h2" />
 
-In Anchor, instructions are defined using the `#[program]` module and individual instruction functions. Here's the basic structure:
+Trong Anchor, instruction được định nghĩa bằng module `#[program]` và các hàm instruction riêng lẻ. Đây là cấu trúc cơ bản:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -23,15 +23,15 @@ pub mod my_program {
 }
 ```
 
-<ArticleSection name="Instruction Context" id="instruction-context" level="h3" />
+<ArticleSection name="Ngữ cảnh của Instruction" id="instruction-context" level="h3" />
 
-Every instruction function receives a `Context` struct as its first parameter. This context contains:
-- `accounts`: The accounts passed to the instruction
-- `program_id`: The program's public key
-- `remaining_accounts`: Any additional accounts not explicitly defined in the context struct
-- `bumps`: The `bumps` field is particularly useful when working with PDAs, as it provides the bump seeds that were used to derive the PDA addresses (only if you're deriving them in the account struct)
+Mỗi hàm instruction nhận một struct `Context` làm tham số đầu tiên. Context này chứa:
+- `accounts`: Các tài khoản được truyền cho instruction
+- `program_id`: Public key của chương trình
+- `remaining_accounts`: Bất kỳ tài khoản bổ sung nào không được định nghĩa rõ ràng trong struct context
+- `bumps`: Trường `bumps` đặc biệt hữu ích khi làm việc với PDAs, vì nó cung cấp các bump seeds đã được sử dụng để tạo ra địa chỉ PDA (chỉ khi bạn đang tạo chúng trong account struct)
 
-That can be accessed by doing:
+Có thể được truy cập bằng cách:
 
 ```rust
 // Accessing accounts
@@ -52,13 +52,13 @@ let bump = ctx.bumps.pda_account;
 
 <ArticleSection name="Instruction Discriminator" id="instruction-discriminator" level="h3" />
 
-Like accounts, instructions in Anchor use discriminators to identify different instruction types. The default discriminator is an 8-byte prefix generated using `sha256("global:<instruction_name>")[0..8]`. The instruction name should be in snake_case.
+Giống như accounts, instructions trong Anchor sử dụng discriminators để xác định các loại instruction khác nhau. Discriminator mặc định là một prefix 8-byte được tạo bằng cách sử dụng `sha256("global:<instruction_name>")[0..8]`. Tên instruction nên được viết theo snake_case.
 
 <AnchorDiscriminatorCalculator value={"initialize_account"} displayMode="instruction" />
 
 <ArticleSection name="Custom Instruction Discriminator" id="custom-instruction-discriminator" level="h3" />
 
-You can also specify a custom discriminator for your instructions:
+Bạn cũng có thể chỉ định một discriminator tùy chỉnh cho instructions của mình:
 
 ```rust
 #[instruction(discriminator = 1)]
@@ -70,15 +70,15 @@ pub fn custom_discriminator(ctx: Context<Custom>) -> Result<()> {
 
 <ArticleSection name="Instruction Scaffold" id="instruction-scaffold" level="h2" />
 
-You can write your instruction in different way, in this section we're going to teach some of the style and way you can actually set them up
+Bạn có thể viết instruction theo nhiều cách khác nhau, trong phần này chúng ta sẽ học một số phong cách và cách bạn có thể thiết lập chúng
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h3" />
 
-Instruction logic can be organized in different ways, depending on your program's complexity and your preferred coding style. Here are the main approaches:
+Logic instruction có thể được tổ chức theo nhiều cách khác nhau, tùy thuộc vào độ phức tạp của chương trình và phong cách lập trình ưa thích của bạn. Dưới đây là các phương pháp chính:
 
 1. **Inline Instruction Logic**
 
-For simple instructions, you can write the logic directly in the instruction function:
+Đối với các instruction đơn giản, bạn có thể viết logic trực tiếp trong hàm instruction:
 
 ```rust
 pub fn initialize(ctx: Context<Transfer>, amount: u64) -> Result<()> {
@@ -91,7 +91,7 @@ pub fn initialize(ctx: Context<Transfer>, amount: u64) -> Result<()> {
 ```
 2. **Separate Module Implementation**
 
-For very complex programs, you can organize the logic in separate modules:
+Đối với các chương trình rất phức tạp, bạn có thể tổ chức logic trong các module riêng biệt:
 
 ```rust
 // In a separate file: transfer.rs
@@ -111,7 +111,7 @@ pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
 
 3. **Separate Context Implementation**
 
-For more complex instructions, you can move the logic to the context struct's implementation:
+Đối với các instruction phức tạp hơn, bạn có thể chuyển logic sang implementation của context struct:
 
 ```rust
 // In a separate file: transfer.rs
@@ -145,11 +145,11 @@ pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
 
 <ArticleSection name="Instruction Parameters" id="instruction-parameters" level="h3" />
 
-Instructions can accept parameters beyond the context. These parameters are serialized and deserialized automatically by Anchor. Here are the key points about instruction parameters:
+Instructions có thể nhận các tham số ngoài context. Các tham số này được serialize và deserialize tự động bởi Anchor. Dưới đây là những điểm chính về instruction parameters:
 
 1. **Basic Types**
 
-Anchor supports all Rust primitive types and common Solana types:
+Anchor hỗ trợ tất cả các kiểu dữ liệu nguyên thủy của Rust và các kiểu Solana phổ biến:
 
 ```rust
 pub fn complex_instruction(
@@ -165,7 +165,7 @@ pub fn complex_instruction(
 
 2. **Custom Types**
 
-You can use custom types as parameters, but they must implement `AnchorSerialize` and `AnchorDeserialize`:
+Bạn có thể sử dụng các kiểu tùy chỉnh làm tham số, nhưng chúng phải implement `AnchorSerialize` và `AnchorDeserialize`:
 
 ```rust
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -185,15 +185,15 @@ pub fn custom_type_instruction(
 
 <ArticleSection name="Best Practices" id="instruction-discriminator" level="h3" />
 
-1. **Keep Instructions Focused**: Each instruction should do one thing well. If an instruction is doing too much, consider splitting it into multiple instructions.
+1. **Giữ Instructions Tập Trung**: Mỗi instruction nên làm một việc và làm tốt. Nếu một instruction đang làm quá nhiều việc, hãy xem xét chia nó thành nhiều instructions.
 
-2. **Use Context Implementation**: For complex instructions, use the context implementation approach to:
-   - Keep your code organized
-   - Make it easier to test
-   - Improve reusability
-   - Add proper documentation
+2. **Sử Dụng Context Implementation**: Đối với các instruction phức tạp, hãy sử dụng phương pháp context implementation để:
+   - Giữ code của bạn được tổ chức
+   - Làm cho việc test dễ dàng hơn
+   - Cải thiện khả năng tái sử dụng
+   - Thêm tài liệu phù hợp
 
-3. **Error Handling**: Always use proper error handling and return meaningful error messages:
+3. **Xử Lý Lỗi**: Luôn sử dụng xử lý lỗi phù hợp và trả về các thông báo lỗi có ý nghĩa:
 ```rust
 #[error_code]
 pub enum TransferError {
@@ -217,11 +217,11 @@ impl<'info> Transfer<'info> {
 }
 ```
 
-4. **Documentation**: Always document your instruction logic, especially when using context implementation:
+4. **Tài Liệu**: Luôn tài liệu hóa logic instruction của bạn, đặc biệt khi sử dụng context implementation:
 ```rust
 impl<'info> Transfer<'info> {
     /// # Transfers tokens
-    /// 
+    ///
     /// Transfers tokens from source to destination account
     pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
         // Implementation
@@ -232,13 +232,13 @@ impl<'info> Transfer<'info> {
 
 <ArticleSection name="Cross-Program Invocations (CPIs)" id="cross-program-invocations" level="h2" />
 
-Cross Program Invocations (CPI) refer to the process of one program invoking instructions of another program, which enables the composability of Solana programs. Anchor provides a convenient way to make CPIs through the `CpiContext` and program-specific builders.
+Cross Program Invocations (CPI) đề cập đến quá trình một chương trình gọi các instructions của chương trình khác, điều này cho phép tính kết hợp của các chương trình Solana. Anchor cung cấp một cách thuận tiện để thực hiện CPIs thông qua `CpiContext` và các builders cụ thể cho từng chương trình.
 
-**Note**: You can find all the System Program CPI by using the main anchor crate and doing: `use anchor_lang::system_program::*`; and for the one relative to the SPL token program we'll need to import the anchor_spl crate and do: `use anchor_spl::token::*`
+**Lưu ý**: Bạn có thể tìm thấy tất cả System Program CPI bằng cách sử dụng anchor crate chính và thực hiện: `use anchor_lang::system_program::*`; và đối với những cái liên quan đến SPL token program, chúng ta sẽ cần import anchor_spl crate và thực hiện: `use anchor_spl::token::*`
 
 <ArticleSection name="Basic CPI Structure" id="basic-cpi-structure" level="h3" />
 
-Here's how to make a basic CPI:
+Đây là cách thực hiện một CPI cơ bản:
 
 ```rust
 use anchor_lang::solana_program::program::invoke_signed;
@@ -261,7 +261,7 @@ pub fn transfer_lamport(ctx: Context<TransferLamport>, amount: u64) -> Result<()
 
 <ArticleSection name="CPI with PDA Signers" id="cpi-with-pda-signers" level="h3" />
 
-When making CPIs that require PDA signatures, use `CpiContext::new_with_signer`:
+Khi thực hiện CPIs yêu cầu chữ ký PDA, hãy sử dụng `CpiContext::new_with_signer`:
 
 ```rust
 use anchor_lang::solana_program::program::invoke_signed;
@@ -290,7 +290,7 @@ pub fn transfer_lamport_with_pda(ctx: Context<TransferLamportWithPda>, amount: u
 
 <ArticleSection name="Error Handling" id="error-handling" level="h2" />
 
-Anchor provides a robust error handling system for instructions. Here's how to implement custom errors and handle them in your instructions:
+Anchor cung cấp một hệ thống xử lý lỗi mạnh mẽ cho instructions. Đây là cách implement custom errors và xử lý chúng trong instructions của bạn:
 
 ```rust
 #[error_code]

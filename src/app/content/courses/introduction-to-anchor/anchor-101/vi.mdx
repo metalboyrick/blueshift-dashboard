@@ -5,27 +5,27 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Introduction to Anchor](/graphics/course-banners/introduction-to-anchor.png)
 
-<ArticleSection name="What is Anchor" id="what-is-anchor" level="h2" />
+<ArticleSection name="Anchor là gì" id="what-is-anchor" level="h2" />
 
-Anchor is the premier framework for Solana smart-contract development, offering a complete workflow for writing, testing, deploying, and interacting with onchain programs.
+Anchor là framework hàng đầu cho việc phát triển smart contract Solana, cung cấp một quy trình hoàn chỉnh để viết, kiểm thử, triển khai và tương tác với các chương trình onchain.
 
-### Key advantages
+### Ưu điểm chính
 
-- **Reduced boilerplate**: Anchor abstracts the repetitive work of account management, instruction serialization, and error handling so you can focus on just the core business logic.
-- **Built-in security**:  Rigorous checks such as account-ownership verification and data validation run out of the box, mitigating many common vulnerabilities before they surface.
+- **Giảm boilerplate**: Anchor trừu tượng hóa công việc lặp đi lặp lại của quản lý tài khoản, serialization instruction và xử lý lỗi để bạn có thể tập trung vào logic nghiệp vụ cốt lõi.
+- **Bảo mật tích hợp**: Các kiểm tra nghiêm ngặt như xác minh quyền sở hữu tài khoản và xác thực dữ liệu chạy ngay từ đầu, giảm thiểu nhiều lỗ hổng phổ biến trước khi chúng xuất hiện.
 
 ### Anchor Macros
 
-- `declare_id!()`: Declares at what onchain address the program lives.
-- `#[program]`: Marks the module that contains every instruction entrypoint and business-logic function.
-- `#[derive(Accounts)]`: Lists the accounts an instruction requires and enforces their constraints automatically.
-- `#[error_code]`: Defines custom, human-readable error types that make debugging clearer and faster.
+- `declare_id!()`: Khai báo địa chỉ onchain nơi chương trình tồn tại.
+- `#[program]`: Đánh dấu module chứa mọi entrypoint instruction và hàm logic nghiệp vụ.
+- `#[derive(Accounts)]`: Liệt kê các tài khoản mà một instruction yêu cầu và tự động thực thi các ràng buộc của chúng.
+- `#[error_code]`: Định nghĩa các kiểu lỗi tùy chỉnh, dễ đọc giúp việc debug rõ ràng và nhanh hơn.
 
-Together, these declarative macros abstract away low-level byte management, allowing you to deliver secure, production-grade Solana programs with far less effort.
+Cùng nhau, những macro khai báo này trừu tượng hóa việc quản lý byte cấp thấp, cho phép bạn cung cấp các chương trình Solana bảo mật, chất lượng production với ít nỗ lực hơn nhiều.
 
-### Program Structure
+### Cấu trúc Chương trình
 
-Let's begin with a bare-bones version of a program to explain in detail what each macro actually does:
+Hãy bắt đầu với một phiên bản cơ bản của chương trình để giải thích chi tiết những gì mỗi macro thực sự làm:
 
 ```rust
 declare_id!("22222222222222222222222222222222222222222222");
@@ -56,7 +56,7 @@ pub enum VaultError {
 }
 ```
 
-This will transform into focused modules instead of cramming everything into the `lib.rs` for more structured programs. The program folder tree will look roughly like this:
+Điều này sẽ chuyển đổi thành các module tập trung thay vì nhồi nhét mọi thứ vào `lib.rs` để có các chương trình có cấu trúc tốt hơn. Cây thư mục chương trình sẽ trông gần như thế này:
 
 ```
 src
@@ -72,17 +72,17 @@ src
 
 #### `declare_id!()`
 
-The `declare_id!()` macro assigns to your program its onchain address; a unique public key derived from the keypair in the project's `target` folder. That keypair signs and deploys the compiled `.so` binary containing all program logic and data.
+Macro `declare_id!()` gán cho chương trình của bạn địa chỉ onchain của nó; một public key duy nhất được tạo ra từ keypair trong thư mục `target` của dự án. Keypair đó ký và triển khai file binary `.so` đã biên dịch chứa tất cả logic và dữ liệu của chương trình.
 
-**Note:** We use the placeholder `222222...` in Blueshift examples because of our internal test suite. In production, Anchor will generate a fresh program ID for you when you run the standard build and deploy commands.
+**Lưu ý:** Chúng ta sử dụng placeholder `222222...` trong các ví dụ Blueshift vì test suite nội bộ của chúng ta. Trong production, Anchor sẽ tạo một program ID mới cho bạn khi bạn chạy các lệnh build và deploy tiêu chuẩn.
 
 #### `#[program]` & `#[derive(Accounts)]`
 
-Every instruction has its own **Context** struct that lists all the accounts and, optionally, any data the instruction will need.  
+Mỗi instruction có struct **Context** riêng liệt kê tất cả các tài khoản và, tùy chọn, bất kỳ dữ liệu nào mà instruction sẽ cần.
 
-In this example, both `deposit` and `withdraw` share the same accounts; for that reason, we're going to create a single account struct called `VaultAction` to keep things more efficient and easy.
+Trong ví dụ này, cả `deposit` và `withdraw` đều chia sẻ cùng các tài khoản; vì lý do đó, chúng ta sẽ tạo một account struct duy nhất gọi là `VaultAction` để giữ mọi thứ hiệu quả và dễ dàng hơn.
 
-#### A closer look at `#[derive(Accounts)]` macro
+#### Nhìn kỹ hơn vào macro `#[derive(Accounts)]`
 
 ```rust
 #[derive(Accounts)]
@@ -101,29 +101,29 @@ pub struct VaultAction<'info> {
 }
 ```
 
-As we can see from the code snippet, the `#[derive(Accounts)]` macro serves three critical responsibilities:
-- Declares all the accounts a specific instruction needs.
-- Enforce constraint checks automatically, blocking many bugs and potential exploits at runtime.
-- Generates helper methods that let you access and mutate accounts safely.
+Như chúng ta có thể thấy từ đoạn code, macro `#[derive(Accounts)]` phục vụ ba trách nhiệm quan trọng:
+- Khai báo tất cả các tài khoản mà một instruction cụ thể cần.
+- Tự động thực thi kiểm tra ràng buộc, chặn nhiều bug và khai thác tiềm ẩn tại runtime.
+- Tạo ra các phương thức hỗ trợ cho phép bạn truy cập và thay đổi tài khoản một cách an toàn.
 
-It accomplishes this through a combination of account types and inline attributes.
+Nó thực hiện điều này thông qua sự kết hợp của các kiểu tài khoản và thuộc tính inline.
 
-**Account types in our example**
-- `Signer<'info>`: Verifies the account signed the transaction; essential for security and for CPIs that demand a signature.
-- `SystemAccount<'info>`: Confirms ownership of the account by the System Program.
-- `Program<'info, System>`: Ensures the account is executable and matches the System Program ID, enabling CPIs such as account creation or lamport transfers.
+**Các kiểu tài khoản trong ví dụ của chúng ta**
+- `Signer<'info>`: Xác minh tài khoản đã ký transaction; cần thiết cho bảo mật và cho các CPI yêu cầu chữ ký.
+- `SystemAccount<'info>`: Xác nhận quyền sở hữu tài khoản bởi System Program.
+- `Program<'info, System>`: Đảm bảo tài khoản có thể thực thi và khớp với System Program ID, cho phép các CPI như tạo tài khoản hoặc chuyển lamport.
 
-**Inline attributes you'll encounter**
-- `mut`: Flags the account as mutable; mandatory whenever its lamport balance or data may change.
-- `seeds & bump`: Verifies the account is a Program-Derived Address (PDA) generated from the provided seeds plus a bump byte.
+**Các thuộc tính inline bạn sẽ gặp**
+- `mut`: Đánh dấu tài khoản là có thể thay đổi; bắt buộc bất cứ khi nào số dư lamport hoặc dữ liệu của nó có thể thay đổi.
+- `seeds & bump`: Xác minh tài khoản là một Program-Derived Address (PDA) được tạo từ các seed được cung cấp cộng với một byte số bump.
 
-**Note** PDAs are important because:
-- When used by the program that owns them, PDAs can sign CPIs on the program's behalf.
-- They give you deterministic, verifiable addresses for persisting program state.
+**Lưu ý** PDA quan trọng vì:
+- Khi được sử dụng bởi chương trình sở hữu chúng, PDA có thể ký CPI thay mặt cho chương trình.
+- Chúng cung cấp cho bạn các địa chỉ xác định và có thể xác minh để duy trì trạng thái chương trình.
 
 #### `#[error_code]`
 
-The `#[error_code]` macro lets you define clear, custom errors inside the program.
+Macro `#[error_code]` cho phép bạn định nghĩa các lỗi tùy chỉnh rõ ràng bên trong chương trình.
 
 ```rust
 #[error_code]
@@ -135,4 +135,4 @@ pub enum VaultError {
 }
 ```
 
-Each enum variant can carry a `#[msg(...)]` attribute that logs a descriptive string whenever the error occurs; far more helpful than a raw numeric code during debugging.
+Mỗi biến thể của enum có thể mang một thuộc tính `#[msg(...)]` ghi log một chuỗi mô tả bất cứ khi nào lỗi xảy ra; hữu ích hơn nhiều so với một con số trong quá trình debug.

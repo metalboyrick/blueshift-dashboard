@@ -1,13 +1,13 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
 
-# Accounts
+# Các tài khoản
 
-We saw the `#[account]` macro, but naturally on Solana there are different types of accounts. For this reason it is worth taking a moment to see how generally accounts on Solana work, but more in depth, how they work with Anchor.
+Chúng ta đã thấy macro `#[account]`, nhưng tự nhiên trên Solana có nhiều loại tài khoản khác nhau. Vì lý do này, đáng để dành một chút thời gian để xem cách các tài khoản trên Solana hoạt động nói chung, nhưng sâu hơn, cách chúng hoạt động với Anchor.
 
-<ArticleSection name="General Overview" id="general-overview" level="h2" />
+<ArticleSection name="Tổng quan chung" id="general-overview" level="h2" />
 
-On Solana, every piece of state lives in an account; picture the [ledger](https://solana.com/docs/references/terminology#ledger) as one giant table where each row shares the same base schema:
+Trên Solana, mọi phần của trạng thái đều tồn tại trong một tài khoản; hãy hình dung [ledger](https://solana.com/docs/references/terminology#ledger) như một bảng khổng lồ nơi mỗi hàng chia sẻ cùng một schema cơ bản:
 
 ```rust
 pub struct Account {
@@ -25,42 +25,42 @@ pub struct Account {
 }
 ```
 
-All accounts on Solana share the same base layout. What sets them apart is:
+Tất cả các tài khoản trên Solana đều chia sẻ cùng một layout cơ bản. Điều khiến chúng khác biệt là:
 
-1. The owner: The program that has exclusive rights to modify the account's data and lamports.
-2. The data: Used by the owner program to distinguish between different account types.
+1. Owner: Chương trình có đặc quyền để sửa đổi dữ liệu và lamport của tài khoản.
+2. Dữ liệu: Được sử dụng bởi chương trình owner để phân biệt giữa các loại tài khoản khác nhau.
 
-When we talk about Token Program Accounts, what we mean is an account where the `owner` is the Token Program. Unlike a System Account whose data field is empty, a Token Program Account can be either a **Mint** or a **Token** account. We use discriminators to distinguish between them.
+Khi chúng ta nói về Token Program Accounts, ý chúng ta là một tài khoản nơi `owner` là Token Program. Không giống như System Account có trường data trống, Token Program Account có thể là tài khoản **Mint** hoặc **Token**. Chúng ta sử dụng discriminator để phân biệt giữa chúng.
 
-Just as the Token Program can own accounts, so can any other program even our own.
+Cũng như Token Program có thể sở hữu tài khoản, bất kỳ chương trình nào khác thậm chí cả chương trình của chúng ta cũng có thể.
 
-<ArticleSection name="Program Accounts" id="program-accounts" level="h2" />
+<ArticleSection name="Các tài khoản của chương trình" id="program-accounts" level="h2" />
 
-Program accounts are the foundation of state management in Anchor programs. They allow you to create custom data structures that are owned by your program. Let's explore how to work with them effectively.
+Các tài khoản của chương trình là nền tảng của quản lý trạng thái trong các chương trình Anchor. Chúng cho phép bạn tạo các cấu trúc dữ liệu tùy chỉnh được sở hữu bởi chương trình của bạn. Hãy khám phá cách làm việc với chúng một cách hiệu quả.
 
-### Account Structure and Discriminators
+### Cấu trúc Account và Discriminator
 
-Every program account in Anchor needs a way to identify its type. This is handled through discriminators, which can be either:
+Mỗi tài khoản chương trình trong Anchor cần một cách để xác định loại của nó. Điều này được xử lý thông qua discriminator, có thể là:
 
-1. **Default Discriminators**: An 8-byte prefix generated using `sha256("account:<StructName>")[0..8]` for accounts, or `sha256("global:<instruction_name>")[0..8]` for instructions. The seeds use PascalCase for accounts and snake_case for instructions.
+1. **Discriminator Mặc định**: Một prefix 8-byte được tạo bằng cách `sha256("account:<StructName>")[0..8]` cho account, hoặc `sha256("global:<instruction_name>")[0..8]` cho instruction. Các seed sử dụng PascalCase cho account và snake_case cho instruction.
 
 <AnchorDiscriminatorCalculator value={"TestAccount"} displayMode="account" />
 
-2. **Custom Discriminators**: Starting with Anchor `v0.31.0`, you can specify your own discriminator:
+2. **Discriminator tùy chỉnh**: Bắt đầu từ Anchor `v0.31.0`, bạn có thể chỉ định discriminator của riêng mình:
 
 ```rust
 #[account(discriminator = 1)]              // single-byte
 pub struct Escrow { … }
 ```
 
-**Important Notes about Discriminators**:
-- They must be unique across your program
-- Using `[1]` prevents using `[1, 2, …]` as these also start with `1`
-- `[0]` cannot be used as it conflicts with uninitialized accounts
+**Lưu ý quan trọng về Discriminator**:
+- Chúng phải là duy nhất trong chương trình của bạn
+- Sử dụng `[1]` ngăn cản việc sử dụng `[1, 2, …]` vì chúng cũng bắt đầu bằng `1`
+- `[0]` không thể được sử dụng vì nó xung đột với các tài khoản chưa được khởi tạo
 
-### Creating Program Accounts
+### Tạo tài khoản của chương trình
 
-To create a program account, you first define your data structure:
+Để tạo một tài khoản của chương trình, trước tiên bạn định nghĩa cấu trúc dữ liệu của mình:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -72,17 +72,17 @@ pub struct CustomAccountType {
 }
 ```
 
-Key points about program accounts:
-- Maximum size is 10,240 bytes (10 KiB)
-- For larger accounts, you'll need `zero_copy` and chunked writes
-- The `InitSpace` derive macro automatically calculates the required space
-- Total space = `INIT_SPACE` + `DISCRIMINATOR.len()`
+Các điểm chính về tài khoản chương trình:
+- Kích thước tối đa là 10,240 byte (10 KiB)
+- Đối với các tài khoản lớn hơn, bạn sẽ cần `zero_copy` và ghi từng đoạn
+- Macro derive `InitSpace` tự động tính toán không gian cần thiết cho tài khoản
+- Tổng không gian = `INIT_SPACE` + `DISCRIMINATOR.len()`
 
-The total space in bytes needed for the account is the sum of `INIT_SPACE` (size of all the fields combined) and the discriminator size (`DISCRIMINATOR.len()`).
+Tổng không gian tính bằng byte cần thiết cho tài khoản là tổng của `INIT_SPACE` (kích thước của tất cả các trường kết hợp) và kích thước discriminator (`DISCRIMINATOR.len()`).
 
-Solana accounts require a rent deposit in lamports, which depends on the size of the account. Knowing the size helps us calculate how many lamports we need to deposit to make the account open.
+Các tài khoản Solana yêu cầu một khoản tiền gửi rent tính bằng lamport, phụ thuộc vào kích thước của tài khoản. Biết kích thước giúp chúng ta tính toán cần bao nhiêu lamport cần để mở tài khoản.
 
-Here's how we're going to initiate the account in our `Account` struct:
+Đây là cách chúng ta sẽ khởi tạo tài khoản trong struct `Account` của mình:
 
 ```rust
 #[account(
@@ -93,12 +93,12 @@ Here's how we're going to initiate the account in our `Account` struct:
 pub account: Account<'info, CustomAccountType>,
 ```
 
-Here are some of the fields used in the `#[account]` macro, beyond the `seeds` and `bump` fields that we have already covered, and what they do:
-- `init`: tells Anchor to create the account
-- `payer`: which signer funds the rent (here, the maker)
-- `space`: how many bytes to allocate. This is where the rent calculation happens as well
+Đây là một số trường được sử dụng trong macro `#[account]`, ngoài các trường `seeds` và `bump` chúng ta đã đề cập trước đó, và những gì chúng làm:
+- `init`: nói với Anchor rằng hãy tạo tài khoản này.
+- `payer`: người ký nào sẽ trả phí thuê cho tài khoản (ở đây, là maker). 
+- `space`: số lượng byte cần được cấp phát cho tài khoản. Đây cũng là nơi tính toán phí thuê xảy ra.
 
-After creation, you can modify the account's data. If you need to change its size, use reallocation:
+Sau khi tạo, bạn có thể sửa đổi dữ liệu của tài khoản. Nếu bạn cần thay đổi kích thước của nó, hãy sử dụng realloc:
 
 ```rust
 #[account(
@@ -109,9 +109,9 @@ After creation, you can modify the account's data. If you need to change its siz
 )]
 ```
 
-**Note**: When reducing account size, set `realloc::zero = true` to ensure old data is properly cleared.
+**Chú ý**: Khi giảm kích thước tài khoản, hãy đặt `realloc::zero = true` để đảm bảo rằng dữ liệu cũ được xóa đúng cách.
 
-Lastly, when the account is no longer needed, we can close it to recover rent:
+Cuối cùng, khi tài khoản không còn cần thiết nữa, chúng ta có thể đóng nó để thu hồi tiền thuê:
 
 ```rust
 #[account(
@@ -121,7 +121,7 @@ Lastly, when the account is no longer needed, we can close it to recover rent:
 pub account: Account<'info, CustomAccountType>,
 ```
 
-We then can add PDAs, deterministic addresses derived from seeds and a program ID that are particularly useful for creating predictable account addresses, into these constraints like this:
+Chúng ta có thể thêm các PDA, các địa chỉ được xác định từ seed và ID của 1 chương trình mà nó đặc biệt hưu dụng cho việc tạo ra các địa chỉ tài khoản có thể dự đoán được, vào các ràng buộc như thế này:
 
 ```rust
 #[account(
@@ -131,9 +131,10 @@ We then can add PDAs, deterministic addresses derived from seeds and a program I
 pub account: Account<'info, CustomAccountType>,
 ```
 
-**Note**: that PDAs are deterministic: same seeds + program + bump always produce the same address and that the bump ensures the address is off the ed25519 curve
+**Chú ý**: Các PDA là xác định: cùng một seeds + program + bump luôn luôn tạo ra cùng một địa chỉ và bump đảm bảo rằng địa chỉ nằm ngoài đường cong ed25519.
 
-Since the calculating the bump can "burn" a lot of CUs, it's always good to save it into the account or pass it into the instruction and validate it without having to calculate like this:
+Bởi vì việc tính toán số bump có thể "đôt" nhiều tài nguyên CU, nên luôn tốt hơn là lưu trữ nó trong tài khoản hoặc chuyển nó vào trong lệnh và xác minh nó mà không cần phải tính toán như thế này:
+
 
 ```rust
 #[account(
@@ -143,7 +144,7 @@ Since the calculating the bump can "burn" a lot of CUs, it's always good to save
 pub account: Account<'info, CustomAccountType>,
 ```
 
-And it's possible to derive a PDA that is derived from another program by passing the address of the program is derived from like this:
+Và có thể tạo ra một PDA được tạo từ một chương trình khác bằng cách truyền địa chỉ của chương trình mà nó được tạo ra như thế này:
 
 ```rust
 #[account(
@@ -156,21 +157,21 @@ pub account: Account<'info, CustomAccountType>,
 
 <ArticleSection name="Token Accounts" id="token-program" level="h2" />
 
-The Token Program, part of the Solana Program Library (SPL), is the built-in toolkit for minting and moving any asset that isn't native SOL. It has instructions to create tokens, mint new supply, transfer balances, burn, freeze, and more.
+Token Program, một phần của Solana Program Library (SPL), là bộ công cụ tích hợp để mint và di chuyển bất kỳ tài sản nào không phải là SOL gốc. Nó có các instruction để tạo token, mint supply mới, chuyển số dư, burn, freeze, và nhiều hơn nữa.
 
-This program owns two key account types:
-- **Mint Account**: stores the metadata for one specific token: supply, decimals, mint authority, freeze authority, and so on
-- **Token Account**: holds a balance of that mint for a particular owner. Only the owner can reduce the balance (transfer, burn, etc.), but anyone can send tokens to the account, increasing its balance
+Chương trình này sở hữu hai loại tài khoản chính:
+- **Mint Account**: lưu trữ metadata cho một token cụ thể: supply, decimals, mint authority, freeze authority, và nhiều hơn nữa
+- **Token Account**: giữ số dư của mint đó cho một owner cụ thể. Chỉ owner mới có thể giảm số dư (transfer, burn, v.v.), nhưng bất kỳ ai cũng có thể gửi token đến tài khoản, tăng số dư của nó
 
-### Token Accounts in Anchor
+### Token Accounts trong Anchor
 
-Natively, the core Anchor crate only bundles CPI and Accounts helpers for the System Program. If you want the same hand-holding for SPL tokens you pull in the `anchor_spl` crate.
+Về bản chất, crate Anchor cốt lõi chỉ đóng gói các helper CPI và Accounts cho System Program. Nếu bạn muốn sự hỗ trợ tương tự cho SPL token, bạn cần kéo vào crate `anchor_spl`.
 
-`anchor_spl` adds:
-- Helper builders for every instruction in both the SPL Token and Token-2022 programs
-- Type wrappers that make it painless to verify and deserialize Mint and Token accounts
+`anchor_spl` thêm:
+- Helper builder cho mọi instruction trong cả chương trình SPL Token và Token-2022
+- Type wrapper giúp việc xác minh và deserialize Mint và Token account trở nên dễ dàng
 
-Let's look at how the `Mint` and `Token` accounts are structured:
+Hãy xem cách các tài khoản `Mint` và `Token` được cấu trúc:
 
 ```rust
 #[account(
@@ -190,18 +191,18 @@ pub mint: Account<'info, Mint>,
 pub maker_ata_a: Account<'info, TokenAccount>,
 ```
 
-`Account<'info, Mint>` and `Account<'info, TokenAccount>` tell Anchor to:
-- confirm the account really is a Mint or Token account
-- deserialize its data so you can read fields directly
-- enforce any extra constraints you specify (`authority`, `decimals`, `mint`, `token_program`, etc.)
+`Account<'info, Mint>` và `Account<'info, TokenAccount>` yêu cầu Anchor:
+- xác nhận tài khoản thực sự là Mint hoặc Token account
+- deserialize dữ liệu của nó để bạn có thể đọc các trường trực tiếp
+- thực thi bất kỳ ràng buộc bổ sung nào bạn chỉ định (`authority`, `decimals`, `mint`, `token_program`, v.v.)
 
-These token-related accounts follow the same `init` pattern used earlier. Since Anchor knows their fixed byte size, we don't need to specify a `space` value, only the payer funding the account.
+Các tài khoản liên quan đến token này tuân theo cùng pattern `init` đã sử dụng trước đó. Vì Anchor biết kích thước byte cố định của chúng, chúng ta không cần chỉ định giá trị `space`, chỉ cần payer tài trợ cho tài khoản.
 
-Anchor also offers `init_if_needed` macro: it checks whether the token account already exists and, if not, creates it. That shortcut isn't safe for every account type, but it's perfectly suited to token accounts, so we'll rely on it here.
+Anchor cũng cung cấp macro `init_if_needed`: nó kiểm tra xem token account đã tồn tại chưa và, nếu chưa, sẽ tạo nó. Điều đó không an toàn cho mọi loại tài khoản, nhưng nó hoàn toàn phù hợp với token account, vì vậy chúng ta sẽ dựa vào nó ở đây.
 
-As mentioned, `anchor_spl` creates helpers for both the **Token** and **Token2022** programs, with the latter introducing Token Extensions. The main challenge is that even though these accounts achieve similar goals and have comparable structures, they can't be deserialized and checked the same way since they're owned by two different programs.
+Như đã đề cập, `anchor_spl` tạo helper cho cả chương trình **Token** và **Token2022**, với chương trình sau giới thiệu Token Extensions. Thách thức chính là mặc dù những tài khoản này đạt được mục tiêu tương tự và có cấu trúc tương đương, chúng không thể được deserialize và kiểm tra theo cách giống nhau vì chúng được sở hữu bởi hai chương trình khác nhau.
 
-We could create more "advanced" logic to handle these different account types, but fortunately Anchor supports this scenario through **InterfaceAccounts**:
+Chúng ta có thể tạo logic "nâng cao" hơn để xử lý các loại tài khoản khác nhau này, nhưng may mắn thay Anchor hỗ trợ tình huống này thông qua **InterfaceAccounts**:
 
 ```rust
 use anchor_spl::token_interface::{Mint, TokenAccount};
@@ -222,19 +223,19 @@ pub mint: InterfaceAccounts<'info, Mint>,
 pub maker_ata_a: InterfaceAccounts<'info, TokenAccount>,
 ```
 
-The key difference here is that we're using `InterfaceAccounts` instead of `Account`. This allows our program to work with both Token and Token2022 accounts without needing to handle the differences in their deserialization logic. The interface provides a common way to interact with both types of accounts while maintaining type safety and proper validation.
+Sự khác biệt chính ở đây là chúng ta đang sử dụng `InterfaceAccounts` thay vì `Account`. Điều này cho phép chương trình của chúng ta hoạt động với cả Token và Token2022 account mà không cần xử lý sự khác biệt trong logic deserialization của chúng. Interface cung cấp một cách chung để tương tác với cả hai loại tài khoản trong khi duy trì type safety và validation thích hợp.
 
-This approach is particularly useful when you want your program to be compatible with both token standards, as it eliminates the need to write separate logic for each program. The interface handles all the complexity of dealing with different account structures behind the scenes.
+Cách tiếp cận này đặc biệt hữu ích khi bạn muốn chương trình của mình tương thích với cả hai tiêu chuẩn token, vì nó loại bỏ nhu cầu viết logic riêng biệt cho mỗi chương trình. Interface xử lý tất cả sự phức tạp của việc xử lý các cấu trúc tài khoản khác nhau ở hậu trường.
 
-If you want to learn more about how to use `anchor-spl` you can follow the [SPL-Token Program with Anchor](/en/courses/spl-token-with-anchor) or [Token2022 Program with Anchor](/en/courses/token-2022-with-anchor) courses.
+Nếu bạn muốn tìm hiểu thêm về cách sử dụng `anchor-spl`, bạn có thể theo dõi các khóa học [SPL-Token Program with Anchor](/vi/courses/spl-token-with-anchor) hoặc [Token2022 Program with Anchor](/vi/courses/token-2022-with-anchor).
 
-<ArticleSection name="Additional Accounts Type" id="additional-accounts-type" level="h2" />
+<ArticleSection name="Các Loại Account Bổ sung" id="additional-accounts-type" level="h2" />
 
-Naturally, System Accounts, Program Accounts and Token Accounts are not the only types of account that we can have in anchor. So we're going to see here other types of Account that we can have:
+Tất nhiên, System Account, Program Account và Token Account không phải là những loại tài khoản duy nhất mà chúng ta có thể có trong anchor. Vì vậy chúng ta sẽ xem ở đây các loại Account khác mà chúng ta có thể có:
 
 ### Signer
 
-The `Signer` type is used when you need to verify that an account has signed a transaction. This is crucial for security as it ensures that only authorized accounts can perform certain actions. You'll use this type whenever you need to guarantee that a specific account has approved a transaction, such as when transferring funds or modifying account data that requires explicit permission. Here's how you can use it:
+Kiểu `Signer` được sử dụng khi bạn cần xác minh rằng một tài khoản đã ký một transaction. Điều này rất quan trọng cho bảo mật vì nó đảm bảo rằng chỉ các tài khoản được ủy quyền mới có thể thực hiện các hành động nhất định. Bạn sẽ sử dụng kiểu này bất cứ khi nào bạn cần đảm bảo rằng một tài khoản cụ thể đã phê duyệt một transaction, chẳng hạn như khi chuyển tiền hoặc sửa đổi dữ liệu tài khoản yêu cầu quyền rõ ràng. Đây là cách bạn có thể sử dụng nó:
 
 ```rust
 #[derive(Accounts)]
@@ -244,20 +245,20 @@ pub struct InstructionAccounts<'info> {
 }
 ```
 
-The `Signer` type automatically checks if the account has signed the transaction. If it hasn't, the transaction will fail. This is particularly useful when you need to ensure that only specific accounts can perform certain operations.
+Kiểu `Signer` tự động kiểm tra xem tài khoản đã ký transaction chưa. Nếu chưa, transaction sẽ thất bại. Điều này đặc biệt hữu ích khi bạn cần đảm bảo rằng chỉ các tài khoản cụ thể mới có thể thực hiện các thao tác nhất định.
 
 ### AccountInfo & UncheckedAccount
 
-`AccountInfo` and `UncheckedAccount` are low-level account types that provide direct access to account data without automatic validation. They are identical in functionality, but `UncheckedAccount` is the preferred choice as its name better reflects its purpose.
+`AccountInfo` và `UncheckedAccount` là các kiểu tài khoản cấp thấp cung cấp quyền truy cập trực tiếp vào dữ liệu tài khoản mà không có validation tự động. Chúng giống hệt nhau về chức năng, nhưng `UncheckedAccount` là lựa chọn được ưa thích vì tên của nó phản ánh tốt hơn mục đích của nó.
 
-These types are useful in three main scenarios:
-1. Working with accounts that lack a defined structure
-2. Implementing custom validation logic
-3. Interacting with accounts from other programs that don't have Anchor type definitions
+Những kiểu này hữu ích trong ba tình huống chính:
+1. Làm việc với các tài khoản thiếu cấu trúc được định nghĩa
+2. Triển khai logic validation tùy chỉnh
+3. Tương tác với các tài khoản từ chương trình khác không có định nghĩa kiểu Anchor
 
-Since these types bypass Anchor's safety checks, they are inherently unsafe and require explicit acknowledgment using the `/// CHECK` comment. This comment serves as documentation that you understand the risks and have implemented appropriate validation.
+Vì những kiểu này bỏ qua các kiểm tra an toàn của Anchor, chúng vốn dĩ không an toàn và yêu cầu sự thừa nhận rõ ràng bằng cách sử dụng comment `/// CHECK`. Comment này phục vụ như tài liệu rằng bạn hiểu rủi ro và đã triển khai validation thích hợp.
 
-Here's an example of how to use them:
+Đây là ví dụ về cách sử dụng chúng:
 
 ```rust
 #[derive(Accounts)]
@@ -272,14 +273,14 @@ pub struct InstructionAccounts<'info> {
 
 ### Option
 
-The `Option` type in Anchor allows you to make accounts optional in your instruction. When an account is wrapped in `Option`, it can either be provided or omitted in the transaction. This is particularly useful for:
-- Building flexible instructions that can work with or without certain accounts
-- Implementing optional parameters that may not always be needed
-- Creating backward-compatible instructions that can work with new or old account structures
+Kiểu `Option` trong Anchor cho phép bạn làm cho các tài khoản trở thành tùy chọn trong instruction của bạn. Khi một tài khoản được bao bọc trong `Option`, nó có thể được cung cấp hoặc bỏ qua trong transaction. Điều này đặc biệt hữu ích cho:
+- Xây dựng các instruction linh hoạt có thể hoạt động có hoặc không có các tài khoản nhất định
+- Triển khai các tham số tùy chọn có thể không phải lúc nào cũng cần thiết
+- Tạo các instruction tương thích ngược có thể hoạt động với cấu trúc tài khoản mới hoặc cũ
 
-When an `Option` account is set to `None`, Anchor will use the Program ID as the account address. This behavior is important to understand when working with optional accounts.
+Khi một tài khoản `Option` được đặt thành `None`, Anchor sẽ sử dụng Program ID làm địa chỉ tài khoản. Hành vi này quan trọng để hiểu khi làm việc với các tài khoản tùy chọn.
 
-Here's how to implement it:
+Đây là cách triển khai nó:
 
 ```rust
 #[derive(Accounts)]
@@ -290,12 +291,12 @@ pub struct InstructionAccounts<'info> {
 
 ### Box
 
-The `Box` type is used to store accounts on the heap rather than the stack. This is necessary in several scenarios:
-- When dealing with large account structures that would be inefficient to store on the stack
-- When working with recursive data structures
-- When you need to work with accounts that have a size that can't be determined at compile time
+Kiểu `Box` được sử dụng để lưu trữ tài khoản trên heap thay vì stack. Điều này cần thiết trong một số tình huống:
+- Khi xử lý các cấu trúc tài khoản lớn mà việc lưu trữ trên stack sẽ không hiệu quả
+- Khi làm việc với các cấu trúc dữ liệu đệ quy
+- Khi bạn cần làm việc với các tài khoản có kích thước không thể xác định tại thời điểm compile
 
-Using `Box` helps manage memory more efficiently in these cases by allocating the account data on the heap. Here's an example:
+Sử dụng `Box` giúp quản lý bộ nhớ hiệu quả hơn trong những trường hợp này bằng cách cấp phát dữ liệu tài khoản trên heap. Đây là một ví dụ:
 
 ```rust
 #[derive(Accounts)]
@@ -306,15 +307,15 @@ pub struct InstructionAccounts<'info> {
 
 ### Program
 
-The `Program` type is used to validate and interact with other Solana programs. Anchor can easily identify program accounts because they have their `executable` flag set to `true`. This type is particularly useful when:
+Kiểu `Program` được sử dụng để validate và tương tác với các chương trình Solana khác. Anchor có thể dễ dàng xác định các program account vì chúng có flag `executable` được đặt thành `true`. Kiểu này đặc biệt hữu ích khi:
 
-- You need to make Cross-Program Invocations (CPIs)
-- You want to ensure you're interacting with the correct program
-- You need to verify program ownership of accounts
+- Bạn cần thực hiện Cross-Program Invocation (CPI)
+- Bạn muốn đảm bảo rằng bạn đang tương tác với chương trình đúng
+- Bạn cần xác minh quyền sở hữu chương trình của các tài khoản
 
-There are two main ways to use the `Program` type:
+Có hai cách chính để sử dụng kiểu `Program`:
 
-1. Using built-in program types (recommended when available):
+1. Sử dụng các kiểu chương trình tích hợp (được khuyến nghị khi có sẵn):
 ```rust
 use anchor_spl::token::Token;
 
@@ -325,7 +326,7 @@ pub struct InstructionAccounts<'info> {
 }
 ```
 
-2. Using a custom program address when the program type isn't available:
+2. Sử dụng địa chỉ chương trình tùy chỉnh khi kiểu chương trình không có sẵn:
 ```rust
 // Address of the Program
 const PROGRAM_ADDRESS: Pubkey = pubkey!("22222222222222222222222222222222222222222222")
@@ -338,7 +339,7 @@ pub struct InstructionAccounts<'info> {
 }
 ```
 
-**Note**: When working with token programs, you might need to support both the Legacy Token Program and Token-2022 Program. In such cases, use the `Interface` type instead of `Program`:
+**Lưu ý**: Khi làm việc với các token program, bạn có thể cần hỗ trợ cả Legacy Token Program và Token-2022 Program. Trong những trường hợp như vậy, hãy sử dụng kiểu `Interface` thay vì `Program`:
 
 ```rust
 use anchor_spl::token_interface::TokenInterface;
@@ -351,11 +352,11 @@ pub struct InstructionAccounts<'info> {
 
 <ArticleSection name="Custom Account Validation" id="custom-account-validation" level="h2" />
 
-Anchor provides a powerful set of constraints that can be applied directly in the `#[account]` attribute. These constraints help ensure account validity and enforce program rules at the account level, before your instruction logic runs. Here are the available constraints:
+Anchor cung cấp một bộ ràng buộc mạnh mẽ có thể được áp dụng trực tiếp trong thuộc tính `#[account]`. Những ràng buộc này giúp đảm bảo tính hợp lệ của tài khoản và thực thi các quy tắc chương trình ở cấp độ tài khoản, trước khi logic instruction của bạn chạy. Đây là các ràng buộc có sẵn:
 
-### Address Constraint
+### Ràng buộc Address
 
-The `address` constraint verifies that an account's public key matches a specific value. This is essential when you need to ensure you're interacting with a known account, such as a specific PDA or a program account:
+Ràng buộc `address` xác minh rằng public key của một tài khoản khớp với một giá trị cụ thể. Điều này rất quan trọng khi bạn cần đảm bảo rằng bạn đang tương tác với một tài khoản đã biết, chẳng hạn như một PDA cụ thể hoặc một tài khoản của chương trình:
 
 ```rust
 #[account(
@@ -365,9 +366,9 @@ The `address` constraint verifies that an account's public key matches a specifi
 pub account: Account<'info, CustomAccountType>,
 ```
 
-### Owner Constraint
+### Ràng buộc Owner
 
-The `owner` constraint ensures that an account is owned by a specific program. This is a critical security check when working with program-owned accounts, as it prevents unauthorized access to accounts that should be managed by a particular program:
+Ràng buộc `owner` đảm bảo rằng một tài khoản được sở hữu bởi một chương trình cụ thể. Đây là một kiểm tra bảo mật quan trọng khi làm việc với các tài khoản thuộc sở hữu của chương trình, vì nó ngăn chặn truy cập trái phép vào các tài khoản mà lẽ ra phải được quản lý bởi một chương trình cụ thể:
 
 ```rust
 #[account(
@@ -377,18 +378,18 @@ The `owner` constraint ensures that an account is owned by a specific program. T
 pub account: Account<'info, CustomAccountType>,
 ```
 
-### Executable Constraint
+### Ràng buộc Executable
 
-The `executable` constraint verifies that an account is a program account (has its `executable` flag set to `true`). This is particularly useful when making Cross-Program Invocations (CPIs) to ensure you're interacting with a program rather than a data account:
+Ràng buộc `executable` xác minh rằng một tài khoản là một program account (có flag `executable` được đặt thành `true`). Điều này đặc biệt hữu ích khi thực hiện Cross-Program Invocation (CPI) để đảm bảo rằng bạn đang tương tác với một chương trình thay vì một data account:
 
 ```rust
 #[account(executable)]
 pub account: Account<'info, CustomAccountType>,
 ```
 
-### Mutable Constraint
+### Ràng buộc Mutable
 
-The `mut` constraint marks an account as mutable, allowing its data to be modified during the instruction. This is required for any account that will be updated, as Anchor enforces immutability by default for safety:
+Ràng buộc `mut` đánh dấu một tài khoản là có thể thay đổi, cho phép dữ liệu của nó được sửa đổi trong quá trình thực hiện instruction. Điều này bắt buộc đối với bất kỳ tài khoản nào sẽ được cập nhật, vì Anchor thực thi tính bất biến theo mặc định để đảm bảo an toàn:
 
 ```rust
 #[account(
@@ -398,9 +399,9 @@ The `mut` constraint marks an account as mutable, allowing its data to be modifi
 pub account: Account<'info, CustomAccountType>,
 ```
 
-### Signer Constraint
+### Ràng buộc Signer
 
-The `signer` constraint verifies that an account has signed the transaction. This is crucial for security when an account needs to authorize an action, such as transferring funds or modifying data. It's a more explicit way to require signatures compared to using the `Signer` type:
+Ràng buộc `signer` xác minh rằng một tài khoản đã ký transaction. Điều này rất quan trọng cho bảo mật khi một tài khoản cần ủy quyền cho một hành động, chẳng hạn như chuyển tiền hoặc sửa đổi dữ liệu. Đây là một cách rõ ràng hơn để yêu cầu chữ ký so với việc sử dụng kiểu `Signer`:
 
 ```rust
 #[account(
@@ -410,9 +411,9 @@ The `signer` constraint verifies that an account has signed the transaction. Thi
 pub account: Account<'info, CustomAccountType>,
 ```
 
-### Has One Constraint
+### Ràng buộc Has One
 
-The `has_one` constraint verifies that a specific field on the account struct matches another account's public key. This is useful for maintaining relationships between accounts, such as ensuring a token account belongs to the correct owner:
+Ràng buộc `has_one` xác minh rằng một trường cụ thể trên account struct khớp với public key của tài khoản khác. Điều này hữu ích để duy trì mối quan hệ giữa các tài khoản, chẳng hạn như đảm bảo một token account thuộc về owner đúng:
 
 ```rust
 #[account(
@@ -421,9 +422,9 @@ The `has_one` constraint verifies that a specific field on the account struct ma
 pub account: Account<'info, CustomAccountType>,
 ```
 
-### Custom Constraint
+### Ràng buộc Custom
 
-When the built-in constraints don't meet your needs, you can write a custom validation expression. This allows for complex validation logic that can't be expressed with other constraints, such as checking account data length or validating relationships between multiple fields:
+Khi các ràng buộc tích hợp không đáp ứng nhu cầu của bạn, bạn có thể viết một biểu thức validation tùy chỉnh. Điều này cho phép logic validation phức tạp không thể được biểu đạt bằng các ràng buộc khác, chẳng hạn như kiểm tra độ dài dữ liệu tài khoản hoặc xác thực mối quan hệ giữa nhiều trường:
 
 ```rust
 #[account(
@@ -432,4 +433,4 @@ When the built-in constraints don't meet your needs, you can write a custom vali
 pub account: Account<'info, CustomAccountType>,
 ```
 
-These constraints can be combined to create powerful validation rules for your accounts. By placing validation at the account level, you keep your security checks close to the account definitions and avoid scattering `require!()` calls throughout your instruction logic.
+Những ràng buộc này có thể được kết hợp để tạo ra các quy tắc validation mạnh mẽ cho tài khoản của bạn. Bằng cách đặt validation ở cấp độ tài khoản, bạn giữ các kiểm tra bảo mật gần với định nghĩa tài khoản và tránh việc rải rác các lời gọi `require!()` trong suốt logic instruction của bạn.
