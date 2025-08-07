@@ -16,6 +16,7 @@ Below are the accounts required for this context:
 - `vault_y`: The token account that holds all of token Y deposited into the pool. Must be passed as `mutable`.
 - `user_x_ata`: The user's associated token account for token X. This is the source account from which the user's token X will be transferred into the pool. Must be passed as `mutable`.
 - `user_y_ata`: The user's associated token account for token Y. This is the source account from which the user's token Y will be transferred into the pool. Must be passed as `mutable`.
+- `user_lp_ata`: The user's associated token account for LP tokens. This is the destination account where LP tokens will be minted. Must be passed as `mutable`.
 - `config`: The configuration account for the AMM pool. Stores all relevant pool parameters and state.
 - `token program`: The SPL Token program account. This is required to perform token operations such as transfers and minting. Must be `executable`.
 
