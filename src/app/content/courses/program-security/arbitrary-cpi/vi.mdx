@@ -1,20 +1,20 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Arbitrary CPIs
+# Arbitrary CPI
 
-Arbitrary Cross Program Invocation (CPI) attacks occur when programs blindly call whatever program is passed in as a parameter, rather than validating they're invoking the intended program. 
+Các cuộc tấn công Arbitrary Cross Program Invocation (CPI) xảy ra khi các chương trình mù quáng gọi bất kỳ chương trình nào được truyền vào như một tham số, thay vì xác thực rằng chúng đang gọi chương trình dự định.
 
-This transforms your secure program into a launcher for malicious code, allowing attackers to hijack your program's authority and execute unauthorized operations under your program's identity.
+Điều này biến chương trình an toàn của bạn thành một nơi chạy của mã độc hại, cho phép kẻ tấn công chiếm quyền authority của chương trình bạn và thực thi các thao tác trái phép dưới danh tính chương trình của bạn.
 
-The danger lies in Solana's flexible account model. Since callers can pass any program ID into your instruction's account list, failing to validate program addresses means your program becomes a proxy for arbitrary code execution. 
+Nguy hiểm nằm ở mô hình account linh hoạt của Solana. Vì người gọi có thể truyền bất kỳ program ID nào vào danh sách account của instruction bạn, việc không xác thực địa chỉ chương trình có nghĩa là chương trình của bạn trở thành proxy cho việc thực thi mã tùy ý.
 
-An attacker can substitute a malicious program that mimics the expected interface but performs completely different operations—like reversing transfers, draining accounts, or manipulating state in unexpected ways.
+Kẻ tấn công có thể thay thế một chương trình độc hại bắt chước interface mong đợi nhưng thực hiện các thao tác hoàn toàn khác—như đảo ngược transfer, rút cạn account, hoặc thao tác state theo những cách bất ngờ.
 
-What makes this particularly insidious is that the attack succeeds even when all other security checks pass. Your program might correctly validate account ownership, check signatures, and verify data structures, but still end up calling malicious code because it never confirmed it was talking to the right program.
+Cái làm cho điều này đặc biệt nguy hiểm là cuộc tấn công thành công ngay cả khi tất cả các kiểm tra bảo mật khác đều vượt qua. Chương trình của bạn có thể xác thực đúng cách account ownership, kiểm tra chữ ký, và xác minh cấu trúc dữ liệu, nhưng vẫn kết thúc bằng việc gọi code độc hại vì nó không bao giờ xác nhận rằng nó đang nói chuyện với chương trình đúng.
 
 <ArticleSection name="Anchor" id="anchor" level="h2" />
 
-Consider this vulnerable instruction that performs a token transfer:
+Xem xét instruction dễ bị tấn công này thực hiện token transfer:
 
 ```rust
 #[program]
@@ -55,17 +55,17 @@ pub struct SendTokens<'info> {
 }
 ```
 
-This code appears secure at first glance. The source and destination are properly validated as token accounts, and the authority must sign the transaction. However, the `token_program` field is an `UncheckedAccount`, meaning Anchor performs no validation on it whatsoever.
+Mã này thoạt nhìn có vẻ an toàn. Source và destination được xác thực đúng cách là các token account, và authority phải ký giao dịch. Tuy nhiên, trường `token_program` là một `UncheckedAccount`, có nghĩa là Anchor không thực hiện validation nào trên nó cả.
 
-An attacker can exploit this by:
-- Creating a malicious program with a transfer instruction that has the same interface as SPL Token's transfer
-- Instead of transferring tokens from source to destination, their malicious program does the reverse, or worse
-- Passing their malicious program as the `token_program` parameter
-- Your program unknowingly calls the attacker's code with full authority over the transaction
+Kẻ tấn công có thể khai thác điều này bằng cách:
+- Tạo một chương trình độc hại với instruction transfer có cùng interface như transfer của SPL Token
+- Thay vì chuyển token từ source đến destination, chương trình độc hại của họ làm ngược lại, hoặc tệ hơn
+- Truyền chương trình độc hại của họ làm tham số `token_program`
+- Chương trình của bạn vô tình gọi code của kẻ tấn công với toàn quyền authority trên giao dịch
 
-The attack succeeds because while the token accounts are legitimate, the program performing the operation is not. The malicious program might transfer tokens in the wrong direction, drain accounts to the attacker's wallet, or perform any operation that the passed accounts allow.
+Cuộc tấn công thành công vì trong khi các token account là hợp pháp, chương trình thực hiện thao tác thì không. Chương trình độc hại có thể chuyển token theo hướng sai, rút cạn account đến ví của kẻ tấn công, hoặc thực hiện bất kỳ thao tác nào mà các account được truyền cho phép.
 
-Luckily `Anchor` makes it super easy to perform this check directly in the account struct by just changing `UncheckedAccount` to `Program` and passing the `Token` type which automatically validates the program ID:
+May mắn thay `Anchor` làm cho việc thực hiện kiểm tra này cực kỳ dễ dàng trực tiếp trong account struct bằng cách chỉ cần thay đổi `UncheckedAccount` thành `Program` và truyền kiểu `Token` tự động xác thực program ID:
 
 ```rust
 #[derive(Accounts)]
@@ -77,7 +77,7 @@ pub struct SendTokens<'info> {
 }
 ```
 
-Even better, use Anchor's CPI helpers which handle program validation automatically:
+Thậm chí tốt hơn, sử dụng CPI helper của Anchor xử lý program validation tự động:
 
 ```rust
 pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
@@ -97,7 +97,7 @@ pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
 }
 ```
 
-For custom validation, explicitly check the program ID before making the CPI:
+Để xác minh tùy chỉnh, kiểm tra rõ ràng program ID trước khi thực hiện CPI:
 
 ```rust
 pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
@@ -127,7 +127,7 @@ pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
 
 <ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
 
-In Pinocchio, manual validation is required since there's no automatic program checking:
+Trong Pinocchio, xác minh thủ công là bắt buộc vì không có kiểm tra chương trình tự động:
 
 ```rust
 if self.accounts.token_program.pubkey() != &spl_token::ID {

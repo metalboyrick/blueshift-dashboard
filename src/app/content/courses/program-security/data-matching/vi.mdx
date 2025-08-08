@@ -2,15 +2,15 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Data Matching
 
-Data matching is the security practice of validating that account data contains the expected values before trusting it in your program logic. While `owner` checks verify who controls an account and `signer` checks verify authorization, data matching ensures the account's internal state aligns with your program's assumptions.
+Data matching là việc bảo mật xác thực rằng dữ liệu account chứa các giá trị mong đợi trước khi tin tưởng nó trong logic chương trình của bạn. Trong khi kiểm tra `owner` xác minh ai kiểm soát một account và kiểm tra `signer` xác minh ủy quyền, data matching đảm bảo trạng thái bên trong của account phù hợp với các giả định của chương trình bạn.
 
-This becomes crucial when instruction handlers depend on relationships between accounts or when specific data values determine program behavior. Without proper data validation, attackers can manipulate program flow by crafting accounts with unexpected data combinations, even if those accounts pass basic ownership and authorization checks.
+Điều này trở nên quan trọng khi bộ xử lý instruction phụ thuộc vào mối quan hệ giữa các account hoặc khi các giá trị dữ liệu cụ thể xác định hành vi chương trình. Không có các xác minh dữ liệu thích hợp, kẻ tấn công có thể can thiệp vào luồng chương trình bằng cách tạo các account với các kết hợp dữ liệu bất ngờ, ngay cả khi những account đó vượt qua các kiểm tra ownership và authorization cơ bản.
 
-The danger lies in the gap between structural validation and logical validation. Your program might correctly verify that an account has the right type and is owned by the right program, but still make incorrect assumptions about the relationships between different pieces of data.
+Nguy hiểm nằm ở khoảng cách giữa việc xác minh về mặt cấu trúc và xác minh về mặt logic. Chương trình của bạn có thể xác minh chính xác rằng một account có đúng kiểu và được sở hữu bởi chương trình đúng, nhưng vẫn đưa ra các giả định không chính xác về mối quan hệ giữa các phần dữ liệu khác nhau.
 
 <ArticleSection name="Anchor" id="anchor" level="h2" />
 
-Consider this vulnerable instruction that updates ownership of a program account:
+Xem xét instruction dễ bị tấn công này cập nhật ownership của một program account:
 
 ```rust
 #[program]
@@ -42,18 +42,18 @@ pub struct ProgramAccount {
 }
 ```
 
-This code appears secure at first glance. The `owner` is properly marked as a `Signer`, ensuring they authorized the transaction. The `program_account` is correctly typed and owned by the program. All the basic security checks pass.
+Mã này thoạt nhìn có vẻ an toàn. `owner` được đánh dấu đúng cách là `Signer`, đảm bảo họ đã ủy quyền cho giao dịch. `program_account` được gõ chính xác và được sở hữu bởi chương trình. Tất cả các kiểm tra bảo mật cơ bản đều vượt qua.
 
-But there's a critical flaw: the program never validates that the `owner` who signed the transaction is actually the same as the `owner` stored in the `program_account` data.
+Nhưng có một lỗ hổng nghiêm trọng: chương trình không bao giờ xác thực rằng `owner` đã ký giao dịch thực sự giống với `owner` được lưu trữ trong dữ liệu `program_account`.
 
-An attacker can exploit this by:
-- Creating their own keypair (let's call it `attacker_keypair`)
-- Finding any program account they want to hijack
-- Crafting a transaction where: the `owner` is the `attacker_keypair` (which they control and can sign with); the `new_owner` is their main public key and the `program_account` is the victim's account
+Kẻ tấn công có thể khai thác điều này bằng cách:
+- Tạo keypair riêng của họ (gọi là `attacker_keypair`)
+- Tìm bất kỳ program account nào họ muốn chiếm đoạt
+- Tạo một giao dịch nơi: `owner` là `attacker_keypair` (mà họ kiểm soát và có thể ký với); `new_owner` là public key chính của họ và `program_account` là account của nạn nhân
 
-The transaction succeeds because `attacker_keypair` properly signs it, but the program never checks whether `attacker_keypair` matches the actual `owner` stored in `program_account.owner`. The attacker successfully transfers ownership of someone else's account to themselves.
+Giao dịch thành công vì `attacker_keypair` ký đúng cách, nhưng chương trình không bao giờ kiểm tra xem `attacker_keypair` có khớp với `owner` thực tế được lưu trữ trong `program_account.owner` hay không. Kẻ tấn công thành công chuyển ownership của account của người khác cho chính họ.
 
-Luckily `Anchor` makes it super easy to perform this check directly in the account struct by adding the `has_one` constraint like this:
+May mắn thay `Anchor` làm cho việc thực hiện kiểm tra này cực kỳ dễ dàng trực tiếp trong account struct bằng cách thêm ràng buộc `has_one` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -66,7 +66,7 @@ pub struct UpdateOwnership<'info> {
 }
 ```
 
-Or we could decide to change the design of the program and make the `program_account` a PDA derived from the `owner` like this:
+Hoặc chúng ta có thể quyết định thay đổi thiết kế của chương trình và làm cho `program_account` thành một PDA được derive từ `owner` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -83,7 +83,7 @@ pub struct UpdateOwnership<'info> {
 }
 ```
 
-Or you could just check that data in the instruction using the `ctx.accounts.program_account.owner` check like this:
+Hoặc bạn có thể chỉ cần kiểm tra dữ liệu đó trong instruction bằng cách sử dụng kiểm tra `ctx.accounts.program_account.owner` như thế này:
 
 ```rust
 pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
@@ -97,13 +97,13 @@ pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
 }
 ```
 
-By adding this check, the instruction handler will only proceed if the account has the correct `owner`. If the `owner` is not the correct one, the transaction will fail.
+Bằng cách thêm kiểm tra này, bộ xử lý instruction sẽ chỉ tiếp tục nếu account có `owner` đúng. Nếu `owner` không đúng, giao dịch sẽ thất bại.
 
 <ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
 
-In Pinocchio, since we don't have the possibility of adding security checks directly inside of the account struct, we are forced to do so in the instruction logic. 
+Trong Pinocchio, vì chúng ta không có khả năng thêm kiểm tra bảo mật trực tiếp bên trong account struct, chúng ta buộc phải làm như vậy trong logic instruction.
 
-We can do so by deserializing the data of the account and checking the `owner` value:
+Chúng ta có thể làm điều đó bằng cách deserialize dữ liệu của account và kiểm tra giá trị `owner`:
 
 ```rust
 let account_data = ctx.accounts.program_account.try_borrow_data()?;
@@ -115,7 +115,7 @@ if account_state.owner != self.accounts.owner.key() {
 }
 ```
 
-> You'll need to create your `ProgramAccount::try_deserialize()` function since Pinocchio lets us handle deserialization and serialization as we wish 
+> Bạn sẽ cần tạo hàm `ProgramAccount::try_deserialize()` của mình vì Pinocchio cho phép chúng ta xử lý deserialization và serialization như chúng ta muốn
 
 
 

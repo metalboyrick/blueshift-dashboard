@@ -88,7 +88,7 @@ Vì chúng ta không có macro, và chúng ta muốn tránh chúng để giữ c
 
 ### Trait `TryFrom`
 
-`TryFrom` là một phần của họ conversion tiêu chuẩn của Rust. Không giống như `From`, giả định rằng một conversion không thể thất bại, `TryFrom` trả về một `Result`, cho phép bạn hiển thị lỗi sớm - hoàn hảo cho validation onchain.
+`TryFrom` là một phần của họ các phương pháp chuyển đổi tiêu chuẩn của Rust. Không giống như `From`, giả định rằng một chuyển đổi không thể thất bại, `TryFrom` trả về một `Result`, cho phép bạn hiển thị lỗi sớm - hoàn hảo cho validation onchain.
 
 Trait được định nghĩa như thế này:
 
@@ -99,7 +99,7 @@ pub trait TryFrom<T>: Sized {
 }
 ```
 
-Trong một chương trình Solana, chúng ta triển khai `TryFrom` để chuyển đổi các raw account slice (và, khi cần thiết, cả instruction byte) thành các struct có kiểu  trong khi thực thi mọi ràng buộc.
+Trong một chương trình Solana, chúng ta triển khai `TryFrom` để chuyển đổi các raw account slice (và, khi cần thiết, cả instruction byte) thành các struct có kiểu trong khi thực thi mọi ràng buộc.
 
 <ArticleSection name="Xác thực Account" id="accounts-validation" level="h2" />
 

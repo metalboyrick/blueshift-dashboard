@@ -1,18 +1,18 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Revival Attacks
+# Revival Attack
 
-Revival attacks exploit Solana's account closure mechanism by bringing "dead" accounts back to life within the same transaction. 
+Các cuộc tấn công revival (hồi sinh) khai thác cơ chế đóng account của Solana bằng cách đưa các account "chết" trở lại sống trong cùng một giao dịch.
 
-When you close an account by transferring out its lamports, Solana doesn't immediately garbage collect it; the account only gets cleaned up after the transaction completes. This delay creates a dangerous window where attackers can "revive" closed accounts by sending lamports back to them, leaving zombie accounts with stale data that your program might still trust.
+Khi bạn đóng một account bằng cách chuyển lamport ra khỏi nó, Solana không ngay lập tức thu hồi nó; account chỉ được dọn dẹp sau khi giao dịch hoàn thành. Sự chậm trễ này tạo ra một cửa sổ nguy hiểm nơi kẻ tấn công có thể "hồi sinh" các account đã đóng bằng cách gửi lamport trở lại cho chúng, để lại các zombie account với dữ liệu cũ mà chương trình của bạn có thể vẫn tin tưởng.
 
-The attack succeeds because of a fundamental misunderstanding about account lifecycle. Developers assume that closing an account makes it immediately unusable, but in reality, the account remains accessible until the transaction ends. An attacker can sandwich your close instruction with a transfer that refunds the account's rent exemption, preventing garbage collection and maintaining the account in an exploitable state.
+Cuộc tấn công thành công vì hiểu lầm cơ bản về vòng đời account. Các nhà phát triển giả định rằng đóng một account làm cho nó ngay lập tức không thể sử dụng được, nhưng trong thực tế, account vẫn có thể truy cập được cho đến khi giao dịch kết thúc. Kẻ tấn công có thể kẹp giữa instruction đóng của bạn với một transfer hoàn lại phí thuê của account, ngăn chặn việc thu hồi và duy trì account ở trạng thái có thể khai thác tiếp.
 
-This is particularly devastating in protocols where account closure represents finalization like: completing escrows, settling disputes, or burning assets. A revived account can trick your program into believing these operations never completed, potentially allowing double-spending, unauthorized access, or protocol manipulation.
+Điều này đặc biệt có hại trong các protocol nơi việc đóng account đại diện cho kết thúc của một quy trình, như: hoàn thành escrow, giải quyết tranh chấp, hoặc đốt tài sản. Một account được hồi sinh có thể lừa chương trình của bạn tin rằng những thao tác này chưa bao giờ hoàn thành, có thể cho phép double-spending, truy cập trái phép, hoặc thao tác protocol.
 
 <ArticleSection name="Anchor" id="anchor" level="h2" />
 
-Consider this vulnerable instruction that closes a program account:
+Xem xét instruction dễ bị tấn công này đóng một program account:
 
 ```rust
 #[program]
@@ -48,19 +48,19 @@ pub struct Close<'info> {
 }
 ```
 
-This code looks correct: it transfers all lamports from the account to the destination, which should trigger garbage collection. However, the account's data remains untouched, and the account is still accessible within the same transaction.
+Mã này trông có vẻ đúng: nó chuyển tất cả lamport từ account đến đích, điều này sẽ kích hoạt việc thu hồi account. Tuy nhiên, dữ liệu của account vẫn không bị động đến, và account vẫn có thể truy cập được trong cùng giao dịch.
 
-An attacker can exploit this by creating a transaction with multiple instructions:
-- Instruction 1: Call your close function to drain the account's lamports
-- Instruction 2: Transfer lamports back to the "closed" account (revival)
-- Instruction 3: Use the revived account in subsequent operations
+Kẻ tấn công có thể khai thác điều này bằng cách tạo một giao dịch với nhiều instruction:
+- Instruction 1: Gọi hàm đóng của bạn để rút cạn lamport của account
+- Instruction 2: Chuyển lamport trở lại account "đã đóng" (revival)
+- Instruction 3: Sử dụng account được hồi sinh trong các thao tác tiếp theo
 
-The result is a zombie account that appears closed to your program's logic but remains functional with all its original data intact. This can lead to:
-- Double-spending: Using "closed" escrow accounts multiple times
-- Authorization bypass: Reviving admin accounts that should be deactivated
-- State corruption: Operating on accounts that should no longer exist
+Kết quả là một zombie account có vẻ đã đóng đối với logic chương trình của bạn nhưng vẫn hoạt động với tất cả dữ liệu gốc nguyên vẹn. Điều này có thể dẫn đến:
+- Double-spending: Sử dụng các escrow account "đã đóng" nhiều lần
+- Authorization bypass: Hồi sinh các admin account nên được vô hiệu hóa
+- State corruption: Hoạt động trên các account không nên tồn tại nữa
 
-The safest solution is using Anchor's `close` constraint, which handles secure closure automatically:
+Giải pháp an toàn nhất là sử dụng ràng buộc `close` của Anchor, xử lý việc đóng an toàn tự động:
 
 ```rust
 #[derive(Accounts)]
@@ -76,7 +76,7 @@ pub struct Close<'info> {
 }
 ```
 
-Or you could add the `signer` account constraint like this:
+Hoặc bạn có thể thêm ràng buộc account `signer` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -94,7 +94,7 @@ pub struct Close<'info> {
 }
 ```
 
-For custom closure logic, implement the full secure closure pattern:
+Đối với logic đóng tùy chỉnh, triển khai pattern đóng an toàn đầy đủ:
 
 ```rust
 pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
@@ -124,7 +124,7 @@ pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
 
 <ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
 
-In Pinocchio, implement the closure pattern manually:
+Trong Pinocchio, triển khai pattern đóng thủ công:
 
 ```rust
 self.program_account.realloc(0, true)?;

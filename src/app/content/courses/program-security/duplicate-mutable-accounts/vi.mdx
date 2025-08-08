@@ -1,16 +1,16 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Duplicate Mutable Accounts
+# Duplicate Mutable Account 
 
-Duplicate mutable accounts attacks exploit programs that accept multiple mutable accounts of the same type by passing the same account twice, causing the program to unknowingly overwrite its own changes. This creates a race condition within a single instruction where later mutations could silently cancel out earlier ones.
+Các cuộc tấn công duplicate mutable account (Các tài khoản có thể thay đổi bị trùng lặp) khai thác các chương trình chấp nhận nhiều ccount có thể thay đổi cùng kiểu bằng cách truyền cùng một account hai lần, khiến chương trình vô tình ghi đè các thay đổi của chính nó. Điều này tạo ra race condition trong một instruction duy nhất nơi các tahy đổi sau có thể âm thầm hủy bỏ các thay đổi trước đó.
 
-This vulnerability primarily affects instructions that modify data in program-owned accounts, not system operations like lamport transfers. The attack succeeds because Solana's runtime doesn't prevent the same account from being passed multiple times to different parameters; it's the program's responsibility to detect and handle duplicates.
+Lỗ hổng này chủ yếu ảnh hưởng đến các instruction sửa đổi dữ liệu trong các account thuộc sở hữu chương trình, không phải các thao tác hệ thống như chuyển lamport. Cuộc tấn công thành công vì runtime của Solana không ngăn chặn cùng một account được truyền nhiều lần cho các tham số khác nhau; trách nhiệm của chương trình là phát hiện và xử lý các bản sao.
 
-The danger lies in the sequential nature of instruction execution. When the same account is passed twice, the program performs the first mutation, then immediately overwrites it with the second mutation, leaving the account in an unexpected state that may not reflect the user's intentions or the program's logic.
+Nguy hiểm nằm ở bản chất tuần tự của việc thực thi instruction. Khi cùng một account được truyền hai lần, chương trình thực hiện thay đổi đầu tiên, sau đó ngay lập tức ghi đè nó bằng thay đổi thứ hai, khiến cho account ở trạng thái bất ngờ có thể không phản ánh ý định của người dùng hoặc logic của chương trình.
 
 <ArticleSection name="Anchor" id="anchor" level="h2" />
 
-Consider this vulnerable instruction that updates ownership fields on two program accounts:
+Xem xét instruction dễ bị tấn công này cập nhật các trường ownership trên hai program account:
 
 ```rust
 #[program]
@@ -44,17 +44,17 @@ pub struct ProgramAccount {
 }
 ```
 
-This code has a critical flaw: it never verifies that `program_account_1` and `program_account_2` are different accounts.
+Mã này có một lỗ hổng nghiêm trọng: nó không bao giờ xác minh rằng `program_account_1` và `program_account_2` là các account khác nhau.
 
-An attacker can exploit this by passing the same account for both parameters. Here's what happens:
-- The program sets `program_account_1.owner = pubkey_a`
-- Since both parameters reference the same account, the program immediately overwrites this with `program_account_2.owner = pubkey_b`
+Kẻ tấn công có thể khai thác điều này bằng cách truyền cùng một account cho cả hai tham số. Đây là những gì xảy ra:
+- Chương trình đặt `program_account_1.owner = pubkey_a`
+- Vì cả hai tham số đều tham chiếu đến cùng một account, chương trình ngay lập tức ghi đè điều này bằng `program_account_2.owner = pubkey_b`
 
-The final result: the account's owner is set to `pubkey_b`, completely ignoring `pubkey_a`
+Kết quả cuối cùng: owner của account được đặt thành `pubkey_b`, hoàn toàn bỏ qua `pubkey_a`
 
-This might seem harmless, but consider the implications. A user expecting to update two different accounts with specific ownership assignments discovers that only one account was modified, and not in the way they intended. In complex protocols, this could lead to inconsistent state, failed multi-step operations, or even financial losses.
+Điều này có thể có vẻ vô hại, nhưng hãy xem xét các tác động. Một người dùng mong đợi cập nhật hai account khác nhau với các phân công ownership cụ thể phát hiện ra rằng chỉ một account được sửa đổi, và không theo cách họ dự định. Trong các protocol phức tạp, điều này có thể dẫn đến trạng thái không nhất quán, các thao tác nhiều bước thất bại, hoặc thậm chí tổn thất tài chính.
 
-The solution is straightforward. You just need to verify that accounts are unique before proceeding:
+Giải pháp rất đơn giản. Bạn chỉ cần xác minh rằng các account là duy nhất trước khi tiếp tục:
 
 ```rust
 pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
@@ -71,7 +71,7 @@ pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: P
 
 <ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
 
-In Pinocchio, the same validation pattern applies:
+Trong Pinocchio, cùng một pattern validation được áp dụng:
 
 ```rust
 if self.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {

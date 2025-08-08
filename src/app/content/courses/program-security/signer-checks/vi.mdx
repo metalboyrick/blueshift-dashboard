@@ -1,16 +1,16 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Signer Checks
+# Kiểm tra Signer
 
-Signer checks are the digital equivalent of requiring a handwritten signature, they prove that an account holder actually authorized a transaction rather than someone else acting on their behalf. In Solana's trustless environment, this cryptographic proof is the only way to verify authentic authorization.
+Kiểm tra signer là tương đương về mặt kỹ thuật số của việc yêu cầu chữ ký viết tay, chúng chứng minh rằng chủ sở hữu account thực sự đã ủy quyền cho một giao dịch thay vì ai đó khác hành động thay mặt họ. Trong môi trường không tin cậy của Solana, bằng chứng mật mã này là cách duy nhất để xác minh ủy quyền xác thực.
 
-This becomes critical when dealing with Program Derived Accounts (PDAs) and authority-gated operations. Most program accounts store an `authority` field that determines who can modify them, and many PDAs are derived from specific user accounts. Without signer verification, your program has no way to distinguish between legitimate owners and malicious impersonators.
+Điều này trở nên quan trọng khi xử lý Program Derived Account (PDA) và các thao tác được kiểm soát bởi authority. Hầu hết các program account lưu trữ một trường `authority` xác định ai có thể sửa đổi chúng, và nhiều PDA được derive từ các user account cụ thể. Không có xác minh signer, chương trình của bạn không có cách nào để phân biệt giữa chủ sở hữu hợp pháp và kẻ mạo danh độc hại.
 
-The consequences of missing signer checks are devastating: any account can perform operations that should be restricted to specific authorities, leading to unauthorized access, drained accounts, and complete loss of control over program state.
+Hậu quả của việc thiếu kiểm tra signer là mất an toàn: bất kỳ account nào cũng có thể thực hiện các thao tác chỉ nên được hạn chế cho các authority cụ thể, dẫn đến truy cập trái phép, account bị rút cạn, và mất hoàn toàn kiểm soát trạng thái chương trình.
 
 <ArticleSection name="Anchor" id="anchor" level="h2" />
 
-Consider this vulnerable instruction that transfers ownership of a program account:
+Xem xét instruction dễ bị tấn công này chuyển ownership của một program account:
 
 ```rust
 #[program]
@@ -48,20 +48,20 @@ pub struct ProgramAccount {
 }
 ```
 
-At first glance, this looks secure. The `has_one = owner` constraint ensures that the owner account passed to the instruction matches the `owner` field stored in the `program_account`. The data validation is perfect, but there's a fatal flaw.
+Thoạt nhìn, điều này có vẻ an toàn. Ràng buộc `has_one = owner` đảm bảo rằng owner account được truyền vào instruction khớp với trường `owner` được lưu trữ trong `program_account`. Xác minh dữ liệu là hoàn hảo, nhưng có một lỗ hổng chết người.
 
-Notice that `owner` is an `UncheckedAccount`, not a `Signer`. This means while Anchor verifies that the provided account matches the stored owner, it never checks whether that account actually signed the transaction.
+Chú ý rằng `owner` là một `UncheckedAccount`, không phải `Signer`. Điều này có nghĩa là trong khi Anchor xác minh rằng account được cung cấp khớp với owner được lưu trữ, nó không bao giờ kiểm tra xem account đó có thực sự ký giao dịch hay không.
 
-An attacker can exploit this by:
-- Finding any program account they want to hijack
-- Reading the current owner's public key from the account data
-- Crafting a transaction that passes the real owner's public key as the owner parameter
-- Setting themselves as the `new_owner`
-- Submitting the transaction without the real owner's signature
+Kẻ tấn công có thể khai thác điều này bằng cách:
+- Tìm bất kỳ program account nào họ muốn chiếm đoạt
+- Đọc public key của owner hiện tại từ dữ liệu account
+- Tạo một giao dịch truyền public key của owner thật làm tham số owner
+- Đặt chính họ làm `new_owner`
+- Gửi giao dịch mà không có chữ ký của owner thật
 
-The `has_one` constraint passes because the public keys match, but since there's no signer verification, the attacker successfully transfers ownership to themselves without the legitimate owner's consent. Once they control the account, they can perform any operation as the new authority.
+Ràng buộc `has_one` vượt qua vì các public key khớp nhau, nhưng vì không có xác minh signer, kẻ tấn công thành công chuyển ownership cho chính họ mà không có sự đồng ý của owner hợp pháp. Một khi họ kiểm soát account, họ có thể thực hiện bất kỳ thao tác nào với tư cách authority mới.
 
-Luckily `Anchor` makes it super easy to perform this check directly in the account struct by just changing `UncheckedAccount` to `Signer` like this:
+May mắn thay `Anchor` làm cho việc thực hiện kiểm tra này cực kỳ dễ dàng trực tiếp trong account struct bằng cách chỉ cần thay đổi `UncheckedAccount` thành `Signer` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -77,7 +77,7 @@ pub struct UpdateOwnership<'info> {
 }
 ```
 
-Or you could add the `signer` account constraint like this:
+Hoặc bạn có thể thêm ràng buộc account `signer` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -95,7 +95,7 @@ pub struct UpdateOwnership<'info> {
 }
 ```
 
-Or you could just add a signer check in the instruction using the `ctx.accounts.owner.is_signer` check like this:
+Hoặc bạn có thể chỉ cần thêm kiểm tra signer trong instruction bằng cách sử dụng kiểm tra `ctx.accounts.owner.is_signer` như thế này:
 
 ```rust
 pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
@@ -109,13 +109,13 @@ pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
 }
 ```
 
-By adding this check, the instruction handler will only proceed if the authority account has signed the transaction. If the account is not signed, the transaction will fail.
+Bằng cách thêm kiểm tra này, instruction handler sẽ chỉ tiếp tục nếu authority account đã ký giao dịch. Nếu account không được ký, giao dịch sẽ thất bại.
 
 <ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
 
-In Pinocchio, since we don't have the possibility of adding security checks directly inside of the account struct, we are forced to do so in the instruction logic. 
+Trong Pinocchio, vì chúng ta không có khả năng thêm kiểm tra bảo mật trực tiếp bên trong account struct, chúng ta buộc phải làm như vậy trong logic instruction.
 
-We can do so very similarly to Anchor by using the `is_signer()` function like this:
+Chúng ta có thể làm điều đó rất giống với Anchor bằng cách sử dụng hàm `is_signer()` như thế này:
 
 ```rust
 if !self.accounts.owner.is_signer() {

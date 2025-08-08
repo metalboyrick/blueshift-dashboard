@@ -1,20 +1,20 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Owner Checks
+# Kiểm tra Owner
 
-Owner checks are the first line of defense in Solana program security. They verify that an account passed into an instruction handler is actually owned by the expected program, preventing attackers from substituting malicious lookalike accounts.
+Kiểm tra owner là tuyến phòng thủ đầu tiên trong bảo mật chương trình Solana. Chúng xác minh rằng một account được truyền vào bộ xử lý instruction thực sự được sở hữu bởi chương trình mong đợi, ngăn chặn kẻ tấn công thay thế các account giả mạo bằng những cái tương tự.
 
-Every account in Solana's `AccountInfo` struct contains an owner field that identifies which program controls that account. Owner checks ensure this `owner` field matches the expected `program_id` before your program trusts the account's data.
+Mỗi account trong struct `AccountInfo` của Solana chứa một trường owner xác định chương trình nào kiểm soát account đó. Kiểm tra owner đảm bảo trường `owner` này khớp với `program_id` mong đợi trước khi chương trình của bạn tin tưởng dữ liệu của account.
 
-The `AccountInfo` struct contains several fields, including the owner, which represents the program that owns the account. Owner checks ensure that this `owner` field in the `AccountInfo` matches the expected `program_id`.
+Struct `AccountInfo` chứa nhiều trường, bao gồm owner, đại diện cho chương trình sở hữu account. Kiểm tra owner đảm bảo rằng trường `owner` này trong `AccountInfo` khớp với `program_id` mong đợi.
 
-Without owner checks, an attacker can create a perfect "replica" of your account data structure, complete with the correct discriminator and all the right fields, and use it to manipulate instructions that rely on data validation. It's like someone creating a fake ID that looks identical to a real one, but is controlled by the wrong authority.
+Không có kiểm tra owner, kẻ tấn công có thể tạo một "bản sao" hoàn hảo của cấu trúc dữ liệu account của bạn, hoàn chỉnh với discriminator đúng và tất cả các trường phù hợp, và sử dụng nó để thao tác các instruction dựa vào validation dữ liệu. Giống như ai đó tạo một ID giả trông giống hệt ID thật, nhưng được kiểm soát bởi authority không đúng.
 
-> The crucial exception is when you're modifying the account's internal data. In those cases, Solana's runtime automatically prevents other programs from writing to accounts they don't own. But for read operations and validation logic, you're on your own.
+> Ngoại lệ quan trọng là khi bạn đang sửa đổi dữ liệu bên trong của account. Trong những trường hợp đó, runtime của Solana tự động ngăn chặn các chương trình khác ghi vào account mà chúng không sở hữu. Nhưng đối với các thao tác đọc và logic validation, bạn phải tự xử lý.
 
 <ArticleSection name="Anchor" id="anchor" level="h2" />
 
-Consider this vulnerable instruction that executes logic based on the `owner` of a `program_account`:
+Xem xét instruction dễ bị tấn công này thực thi logic dựa trên `owner` của `program_account`:
 
 ```rust
 #[program]
@@ -54,13 +54,13 @@ pub struct ProgramAccount {
 }
 ```
 
-The `UncheckedAccount` type is Anchor's way of saying "I'm not checking anything, handle with extreme care." While the account data might deserialize perfectly and look legitimate, the missing owner check creates a critical vulnerability.
+Kiểu `UncheckedAccount` là cách Anchor nói "Tôi không kiểm tra gì cả, hãy xử lý với sự cẩn thận tối đa." Trong khi dữ liệu account có thể deserialize hoàn hảo và trông hợp pháp, việc thiếu kiểm tra owner tạo ra một lỗ hổng nghiêm trọng.
 
-An attacker can create their own account with identical data structure and pass it to your instruction. Your program will happily check the ownership field, but since the attacker controls the account, they can do whatever they want inside of the instruction.
+Kẻ tấn công có thể tạo account riêng của họ với cấu trúc dữ liệu giống hệt và truyền nó vào instruction của bạn. Chương trình của bạn sẽ vui vẻ kiểm tra trường ownership, nhưng vì kẻ tấn công kiểm soát account, họ có thể làm bất cứ điều gì họ muốn bên trong instruction.
 
-The fix is simple but essential: always verify the account is owned by your program before trusting its contents.
+Cách khắc phục đơn giản nhưng thiết yếu: luôn xác minh account được sở hữu bởi chương trình của bạn trước khi tin tưởng nội dung của nó.
 
-This is super easy with `Anchor` since it's possible to perform this check directly in the account struct by just changing `UncheckedAccount` to `ProgramAccount` like this:
+Điều này cực kỳ dễ dàng với `Anchor` vì có thể thực hiện kiểm tra này trực tiếp trong account struct bằng cách chỉ cần thay đổi `UncheckedAccount` thành `ProgramAccount` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -73,7 +73,7 @@ pub struct Instruction<'info> {
 }
 ```
 
-Or you could add the `owner` account constraint like this:
+Hoặc bạn có thể thêm ràng buộc account `owner` như thế này:
 
 ```rust
 #[derive(Accounts)]
@@ -86,7 +86,7 @@ pub struct Instruction<'info> {
 }
 ```
 
-Or you could just add an owner check in the instruction using the `ctx.accounts.program_account.owner` check like this:
+Hoặc bạn có thể chỉ cần thêm kiểm tra owner trong instruction bằng cách sử dụng kiểm tra `ctx.accounts.program_account.owner` như thế này:
 
 ```rust
 pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
@@ -100,13 +100,13 @@ pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
 }
 ```
 
-By adding this check, the instruction handler will only proceed if the account has the correct `program_id`. If the account is not owned by our program, the transaction will fail.
+Bằng cách thêm kiểm tra này, bộ xử lý instruction sẽ chỉ tiếp tục nếu account có `program_id` đúng. Nếu account không được sở hữu bởi chương trình của chúng ta, giao dịch sẽ thất bại.
 
 <ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
 
-In Pinocchio, since we don't have the possibility of adding security checks directly inside of the account struct, we are forced to do so in the instruction logic. 
+Trong Pinocchio, vì chúng ta không có khả năng thêm kiểm tra bảo mật trực tiếp bên trong account struct, chúng ta buộc phải làm như vậy trong logic instruction.
 
-We can do so very similarly to anchor by using the `is_owned_by()` function like this:
+Chúng ta có thể làm điều đó rất giống với anchor bằng cách sử dụng hàm `is_owned_by()` như thế này:
 
 ```rust
 if !self.accounts.owner.is_owned_by(ID) {

@@ -1,45 +1,45 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Conclusions
+# Kết luận
 
-Congratulations! You've completed the Program Security course. You now have a comprehensive understanding of the critical security vulnerabilities that can affect Solana programs and the practical strategies to defend against them.
+Chúc mừng! Bạn đã hoàn thành khóa học bảo mật chương trình. Giờ đây bạn đã có hiểu biết toàn diện về các lỗ hổng bảo mật nghiêm trọng có thể ảnh hưởng đến các chương trình Solana và các chiến lược thực tế để bảo vệ chống lại chúng.
 
-## What You've Learned
+## Những gì bạn đã học
 
-Throughout this course, you've explored the fundamental security challenges unique to Solana's parallel processing architecture and account-based model. You've learned to identify and mitigate these key vulnerability categories:
+Trong suốt khóa học này, bạn đã khám phá các thách thức bảo mật cơ bản độc đáo với kiến trúc xử lý song song và mô hình dựa trên account của Solana. Bạn đã học cách xác định và giảm thiểu các danh mục lỗ hổng chính này:
 
-### Core Security Principles
-- **Owner Checks**: Verifying that accounts are owned by the expected program before trusting their data
-- **Signer Checks**: Ensuring that accounts have actually authorized transactions through cryptographic signatures
-- **Data Matching**: Validating that account data contains expected values and relationships
+### Nguyên tắc bảo mật cốt lõi
+- **Kiểm tra Owner**: Xác minh rằng các account được sở hữu bởi chương trình mong đợi trước khi tin tưởng dữ liệu của chúng
+- **Kiểm tra Signer**: Đảm bảo rằng các account thực sự đã ủy quyền giao dịch thông qua chữ ký mật mã
+- **Data Matching**: Xác thực rằng dữ liệu account chứa các giá trị và mối quan hệ mong đợi
 
-### Advanced Attack Vectors
-- **Duplicate Mutable Accounts**: Preventing race conditions when the same account is passed multiple times
-- **Reinitialization Attacks**: Protecting against malicious account takeover through improper initialization
-- **Revival Attacks**: Securing account closure to prevent zombie accounts with stale data
-- **PDA Sharing**: Ensuring Program Derived Addresses are specific to individual users or domains
-- **Arbitrary CPIs**: Validating program addresses before cross-program invocations
-- **Type Cosplay**: Using discriminators to prevent account type impersonation
+### Tấn công nâng cao
+- **Duplicate Mutable Account**: Ngăn chặn race condition khi cùng một account được truyền nhiều lần
+- **Reinitialization Attack**: Bảo vệ chống lại việc chiếm đoạt account độc hại thông qua khởi tạo không đúng cách
+- **Revival Attack**: Bảo mật việc đóng account để ngăn chặn zombie account với dữ liệu cũ
+- **PDA Sharing**: Đảm bảo Program Derived Address cụ thể cho từng user hoặc domain riêng lẻ
+- **Arbitrary CPI**: Xác thực địa chỉ chương trình trước cross-program invocation
+- **Type Cosplay**: Sử dụng discriminator để ngăn chặn mạo danh kiểu account
 
-## Key Security Insights
+## Những hiểu biết bảo mật chính
 
-Unlike traditional blockchains, Solana's parallel processing and account-based architecture creates distinct security challenges. The stateless nature of programs means all validation must be explicit, and the account ownership model requires careful attention to authorization patterns.
+Không giống như các blockchain truyền thống, kiến trúc xử lý song song và dựa trên account của Solana tạo ra những thách thức bảo mật riêng biệt. Bản chất stateless của chương trình có nghĩa là tất cả validation phải được rõ ràng, và mô hình sở hữu account yêu cầu chú ý cẩn thận đến các pattern authorization.
 
-The most secure programs implement multiple layers of validation:
-1. **Structural validation** (ownership, type checking)
-2. **Authorization validation** (signer verification)
-3. **Logical validation** (data relationships, business rules)
-4. **State validation** (initialization status, account lifecycle)
+Các chương trình an toàn nhất triển khai nhiều lớp validation:
+1. **Structural validation** (sự sở hữu, kiểm tra kiểu)
+2. **Authorization validation** (xác minh người ký)
+3. **Logical validation** (quan hệ giữa các dữ liệu, business rule)
+4. **State validation** (trạng thái khởi tạo, vòng đời của account)
 
-## Next Steps
+## Các bước tiếp theo
 
-You're now equipped with the knowledge to build significantly more secure Solana programs. Here's how to continue your security journey:
+Bây giờ bạn đã được trang bị kiến thức để xây dựng các chương trình Solana an toàn hơn đáng kể. Đây là cách tiếp tục hành trình bảo mật của bạn:
 
-- Head to the [Challenges section](/en/challenges) and tackle security-focused exercises
-- Try to identify vulnerabilities in existing open-source protocols
-- Practice writing secure code patterns until they become second nature
+- Đến [phần Thử thách](/vi/challenges) và giải quyết các bài tập tập trung vào bảo mật
+- Cố gắng xác định các lỗ hổng trong các protocol mã nguồn mở hiện có
+- Thực hành viết các pattern code an toàn cho đến khi chúng trở thành bản năng
 
-As you continue building on Solana, remember that security isn't just about preventing attacks; it's about building trust with your users and creating protocols that can safely handle millions of dollars in value.
+Khi bạn tiếp tục xây dựng trên Solana, hãy nhớ rằng bảo mật không chỉ là về việc ngăn chặn các cuộc tấn công; đó là về việc xây dựng niềm tin với người dùng của bạn và tạo ra các protocol có thể xử lý an toàn hàng triệu đô la giá trị.
 
-Ready to put your security knowledge to the test? Start building, stay vigilant, and keep learning!
+Sẵn sàng đưa kiến thức bảo mật của bạn vào thử nghiệm? Bắt đầu xây dựng, luôn cảnh giác, và tiếp tục học hỏi!
 
