@@ -33,6 +33,9 @@ const nextConfig = {
 const withMDX = createMDX({
   extension: /\.mdx?$/,
   options: {
+    remarkPlugins: [
+      remarkGfm
+    ],
     rehypePlugins: [
       [
         rehypePrettyCode,
@@ -61,4 +64,5 @@ export default withNextIntl(withMDX(nextConfig));
 
 // added by create cloudflare to enable calling `getCloudflareContext()` in `next dev`
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import remarkGfm from "remark-gfm";
 await initOpenNextCloudflareForDev();
