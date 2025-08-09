@@ -129,6 +129,7 @@ const node = programNode({
     pdas: [],
     errors: [],
 });
+```
 
 In the next section we'll examine all these elements in detail.
 
@@ -172,7 +173,7 @@ Additionally, you can include optional accounts. Based on your program's design,
 The docs field can be used to add documentation explaining what this instruction accomplishes within the program.
 
 ```ts
-instructionNode({
+const node = instructionNode({
     name: 'increment',
     discriminators: [constantDiscriminatorNode(constantValueNode(numberTypeNode("u8"), numberValueNode(1)))],
         arguments: [

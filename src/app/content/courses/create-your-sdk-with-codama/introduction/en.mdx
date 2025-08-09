@@ -29,10 +29,9 @@ Everything in Codama is represented as a tree of nodes. A node is a structured d
 Your entire program becomes a hierarchical tree starting with a `RootNode` at the top.
 
 There are different type of nodes:
-- `Structure Nodes` (`RootNode`, `ProgramNode`, `AccountNode`, `InstructionNode`): Define the skeleton of your program
+- `Structure Nodes` (`RootNode`, `ProgramNode`, `AccountNode`, `InstructionNode`, ...): Define the skeleton of your program
 - `Type Nodes` (`NumberTypeNode`, `StringTypeNode`, `StructTypeNode`, `ArrayTypeNode`): Describe data structures and field types
 - `Value Nodes` (`NumberValueNode`, `StringValueNode`): Represent default values and constants
-- `Metadata Nodes` (`PdaNode`, `ErrorNode`, `discriminators`): Provide additional information your program might need
 
 > Each node type serves a specific purpose and knows how to represent its data for different target languages. This allows you to build complex program descriptions by combining simple nodes.
 
