@@ -1,0 +1,82 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Codama
+
+Codama is the fastest way to generate type-safe clients for Solana programs across multiple languages and frameworks, create CLI tools, and provide rich program information to explorers.
+
+Everything begins with the Codama IDL—a standardized format that describes any Solana program and serves as the foundation for generating all program-related tooling.
+
+From a single Codama IDL, you can generate:
+- Type-safe clients for JavaScript, Rust, Python, and more
+- CLI tools for interacting with your program
+- Documentation that stays synchronized with your code
+- Explorer integrations that understand your program's structure
+- Testing utilities that know your program's interface
+
+Codama eliminates the tedious work of maintaining clients across multiple languages and frameworks. 
+
+Instead of manually writing and updating client code every time your program changes, you describe your program once in the Codama IDL format, apply any necessary transformations using visitors, and generate everything else automatically
+
+<ArticleSection name="Core Concepts" id="core-concept" level="h2" />
+
+Codama's architecture revolves around two fundamental concepts: Nodes and Visitors.
+
+### Nodes
+
+Everything in Codama is represented as a tree of nodes. A node is a structured data object that describes one specific aspect of your Solana program. 
+
+Your entire program becomes a hierarchical tree starting with a `RootNode` at the top.
+
+There are different type of nodes:
+- `Structure Nodes` (`RootNode`, `ProgramNode`, `AccountNode`, `InstructionNode`): Define the skeleton of your program
+- `Type Nodes` (`NumberTypeNode`, `StringTypeNode`, `StructTypeNode`, `ArrayTypeNode`): Describe data structures and field types
+- `Value Nodes` (`NumberValueNode`, `StringValueNode`): Represent default values and constants
+- `Metadata Nodes` (`PdaNode`, `ErrorNode`, `discriminators`): Provide additional information your program might need
+
+> Each node type serves a specific purpose and knows how to represent its data for different target languages. This allows you to build complex program descriptions by combining simple nodes.
+
+### Visitors 
+
+Visitors are functions that traverse your node tree to either analyze or transform it. 
+
+They implement the visitor pattern by "visiting" each node in your tree and performing operations on them.
+
+There are 2 types of visitors: 
+
+Two Types of Visitors:
+- Analysis Visitors (read-only): Traverse nodes and return information using `codama.accept()`
+- Transformation Visitors: Traverse nodes and return a modified tree using `codama.update()`
+
+> Visitors separate what your program is (the nodes) from what you want to do with it (the operations). This means you can apply the same transformations to any Codama IDL, regardless of how it was created.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Install Codama using your preferred package manager:
+
+```
+pnpm install codama
+```
+
+This includes both `@codama/visitors` and `@codama/renderers` packages.
+
+> Individual packages can be installed separately if needed.
+
+### Setup
+
+Create a `codama.ts` file in your repository with your Codama IDL logic, then run:
+
+```
+pnpx tsx codama.ts
+```
+
+To generate clients, specify target languages using renderers:
+
+```ts
+import { renderJavaScriptVisitor, renderRustVisitor } from '@codama/renderers';
+
+codama.accept(renderJavaScriptVisitor('clients/js/src/generated', { ... }));
+codama.accept(renderRustVisitor('clients/rust/src/generated', { ... }));
+```
+
+> At the moment only Kit, Umi and Rust are available as renderers
