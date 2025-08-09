@@ -749,7 +749,7 @@
     {
       "scope": [
         "comment.line.semicolon.sbpf-asm",
-          "comment.line.hash.sbpf-asm",
+        "comment.line.hash.sbpf-asm",
         "comment.line.double-slash.sbpf-asm",
         "comment.block.sbpf-asm",
         "punctuation.definition.comment.sbpf-asm"
