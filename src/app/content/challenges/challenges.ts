@@ -147,6 +147,45 @@ const allChallenges: ChallengeMetadata[] = [
     ],
     collectionMintAddress: "2NVDhSXZck9AX2aUdPSxMemLN2wtqEd5sNEcwuZVCbHW",
   },
+  {
+    slug: "assembly-memo",
+    language: "Assembly",
+    color: "140,255,102",
+    difficulty: 2,
+    isFeatured: true,
+    unitName: "Assembly Memo",
+    apiPath: "/v1/verify/assembly/memo",
+    requirements: [
+      { instructionKey: "log" },
+    ],
+    collectionMintAddress: "J4TtfoyvksdNjLAqs1yXbZwe8wjVCX6TSjYyGMhU6BU7",
+  },
+  {
+    slug: "assembly-slippage",
+    language: "Assembly",
+    color: "140,255,102",
+    difficulty: 3,
+    isFeatured: true,
+    unitName: "Assembly Slippage",
+    apiPath: "/v1/verify/assembly/slippage",
+    requirements: [
+      { instructionKey: "slippage" },
+    ],
+    collectionMintAddress: "EEzodaKLa7KKbWdUAtjTJxjQXgrfQkkDEnQWzGTYFBBf",
+  },
+  {
+    slug: "assembly-timeout",
+    language: "Assembly",
+    color: "140,255,102",
+    difficulty: 2,
+    isFeatured: true,
+    unitName: "Assembly Timeout",
+    apiPath: "/v1/verify/assembly/timeout",
+    requirements: [
+      { instructionKey: "timeout" },
+    ],
+    collectionMintAddress: "FW9LJEjJwGL1fkAjfM9HxuJuftTU9KrRvPBgP5ZzJx3D",
+  },
 ];
 
 const releasedChallengesSetting =

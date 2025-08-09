@@ -172,7 +172,23 @@
       "title": "Assembly Memo",
       "requirements": {
         "log": {
-          "title": "Challenge 1: Logs the instruction data to program log"
+          "title": "Challenge: Logs the instruction data to program log"
+        }
+      }
+    },
+    "assembly-slippage": {
+      "title": "Assembly Slippage",
+      "requirements": {
+        "slippage": {
+          "title": "Challenge: Slippage check and prevention"
+        }
+      }
+    },
+    "assembly-timeout": {
+      "title": "Assembly Timeout",
+      "requirements": {
+        "timeout": {
+          "title": "Challenge: Time-based validation"
         }
       }
     },
