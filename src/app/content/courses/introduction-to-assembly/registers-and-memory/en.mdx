@@ -12,13 +12,13 @@ The tradeoff is simple: you only get 11 boxes total, so you need to use them str
 
 sBPF assigns specific roles to each register:
 
-| Register | Role | Callee-saved? | Usage Notes |
-|----------|------|---------------|-------------|
-| `r0` | Return value | No | Function results, syscall return values |
-| `r1` | Input buffer pointer | No | Points to 0x400000000 on entry |
-| `r2-r5` | Scratch/arguments | No | Helper function arguments, temporary values |
-| `r6-r9` | General purpose | Yes | Must preserve across calls |
-| `r10` | Frame pointer | Yes, read-only | Stack base, cannot modify directly |
+| Register | Role                 | Callee-saved?  | Usage Notes                                 |
+|----------|----------------------|----------------|---------------------------------------------|
+| `r0`     | Return value         | No             | Function results, syscall return values     |
+| `r1`     | Input buffer pointer | No             | Points to 0x400000000 on entry              |
+| `r2-r5`  | Scratch/arguments    | No             | Helper function arguments, temporary values |
+| `r6-r9`  | General purpose      | Yes            | Must preserve across calls                  |
+| `r10`    | Frame pointer        | Yes, read-only | Stack base, cannot modify directly          |
 
 Registers `r6` through `r9` are "callee-saved," meaning their values persist across function calls. Use these for important data that must survive function invocations. 
 
@@ -30,12 +30,12 @@ Register `r10` is "special" because it serves as your frame pointer, pointing to
 
 While registers hold actively used values, memory stores everything else. sBPF organizes memory into fixed regions with identical layouts across all programs:
 
-| Region | Start Address | Purpose | Size/Notes |
-|--------|---------------|---------|------------|
-| Text | 0x100000000 | Code and read-only data | Program binary |
-| Stack | 0x200000000 | Local variables | 32 KiB, grows downward |
-| Heap | 0x300000000 | Dynamic allocation | Via `sol_alloc_free` |
-| Input | 0x400000000 | Program parameters | Serialized arguments |
+| Region | Start Address | Purpose                 | Size/Notes             |
+|--------|---------------|-------------------------|------------------------|
+| Text   | 0x100000000   | Code and read-only data | Program binary         |
+| Stack  | 0x200000000   | Local variables         | 32 KiB, grows downward |
+| Heap   | 0x300000000   | Dynamic allocation      | Via `sol_alloc_free`   |
+| Input  | 0x400000000   | Program parameters      | Serialized arguments   |
 
 - The **text region** contains your executable code and read-only data like string constants. Data defined with `.quad` directives typically resides here.
 - The **stack region** houses local variables. With `r10` pointing to the stack base, you access locals using negative offsets: `[r10 - 16]`, `[r10 - 24]`, etc. The stack is limited to 32 KiB total.
