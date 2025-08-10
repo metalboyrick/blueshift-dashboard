@@ -170,6 +170,9 @@ const allChallenges: ChallengeMetadata[] = [
     apiPath: "/v1/verify/assembly/slippage",
     requirements: [
       { instructionKey: "slippage" },
+      { instructionKey: "slippage_failure" },
+      { instructionKey: "slippage_token2022" },
+
     ],
     collectionMintAddress: "EEzodaKLa7KKbWdUAtjTJxjQXgrfQkkDEnQWzGTYFBBf",
   },
