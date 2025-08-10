@@ -9,6 +9,7 @@ export const localeNames = {
     vi: "Tiếng Việt"
 };
 
+
 export const routing = defineRouting({
   locales: ['en', 'fr', 'id', 'vi' /*, 'zh-HK'*/],
   defaultLocale: 'en'
