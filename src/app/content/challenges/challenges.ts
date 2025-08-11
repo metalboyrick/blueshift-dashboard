@@ -157,6 +157,7 @@ const allChallenges: ChallengeMetadata[] = [
     apiPath: "/v1/verify/assembly/memo",
     requirements: [
       { instructionKey: "log" },
+      { instructionKey: "log_different" },
     ],
     collectionMintAddress: "J4TtfoyvksdNjLAqs1yXbZwe8wjVCX6TSjYyGMhU6BU7",
   },
@@ -186,6 +187,7 @@ const allChallenges: ChallengeMetadata[] = [
     apiPath: "/v1/verify/assembly/timeout",
     requirements: [
       { instructionKey: "timeout" },
+      { instructionKey: "timeout_failure" },
     ],
     collectionMintAddress: "FW9LJEjJwGL1fkAjfM9HxuJuftTU9KrRvPBgP5ZzJx3D",
   },
