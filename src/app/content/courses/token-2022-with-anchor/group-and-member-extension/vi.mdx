@@ -1,36 +1,36 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Group and Member Extension
+# Group và Member Extension
 
-The `Group` and `Member` extensions are `Mint` account extensions that introduce the ability to create groups, like collections for NFTs, that are linked with multiple assets.
+Phần mở rộng `Group` và `Member` là các `Mint` account extension giới thiệu khả năng tạo nhóm, như bộ sưu tập cho NFT, được liên kết với nhiều asset.
 
-<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+<ArticleSection name="Khởi tạo Mint Account" id="initializing-the-mint-account" level="h2" />
 
-The `Member` and `Group` extension are a little different from what we're used to doing because it's composed of 2 different extensions that both go on a `Mint` account:
-- The `Extension` that contains all the information about the group or member.
-- The `Pointer Extension` that references the `Mint` account where the `Group` or `Member` extension lives.
+Extension `Member` và `Group` hơi khác so với những gì chúng ta đã quen làm vì nó được cấu thành từ 2 extension khác nhau đều nằm trên `Mint` account:
+- `Extension` chứa tất cả thông tin về group hoặc member.
+- `Pointer Extension` tham chiếu `Mint` account đến nơi extension `Group` hoặc `Member` tồn tại.
 
-Usually, when used, the `Extension` and the `Pointer Extension` live on the same `Mint` account; and we're going to do the same for this example.
+Thông thường, khi được sử dụng, `Extension` và `Pointer Extension` tồn tại trên cùng `Mint` account; và chúng ta sẽ làm tương tự cho ví dụ này.
 
-> The `Group` and `Member` extension can't be on the same account
+> Extension `Group` và `Member` không thể ở trên cùng account
 
-Let's start with some basics before diving into the code:
+Hãy bắt đầu với một số điều cơ bản trước khi đi sâu vào code:
 
-While the `GroupPointer` and `MemberPointer` extension lives in the `@solana/spl-token package`, to initialize the `Group` and `Member` we need to use the `@solana/spl-token-group` package.
+Trong khi extension `GroupPointer` và `MemberPointer` tồn tại trong gói `@solana/spl-token`, để khởi tạo `Group` và `Member` chúng ta cần sử dụng gói thư viện `@solana/spl-token-group`.
 
-So let's install the required package:
+Vì vậy hãy cài đặt gói cần thiết:
 
 ```
 npm i @solana/spl-token-group
 ```
 
-Additionally, the `Group` and `Member` extension is one of the "only" extensions that requires you to initialize the extension after having initialized the `Mint` account. 
+Ngoài ra, extension `Group` và `Member` là một trong những extension "duy nhất" yêu cầu bạn khởi tạo extension sau khi đã khởi tạo `Mint` account.
 
-This is because the metadata initialization instruction dynamically allocates the required space for the length of the group and member content.
+Điều này là vì instruction khởi tạo metadata phân bổ động không gian cần thiết cho độ dài của dữ liệu group và member.
 
-At the same time, this means that we're going to need to initialize the `Mint` account with enough lamports to be rent exempt with the `Group` or `Member` extension included, but allocating enough space only for the `GroupPointer` or `MemberPointer` extension since the `initializeGroup()` and `intializeMember()` instruction actually increases the space correctly.
+Đồng thời, điều này có nghĩa là chúng ta sẽ cần khởi tạo `Mint` account với đủ lamport để được miễn phí thuê với extension `Group` hoặc `Member` được bao gồm, nhưng chỉ phân bổ đủ không gian cho extension `GroupPointer` hoặc `MemberPointer` vì instruction `initializeGroup()` và `intializeMember()` thực sự tăng không gian một cách chính xác.
 
-In the code initializing the `Group` looks like this:
+Mã khởi tạo `Group` trông như thế này:
 
 ```ts
 const mint = Keypair.generate();
@@ -87,7 +87,7 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-And after this, we can use the group that we just created to add a member to it like this:
+Vf sau đó, chúng ta có thể sử dụng group mới tạo của chúng ta để thêm một member vào nó như thế này:
 
 ```ts
 const member = Keypair.generate();
@@ -144,11 +144,11 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Member created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-<ArticleSection name="Updating the maxSize for Groups" id="updating-the-max-size-for-groups" level="h2" />
+<ArticleSection name="Cập nhật maxSize cho Group" id="updating-the-max-size-for-groups" level="h2" />
 
-As you can see, when we created the group, we allocated a `maxSize` field that will limit the maximum amount of `Member` that we can have in that specific group.
+Như bạn có thể thấy, khi chúng ta tạo group, chúng ta đã phân bổ trường `maxSize` sẽ giới hạn số lượng tối đa `Member` mà chúng ta có thể có trong group cụ thể đó.
 
-If we change idea, and we still have the `updateAuthority` of the group, we can use the `updateGroupMaxSize()` instruction to shrink or increase that number like so:
+Nếu chúng ta thay đổi ý định, và chúng ta vẫn có `updateAuthority` của group, chúng ta có thể sử dụng instruction `updateGroupMaxSize()` để thu nhỏ hoặc tăng số lượng đó như thế này:
 
 ```ts
 const updateGroupMaxSizeInstructions = createUpdateGroupMaxSizeInstruction(
@@ -161,9 +161,9 @@ const updateGroupMaxSizeInstructions = createUpdateGroupMaxSizeInstruction(
 );
 ```
 
-<ArticleSection name="Updating the updateAuthority for Groups" id="updating-the-update-authority-for-groups" level="h2" />
+<ArticleSection name="Cập nhật updateAuthority cho Group" id="updating-the-update-authority-for-groups" level="h2" />
 
-If we want to change the `UpdateAuthority` or make it immutable in order to not let anyone add any more `Member` to it, we can use the `updateGroupAuthority()` instruction like so:
+Nếu chúng ta muốn thay đổi `UpdateAuthority` hoặc làm cho nó bất biến để không cho phép ai thêm `Member` nào nữa vào nó, chúng ta có thể sử dụng instruction `updateGroupAuthority()` như thế này:
 
 ```ts
 const updateGroupAuthorityInstructions = createUpdateGroupAuthorityInstruction(

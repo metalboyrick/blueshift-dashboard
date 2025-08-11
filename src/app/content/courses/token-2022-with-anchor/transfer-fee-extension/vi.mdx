@@ -1,16 +1,16 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Transfer Fee Extension
+# Transfer Fee Extension
 
-The `TransferFee` extension is a `Mint` extension that lets the creator set a "tax" on the token that is collected every time somebody performs a swap.
+Phần mở rộng `TransferFee` là một `Mint` extension cho phép người tạo đặt "thuế" trên token được thu thập mỗi khi ai đó thực hiện swap.
 
-To make sure that the fee recipient doesn't get write-locked every time somebody performs a swap, and to ensure that we can parallelize transactions containing a `Mint` with this extension, the fee is set aside in the recipient's Token Account that only the `Withdraw Authority` can withdraw.
+Để đảm bảo rằng đối tượng nhận phí không bị write-lock mỗi khi ai đó thực hiện swap, và để đảm bảo rằng chúng ta có thể song song hóa các giao dịch chứa `Mint` với phần mở rộng này, fee được đặt bên trong Token Account của người nhận mà chỉ `Withdraw Authority` mới có thể rút.
 
-<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+<ArticleSection name="Khởi tạo Mint Account" id="initializing-the-mint-account" level="h2" />
 
-Since `Anchor` doesn't have any macros for the `transfer_fee` extension we're going to create a `Mint` account using the raw CPIs.
+Vì `Anchor` không có bất kỳ macro nào cho extension `transfer_fee`, chúng ta sẽ tạo `Mint` account bằng cách sử dụng một CPI thô.
 
-Here's how to create a mint with the Transfer Fee extension:
+Đây là cách tạo mint với phần mở rộng Transfer Fee:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -103,15 +103,15 @@ pub fn initialize_transfer_fee_config(
 }
 ```
 
-<ArticleSection name="Transferring Tokens with the Fee" id="transferring-tokens-with-the-fee" level="h2" />
+<ArticleSection name="Transfer Token với Fee" id="transferring-tokens-with-the-fee" level="h2" />
 
-To transfer tokens for `Mint` that have a TransferFee` extension we have to routes:
-- We can use the normal `transfer_checked()` instruction and by doing this the calculation of the fee is handled automatically
-- We can use the `transfer_checked_with_fee()` instruction and supply manually the `fee` we're going to pay in that tansfer. This is very useful if we want to make sure to not get "rugged" if the authority change the fee and create a abnormally high fee; it's like setting the slippage for a transfer.
+Để chuyển token của `Mint` có phần mở rộng `TransferFee`, chúng ta có hai cách:
+- Chúng ta có thể sử dụng instruction `transfer_checked()` bình thường và bằng cách này việc tính toán fee được xử lý tự động
+- Chúng ta có thể sử dụng instruction `transfer_checked_with_fee()` và cung cấp thủ công `fee` mà chúng ta sẽ trả trong transfer đó. Điều này rất hữu ích nếu chúng ta muốn đảm bảo không bị "rug" nếu authority thay đổi fee và tạo ra fee cao bất thường; nó giống như việc đặt slippage cho transfer.
 
-> Even if the authority change the fee, the new fee become active 2 epoch after being set
+> Ngay cả khi authority thay đổi fee, fee mới sẽ chỉ thực sự hoạt động sau 2 epoch từ khi được đặt
 
-Here's how to create a transfer using the `transfer_checked_with_fee()` instruction:
+Đây là cách tạo transfer sử dụng instruction `transfer_checked_with_fee()`:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -192,7 +192,7 @@ pub fn transfer_checked_with_fee(ctx: Context<Transfer>, amount: u64) -> Result<
 }
 ```
 
-To then withdraw the fees, we can gather all the `Token Account` that have fees "trapped" inside of them and pass them as remaining account. On the Typescript side it would look something like this:
+Để rút fee, chúng ta có thể sử dụng instruction `harvest_withheld_tokens_to_mint()` để thu tất cả fee từ các token account và sau đó sử dụng instruction `withdraw_withheld_tokens_from_mint()` để rút fee đến một `token_account` được chọn bởi `authority`.
 
 ```ts
 // Retrieve all Token Accounts for the Mint Account
@@ -235,7 +235,7 @@ remainingAccounts: accountsToWithdrawFrom.map(pubkey => ({
 })),
 ```
 
-After we set up all the accounts that we need, to withdraw tokens to the `authority_token_account` we need to "harvest" all fees from token accounts using the `harvest_withheld_tokens_to_mint()` instruction and then claiming them to a `token_account` choosen by the `authority` using the `withdraw_withheld_tokens_from_mint()` instruction.
+Sau khi chúng ta thiết lập tất cả account mà chúng ta cần, để rút token đến `authority_token_account`, chúng ta cần "thu hoạch" tất cả fee từ token account bằng cách sử dụng instruction `harvest_withheld_tokens_to_mint()` và sau đó chuyển chúng đến `token_account` được chọn bởi `authority` bằng cách sử dụng instruction `withdraw_withheld_tokens_from_mint()`.
 
 ```rust
 use anchor_lang::prelude::*;
@@ -298,9 +298,9 @@ pub fn harvest_and_withdraw_fees<'info>(ctx: Context<'_, '_, 'info, 'info, Harve
 
 <ArticleSection name="Updating the Fee" id="updating-the-fee" level="h2" />
 
-After having intialized our `Mint` with the `TranferFee` extension, we might need to update that specific fee in the future. And to make sure that the creator doesn't "rug" their token holder with a "bait and switch" by setting the fee very high everytime a transfer is executed the new `TranferFee` will be activated after 2 epoch.
+Sau khi đã khởi tạo `Mint` của chúng ta với phần mở rộng `TranferFee`, chúng ta có thể cần cập nhật fee cụ thể đó trong tương lai. Và để đảm bảo rằng người tạo không "rug" những người nắm giữ token của họ với "bait và switch" bằng cách đặt fee rất cao mỗi khi transfer được thực thi, `TranferFee` mới sẽ chỉ được kích hoạt sau 2 epoch.
 
-To accomodate for this, this is how the data of the `TransferFee` extension looks like: 
+Để phù hợp với điều này, đây là cách dữ liệu của phần mở rộng `TransferFee` thể hiện:
 
 ```rust
 pub struct TransferFeeConfig {
@@ -318,7 +318,7 @@ pub struct TransferFee {
 }
 ```
 
-So to change the fee we can use the `transfer_fee_set()` instruction like so:
+Vì vậy để thay đổi fee, chúng ta có thể sử dụng instruction `transfer_fee_set()` như thế này:
 
 ```rust
 use anchor_lang::prelude::*;

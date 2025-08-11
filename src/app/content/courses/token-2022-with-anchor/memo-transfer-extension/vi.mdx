@@ -1,14 +1,14 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Memo Transfer Extension
+# Memo Transfer Extension
 
-The `MemoTranfer` Extension is a `Token` account extension that enforces that all incoming transfers to a token account include a memo, facilitating enhanced transaction tracking and user identification.
+`MemoTranfer` Extension là một `Token` account extension thực thi rằng tất cả transfer đến một token account phải bao gồm memo, tạo điều kiện cho việc theo dõi giao dịch nâng cao và nhận dạng người dùng.
 
-<ArticleSection name="Initializing the Token Account" id="initializing-the-token-account" level="h2" />
+<ArticleSection name="Khởi tạo Token Account" id="initializing-the-token-account" level="h2" />
 
-Since `Anchor` doesn't have any macros for the `memo_transfer` extension we're going to create a `Token` account using the raw CPIs.
+Vì `Anchor` không có bất kỳ macro nào cho phần mở rộng `memo_transfer`, chúng ta sẽ tạo `Token` account bằng cách sử dụng một CPI thô.
 
-Here's how to create a token with the Memo Transfer extension:
+Đây là cách tạo token với phần mở rộng Memo Transfer:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -83,11 +83,11 @@ pub struct Initialize<'info> {
 }
 ```
 
-<ArticleSection name="Transferring Token with a Memo" id="transferring-token-with-a-memo" level="h2" />
+<ArticleSection name="Transfer Token với Memo" id="transferring-token-with-a-memo" level="h2" />
 
-To use the Memo program on Solana we have to viable path. 
+Để sử dụng Memo program trên Solana, chúng ta có hai cách khả thi.
 
-Building our own "raw" memo instruction like this: 
+Xây dựng memo instruction "thô" của riêng chúng ta như thế này:
 
 ```ts
 const message = "Hello, Solana";
@@ -98,15 +98,15 @@ new TransactionInstruction({
     programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), // Memo program that validates keys and memo message
 }),
 
-Or we can use the Memo program SDK after downloading the package like this: 
+Hoặc chúng ta có thể sử dụng Memo program SDK sau khi tải gói hỗ trợ như thế này:
 
 ```
 npm i @solana/spl-memo
 ```
 
-> After creating the memo, the next instruction will be a simple transfer instruction.
+> Sau khi tạo memo, instruction tiếp theo sẽ là một instruction chuyển token đơn giản. 
 
-In our example we're going to use the second option and it will look like this:
+Trong ví dụ của chúng ta, chúng ta sẽ sử dụng cách thứ hai và nó sẽ trông như thế này:
 
 ```ts
 const memoInstruction = createMemoInstruction(
@@ -126,9 +126,9 @@ const transferSignature = await sendAndConfirmTransaction(connection, transferTr
 console.log(`Tokens transferred with memo! Check out your TX here: https://explorer.solana.com/tx/${transferSignature}?cluster=devnet`);
 ```
 
-<ArticleSection name="Disabling and Enabling the Memo" id="disabling-and-enabling-the-memo" level="h2" />
+<ArticleSection name="Vô hiệu hóa và kích hoạt Memo" id="disabling-and-enabling-the-memo" level="h2" />
 
-If we don't want to enforce the transfer to come with a memo, we can do so using the `memo_transfer_disable` function and it would look like so:
+Nếu chúng ta không muốn thực thi transfer phải đi kèm với memo, chúng ta có thể làm như vậy bằng cách sử dụng hàm `memo_transfer_disable` và nó sẽ trông như thế này:
 
 ```rust
 use anchor_lang::prelude::*;

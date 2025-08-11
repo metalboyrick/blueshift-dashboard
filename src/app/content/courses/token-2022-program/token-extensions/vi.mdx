@@ -1,30 +1,30 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Token Extensions
+# Token Extension
 
-While the original Token program provided essential functionality like minting, transferring, and freezing tokens, Token Extensions unlock a new paradigm of programmable tokens.
+Trong khi Token program gốc cung cấp chức năng thiết yếu như mint, transfer, và freeze token, Token Extensions mở khóa một mô hình mới của các token có thể lập trình được.
 
-This enhanced program maintains full compatibility with existing SPL Token operations while adding sophisticated features such as transfer hooks for custom logic execution, built-in fee mechanisms, enhanced metadata support, interest-bearing calculations, and advanced security controls.
+Chương trình nâng cao này duy trì khả năng tương thích đầy đủ với các thao tác SPL Token hiện có trong khi thêm các tính năng tinh vi như transfer hook để thực thi logic tùy chỉnh, cơ chế thu phí tích hợp, hỗ trợ metadata nâng cao, tính toán interest-bearing, và kiểm soát bảo mật nâng cao.
 
-### Extension Compatibility
+### Khả năng tương thích Extension
 
-Token Extensions are designed to be composable, allowing you to combine multiple extensions to create tokens that perfectly match your project's requirements.
+Token Extension được thiết kế để có thể kết hợp, cho phép bạn kết hợp nhiều extension để tạo token phù hợp hoàn hảo với yêu cầu dự án của bạn.
 
-However, certain combinations are incompatible due to conflicting functionality or logical contradictions like:
-- Non-transferable + transfer hooks / transfer fees / confidential transfer
-- Confidential transfer + transfer fees (until 1.18)
-- Confidential transfer + transfer hooks (these transfers can only see source / destination accounts, therefore cannot act on the amount transferred)
+Tuy nhiên, một số kết hợp không tương thích do chức năng xung đột hoặc mâu thuẫn logic như:
+- Non-transferable + transfer hook / transfer fee / confidential transfer
+- Confidential transfer + transfer fee (cho đến phiên bản 1.18)
+- Confidential transfer + transfer hook (những lệnh chuyển này chỉ có thể thấy account nguồn / đích , do đó không thể tác động lên số lượng token được chuyển)
 - Confidential transfer + permanent delegate
 
 <ArticleSection name="Transfer Fee Extension" id="transfer-fee-config" level="h2" />
 
-The `TransferFee` extension is a `Mint` extension that lets the creator set a "tax" on the token that is collected every time somebody performs a swap.
+Phần mở rộng `TransferFee` là một `Mint` extension cho phép creator đặt "thuế" trên token được thu thập mỗi khi ai đó thực hiện swap.
 
-To make sure that the fee recipient doesn't get write-locked every time somebody performs a swap, and to ensure that we can parallelize transactions containing a Mint with this extension, the fee is set aside in the recipient's Token Account that only the `Withdraw Authority` can withdraw.
+Để đảm bảo rằng đối tượng nhận phí không bị write-lock mỗi khi ai đó thực hiện swap, và để đảm bảo rằng chúng ta có thể song song hóa các giao dịch chứa Mint với phần mở rộng này, phí được đặt sang một trong Token Account của người nhận mà chỉ `Withdraw Authority` mới có thể rút.
 
-For this exact reason, to use the `TransferFee` extension, we need 2 different types of extensions: one that goes directly on the `Mint` account called `TransferFeeConfig` that has all the data needed to perform a swap, and another one that goes on the `Token` account called `TransferFeeAmount` that "registers" how much token is withheld by the token account.
+Chính vì lý do này, để sử dụng phần mở rộng `TransferFee`, chúng ta cần 2 loại phần mở rộng khác nhau: một cái nằm trực tiếp trên `Mint` account được gọi là `TransferFeeConfig` có tất cả dữ liệu cần thiết để thực hiện swap, và một cái khác đặt trên `Token` account được gọi là `TransferFeeAmount` "đăng ký" bao nhiêu token bị giữ lại bởi token account.
 
-This is how the `TransferFee` Extension data looks:
+Dữ liệu của phần mở rộng `TransferFee` trông như thế này:
 
 ```rust
 /// TransferFeeConfig Extension
@@ -45,19 +45,19 @@ pub struct TransferFee {
 }
 ```
 
-Some things to point out:
-- The `config_authority` can be different from who actually can withdraw the tokens from the `Token` accounts.
-- We have both an `older` and `newer` transfer fee struct.
+Một số điều cần lưu ý:
+- `config_authority` có thể khác với đối tượng thực sự có thể rút token từ `Token` account.
+- Chúng ta có cả struct transfer fee `older` và `newer`.
 
-The last point is due to the fact there is a "cooldown" period when we set a new `TransferFee` of 2 epochs to avoid rug pulls at the end of an epoch. This means that for the first 2 epochs of a new `TransferFee`, the older `TransferFee` is the one that is actually active.
+Điểm cuối cùng là do có thời gian "cooldown" khi chúng ta đặt `TransferFee` mới là 2 epoch để tránh rug pull ở cuối epoch. Điều này có nghĩa là trong 2 epoch đầu tiên của `TransferFee` mới, `TransferFee` cũ là cái thực sự hoạt động.
 
-Additionally, you can see that the `TransferFeeConfig` has a `withheld_amount` field. This might sound strange since we just said that the token fee accrue into the `Token Account` but the reality is that claiming those fee is a 2 step process:
-- Claim fees from the `Token Account` to the `Mint`. This can be done permissionlessly
-- Claim fees from the `Mint` to the destination account. This is a permissioned action that only the `Withdraw Authority` can execute.
+Ngoài ra, bạn có thể thấy rằng `TransferFeeConfig` có field `withheld_amount`. Điều này có thể nghe lạ vì chúng ta vừa nói rằng token fee tích lũy vào `Token Account` nhưng thực tế là việc claim những fee đó là một quá trình 2 bước:
+- Claim fee từ `Token Account` đến `Mint`. Điều này có thể được thực hiện không cần cấp phép
+- Claim fee từ `Mint` đến account đích. Đây là hành động có cần được cấp phép mà chỉ `Withdraw Authority` mới có thể thực thi.
 
-For this extension, we need a 2 step process to account for the edge case in which someone want to close a `Token Account` where there are fees still inside. Since the destination of those fee could be "different" from the `Withdraw Authority` we need to account for the fact that those fees needs to be sent somewhere before closing the `Token Account`
+Đối với phần mở rộng này, chúng ta cần một quá trình 2 bước để tính đến trường hợp biên mà ai đó muốn đóng `Token Account` nơi vẫn còn fee bên trong. Vì đích đến của những fee đó có thể "khác" với `Withdraw Authority`, chúng ta cần tính đến việc những fee đó cần được gửi đi đâu đó trước khi đóng `Token Account`
 
-And this is how the `TransferFeeAmount` Extension data looks
+Và dữ liệu Extension `TransferFeeAmount` trông như thế này:
 
 ```rust
 /// TransferFeeAmount Extension
@@ -70,11 +70,11 @@ pub struct TransferFeeAmount {
 
 <ArticleSection name="Mint Close Authority Extension" id="mint-close-authority-config" level="h2" />
 
-The `MintCloseAuthority` extension is a `Mint` extension that allows the authority to close and retrieve the rent from a `Mint` account that has a current supply of 0.
+Phần mở rộng `MintCloseAuthority` là một `Mint` extension cho phép authority đóng và lấy lại phí thuê từ `Mint` account mà có cung hiện tại là 0.
 
-This extension is useful for cleaning up unused mints and reclaiming the SOL that was used to pay for the account's rent exemption. The mint can only be closed when no tokens are in circulation.
+Phần mở rộng này hữu ích để dọn dẹp các mint không sử dụng và lấy lại SOL đã được sử dụng để trả cho phí thuê của account. Mint chỉ có thể được đóng khi không có token nào đang lưu thông.
 
-This is how the `MintCloseAuthority` extension data looks:
+Dữ liệu extension `MintCloseAuthority` trông như thế này:
 
 ```rust
 /// MintCloseAuthority Extension
@@ -88,11 +88,11 @@ pub struct MintCloseAuthority {
 <ArticleSection name="Default Account State Extension" id="default-account-state-extension" level="h2" />
 
 
-The `DefaultAccountState` extension is a `Mint` extension that allows all newly created Token Accounts for that specific mint to be frozen by default. The `Freeze Authority` of the mint can then thaw (unfreeze) these `Token` accounts so they can become usable.
+Phần mở rộng `DefaultAccountState` là một `Mint` extension cho phép tất cả Token Account mới được tạo cho mint cụ thể đó bị đóng băng theo mặc định. `Freeze Authority` của mint sau đó có thể thaw (bỏ đóng băng) những `Token` account này để chúng có thể trở nên có thể sử dụng được.
 
-This feature grants token creators the ability to have greater control over token distribution by limiting who can hold the tokens. It's particularly useful for compliance scenarios, KYC/AML requirements, or creating allowlist-based token distributions where accounts must be explicitly approved before they can receive or transfer tokens.
+Chức năng này cung cấp cho người tạo token khả năng kiểm soát tốt hơn việc phân phối token bằng cách giới hạn ai có thể giữ token. Nó đặc biệt hữu ích cho các kịch bản tuân thủ, yêu cầu KYC/AML, hoặc tạo phân phối token dựa trên một danh sách được cho phép nơi account phải được phê duyệt rõ ràng trước khi chúng có thể nhận hoặc chuyển token.
 
-This is how the `DefaultAccountState` extension data looks:
+Dữ liệu extension `DefaultAccountState` trông như thế này:
 
 ```rust
 /// DefaultAccountState Extension
@@ -111,13 +111,13 @@ pub enum AccountState {
 
 <ArticleSection name="Immutable Owner Extension" id="immutable-owner-extension" level="h2" />
 
-The `ImmutableOwner` extension is a `Token` account extension that prevents any changes in ownership of the Token account. This secures accounts against unauthorized access and transfer attempts.
+Phần mở rộng `ImmutableOwner` là một `Token` account extension ngăn chặn bất kỳ thay đổi nào trong quyền sở hữu của Token account. Điều này giúp bảo mật account chống lại truy cập và các nỗ lực chuyển token trái phép.
 
-This extension is particularly valuable for Associated Token Accounts (ATAs) and other accounts where ownership should never change. It protects against malicious programs that might attempt to steal ownership of token accounts, and provides additional security guarantees for users and applications.
+Phần mở rộng này đặc biệt có giá trị cho Associated Token Account (ATA) và các account khác nơi quyền sở hữu không bao giờ nên thay đổi. Nó bảo vệ chống lại các chương trình độc hại có thể cố gắng đánh cắp quyền sở hữu của token account, và cung cấp đảm bảo bảo mật bổ sung cho người dùng và ứng dụng.
 
-> All Token Extensions Program ATAs have immutable owners enabled by default
+> Tất cả ATA của Token Extensions Program đều có owner không thể thay đổi được bật theo mặc định
 
-This is how the `ImmutableOwner` extension data looks:
+Dữ liệu extension `ImmutableOwner` trông như thế này:
 
 ```rust
 /// ImmutableOwner Extension
@@ -126,11 +126,11 @@ pub const immutable_owner_extension_header: [u8; 4] = [7, 0, 0, 0];
 
 <ArticleSection name="Memo Transfer Extension" id="memo-transfer-extension" level="h2" />
 
-The `MemoTranfer Extension` is a `Token` account extension that enforces that all incoming transfers to a token account include a memo, facilitating enhanced transaction tracking and user identification.
+`MemoTranfer Extension` là một `Token` account extension đảm bảo rằng tất cả lệnh chuyển token đến một token account phải bao gồm một memo, tạo điều kiện cho việc theo dõi giao dịch nâng cao và nhận dạng người dùng.
 
-This extension is particularly useful for exchanges, regulated institutions, and applications that need to track the purpose or source of incoming transfers for compliance, accounting, or customer service purposes. When enabled, any transfer to the account will fail unless it includes a memo instruction in the same transaction.
+Phần mở rộng này đặc biệt hữu ích cho trao đổi, được quy định bởi tổ chức, và ứng dụng cần theo dõi mục đích hoặc nguồn của lệnh chuyển đến vì mục đích tuân thủ, kế toán, hoặc mục đích dịch vụ khách hàng. Khi được bật, bất kỳ lệnh chuyển token nào đến account sẽ thất bại trừ khi nó bao gồm một memo instruction trong cùng giao dịch.
 
-This is how the `MemoTranfer` extension data looks:
+Dữ liệu extension `MemoTranfer` trông như thế này:
 
 ```rust
 /// MemoTranfer Extension
@@ -143,13 +143,13 @@ pub struct MemoTranfer {
 
 <ArticleSection name="Non Transferable Extension" id="non-transferable-extension" level="h2" />
 
-The `NonTransferable` extension is a `Mint` account extension that prevents tokens from being transferred between accounts, making them permanently bound to their current holders.
+Phần mở rộng `NonTransferable` là một `Mint` account extension ngăn chặn token được chuyển giữa các account, làm cho chúng bị ràng buộc vĩnh viễn với người giữ hiện tại.
 
-This extension is useful for creating soulbound tokens, achievement badges, certificates, or any token that represents a non-transferable right or status. Once minted to an account, these tokens cannot be moved, sold, or transferred to another wallet, ensuring they remain permanently associated with the original recipient.
+Phần mở rộng này hữu ích để tạo soulbound token, các huy hiệu thành tích, chứng chỉ, hoặc bất kỳ token nào đại diện cho quyền hoặc trạng thái không thể chuyển giao. Khi được đúc vào một account, những token này không thể được di chuyển, bán, hoặc chuyển giao sang ví khác, đảm bảo chúng được liên kết vĩnh viễn với người nhận ban đầu.
 
-Additionally, the `Token` account associated with a `Mint` that has the `NonTransferable` extension will come with the `NonTransferableAccount` extension.
+Ngoài ra, `Token` account được liên kết với `Mint` có phần mở rộng `NonTransferable` sẽ đi kèm với extension `NonTransferableAccount`.
 
-This is how the `NonTransferable` and `NonTransferableAccount` extension data looks:
+Đây là cách dữ liệu extension `NonTransferable` và `NonTransferableAccount` thể hiện:
 
 ```rust
 /// NonTransferable Extension
@@ -159,15 +159,15 @@ pub const non_transferable_extension_header: [u8; 4] = [9, 0, 0, 0];
 pub const non_transferable_account_extension_header: [u8; 4] = [13, 0, 0, 0];
 ```
 
-Both extensions are just flags; their presence alone enforces the restriction.
+Cả hai phần mở rộng chỉ là các cờ đánh dấu; sự hiện diện của chúng là thể hiện sự hạn chế.
 
 <ArticleSection name="Interest Bearing Extension" id="interest-bearing-extension" level="h2" />
 
-The `InterestBearing` extension is a `Mint` account extension that lets users apply an interest rate to their tokens and retrieve the updated total, including interest, at any given moment.
+Phần mở rộng `InterestBearing` là một `Mint` account extension cho phép người dùng áp dụng lãi suất cho token của họ và lấy tổng được cập nhật, bao gồm lãi, tại bất kỳ thời điểm nào.
 
-> This mechanism does not generate new tokens; the displayed amount simply includes the accumulated interest through the `amount_to_ui_amount` function, making the change purely aesthetic. That being said, this is a value stored within the mint account and programs can take advantage of this to create functionality beyond pure aesthetics.
+> Cơ chế này không tạo ra token mới; số lượng hiển thị chỉ đơn giản bao gồm lãi tích lũy thông qua hàm `amount_to_ui_amount`, làm cho thay đổi hoàn toàn việc nhìn. Điều đó nói rằng, đây là một giá trị được lưu trữ trong mint account và các chương trình có thể tận dụng điều này để tạo chức năng vượt ra ngoài thẩm mỹ thuần túy.
 
-This is how the `InterestBearing` extension data looks:
+Dữ liệu extension `InterestBearing` trông như thế này:
 
 ```rust
 /// InterestBearing Extension
@@ -182,23 +182,23 @@ pub struct InterestBearing {
 }
 ```
 
-Since the rate can be updated, to make sure that the calculation are correct, there is a `pre_update_average_rate` field that is used during calculation how to behave in case of an updated rate.
+Vì tỉ lệ có thể được cập nhật, để đảm bảo rằng tính toán là chính xác, tồn tại trường `pre_update_average_rate` được sử dụng trong tính toán cách hành xử trong trường hợp tỉ lệ được cập nhật.
 
 <ArticleSection name="Cpi Guard Extension" id="cpi-guard-extension" level="h2" />
 
-The `CpiGuard` extension is a `Token` account extension that prohibits certain actions inside cross-program invocations, protecting users from malicious programs that might attempt to manipulate their token accounts without explicit consent.
+Phần mở rộng `CpiGuard` là một `Token` account extension ngăn chặn một số hành động bên trong cross-program invocation, bảo vệ người dùng khỏi các chương trình độc hại có thể cố gắng thao tác token account của họ mà không có sự đồng ý rõ ràng.
 
-This extension is crucial for security when interacting with DeFi protocols, DEXs, or any program that requests token account access. It prevents programs from performing unauthorized actions like changing ownership, setting unwanted delegates, or redirecting funds to unintended recipients during cross-program calls.
+Phần mở rộng này rất quan trọng cho bảo mật khi tương tác với giao thức DeFi, DEX, hoặc bất kỳ chương trình nào yêu cầu quyền truy cập token account. Nó ngăn chặn các chương trình thực hiện các hành động trái phép như thay đổi quyền sở hữu, đặt delegate không mong muốn, hoặc chuyển hướng tiền đến người nhận không mong muốn trong quá trình cross-program call.
 
-When the `CpiGuard` extension is enabled, the following CPI works as described:
-- Transfer: the signing authority must be the owner or previously established account delegate
-- Burn: the signing authority must be the owner or previously established account delegate
-- Approve: prohibited - no delegates can be approved within the CPI
-- Close Account: the lamport destination must be the account owner
-- Set Close Authority: prohibited unless unsetting
-- Set Owner: always prohibited, including outside CPI
+Khi phần mở rộng `CpiGuard` được bật, các CPI sau hoạt động như được mô tả:
+- Transfer: người ký phải là owner hoặc account được ủy quyền đã được thiết lập trước đó
+- Burn: người ký phải là owner hoặc account được ủy quyền đã được thiết lập trước đó
+- Approve: bị cấm - không có đối tượng được ủy quyền nào có thể được phê duyệt trong CPI
+- Close Account: đích đến của phí thuê lamport phải là account owner
+- Set Close Authority: bị cấm trừ khi nó không được đặt
+- Set Owner: luôn bị cấm, bao gồm cả bên ngoài CPI
 
-This is how the `CpiGuard` extension data looks:
+Dữ liệu extension `CpiGuard` trông như thế này:
 
 ```rust
 /// CpiGuard Extension
@@ -211,13 +211,13 @@ pub struct CpiGuard {
 
 <ArticleSection name="Permanent Delegate Extension" id="permanent-delegate-extension" level="h2" />
 
-The `PermanentDelegate` extension is a `Mint` account extension that allows a permanent delegate for all tokens of the mint that is capable of transferring or burning any token of that mint, from any token account.
+Phần mở rộng `PermanentDelegate` là một `Mint` account extension cho phép ủy nhiệm vĩnh viễn cho tất cả token của mint có khả năng chuyển giao hoặc đốt bất kỳ token nào của mint đó, từ bất kỳ token account nào.
 
-This extension is useful for creating tokens with built-in administrative control, such as stablecoins that need emergency freeze capabilities, gaming tokens that require centralized management, or compliance tokens where a regulator needs permanent oversight.
+Phần mở rộng này hữu ích để tạo token với kiểm soát quản trị tích hợp, chẳng hạn như stablecoin cần khả năng đóng băng khẩn cấp, token trò chơi yêu cầu quản lý tập trung, hoặc token cần tuân thủ quy tắc nơi mà cơ quan quản lý cần giám sát vĩnh viễn.
 
-> Unlike regular delegates which can be revoked, this delegate authority is permanent and immutable.
+> Không giống như ủy nhiệm thông thường có thể bị thu hồi, đối tượng được ủy nhiệm này là vĩnh viễn và bất biến.
 
-This is how the `PermanentDelegate` extension data looks:
+Đây là cách dữ liệu extension `PermanentDelegate` được thể hiện:
 
 ```rust
 /// PermanentDelegate Extension
@@ -230,15 +230,15 @@ pub struct PermanentDelegate {
 
 <ArticleSection name="Transfer Hook Extension" id="transfer-hook-extension" level="h2" />
 
-The `TransferHook` extension is a `Mint` account extension that introduces the ability to create `Mint` Accounts that execute custom instruction logic on every token transfer.
+Phần mở rộng `TransferHook` là một `Mint` account extension giới thiệu khả năng tạo `Mint` Account thực thi logic tùy chỉnh trên mỗi lần token được chuyển.
 
-This extension enables powerful use cases like automatic tax collection, royalty payments, transfer restrictions based on custom logic, compliance checks, or any other programmable behavior that should happen during transfers. The hook program is invoked automatically by the extension program whenever a transfer occurs.
+Phần mở rộng này cho phép các trường hợp sử dụng mạnh mẽ như thu thuế tự động, thanh toán điểm tích lũy, hạn chế việc chuyển token dựa trên logic tùy chỉnh, kiểm tra việc tuân thủ chính sách, hoặc bất kỳ hành vi có thể lập trình nào khác nên xảy ra trong quá trình chuyển. Hook program được gọi tự động bởi extension program bất cứ khi nào việc chuyển xảy ra.
 
-To achieve this, developers must build a program that implements the [Transfer Hook Interface](https://github.com/solana-program/transfer-hook/tree/main/program) and initialize a `Mint` account with the `Transfer Hook` extension enabled.
+Để đạt được điều này, lập trình viên phải xây dựng một chương trình triển khai [Transfer Hook Interface](https://github.com/solana-program/transfer-hook/tree/main/program) và khởi tạo `Mint` account với phần mở rộng `Transfer Hook` được bật.
 
-Additionally, the Token account associated with a `Mint` that has the `TransferHook` extension will come with the `TransferHookAccount` extension.
+Ngoài ra, Token account được liên kết với `Mint` có phần mở rộng `TransferHook` sẽ đi kèm với phần mở rộng `TransferHookAccount`.
 
-This is how the `TransferHook` and `TransferHookAccount` extension data looks:
+Đây là cách dữ liệu extension `TransferHook` và `TransferHookAccount` được thể hiện:
 
 ```rust
 /// TransferHook Extension
@@ -262,21 +262,21 @@ pub struct TransferHookAccount {
 
 <ArticleSection name="Metadata Extension" id="metadata-extension" level="h2" />
 
-The `Metadata` extension is a `Mint` account extension that introduces the ability to embed metadata directly into mint accounts natively and without having to use another program.
+Phần mở rộng `Metadata` là một `Mint` account extension giới thiệu khả năng nhúng metadata trực tiếp vào mint account một cách tự nhiên và không cần phải sử dụng chương trình khác.
 
-This extension is particularly useful for NFTs, tokens, and other assets that need on-chain metadata like names, symbols, images, and custom attributes. By embedding metadata directly in the mint account, it eliminates the need for external metadata programs and ensures the metadata is permanently associated with the token.
+Phần mở rộng này đặc biệt hữu ích cho NFT, token, và các tài sản khác cần metadata on-chain như tên, ký hiệu, hình ảnh, và thuộc tính tùy chỉnh. Bằng cách nhúng metadata trực tiếp trong mint account, nó loại bỏ nhu cầu về các chương trình metadata bên ngoài và đảm bảo metadata được liên kết vĩnh viễn với token.
 
-The `Metadata` extension is composed of 2 different extensions that both go on a Mint account:
-- The `Metadata` extension that contains all the metadata information like name, symbol, uri and additional accounts.
-- The `MetadataPointer` extension that references the `Mint` account where the `Metadata` extension lives.
+Phần mở rộng `Metadata` được cấu thành từ 2 phần mở rộng khác nhau đều nằm trên Mint account:
+- Phần mở rộng `Metadata` chứa tất cả thông tin metadata như tên, ký hiệu, uri và các thông tin khác của account.
+- Phần mở rộng `MetadataPointer` tham chiếu `Mint` account đến nơi mà phần mở rộng `Metadata` tồn tại.
 
-Usually, when used, these 2 extensions live on the same `Mint` account. But there might be a case where the same Metadata is getting used across different assets, and for that reason it would be cheaper to separate the 2 extensions and reference the `Mint` with the `Metadata` extension.
+Thông thường, khi được sử dụng, 2 extension này tồn tại trên cùng `Mint` account. Nhưng có thể có trường hợp cùng Metadata được sử dụng trên các asset khác nhau, và vì lý do đó sẽ rẻ hơn để tách 2 extension và tham chiếu `Mint` với extension `Metadata`.
 
-> Differently from other extensions, to create the `Metadata` extension we'll need to use the [Token Metadata Interface](https://github.com/solana-program/token-metadata/tree/main). The Metadata Pointer Extension uses the classic Token2022 Program
+> Khác với các phần mở rộng khác, để tạo phần mở rộng `Metadata` chúng ta sẽ cần sử dụng [Token Metadata Interface](https://github.com/solana-program/token-metadata/tree/main). Metadata Pointer Extension sử dụng Token2022 Program cổ điển
 
-This time around we can't create a set extension header for the `Metadata` extension since it has variable data inside of it, and that means that the length will differ based on the field.
+Lần này chúng ta không thể tạo bộ header cho phần mở rộng `Metadata` vì nó có dữ liệu động bên trong, và điều đó có nghĩa là độ dài sẽ khác nhau dựa trên các trường.
 
-This is how the `Metadata` and `MetadataPointer` extension data looks:
+Đây là cách dữ liệu extension `Metadata` và `MetadataPointer` được thể hiện:
 
 ```rust
 /// Metadata Pointer Extension
@@ -308,23 +308,23 @@ pub struct TokenMetadata {
 }
 ```
 
-<ArticleSection name="Group and Member Extension" id="group-and-member-extension" level="h2" />
+<ArticleSection name="Group và Member Extension" id="group-and-member-extension" level="h2" />
 
-The `Group` and `Member` extensions are `Mint` account extensions that introduce the ability to create groups, like collections for NFTs, that are linked with multiple assets.
+Phần mở rộng `Group` và `Member` là các `Mint` account extension giới thiệu khả năng tạo nhóm, như bộ sưu tập cho NFT, được liên kết với nhiều tài sản.
 
-This extension system is perfect for creating NFT collections, token families, or any grouping of related assets where you need to track membership and enforce collection limits. Groups can represent collections while members represent individual items within those collections.
+Hệ thống phần mở rộng này hoàn hảo để tạo bộ sưu tập NFT, họ token, hoặc bất kỳ nhóm tài sản liên quan nào mà bạn cần theo dõi thành viên và thực thi giới hạn cho bộ tập. Nhóm có thể đại diện cho bộ sưu tập trong khi thành viên đại diện cho các thành phần riêng lẻ trong những bộ sưu tập đó.
 
-Both the Group and Member extensions are composed of 2 different extensions that both go on a `Mint` account, just like the `Metadata` extension:
-- The `Extension` that contains all the information about the group or member.
-- The `Pointer Extension` that references the Mint account where the `Group` or `Member` extension lives.
+Cả 2 phần mở rộng Group và Member đều được cấu thành từ 2 phần mở rộng khác nhau đều nằm trên `Mint` account, giống như phần mở rộng `Metadata`:
+- `Extension` chứa tất cả thông tin về group hoặc member.
+- `Pointer Extension` tham chiếu Mint account đến nơi phần mở rộng `Group` hoặc `Member` tồn tại.
 
-The relationship between a group and a member is that a group can have multiple members but not the other way around.
+Mối quan hệ giữa group và member là một group có thể có nhiều member nhưng không phải ngược lại.
 
-As with the Metadata extension, here we put both the `Extension` and the `Pointer` usually in the same `Mint` account, and to create the `Group` and `Member` extension we'll need to use the [Token Group Interface](https://github.com/solana-program/token-group/tree/main).
+Giống như với phần mở rộng Metadata, ở đây chúng ta thường đặt cả `Extension` và `Pointer` trong cùng `Mint` account, và để tạo phần mở rộng `Group` và `Member` chúng ta sẽ cần sử dụng [Token Group Interface](https://github.com/solana-program/token-group/tree/main).
 
-> We can't have the `Group` extension in the same `Mint` account where there is a `Member` extension.
+> Chúng ta không thể có phần mở rộng `Group` trong cùng `Mint` account nơi có phần mở rộng `Member`.
 
-This is how the `Group` and `GroupPointer` Extension data looks:
+Đây là cách dữ liệu Extension `Group` và `GroupPointer` được thể hiện:
 
 ```rust
 /// GroupPointer Extension
@@ -353,7 +353,7 @@ pub struct TokenGroup {
 }
 ```
 
-This is how the `Member` and `MemberPointer` Extension data looks:
+Đây là cách dữ liệu Extension `Member` và `MemberPointer` được thể hiện:
 
 ```rust
 /// MemberPointer Extension

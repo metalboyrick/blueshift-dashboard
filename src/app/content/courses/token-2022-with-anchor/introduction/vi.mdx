@@ -1,44 +1,44 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Token2022 Program
+# Chương trình Token2022
 
-The Token2022 Program, also known as Token Extensions, is a superset of the functionality provided by the Token Program. 
+Chương trình Token2022, còn được gọi là Token Extensions, là một superset của các chức năng được cung cấp bởi Token Program.
 
-If you want to learn more about what additional functionalities are available and what are the differences with the Legacy token program, go follow [this course](/en/courses/token-2022-program)  
+Nếu bạn muốn tìm hiểu thêm về những chức năng bổ sung có sẵn và sự khác biệt với legacy token program, hãy theo dõi [khóa học này](/vi/courses/token-2022-program)
 
-> If you're not familiar with anchor, we advise you to go through our [introduction to anchor course](/en/courses/introduction-to-anchor) before moving forward.
+> Nếu bạn không quen thuộc với anchor, chúng tôi khuyên bạn nên xem qua [khóa học giới thiệu về anchor](/vi/courses/introduction-to-anchor) trước khi tiếp tục.
 
-For anchor, everything token related can be found in the `anchor-spl` crate. For this reason, after having initialized an `Anchor` workspace we can just do:
+Đối với anchor, mọi thứ liên quan đến token có thể được tìm thấy trong crate `anchor-spl`. Vì lý do này, sau khi đã khởi tạo workspace `Anchor`, chúng ta chỉ cần làm thế này:
 
 ```
 cargo add anchor-spl
 ```
 
-> The version of `anchor-spl` needs to be the same of our `anchor-lang` crate. And token2022 extensions are available only from version 0.30.0 forward. 
+> Phiên bản của `anchor-spl` cần giống với crate `anchor-lang` của chúng ta. Và token2022 extension chỉ có sẵn từ phiên bản 0.30.0 trở đi.
 
-Don't forget to then update the `idl-build` feature  that can be found into the `[features]` section of the `cargo.toml` file of our program with `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
+Đừng quên cập nhật feature `idl-build` có thể được tìm thấy trong phần `[features]` của file `cargo.toml` của chương trình với `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
 
-<ArticleSection name="Mint and Token Accounts" id="mint-and-token-accounts" level="h2" />
+<ArticleSection name="Mint và Token Account" id="mint-and-token-accounts" level="h2" />
 
-If you're familiar with `Anchor`, you'll know that they have a set of macros that help the user abstract away a lot of the complexities related to initializing accounts.
+Nếu bạn quen thuộc với `Anchor`, bạn sẽ biết rằng nó có một tập hợp macro giúp người dùng trừu tượng hóa nhiều phức tạp liên quan đến việc khởi tạo account.
 
-The same works here for `Mint`, `Token` and `Associated Token` accounts.
+Điều tương tự cũng hoạt động ở đây cho các account `Mint`, `Token` và `Associated Token`.
 
-### Mint Account with Extensions
+### Mint Account với Extension
 
-Since `Mint` account with extensions have different size and are owned by a different program, `Anchor` created a new type of accounts that works independently if the `Mint` account is from the Legacy Token or from the Token2022 program.
+Vì `Mint` account với các phần mở rộng được thêm vào có kích thước khác nhau và được sở hữu bởi một chương trình khác, `Anchor` đã tạo ra một loại account mới hoạt động độc lập nếu `Mint` account là từ Legacy Token hoặc từ chương trình Token2022.
 
-To use them, we just need to import both the `TokenInterface` and `Mint` from the `anchor_spl::token_interface` like this: 
+Để sử dụng chúng, chúng ta chỉ cần import cả `TokenInterface` và `Mint` từ `anchor_spl::token_interface` như thế này:
 
 ```rust
 use anchor_spl::token_interface::{TokenInterface, Mint};
 ```
 
-After that we can just do `pub mint: InterfaceAccount<'info, Mint>,` and specify that we want the mint to use the token_program account that we have in the account struct like this: `mint::token_program = token_program` and we are good! 
+Sau đó chúng ta chỉ cần khai báo `pub mint: InterfaceAccount<'info, Mint>,` và chỉ định rằng chúng ta muốn mint sử dụng token_program account mà chúng ta có trong account struct như thế này: `mint::token_program = token_program` và chúng ta đã sẵn sàng!
 
-> The token interface provides a common way to interact with both types of accounts without needing to handle the differences in their deserialization logic while maintaining type safety and proper validation.
+> Token interface cung cấp một cách chung để tương tác với cả hai loại account mà không cần xử lý sự khác biệt trong việc giải tuần tự hóa logic của chúng trong khi duy trì type safety và validation thích hợp.
 
-Before diving into how to add extension to the mint account, this is how to create a mint with the Token2022 program:
+Trước khi đi sâu vào cách thêm extension vào mint account, đây là cách tạo mint với chương trình Token2022:
 
 ```rust
 #[derive(Accounts)]
@@ -58,7 +58,7 @@ pub struct CreateMint<'info> {
 }
 ```
 
-Now, luckily, `Anchor` has our back, and created some macros to add the most popular extensions directly in the initialize step like so:
+Hiện giờ, thật may mắn, `Anchor` đã giúp chúng ta và tạo ra một số macro để thêm các phần mở rộng phổ biến trực tiếp vào bước khởi tạo như thế này:
 
 ```rust
 #[account(
@@ -76,11 +76,11 @@ Now, luckily, `Anchor` has our back, and created some macros to add the most pop
 )]
 pub mint: InterfaceAccount<'info, Mint>,
 
-### Associated Token Account with Extensions
+### Associated Token Account với phần mở rộng
 
-`Associated Token` accounts comes with the `ImmutableOwner` extension by default. So the only difference between the creation of a Legacy or Token2022 `Token Account` is just the usage of the `Interface Account`.
+`Associated Token` account đi kèm với extension `ImmutableOwner` theo mặc định. Vì vậy sự khác biệt duy nhất giữa việc tạo Legacy hoặc Token2022 `Token Account` chỉ là việc sử dụng `Interface Account`.
 
-Here's how to create an associated token account:
+Đây là cách tạo associated token account:
 
 ```rust
 #[derive(Accounts)]
@@ -100,11 +100,11 @@ pub struct CreateAssociatedToken<'info> {
 }
 ```
 
-### Token Account with Extensions
+### Token Account với Extension
 
-The `Token` accounts doesn't come with any extension by default and it doesn't have any macro that helps us out. So using macros we can only create a normal Token2022 `Token` account.
+`Token` account không đi kèm với bất kỳ extension nào theo mặc định và nó không có bất kỳ macro nào giúp chúng ta. Vì vậy sử dụng macro chỉ giúp chúng ta có thể tạo `Token` account Token2022 bình thường.
 
-Here's how to create a token account:
+Đây là cách tạo token account:
 
 ```rust
 #[derive(Accounts)]

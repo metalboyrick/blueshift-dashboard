@@ -1,34 +1,34 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Metadata Extension
+# Metadata Extension
 
-The `Metadata` extension is a `Mint` account extension that introduces the ability to embed metadata directly into mint accounts natively and without having to use another program.
+Phần mở rộng `Metadata` là một `Mint` account extension giới thiệu khả năng nhúng metadata trực tiếp vào mint account một cách tự nhiên và không cần phải sử dụng chương trình khác.
 
-<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+<ArticleSection name="Khởi tạo Mint Account" id="initializing-the-mint-account" level="h2" />
 
-The `Metadata` extension is a little different from what we're used to doing because it's composed of 2 different extensions that both go on a `Mint` account:
-- The `Metadata` extension that contains all the metadata information like name, symbol, uri and additional accounts.
-- The `MetadataPointer` extension that references the `Mint` account where the `Metadata` extension lives.
+Phần mở rộng `Metadata` hơi khác so với những gì chúng ta đã quen làm vì nó được cấu thành từ 2 extension khác nhau đều nằm trên `Mint` account:
+- Extension `Metadata` chứa tất cả thông tin metadata như tên, ký hiệu, uri và các thông tin khác của account.
+- Extension `MetadataPointer` tham chiếu `Mint` account tới nơi extension `Metadata` tồn tại.
 
-Usually, when used, these 2 extensions live on the same `Mint` account; and we're going to do the same for this example.
+Thông thường, khi được sử dụng, 2 extension này tồn tại trên cùng `Mint` account; và chúng ta sẽ làm tương tự cho ví dụ này.
 
-Let's start with some basics before diving into the code:
+Hãy bắt đầu với một số điều cơ bản trước khi đi sâu vào code:
 
-While the `MetadataPointer` extension lives in the `@solana/spl-token package`, to initialize the `Metadata` we need to use the `@solana/spl-token-metadata` package.
+Trong khi extension `MetadataPointer` tồn tại trong gói `@solana/spl-token`, để khởi tạo `Metadata` chúng ta cần sử dụng gói `@solana/spl-token-metadata`.
 
-So let's install the required package:
+Vì vậy hãy cài đặt gói cần thiết:
 
 ```
 npm i @solana/spl-token-metadata
 ```
 
-Additionally, the `Metadata` extension is one of the "only" extensions that requires you to initialize the extension after having initialized the `Mint` account. 
+Ngoài ra, phần mở rộng `Metadata` là một trong những phần mở rộng "duy nhất" yêu cầu bạn khởi tạo nó sau khi đã khởi tạo `Mint` account.
 
-This is because the metadata initialization instruction dynamically allocates the required space for the variable-length metadata content.
+Điều này là vì instruction khởi tạo metadata phân bổ động không gian cần thiết cho nội dung metadata có độ dài biến đổi.
 
-At the same time, this means that we're going to need to initialize the `Mint` account with enough lamports to be rent exempt with the `Metadata` extension included, but allocating enough space only for the `MetadataPointer` extension since the `initializeMetadata()` instruction actually increases the space correctly.
+Đồng thời, điều này có nghĩa là chúng ta sẽ cần khởi tạo `Mint` account với đủ lamport để được miễn phí thuê với phần mở rộng `Metadata` được bao gồm, nhưng chỉ phân bổ đủ không gian cho extension `MetadataPointer` vì instruction `initializeMetadata()` thực sự tăng không gian một cách chính xác.
 
-In the code this looks like this:
+Mã sẽ trông như thế này:
 
 ```ts
 // Metadata struct
@@ -50,7 +50,7 @@ const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
 const lamports = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
 ```
 
-Now that we're familiar with these concepts, let's dive into the addition of the `MetadataPointer` and `Metadata` extension on the mint account.
+Bây giờ, chúng ta đã quen thuộc với các khái niệm này, hãy đi sâu vào việc thêm extension `MetadataPointer` và `Metadata` vào `Mint` account.
 
 ```ts
 import {
@@ -151,15 +151,15 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-> The `initialize` instruction for the `metadata-interface` doesn't allow for `additionalMetdata` for this reason if we want to create an `asset` that has it, we're going to need to use the `updateField` instruction like we did in this example
+> Instruction `initialize` của `metadata-interface` không cho phép `additionalMetdata` vì vậy nếu chúng ta muốn tạo một `tài sản` có nó, chúng ta sẽ cần sử dụng instruction `updateField` như chúng ta đã làm trong ví dụ này.
 
-<ArticleSection name="Updating the Metadata" id="updating-the-metadata" level="h2" />
+<ArticleSection name="Cập nhật Metadata" id="updating-the-metadata" level="h2" />
 
-It's possible to update all fields of the metadata using the same instruction `updateField()`.
+Có thể cập nhật tất cả trường của metadata bằng cách sử dụng cùng instruction `updateField()`.
 
-For the `additionalMetadata` this works a little bit different because we can update an existing field by just passing the same `Field` with a new value or just add a new field to the `Metadata`.
+Đối với `additionalMetadata`, điều này hoạt động hơi khác một chút vì chúng ta có thể cập nhật trường hiện có bằng cách chỉ truyền cùng một `trường` với giá trị mới hoặc chỉ thêm trường mới vào `Metadata`.
 
-Under the hood, the program uses the same instruction with different flag based on what we're trying to change this means that we can change all the fields like this:
+Bên dưới, chương trình sử dụng cùng instruction với cờ khác nhau dựa trên những gì chúng ta đang cố gắng thay đổi, điều này có nghĩa là chúng ta có thể thay đổi tất cả các trường như thế này:
 
 ```ts
 const newMetadata: TokenMetadata = {
@@ -247,9 +247,9 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Metadata updated! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-> As you can see we always need to make sure that the account is rent exempt this is why we make all the calculation about rent at the start and transfer additional lamports if needed.
+> Như bạn có thể thấy, chúng ta luôn cần đảm bảo rằng account được miễn phí thuê. Đó là lý do tại sao chúng ta thực hiện tất cả các tính toán về phí thuê ngay từ đầu và chuyển thêm lamport vào nếu cần.
 
-We can remove `Field` in the `additionalMetadata` struct as well using the `removeKey` instruction like so:
+Chúng ta có thể loại bỏ `trường` trong cấu trúc `additionalMetadata` bằng cách sử dụng instruction `removeKey` như thế này:
 
 ```ts
 const removeMetadataKeyInstructions = createRemoveKeyInstruction({

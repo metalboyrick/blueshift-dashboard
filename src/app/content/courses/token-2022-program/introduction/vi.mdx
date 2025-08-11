@@ -1,24 +1,24 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Token2022 Program
+# Chương trình Token2022
 
-The Token2022 Program, also known as Token Extensions, is a superset of the functionality provided by the Token Program.
+Chương trình Token2022, còn được gọi là Token Extensions, là một superset của chức năng được cung cấp bởi Token Program.
 
-The Legacy Token Program serves most needs for fungible and non-fungible tokens through a simple set of agnostic interfaces and structures. However, it lacks more opinionated features and implementations that would help developers create custom behavior with a common interface, making development faster and safer.
+Legacy Token Program phục vụ hầu hết nhu cầu cho fungible và non-fungible token thông qua một tập hợp interface và cấu trúc bất khả tri đơn giản. Tuy nhiên, nó thiếu các chức năng và triển khai tùy biến mà giúp developer tạo hành vi tùy chỉnh với interface chung, làm cho việc phát triển nhanh hơn và an toàn hơn.
 
-For this exact reason, a new Token Program called `Token2022` was created with a new set of features called `Token Extensions`. These extensions provide specific, customizable behaviors that can be attached to either the `Token Account` or the `Mint Account`.
+Chính vì lý do này, một Token Program mới được gọi là `Token2022` đã được tạo ra với một tập hợp các chức năng mới được gọi là `Token Extensions`. Những phần mở rộng này cung cấp các hành vi cụ thể, có thể tùy chỉnh có thể được gắn vào `Token Account` hoặc `Mint Account`.
 
-> The `SPL-Token Program` (commonly referred to by developers as `Tokenkeg`, because of the program address: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) and the `Token2022 Program` are two completely different programs that share the same "starting point". This means that `Tokenkeg` tokens are deserializable with `Token2022` but they can't be used inside of that program to add extensions to them for example.
+> `SPL-Token Program` (thường được developer gọi là `Tokenkeg`, vì địa chỉ chương trình là: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) và `Token2022 Program` là hai chương trình hoàn toàn khác nhau có chung "điểm khởi đầu". Điều này có nghĩa là token `Tokenkeg` có thể deserialize với `Token2022` nhưng chúng không thể được sử dụng bên trong chương trình Token2022 để thêm các extension.
 
-<ArticleSection name="Mint and Token Accounts" id="mint-and-token-accounts" level="h2" />
+<ArticleSection name="Mint và Token Account" id="mint-and-token-accounts" level="h2" />
 
-In the previous section we talked about the fact that the main difference between the `Tokenkeg` and `Token2022` programs are **Token Extensions**.
+Trong phần trước, chúng ta đã nói về việc sự khác biệt chính giữa chương trình `Tokenkeg` và `Token2022` là **Token Extensions**.
 
-To be enforceable, these extensions need to live directly inside the `Mint` and `Token` accounts, since this is the only way to ensure that the ruleset is enforced while operating directly on the token program.
+Để có thể thực thi được, những phần mở rộng này cần tồn tại trực tiếp bên trong `Mint` và `Token` account, vì đây là cách duy nhất để đảm bảo rằng bộ quy tắc có thể được thực thi khi hoạt động trực tiếp trên token program.
 
-For this reason, let's look at the main differences between the legacy and new token programs on these accounts.
+Vì lý do này, hãy xem xét những khác biệt chính giữa legacy và token program mới trên những account này.
 
-**Legacy Token Accounts**
+**Legacy Token Account**
 
 ```rust
 #[repr(C)]
@@ -65,11 +65,11 @@ pub struct Account {
 }
 ```
 
-As you can see, for these accounts there is no written discriminator. This is because the fields are all of fixed length and the difference in space is great enough to discriminate between these different types of accounts by just comparing their different lengths.
+Như bạn có thể thấy, đối với những account này không có discriminator. Điều này là vì các trường đều có độ dài cố định và sự khác biệt về không gian đủ lớn để phân biệt giữa những loại account khác nhau này chỉ bằng cách so sánh độ dài khác nhau của chúng.
 
-The problem with the Token Extension Program is that any extra data needed for the extension is tagged at the end of the `Mint` and `Token` accounts that we're familiar with.
+Vấn đề với Token Extension Program là bất kỳ dữ liệu bổ sung nào cần thiết cho phần mở rộng đều được nằm ở cuối `Mint` và `Token` account mà chúng ta quen thuộc.
 
-This means that discrimination by length would fall short because we could have a `Mint` with 3-4 extensions attached to it that surpasses the length of the `Token` Account. For this reason, when `Mint` and `Token` accounts have extensions, a discriminator gets added to them like this:
+Điều này có nghĩa là việc phân biệt theo độ dài sẽ không đủ vì chúng ta có thể có một `Mint` với 3-4 extension được gắn vào nó vượt quá độ dài của `Token` Account. Vì lý do này, khi `Mint` và `Token` account có thêm phần mở rộng, một discriminator được thêm vào chúng như thế này:
 
 ```rust
 #[repr(C)]
@@ -97,17 +97,17 @@ pub struct Account {
 }
 ```
 
-To maintain the legacy struct, the discriminator doesn't live in the first byte like usual, but lives at byte `166`.
+Để duy trì legacy struct, discriminator không tồn tại ở byte đầu tiên như thường lệ, mà tồn tại ở byte `166`.
 
-This is because the `Token` account length is 165 bytes, meaning that the discriminator gets added after the base length. For the `Mint` account, this means we had to add 83 bytes of padding to ensure that the two accounts have the same base length.
+Điều này là vì độ dài `Token` account là 165 byte, có nghĩa là discriminator được thêm vào sau độ dài cơ sở. Đối với `Mint` account, điều này có nghĩa là chúng ta phải thêm 83 byte đệm để đảm bảo rằng hai account có cùng độ dài cơ sở.
 
-So to discriminate between the two accounts, we just need to check the 166th byte (data[165] if you count from 0) and move accordingly.
+Vì vậy để phân biệt giữa hai account, chúng ta chỉ cần kiểm tra byte thứ 166 (data[165] nếu bạn đếm từ 0) và di chuyển tương ứng.
 
-<ArticleSection name="Token Extensions" id="token-extensions" level="h2" />
+<ArticleSection name="Token Extension" id="token-extensions" level="h2" />
 
-In the next section we're going to talk about the merits and the different Token Extensions that are currently present on Solana, but in this introductory paragraph we're just going to talk about how they get serialized and added to the two state accounts that we talked about before.
+Trong phần tiếp theo, chúng ta sẽ nói về những ưu điểm và các Token Extension khác nhau hiện có trên Solana, nhưng trong phần giới thiệu này, chúng ta chỉ nói về cách chúng được serialize và thêm vào hai state account mà chúng ta đã nói trước đó.
 
-Each extension has a discriminator that gets saved with the size of that extension directly on the account. We'll call this the "header" of the extension and it looks like this:
+Mỗi extension có một discriminator được lưu với kích thước của extension đó trực tiếp trên account. Chúng ta sẽ gọi đây là "header" của extension và nó trông như thế này:
 
 ```rust
 pub struct ExtensionHeader {
@@ -118,4 +118,4 @@ pub struct ExtensionHeader {
 }
 ```
 
-This makes it extremely easy to know what extensions are on the token and deserialize the data only of the ones that we need, because we can grab the discriminator and then jump to the next extension to check what is there or not.
+Điều này làm cho việc biết phần mở rộng nào có trên token và deserialize dữ liệu chỉ của những extension mà chúng ta cần trở nên cực kỳ dễ dàng, vì chúng ta có thể lấy discriminator và sau đó nhảy đến phần mở rộng tiếp theo để kiểm tra có gì ở đó hay không.

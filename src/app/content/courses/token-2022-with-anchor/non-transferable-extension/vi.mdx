@@ -1,14 +1,14 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Non Transferable Extension
+# Non Transferable Extension
 
-The `NonTransferable` extension is a `Mint` account extension that prevents tokens from being transferred between accounts, making them permanently bound to their current holders.
+Phần mở rộng `NonTransferable` là một `Mint` account extension ngăn chặn token được chuyển giữa các account, làm cho chúng bị ràng buộc vĩnh viễn với người giữ hiện tại.
 
-<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+<ArticleSection name="Khởi tạo Mint Account" id="initializing-the-mint-account" level="h2" />
 
-Since `Anchor` doesn't have any macros for the `non_transferable` extension we're going to create a `Mint` account using the raw CPIs.
+Vì `Anchor` không có bất kỳ macro nào cho extension `non_transferable`, chúng ta sẽ tạo `Mint` account bằng cách sử dụng một CPI thô.
 
-Here's how to create a mint with the Non Transferable extension:
+Đây là cách tạo mint với phần mở rộng Non Transferable:
 
 ```rust
 use anchor_lang::prelude::*;

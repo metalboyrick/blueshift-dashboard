@@ -1,14 +1,14 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Default Account State Extension
+# Default Account State Extension
 
-The `DefaultAccountState` extension is a Mint extension that allows all newly created `Token` accounts for that specific mint to be frozen by default. The `Freeze Authority` of the mint can then thaw (unfreeze) these `Token` accounts so they can become usable.
+Phần mở rộng `DefaultAccountState` là một Mint extension cho phép tất cả `Token` account mới được tạo cho mint cụ thể đó bị đóng băng theo mặc định. `Freeze Authority` của mint sau đó có thể thaw (bỏ đóng băng) những `Token` account này để chúng có thể trở nên có thể sử dụng được.
 
-<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+<ArticleSection name="Khởi tạo Mint Account" id="initializing-the-mint-account" level="h2" />
 
-Since `Anchor` doesn't have any macros for the `default_account_state` extension we're going to create a `Mint` account using the raw CPIs.
+Vì `Anchor` không có bất kỳ macro nào cho extension `default_account_state`, chúng ta sẽ tạo `Mint` account bằng cách sử dụng raw CPI.
 
-Here's how to create a mint with the Default Account State extension:
+Đây là cách tạo mint với Default Account State extension:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -88,15 +88,15 @@ pub fn initialize_default_account_state_(
 }
 ```
 
-> Remember that the `Freeze Authority` on the `Mint` is mandatory for this extension or we'll not be able to thaw any `Token` account at creation. 
+> Hãy nhớ rằng `Freeze Authority` trên `Mint` là bắt buộc đối với phần mở rộng này hoặc chúng ta sẽ không thể thaw bất kỳ `Token` account nào khi chúng được tạo.
 
 <ArticleSection name="Thawing the Token Account" id="thawing-the-token-account" level="h2" />
 
-Having the `DefaultAccountState` extension means that all `Token` account that gets initialized, are going to be `frozen` by default.
+Có phần mở rộng `DefaultAccountState` nghĩa là tất cả các `Token` account khi được khởi tạo sẽ mặc định bị `đóng băng`.
 
-This means that it's not possible to `Mint`, `Transfer` or pretty much do anything with those `Token` account if we don't thaw (unfreeze) them.
+Điều này có nghĩa là nó không thể nào thực hiện `Mint`, `Transfer` hoặc hầu như bất kỳ thao tác nào trên những `Token` account đó nếu chúng ta không thaw (bỏ đóng băng) chúng.
 
-We can easily thaw a `Token` account using the `thaw_account()` instruction like this:
+Chúng ta có thể dễ dàng gỡ bỏ đóng băng một `Token` account bằng cách sử dụng instruction `thaw_account()` như thế này:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -136,9 +136,9 @@ pub fn thaw_account(
 }
 ```
 
-<ArticleSection name="Changing the Default Account State" id="changing-the-default-account-state" level="h2" />
+<ArticleSection name="Thay đổi Default Account State" id="changing-the-default-account-state" level="h2" />
 
-Once we don't need to have greater control over token distribution and we want to let everybody freely trade or token, we can change the default account state using the `default_account_state_update()` instruction like so:
+Khi chúng ta không cần có kiểm soát lớn hơn đối với phân phối token và chúng ta muốn để mọi người tự do giao dịch token, chúng ta có thể thay đổi default account state bằng cách sử dụng instruction `default_account_state_update()` như thế này:
 
 ```rust
 use anchor_lang::prelude::*;
