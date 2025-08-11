@@ -2,64 +2,64 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Mollusk 101
 
-Testing Solana programs efficiently requires a framework that balances speed, precision, and insight. When developing complex program logic, you need an environment that enables rapid iteration without sacrificing the ability to test edge cases or measure performance accurately.
+Kiểm thử các chương trình Solana một cách hiệu quả đòi hỏi một framework cân bằng giữa tốc độ, độ chính xác và khả năng hiểu biết sâu sắc. Khi phát triển logic chương trình phức tạp, bạn cần một môi trường cho phép lặp lại nhanh chóng mà không hy sinh khả năng kiểm thử các trường hợp biên hoặc đo lường hiệu suất một cách chính xác.
 
-The ideal Solana testing framework should provide three essential capabilities: 
-- Fast execution for quick development cycles, 
-- Flexible account state manipulation for comprehensive edge case testing, 
-- Detailed performance metrics for optimization insights.
+Framework kiểm thử lý tưởng trên Solana nên cung cấp ba khả năng thiết yếu:
+- Thực thi nhanh cho chu kỳ phát triển nhanh chóng,
+- Thao tác trên trạng thái account một cách linh hoạt để kiểm thử toàn diện các trường hợp biên,
+- Cung cấp số liệu về hiệu suất chi tiết để có cái nhìn sâu sắc về tối ưu hóa.
 
-Mollusk addresses these requirements by providing a streamlined testing environment specifically designed for Solana program development.
+Mollusk giải quyết những yêu cầu này bằng cách cung cấp một môi trường kiểm thử được tối ưu hóa được thiết kế đặc biệt cho phát triển chương trình Solana.
 
-<ArticleSection name="What is Mollusk" id="what-is-mollusk" level="h2" />
+<ArticleSection name="Mollusk là gì" id="what-is-mollusk" level="h2" />
 
-[Mollusk](https://github.com/anza-xyz/mollusk), created and maintained by [Joe Caulfield](https://x.com/realbuffalojoe) from the [Anza](https://x.com/anza_xyz) team, is a lightweight test harness for Solana programs that provides a direct interface to program execution without the overhead of a full validator runtime.
+[Mollusk](https://github.com/anza-xyz/mollusk), được tạo và duy trì bởi [Joe Caulfield](https://x.com/realbuffalojoe) từ team [Anza](https://x.com/anza_xyz), là một framework kiểm thử nhẹ cho các chương trình Solana cung cấp interface trực tiếp đến việc thực thi chương trình mà không cần overhead như một validator runtime đầy đủ.
 
-Rather than simulating a complete validator environment, Mollusk constructs a program execution pipeline using low-level Solana Virtual Machine (SVM) components. This approach eliminates unnecessary overhead while maintaining the essential functionality needed for thorough program testing.
+Thay vì mô phỏng một môi trường validator hoàn chỉnh, Mollusk xây dựng một pipeline thực thi chương trình sử dụng các component Solana Virtual Machine (SVM) cấp thấp. Cách tiếp cận này loại bỏ overhead không cần thiết trong khi duy trì chức năng thiết yếu cần thiết cho việc kiểm thử chương trình kỹ lưỡng.
 
-The framework achieves exceptional performance by excluding heavyweight components like `AccountsDB` and `Bank` from the Agave validator implementation. This design choice requires explicit account provisioning, which actually becomes an advantage because it grants precise control over account states and enables testing scenarios that would be difficult to reproduce in a full validator environment.
+Framework đạt được hiệu suất đặc biệt bằng cách loại trừ các thành phần nặng như `AccountsDB` và `Bank` từ triển khai validator của Agave. Lựa chọn thiết kế này yêu cầu cung cấp account rõ ràng, điều này thực sự trở thành một lợi thế vì nó cấp quyền kiểm soát chính xác đối với trạng thái của account và cho phép kiểm thử các kịch bản khó tái tạo trong môi trường validator đầy đủ.
 
-Mollusk's test harness supports comprehensive configuration options, including compute budget adjustments, feature set modifications, and sysvar customization. These configurations are managed directly through the `Mollusk` struct and can be modified using built-in helper functions.
+Mollusk hỗ trợ các tùy chọn cấu hình toàn diện, bao gồm điều chỉnh compute budget, sửa đổi cá bộ tính năng, và tùy chỉnh sysvar. Những cấu hình này được quản lý trực tiếp thông qua struct `Mollusk` và có thể được sửa đổi bằng các hàm bổ trợ tích hợp.
 
-<ArticleSection name="First Steps" id="first-steps" level="h2" />
+<ArticleSection name="Các bước đầu tiên" id="first-steps" level="h2" />
 
-The core `mollusk-svm` crate provides the fundamental testing infrastructure, while additional crates offer specialized helpers for common Solana programs like `Token` and `Memo` programs.
+Crate `mollusk-svm` cốt lõi cung cấp cơ sở hạ tầng kiểm thử cơ bản, trong khi các crate bổ sung cung cấp các bổ trợ chuyên biệt cho các chương trình Solana phổ biến như chương trình `Token` và `Memo`.
 
-### Setup
+### Thiết lập
 
-Add the main Mollusk crate to your project:
+Thêm crate Mollusk chính vào dự án của bạn:
 
 ```
 cargo add mollusk-svm
 ```
 
-Include program-specific helpers as needed:
+Bao gồm phàn bổ trợ cụ thể cho chương trình khi cần:
 
 ```
 cargo add mollusk-svm-programs-memo mollusk-svm-programs-token
 ```
 
-These additional crates provide pre-configured helpers for standard Solana programs, reducing boilerplate code and simplifying the setup of common testing scenarios involving token operations or memo instructions.
+Những crate bổ sung này cung cấp các phần bổ trợ được cấu hình sẵn cho các chương trình Solana tiêu chuẩn, giảm boilerplate code và đơn giản hóa việc thiết lập các kịch bản kiểm thử phổ biến liên quan đến thao tác token hoặc memo instruction.
 
-### Additional Dependencies
+### Các thành phần phụ thuộc bổ sung
 
-Several Solana crates enhance the testing experience by providing essential types and utilities:
+Một số crate Solana nâng cao trải nghiệm kiểm thử bằng cách cung cấp các type và utility thiết yếu:
 
 ```
 cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk
 ```
 
-Since these dependencies are only needed for testing, keep your program binary lightweight by adding them under the `[dev-dependencies]` section in your `Cargo.toml`:
+Vì những phần phụ thuộc này chỉ cần thiết cho kiểm thử, hãy giữ cho binary chương trình của bạn nhẹ bằng cách thêm chúng dưới phần `[dev-dependencies]` trong `Cargo.toml` của bạn:
 
 ```
 [dev-dependencies]
 mollusk-svm = "0.4.0"
 ```
-> This configuration ensures that testing utilities don't increase your program's deployment size while providing access to all necessary Solana types and helper functions during development.
+> Cấu hình này đảm bảo rằng các utility kiểm thử không làm tăng kích thước triển khai chương trình của bạn trong khi cung cấp quyền truy cập vào tất cả các type Solana cần thiết và hàm bổ trợ trong quá trình phát triển.
 
-<ArticleSection name="Mollusk Basics" id="mollusk-basics" level="h2" />
+<ArticleSection name="Mollusk cơ bản" id="mollusk-basics" level="h2" />
 
-Start by declaring the `program_id` and creating a `Mollusk` instance with the address that you used in your program so it gets called correctly and doesn't throw any "ProgramMismatch` error during testing, and the path to the built program like so:
+Bắt đầu bằng việc khai báo `program_id` và tạo một instance `Mollusk` với địa chỉ mà bạn đã sử dụng trong chương trình của mình để nó được gọi đúng cách và không gặp bất kỳ lỗi "ProgramMismatch" nào trong quá trình kiểm thử, và đường dẫn đến chương trình đã build như thế này:
 
 ```rust
 use mollusk_svm::Mollusk;
@@ -84,25 +84,25 @@ fn test() {
 }
 ```
 
-To tests, we can then use one of the four main API methods offered:
-- `process_instruction`: Process an instruction and return the result.
-- `process_and_validate_instruction`: Process an instruction and perform a series of checks on the result, panicking if any checks fail.
-- `process_instruction_chain`: Process a chain of instructions and return the result.
-- `process_and_validate_instruction_chain`: Process a chain of instructions and perform a series of checks on each result, panicking if any checks fail.
+Để kiểm thử, chúng ta có thể sử dụng một trong bốn phương thức API chính được cung cấp:
+- `process_instruction`: Xử lý một instruction và trả về kết quả.
+- `process_and_validate_instruction`: Xử lý một instruction và thực hiện một loạt kiểm tra trên kết quả, panic nếu bất kỳ kiểm tra nào thất bại.
+- `process_instruction_chain`: Xử lý một chuỗi instruction và trả về kết quả.
+- `process_and_validate_instruction_chain`: Xử lý một chuỗi instruction và thực hiện một loạt kiểm tra trên mỗi kết quả, panic nếu bất kỳ kiểm tra nào thất bại.
 
-But before being able to use this methods, we would need to create our accounts and instruction struct to pass in:
+Nhưng trước khi có thể sử dụng những phương thức này, chúng ta cần tạo account và instruction struct để truyền vào:
 
-### Accounts
+### Account
 
-When testing Solana programs with Mollusk, you'll work with several types of accounts that mirror real-world program execution scenarios. Understanding how to construct these accounts properly is essential for effective testing.
+Khi kiểm thử các chương trình Solana với Mollusk, bạn sẽ làm việc với một số loại account phản ánh các kịch bản thực thi chương trình thực tế. Hiểu cách xây dựng những account này đúng cách là thiết yếu cho việc kiểm thử hiệu quả.
 
-The most fundamental account type is the `SystemAccount`, which comes in two primary variants:
-- Payer: An account with lamports that funds program account creation or lamport transfers
-- Uninitialized Account: A program account awaiting initialization within your instruction
+Loại account cơ bản nhất là `SystemAccount`, có hai biến thể chính:
+- Payer: Một account có lamport tài trợ cho việc tạo program account hoặc chuyển lamport
+- Uninitialized Account: Một program account đang chờ khởi tạo trong instruction của bạn
 
-System accounts contain no data and are owned by the System Program. The key difference between payer and uninitialized accounts is their lamport balance: payers have funds, while uninitialized accounts start empty.
+System account không chứa dữ liệu và được sở hữu bởi System Program. Sự khác biệt chính giữa payer và uninitialized account là số dư lamport của chúng: payer có tiền, trong khi uninitialized account bắt đầu với số dư trống.
 
-Here's how to create these basic accounts in Mollusk:
+Đây là cách tạo những account cơ bản này trong Mollusk:
 
 ```rust
 use solana_sdk::{
@@ -119,7 +119,7 @@ let uninitialized_account = Pubkey::new_unique();
 let uninitialized_account_account = Account::new(0, 0, &system_program::id());
 ```
 
-For `ProgramAccounts` that contain data, you have two construction approaches:
+Đối với `ProgramAccount` chứa dữ liệu, bạn có hai cách tiếp cận xây dựng:
 
 ```rust
 use solana_sdk::account::Account;
@@ -142,7 +142,7 @@ let program_account_account = Account {
 };
 ```
 
-Or using `AccountSharedData`:
+Hoặc sử dụng `AccountSharedData`:
 
 ```rust
 use solana_sdk::account::AccountSharedData;
@@ -160,7 +160,7 @@ let mut program_account_account = AccountSharedData::new(lamports, data.len(), &
 program_account_account.set_data_from_slice(&data);
 ```
 
-Once you've created your accounts, compile them into the format Mollusk expects:
+Khi bạn đã tạo account của mình, hãy biên dịch chúng thành định dạng mà Mollusk mong đợi:
 
 ```rust
 let accounts = [
@@ -169,13 +169,13 @@ let accounts = [
 ];
 ```
 
-> When using AccountSharedData, remember to call `.into()` to convert it to the Account type that Mollusk requires for execution like this: `program_account_account.into()`.
+> Khi sử dụng AccountSharedData, hãy nhớ gọi `.into()` để chuyển đổi nó thành type Account mà Mollusk yêu cầu để thực thi như thế này: `program_account_account.into()`.
 
-### Instructions
+### Instruction
 
-Creating instructions for Mollusk testing is straightforward once you understand the three essential components: the `program_id` that identifies your program, the `instruction_data` containing the discriminator and parameters, and the account metadata specifying which accounts are involved and their permissions.
+Tạo instruction cho kiểm thử Mollusk rất đơn giản khi bạn hiểu ba thành phần thiết yếu: `program_id` xác định chương trình của bạn, `instruction_data` chứa discriminator và tham số, và metadata account chỉ định account nào được liên quan và quyền của chúng.
 
-Here's the basic instruction structure:
+Đây là cấu trúc instruction cơ bản:
 
 ```rust
 use solana_sdk::instruction::{Instruction, AccountMeta};
@@ -187,9 +187,9 @@ let instruction = Instruction::new_with_bytes(
 );
 ```
 
-The instruction data must include the instruction discriminator followed by any parameters your instruction requires. For Anchor programs, the default discriminators are 8-byte values derived from the instruction name.
+Dữ liệu instruction phải bao gồm instruction discriminator và theo sau bởi bất kỳ tham số nào mà instruction của bạn yêu cầu. Đối với các chương trình Anchor, discriminator mặc định là giá trị 8-byte được derive từ tên instruction.
 
-To simplify Anchor discriminator generation, use this helper function and construct your instruction data by concatenating the discriminator with serialized parameters:
+Để đơn giản hóa việc tạo Anchor discriminator, hãy sử dụng hàm bổ trợ này và xây dựng dữ liệu instruction của bạn bằng cách nối discriminator với các tham số đã serialize:
 
 ```rust
 use sha2::{Sha256, Digest};
@@ -212,24 +212,24 @@ pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
 }
 ```
 
-For the `AccountMeta` struct we'll need to use the appropriate constructor based on account permissions:
-- `AccountMeta::new(pubkey, is_signer)`: For mutable accounts
-- `AccountMeta::new_readonly(pubkey, is_signer)`: For read-only accounts
+Đối với struct `AccountMeta`, chúng ta sẽ cần sử dụng constructor thích hợp dựa trên quyền account:
+- `AccountMeta::new(pubkey, is_signer)`: Cho account có thể thay đổi
+- `AccountMeta::new_readonly(pubkey, is_signer)`: Cho account chỉ đọc
 
-The boolean parameter indicates whether the account must sign the transaction. Most accounts are non-signers (false), except for payers and authorities that need to authorize operations.
+Tham số boolean cho biết liệu account có phải ký giao dịch hay không. Hầu hết account là non-signer (false), ngoại trừ payer và authority cần ủy quyền các thao tác.
 
-### Execution
+### Thực thi
 
-With accounts and instructions prepared, you can now execute and validate your program logic using Mollusk's execution APIs. Mollusk provides four different execution methods depending on whether you need validation checks and whether you're testing single or multiple instructions.
+Với account và instruction đã chuẩn bị, giờ đây bạn có thể thực thi và xác thực logic chương trình của mình bằng cách sử dụng API thực thi của Mollusk. Mollusk cung cấp bốn phương thức thực thi khác nhau tùy thuộc vào việc bạn có cần kiểm tra xác thực hay không và liệu bạn có đang kiểm thử instruction đơn lẻ hay nhiều instruction.
 
-The simplest execution method processes a single instruction without validation:
+Phương thức thực thi đơn giản nhất xử lý một instruction duy nhất mà không có xác thực:
 
 ```rust
 mollusk.process_instruction(&instruction, &accounts);
 ```
-This returns execution results that you can inspect manually, but doesn't perform automatic validation.
+Phương thức này trả về kết quả thực thi mà bạn có thể kiểm tra thủ công, nhưng không thực hiện xác thực tự động.
 
-For comprehensive testing, use the validation method that allows you to specify expected outcomes:
+Để kiểm thử toàn diện, hãy sử dụng phương thức xác thực cho phép bạn chỉ định kết quả mong đợi:
 
 ```rust
 mollusk.process_and_validate_instruction(
@@ -245,9 +245,9 @@ mollusk.process_and_validate_instruction(
 );
 ```
 
-> We can perform multiple checks on the same account by "bundling" them together like this: `Check::account(&payer).data(&expected_data).owner(&ID).build()`
+> Chúng ta có thể thực hiện nhiều kiểm tra trên cùng một account bằng cách "gộp" chúng lại với nhau như thế này: `Check::account(&payer).data(&expected_data).owner(&ID).build()`
 
-The validation system supports various check types to verify different aspects of execution results. For edge case testing, you can verify that instructions fail as expected:
+Hệ thống xác thực hỗ trợ nhiều loại kiểm tra khác nhau để xác minh các khía cạnh khác nhau của kết quả thực thi. Để kiểm thử trường hợp biên, bạn có thể xác minh rằng instruction thất bại như mong đợi:
 
 ```rust
 mollusk.process_and_validate_instruction(
@@ -259,18 +259,18 @@ mollusk.process_and_validate_instruction(
 );
 ```
 
-For testing complex workflows that require multiple instructions, use the instruction chain methods:
+Để kiểm thử các luồng phức tạp yêu cầu nhiều instruction, hãy sử dụng phương thức instruction chain:
 
 ```rust
 mollusk.process_instruction_chain(
     &[
         (&instruction, &accounts),
-        (&instruction_2, &accounts_2)    
+        (&instruction_2, &accounts_2)
     ]
 );
 ```
 
-Combine multiple instructions with comprehensive validation:
+Kết hợp nhiều instruction với xác thực toàn diện:
 
 ```rust
 mollusk.process_and_validate_instruction_chain(&[
