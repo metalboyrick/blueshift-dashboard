@@ -296,7 +296,7 @@ pub fn harvest_and_withdraw_fees<'info>(ctx: Context<'_, '_, 'info, 'info, Harve
 }
 ```
 
-<ArticleSection name="Updating the Fee" id="updating-the-fee" level="h2" />
+<ArticleSection name="Cập nhật Fee" id="updating-the-fee" level="h2" />
 
 Sau khi đã khởi tạo `Mint` của chúng ta với phần mở rộng `TranferFee`, chúng ta có thể cần cập nhật fee cụ thể đó trong tương lai. Và để đảm bảo rằng người tạo không "rug" những người nắm giữ token của họ với "bait và switch" bằng cách đặt fee rất cao mỗi khi transfer được thực thi, `TranferFee` mới sẽ chỉ được kích hoạt sau 2 epoch.
 

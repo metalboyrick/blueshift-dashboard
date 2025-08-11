@@ -1,31 +1,31 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Token2022 Program
+# Chương trình Token2022
 
-The Token2022 Program, also known as Token Extensions, is a superset of the functionality provided by the Token Program.
+Chương trình Token2022, còn được gọi là Token Extensions, là một superset của chức năng được cung cấp bởi Token Program.
 
-If you want to learn more about what additional functionalities are available and what are the differences with the Legacy token program, go follow [this course](/en/courses/token-2022-program)
+Nếu bạn muốn tìm hiểu thêm về những chức năng bổ sung có sẵn và sự khác biệt với legacy token program, hãy theo dõi [khóa học này](/vi/courses/token-2022-program)
 
-Let's start by installing the required package to work with the SPL Token program using Web3.js:
+Hãy bắt đầu bằng cách cài đặt gói cần thiết để làm việc với SPL Token program sử dụng Web3.js:
 
 ```
 npm i @solana/spl-token
 ```
 
-<ArticleSection name="Mint and Token Accounts" id="mint-and-token-accounts" level="h2" />
+<ArticleSection name="Mint và Token Account" id="mint-and-token-accounts" level="h2" />
 
-If you're familiar with creating `Mint` accounts, `Associated Token` accounts, or `Token` accounts using TypeScript, you'll find that Token2022 follows a very similar pattern.
+Nếu bạn quen thuộc với việc tạo `Mint` account, `Associated Token` account, hoặc `Token` account sử dụng TypeScript, bạn sẽ thấy rằng Token2022 tuân theo một pattern rất tương tự.
 
-The main difference lies in account initialization, as extensions require additional space and must be configured before the mint is finalized.
+Sự khác biệt chính nằm ở việc khởi tạo account, vì các extension yêu cầu không gian bổ sung và phải được cấu hình trước khi mint được hoàn thiện.
 
-### Mint Account with Extensions
+### Mint Account với Extension
 
-When adding extensions to a `Mint`, we need to:
-- Calculate the additional space required for extension data
-- Initialize each extension with its specific configuration
-- Ensure proper ordering of initialization instructions
+Khi thêm extension vào `Mint`, chúng ta cần:
+- Tính toán không gian bổ sung cần thiết cho dữ liệu extension
+- Khởi tạo từng extension với cấu hình cụ thể của nó
+- Đảm bảo thứ tự đúng của các instruction khởi tạo
 
-Here's how to create a mint with the Transfer Fee extension:
+Đây là cách tạo mint với phần mở rộng Transfer Fee:
 
 ```ts
 import {
@@ -90,21 +90,21 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-As you can see, it's pretty straightforward:
-- Generate the `Mint` keypair using the `Keypair.generate()` function.
-- Calculate the length of the `Mint` account with specific extension using the `getMintLen()` function
-- Calculate the minimum lamports needed using the `connection.getMinimumBalanceForRentExemption(mintLen)`
-- Create an account with the correct length, rent and owner
-- Initialize the extension you want on the `Mint` account with the relative functionalities
-- Initialize the `Mint` account
+Như bạn có thể thấy, nó khá đơn giản:
+- Tạo `Mint` keypair sử dụng hàm `Keypair.generate()`.
+- Tính toán độ dài của `Mint` account với extension cụ thể sử dụng hàm `getMintLen()`
+- Tính toán lamport tối thiểu cần thiết sử dụng `connection.getMinimumBalanceForRentExemption(mintLen)`
+- Tạo account với không gian, phí thuê và owner phù hợp
+- Khởi tạo phần mở rộng bạn muốn trên `Mint` account với các chức năng tương ứng
+- Khởi tạo `Mint` account
 
-> A base Mint account without extensions has the same size as a legacy `Mint`. Extensions add their specific data requirements on top of this base size, along with the padding and discriminator that identify the account as a Token2022 `Mint`.
+> Mint account cơ bản khi không có phần mở rộng có cùng kích thước với legacy `Mint`. Các phần mở rộng thêm yêu cầu về dữ liệu cụ thể của chúng lên trên kích thước cơ bản này, cùng với padding và discriminator xác định account là Token2022 `Mint`.
 
-### Associated Token Account with Extensions
+### Associated Token Account với Extension
 
-`Associated Token` accounts comes with the `ImmutableOwner` extension by default. So the only difference between the creation of a Legacy or Token2022 `Token Account` is just the owner program.
+`Associated Token` account đi kèm với extension `ImmutableOwner` theo mặc định. Vì vậy sự khác biệt duy nhất giữa việc tạo Legacy hoặc Token2022 `Token Account` chỉ là owner program.
 
-Here's how to create an `Associated Token` account:
+Đây là cách tạo `Associated Token` account:
 
 ```ts
 const ata = await getAssociatedTokenAddress(
@@ -124,14 +124,14 @@ const createAtaInstructions = createAssociatedTokenAccountIdempotentInstruction(
 )
 ```
 
-### Token Account with Extensions
+### Token Account với Extension
 
-The mechanism creating a `Token` account with extensions is similar to what we did with the `Mint` account:
-- Calculate the additional space required for extension data
-- Initialize each extension with its specific configuration
-- Ensure proper ordering of initialization instructions
+Cơ chế tạo `Token` account với extension tương tự như những gì chúng ta đã làm với `Mint` account:
+- Tính toán không gian bổ sung cần thiết cho dữ liệu extension
+- Khởi tạo từng extension với cấu hình cụ thể của nó
+- Đảm bảo thứ tự đúng của các instruction khởi tạo
 
-Here's how to create a `Token` account with the `CpiGuard` extension:
+Đây là cách tạo `Token` account với extension `CpiGuard`:
 
 ```ts
 const tokenAccount = Keypair.generate();

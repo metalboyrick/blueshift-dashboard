@@ -1,14 +1,14 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Cpi Guard Extension
+# Phần mở rộng CPI Guard
 
-The `CpiGuard` extension is a `Token` account extension that prohibits certain actions inside cross-program invocations, protecting users from malicious programs that might attempt to manipulate their token accounts without explicit consent.
+Phần mở rộng `CpiGuard` là một `Token` account extension ngăn chặn một số hành động bên trong cross-program invocation, bảo vệ người dùng khỏi các chương trình độc hại có thể cố gắng thao tác token account của họ mà không có sự đồng ý rõ ràng.
 
-<ArticleSection name="Initializing the Token Account" id="initializing-the-token-account" level="h2" />
+<ArticleSection name="Khởi tạo Token Account" id="initializing-the-token-account" level="h2" />
 
-To initialie the `CpiGuard` extension on a `Token` account we're going to need the `enableCpiGuard()` function. 
+Để khởi tạo extension `CpiGuard` trên `Token` account, chúng ta sẽ cần hàm `enableCpiGuard()`.
 
-Here's how to create a mint with the Cpi Guard extension:
+Đây là cách tạo mint với phần mở rộng Cpi Guard:
 
 ```ts
 import {
@@ -69,9 +69,9 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-<ArticleSection name="Disabling the CPI Guard" id="disabling-the-cpi-guard" level="h2" />
+<ArticleSection name="Vô hiệu hóa CPI Guard" id="disabling-the-cpi-guard" level="h2" />
 
-When we want to enable some of the behaviours that are blocked by the Cpi guard we can easily disable the guard using the `disableCpiGuard` instruction like so:
+Khi chúng ta muốn tái kích hoạt một số hành vi bị chặn bởi Cpi guard, chúng ta có thể dễ dàng vô hiệu hóa guard bằng cách sử dụng instruction `disableCpiGuard` như thế này:
 
 ```ts
 const disableCpiGuardInstruction = createDisableCpiGuardInstruction(
@@ -82,7 +82,7 @@ const disableCpiGuardInstruction = createDisableCpiGuardInstruction(
 );
 ```
 
-And when we're done and we want to re-add the layer of security we can re-enable using the `enableCpiGuard` instruction like so: 
+Và khi chúng ta hoàn thành và muốn thêm lại lớp bảo mật, chúng ta có thể kích hoạt lại bằng cách sử dụng instruction `enableCpiGuard` như thế này:
 
 ```ts
 const enableCpiGuardInstruction = createEnableCpiGuardInstruction(

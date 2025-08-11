@@ -1,16 +1,16 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# The Transfer Fee Extension
+# Transfer Fee Extension
 
-The `TransferFee` extension is a `Mint` extension that lets the creator set a "tax" on the token that is collected every time somebody performs a swap.
+Phần mở rộng `TransferFee` là một `Mint` extension cho phép creator đặt "thuế" trên token được thu thập mỗi khi ai đó thực hiện swap.
 
-To make sure that the fee recipient doesn't get write-locked every time somebody performs a swap, and to ensure that we can parallelize transactions containing a `Mint` with this extension, the fee is set aside in the recipient's Token Account that only the `Withdraw Authority` can withdraw.
+Để đảm bảo rằng đối tượng nhận phí không bị write-lock mỗi khi ai đó thực hiện swap, và để đảm bảo rằng chúng ta có thể song song hóa các giao dịch chứa `Mint` với extension này, fee được đặt bên trong Token Account của người nhận mà chỉ `Withdraw Authority` mới có thể rút.
 
-<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+<ArticleSection name="Khởi tạo Mint Account" id="initializing-the-mint-account" level="h2" />
 
-To initialie the `TransferFee` extension on a `Mint` account we're going to need the `createInitializeTransferFeeConfigInstruction()` function. 
+Để khởi tạo phần mở rộng `TransferFee` trên `Mint` account, chúng ta sẽ cần hàm `createInitializeTransferFeeConfigInstruction()`.
 
-Here's how to create a mint with the Transfer Fee extension:
+Đây là cách tạo mint với Transfer Fee extension:
 
 ```ts
 import {
@@ -77,13 +77,13 @@ console.log(`Mint created! Check out your TX here: https://explorer.solana.com/t
 
 <ArticleSection name="Transferring Tokens with the Fee" id="transferring-tokens-with-the-fee" level="h2" />
 
-To transfer tokens for `Mint` that have a TransferFee` extension we have to routes:
-- We can use the normal `transferChecked()` instruction and by doing this the calculation of the fee is handled automatically
-- We can use the `tranferCheckedWithFee()` instruction and supply manually the `fee` we're going to pay in that tansfer. This is very useful if we want to make sure to not get "rugged" if the authority change the fee and create a abnormally high fee; it's like setting the slippage for a transfer.
+Để chuyển token cho `Mint` có extension `TransferFee`, chúng ta có hai cách:
+- Chúng ta có thể sử dụng instruction `transferChecked()` bình thường và bằng cách này việc tính toán fee được xử lý tự động
+- Chúng ta có thể sử dụng instruction `tranferCheckedWithFee()` và cung cấp thủ công `fee` mà chúng ta sẽ trả trong transfer đó. Điều này rất hữu ích nếu chúng ta muốn đảm bảo không bị "rug" nếu authority thay đổi fee và tạo ra fee cao bất thường; nó giống như việc đặt slippage cho transfer.
 
-> Even if the authority change the fee, the new fee become active 2 epoch after being set
+> Ngay cả khi authority thay đổi fee, fee mới sẽ trở nên hoạt động sau 2 epoch từ khi được đặt
 
-Here's how to create a transfer using the `tranferCheckedWithFee()` instruction:
+Đây là cách tạo transfer sử dụng instruction `tranferCheckedWithFee()`:
 
 ```ts
 createTransferCheckedWithFeeInstruction(
@@ -105,11 +105,11 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Tokens transferred! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-<ArticleSection name="Harvesting the Fee" id="harvesting-the-fee" level="h2" />
+<ArticleSection name="Thu hoạch Fee" id="harvesting-the-fee" level="h2" />
 
-As pointed in the introduction, the transfer fee stays in the `Token` account that is receiving tokens to avoit write-locking the `Mint` account or the `sourceTokenAccount` for this reason, before being able to withdraw the fee we'll need to be able to search for all the `Token` account that have fees to claim.
+Như đã chỉ ra trong phần giới thiệu, transfer fee ở lại trong `Token` account đang nhận token để tránh write-lock `Mint` account hoặc `sourceTokenAccount` vì lý do này, trước khi có thể rút fee, chúng ta sẽ cần có khả năng tìm kiếm tất cả `Token` account có fee để claim.
 
-We can do this by setting a filter and getting all the accounts that belong to that mint like so:
+Chúng ta có thể làm điều này bằng cách đặt filter và lấy tất cả account thuộc về mint đó như thế này:
 
 ```ts
 // Retrieve all Token Accounts for the Mint Account
@@ -126,7 +126,7 @@ const allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
 });
 ```
 
-And get a list of all the `Token` account that have a fee inside of them by unpacking the `Token` account and using the `getTransferAmoun()` function like so:
+Và lấy danh sách tất cả `Token` account có fee bên trong chúng bằng cách unpack `Token` account và sử dụng hàm `getTransferFeeAmount()` như thế này:
 
 ```ts
 // List of Token Accounts to withdraw fees from
@@ -149,7 +149,7 @@ for (const accountInfo of allAccounts) {
 }
 ```
 
-After that we can use the `withdrawWithheldTokensFromAccounts` instruction with the `Withdraw Authority` to pass in the list of `accountsToWithdrawFrom` like so:
+Sau đó chúng ta có thể sử dụng instruction `withdrawWithheldTokensFromAccounts` với `Withdraw Authority` để truyền vào danh sách `accountsToWithdrawFrom` như thế này:
 
 ```ts
 const harvestInstructions = createWithdrawWithheldTokensFromAccountsInstruction(
@@ -168,11 +168,11 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-<ArticleSection name="Updating the Fee" id="updating-the-fee" level="h2" />
+<ArticleSection name="Cập nhật Fee" id="updating-the-fee" level="h2" />
 
-After having intialized our `Mint` with the `TranferFee` extension, we might need to update that specific fee in the future. And to make sure that the creator doesn't "rug" their token holder with a "bait and switch" by setting the fee very high everytime a transfer is executed the new `TranferFee` will be activated after 2 epoch.
+Sau khi đã khởi tạo `Mint` của chúng ta với extension `TranferFee`, chúng ta có thể cần cập nhật fee cụ thể đó trong tương lai. Và để đảm bảo rằng creator không "rug" token holder của họ với "bait and switch" bằng cách đặt fee rất cao mỗi khi transfer được thực thi, `TranferFee` mới sẽ được kích hoạt sau 2 epoch.
 
-To accomodate for this, this is how the data of the `TransferFee` extension looks like: 
+Để phù hợp với điều này, đây là cách dữ liệu của phần mở rộng `TransferFee` được thể hiện:
 
 ```rust
 pub struct TransferFeeConfig {
@@ -190,7 +190,7 @@ pub struct TransferFee {
 }
 ```
 
-So to change the fee we can use the `setTransferFee` instruction like so:
+Vì vậy để thay đổi fee, chúng ta có thể sử dụng instruction `setTransferFee` như thế này:
 
 ```ts
 const setTransferFeeInstruction = createSetTransferFeeInstruction(
