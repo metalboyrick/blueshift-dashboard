@@ -75,7 +75,7 @@ pub struct Make<'info> {
 ```
 </Codeblock>
 
-**Lưu ý**: Vì chúng ta chỉ cung cấp một `token_program` để đảm bảo rằng CPI không thất bại trong lệnh `take`, nơi chúng ta thực hiện chuyển với cả hai mint, chúng ta cần kiểm tra rằng hai mint được sở hữu bởi cùng một chương trình.
+**Lưu ý**: instruction này chỉ truyền vào 1 token program. Bởi vì để chuyển token cho cả hai mint, chúng ta phải đảm bảo rằng cả 2 mint đều được sở hữu bởi cùng token program (SPL Token hoặc Token-2022), hoặc lời gọi CPI sẽ thất bại.
 
 ### Logic
 
