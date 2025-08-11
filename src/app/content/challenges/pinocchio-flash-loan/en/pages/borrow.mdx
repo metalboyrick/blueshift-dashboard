@@ -230,7 +230,7 @@ for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
 ```
 </Codeblock>
 
-Chúng ta hoàn tất bằng cách sử dụng instruction introspection để thực hiện các kiểm tra cần thiết. Chúng ta xác minh rằng lệnh cuối cùng trong transaction là một lệnh `repay` và nó sử dụng cùng tài khoản `loan` như lệnh `loan` hiện tại của chúng ta.
+We finish by using instruction introspection to perform the necessary checks. We verify that the last instruction in the transaction is a `repay` instruction and that it uses the same `loan` account as our current `loan` instruction.
 
 <Codeblock lang="rust">
 ```rust
@@ -253,4 +253,4 @@ if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts
 ```
 </Codeblock>
 
-> Việc sử dụng một tài khoản `loan` và cấu trúc instruction introspection theo cách này đảm bảo rằng chúng ta thực sự không cần phải thực hiện bất kỳ introspection nào trong lệnh `repay` vì tất cả các kiểm tra hoàn trả sẽ được xử lý bởi tài khoản `loan`.
+> Using a `loan` account and structuring the instruction introspection this way ensures that we don't actually need to do any introspection in the `repay` instruction since all repayment checks will be handled by the `loan` account.
