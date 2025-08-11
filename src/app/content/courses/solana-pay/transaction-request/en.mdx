@@ -1,14 +1,160 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-# Solana Pay
+# Transaction Request
 
-Solana Pay is an open, free-to-use payments framework built on Solana, is available to millions of businesses as an approved app integration on Shopify. Solana Pay is built for instant transactions and near-zero gas fees.
+Transaction requests unlock the full power of Solana Pay by enabling dynamic, server-composed transactions that can handle any type of Solana operation. Unlike transfer requests that contain all payment information in the URL, transaction requests use interactive endpoints to build custom transactions based on real-time data and business logic.
 
-It consist of a JavaScript library for facilitating commerce on Solana by using a token transfer URL scheme. The URL scheme ensures that no matter the wallet or service used, the payment request must be created and interpreted in one standard way.
+<ArticleSection name="Core Functionalities" id="core-functionalities" level="h2" />
 
-Businesses and developers can use Solana Pay to accept payments in SOL or any SPL token without intermediaries or to create custom transaction. 
+Transaction requests follow a simple URL format that points to your server endpoint:
 
-It offers frictionless and portable integration options like payment links, pay now buttons or QR codes on your app, dApp, website, blog, and so much more.
+```
+solana:<link>
+```
 
+The `link` value should be a URL to your API endpoint that can handle both `GET` and `POST` requests. When a user scans a transaction request QR code or clicks a link, their wallet initiates a four-step process that transforms a simple URL into a fully composed transaction ready for signing:
+- Sends a GET request to retrieve display information like your business name and logo.
+- Sends a POST request containing the user's public key. 
+- Your server builds a custom transaction using this information and responds with a base64-encoded serialized transaction. 
+- The wallet presents this transaction to the user for approval and signing.
 
+<ArticleSection name="The API Endpoint" id="the-api-endpoint" level="h2" />
+
+Creating a transaction request endpoint requires handling both `GET` and `POST` requests at the same URL. Using Next.js API Routes as an example, you'll create a file in your `pages/api` folder that exports a handler function:
+
+```ts
+import { NextApiRequest, NextApiResponse } from "next";
+
+export default async function handler(
+  request: NextApiRequest,
+  response: NextApiResponse,
+) {
+  if (request.method === "GET") {
+    return get(response);
+  }
+  if (request.method === "POST") {
+    return post(request, response);
+  }
+  return response.status(405).json({ error: "Method not allowed" });
+}
+```
+
+### GET request
+
+When wallets encounter a transaction request URL, they first issue a `GET` request to gather display information. Your endpoint should return a `JSON` object containing a label that describes your business or service, and an icon URL for visual branding:
+
+```ts
+function get(response: NextApiResponse) {
+  response.status(200).json({
+    label: "Coffee Shop",
+    icon: "https://example.com/logo.png",
+  });
+}
+```
+
+This information helps the user understand what they're about to interact with before proceeding to the actual transaction composition.
+
+### Building Dynamic Transactions
+
+The `POST` request handler is where transaction requests truly shine. Your endpoint receives the user's public key and any query parameters from the original URL, then builds a completely custom transaction:
+
+```ts
+async function post(request: NextApiRequest, response: NextApiResponse) {
+  const { account, reference } = request.body;
+
+  const connection = new Connection(clusterApiUrl("devnet"));
+  const { blockhash } = await connection.getLatestBlockhash();
+
+  const transaction = new Transaction({
+    recentBlockhash: blockhash,
+    feePayer: account,
+  });
+
+  // Add your custom instructions
+  const instruction = SystemProgram.transfer({
+    fromPubkey: new PublicKey(account),
+    toPubkey: merchantWallet,
+    lamports: calculateDynamicAmount(), // Real-time pricing
+  });
+
+  transaction.add(instruction);
+
+  const serializedTransaction = transaction.serialize({
+    requireAllSignatures: false,
+  });
+
+  response.status(200).json({
+    transaction: serializedTransaction.toString("base64"),
+    message: "Purchase processed successfully",
+  });
+}
+```
+
+> Your application doesn't submit the transaction to the network, you won't have access to the transaction signature for tracking purposes.
+
+Transaction requests solve this by including reference values: unique identifiers that get embedded in transactions as non-signer keys.
+
+Include reference parameters in your transaction request URLs, then add them to your transaction instructions. 
+
+This allows you to use Solana's `getSignaturesForAddress` RPC method or the `@solana/pay` library's `findReference` helper to locate and track transaction status.
+
+### Gated Transactions (Optional)
+
+Transaction requests enable sophisticated access control by letting you verify conditions before building transactions. Since you control the endpoint, you can check NFT ownership, whitelist membership, or any other criteria:
+
+```ts
+// Check NFT ownership before building transaction
+const nfts = await metaplex.nfts().findAllByOwner({ owner: account }).run(); 
+
+const hasRequiredNFT = nfts.some(nft => 
+  nft.collection?.address.toString() === requiredCollection
+);
+
+if (!hasRequiredNFT) {
+  return response.status(403).json({ 
+    error: "Access denied: Required NFT not found" 
+  });
+}
+
+// Build transaction only for verified users
+```
+
+### Partial Signing for Enhanced Security (Optional)
+
+For transactions requiring approval from an admin keypair or multi-party authentication, Solana Pay supports partial signing. Your server can add its signature to a transaction before sending it to the user's wallet:
+
+```ts
+const transaction = new Transaction({
+  feePayer: account,
+  blockhash,
+  lastValidBlockHeight,
+});
+
+// Add your instructions requiring admin signature
+transaction.add(customInstruction);
+
+// Partially sign with your admin keypair
+transaction.partialSign(adminKeypair);
+
+// Send to user for final signature
+const serializedTransaction = transaction.serialize({
+  requireAllSignatures: false,
+});
+```
+
+### QR Code Implementation
+
+Transform any transaction request into a scannable QR code using the `@solana/pay` library's `createQR` helper function:
+
+```ts
+import { createQR } from "@solana/pay";
+
+const qr = createQR(
+  "solana:https://yourapi.com/pay?reference=abc123",
+  400,
+  "transparent"
+);
+```
+
+Transaction requests represent the pinnacle of Solana Pay's flexibility: enabling everything from dynamic NFT marketplaces to complex DeFi interactions, all accessible through a simple QR code or URL that works with any Solana wallet.
