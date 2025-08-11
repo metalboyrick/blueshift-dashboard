@@ -69,7 +69,7 @@
       "title": "SPL Token với Web3.js",
       "lessons": {
         "introduction": "Giới thiệu",
-        "mint-to": "Mint token",
+        "mint-to": "Đúc token",
         "transfer": "Chuyển token",
         "burn": "Đốt token",
         "close-account": "Đóng tài khoản",
@@ -83,7 +83,7 @@
       "title": "SPL Token với Anchor",
       "lessons": {
         "introduction": "Giới thiệu",
-        "mint-to": "Mint token",
+        "mint-to": "Đúc token",
         "transfer": "Chuyển token",
         "burn": "Đốt token",
         "close-account": "Đóng tài khoản",
@@ -138,7 +138,7 @@
       }
     },
     "instruction-introspection": {
-      "title": "Nội quan lệnh",
+      "title": "Instruction Introspection",
       "lessons": {
         "introduction": "Giới thiệu",
         "introspection-with-anchor": "Nội quan với Anchor",

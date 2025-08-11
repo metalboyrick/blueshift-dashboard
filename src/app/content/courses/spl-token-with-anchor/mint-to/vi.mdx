@@ -1,16 +1,16 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Mint To Instruction
+# Instruction Mint To
 
-Creates new tokens and deposits them into a specified account. Only the mint authority can perform this operation.
+Đúc một lượng token mới và gửi chúng vào một account được chỉ định. Chỉ mint authority mới có thể thực hiện thao tác này.
 
-Before we can mint any token, we'll need to already have:
-- Initialized a `Mint` account which we hold the `mintAuthority`
-- Initialized a `Token` account or `Associated Token` account where we're going to mint tokens to
+Trước khi chúng ta có thể mint bất kỳ token nào, chúng ta sẽ cần phải có:
+- Account `Mint` đã khởi tạo mà chúng ta giữ `mintAuthority`
+- Account `Token` hoặc account `Associated Token` đã khởi tạo, nơi chúng ta sẽ đúc token đến
 
-> The amount of tokens we mint are "normalized" for decimals. This means that if we want to mint 1 token that has 6 decimals, we'll need to actually put `1_000_000` as amount
+> Số lượng token chúng ta đúc được "chuẩn hóa" với decimal. Điều này có nghĩa là nếu chúng ta muốn đúc 1 token có decimal là 6, chúng ta sẽ cần thực sự đặt `1_000_000` làm amount
 
-This is how the CPI to the `mint_to()` instruction looks like: 
+Đây là cách gọi CPI đến instruction `mint_to()`:
 
 ```rust
 mint_to(
