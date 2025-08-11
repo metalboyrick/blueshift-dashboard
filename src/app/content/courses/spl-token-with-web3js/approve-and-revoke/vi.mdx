@@ -1,24 +1,24 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Approve and Revoke Instructions
+# Instruction Approve và Revoke
 
-Approve grants a delegate the authority to transfer a specific amount of tokens on behalf of the account owner. This enables programmatic token transfers without giving full account control.
+Approve cung cấp ủy quyền để chuyển một số lượng token cụ thể thay mặt cho chủ sở hữu account. Điều này cho phép chuyển token mà không cần cấp toàn quyền kiểm soát account.
 
-> We set an "approved" amount, and the delegate can transfer only up to that amount
+> Chúng ta đặt một số lượng "được phê duyệt", và đối tượng được ủy nhiệm chỉ có thể chuyển tối đa số lượng đó
 
-Revoke removes the current delegate's authority over the account, returning full control to the account owner.
+Revoke loại bỏ quyền của đối tượng được ủy nhiệm hiện tại đối với account, trả lại toàn quyền kiểm soát cho chủ sở hữu account.
 
-> Immediately cancels any existing delegation and only the account owner can revoke delegation (not the delegate itself)
+> Ngay lập tức hủy bỏ bất kỳ đối tượng được ủy nhiệm hiện có nào và chỉ chủ sở hữu account mới có thể revoke delegation (không phải bản thân đối tượng được ủy nhiệm)
 
-Before we can delegate or revoke any token account, we'll need to already have:
-- Initialized a `Mint` account
-- Initialized a `Token` account or `Associated Token` account where we're going to take control of
+Trước khi chúng ta có thể delegate hoặc revoke bất kỳ token account nào, chúng ta sẽ cần phải có:
+- Account `Mint` đã được khởi tạo
+- Account `Token` hoặc account `Associated Token` đã được khởi tạo nơi chúng ta sẽ kiểm soát
 
-> The amount of tokens we mint are "normalized" for decimals. This means that if we want to mint 1 token that has 6 decimals, we'll need to actually put `1e6` as amount
+> Số lượng token chúng ta đúc được "chuẩn hóa" với decimal. Điều này có nghĩa là nếu chúng ta muốn đúc 1 token có decimal là 6, chúng ta sẽ cần thực sự đặt `1_000_000` làm amount
 
-<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+<ArticleSection name="Instruction thô" id="raw-instruction" level="h2" />
 
-By using just "raw" instruction without any abstraction, this is how approve a token would look like:
+Bằng cách chỉ sử dụng instruction "thô" mà không có bất kỳ abstraction nào, approve token:
 
 ```ts
 const tokenAccount = Keypair.generate();
@@ -54,7 +54,7 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Token accounts created and delegated! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-By using just "raw" instruction without any abstraction, this is how revoke a token would look like:
+Bằng cách chỉ sử dụng instruction "thô" mà không có bất kỳ abstraction nào, đây là cách revoke token:
 
 ```ts
 // Revoke the delegate of an ATA 
@@ -70,9 +70,9 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Token account delegate revoked! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+<ArticleSection name="Instruction được trừu tượng hóa" id="abstracted-instruction" level="h2" />
 
-This is how the same instructions would look like abstracted away with the `approve()` instruction:
+Đây là cách các instruction tương tự sẽ trông như thế nào được khi được trừu tượng hóa với instruction `approve()`:
 
 ```ts
 const tokenAccount = Keypair.generate();
@@ -98,7 +98,7 @@ let tx = await approve(
 console.log(`Succesfully Delegated!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
 ```
 
-This is how the same instructions would look like abstracted away with the `revoke()` instruction:
+Đây là cách các instruction tương tự sẽ trông như thế nào khi được trừu tượng hóa với instruction `revoke()`:
 
 ```ts
 let tx = await revoke(
