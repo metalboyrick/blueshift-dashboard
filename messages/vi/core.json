@@ -4,12 +4,6 @@
     "description": "Học cách viết các chương trình on-chain của riêng bạn từ những giảng viên hàng đầu trong hệ sinh thái Solana.",
     "keywords": "Solana, Blueshift, học tập, chứng chỉ, vault, escrow, AMM, native, pinocchio, quantum, SPL token"
   },
-  "locales_native_name": {
-    "en": "Tiếng Anh",
-    "zh-hant": "Tiếng Trung",
-    "fr": "Tiếng Pháp",
-    "vi": "Tiếng Việt"
-  },
   "header": {
     "lessons": "Bài học",
     "courses": "Khóa học",
