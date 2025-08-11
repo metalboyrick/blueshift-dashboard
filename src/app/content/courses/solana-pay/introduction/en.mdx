@@ -1,0 +1,64 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Solana Pay
+
+Solana Pay is a revolutionary open-source payments framework that transforms how businesses handle transactions on Solana. 
+
+Built for instant payments with near-zero fees, it's already available to millions of businesses as an approved integration on Shopify, demonstrating its real-world adoption and reliability.
+
+At its core, Solana Pay is a JavaScript library that facilitates seamless commerce through a standardized token transfer URL scheme. 
+
+This standardization ensures that regardless of the wallet or service used, payment requests are created and interpreted consistently across the entire ecosystem.
+
+<ArticleSection name="Core Functionalities" id="core-functionalities" level="h2" />
+
+Solana Pay's revolutionary approach eliminates the traditional payment processing stack entirely, enabling businesses to receive payments in SOL or any SPL token directly into their wallets without banks, payment processors, or other costly intermediaries taking cuts. 
+
+The framework achieves true universal compatibility by establishing a standardized protocol that works seamlessly across every Solana wallet and application, ensuring that once you implement Solana Pay, your payment system works with the entire ecosystem automatically. 
+
+Its integration flexibility ranges from simple one-click payment links that work in any messaging app to sophisticated custom transaction flows that can handle complex multi-party commerce scenarios, NFT marketplaces, and DeFi protocols. 
+
+Unlike traditional payment rails that take days to settle, Solana Pay leverages the network's sub-second finality to provide genuine instant settlement where funds arrive in merchant accounts immediately upon customer confirmation. 
+
+The user experience transcends typical payment friction through elegant solutions like scannable QR codes for in-person purchases, embeddable pay buttons that require no wallet connections, and shareable links that turn any social platform into a commerce channel.
+
+Solana Pay provides two fundamental request types that power its versatile payment ecosystem:
+
+### Transfer Requests
+
+To handle standard commerce transactions, Solana Pay uses Transfer Requests: non-interactive URLs that directly specify SOL or SPL token transfers. These requests are perfect for straightforward payment scenarios where the transaction details are predetermined.
+
+Everything is encoded in the URL making sure that Wallet can use the URL parameters to build the transaction immediately without any additional HTTP requests or confirmations.
+
+> Perfect for: E-commerce checkouts, donation buttons, subscription payments, and any scenario requiring simple token transfers.
+
+Since the main use of Solana pay is commerce, it offers a non-interactive request for a SOL or SPL Token transfer described through an URL request out of the box. 
+
+The parameters in the URL are used by a wallet to directly compose the transaction.
+
+### Transaction Requests
+
+To enable complex commerce scenarios, Solana Pay offers Transaction Requests: interactive URLs that can compose any type of Solana transaction. These requests unlock unlimited possibilities by allowing server-side transaction composition based on dynamic parameters.
+
+Server interaction enables wallets to make HTTP requests for dynamic transaction composition rather than static URL parsing allowing the creation of any valid Solana transaction, from simple swaps to complex multi-instruction DeFi protocols. 
+
+Additionally, since everything happens inrReal-time, transactions are built using the most current state, pricing, and availability data at the moment of request.
+
+> Perfect for: NFT purchases with dynamic pricing, multi-step DeFi interactions, loyalty program redemptions, and complex business logic requiring real-time data.
+
+<ArticleSection name="Integration and Capabilities" id="integration-capabilities" level="h2" />
+
+Solana Pay's versatility shines through its simple yet powerful integration options: 
+- Generate QR codes for instant in-person payments.
+- Create shareable links that work across any platform
+- Embed pay buttons directly into applications for seamless checkout experiences. 
+
+The framework supports dynamic commerce scenarios where transaction details adjust based on real-time conditions like inventory levels or user preferences.
+
+Beyond basic payments, Solana Pay enables sophisticated blockchain commerce through transaction gating for conditional access, partial signing for multi-party workflows, and custom transaction logic that integrates with existing business systems. 
+
+The specification ensures cross-platform consistency, delivering identical experiences across mobile wallets, browser extensions, and desktop applications without additional development effort.
+
+> The Solana Pay specification fundamentally transforms blockchain payments by replacing complex wallet integrations with simple, standardized URLs that work everywhere.
+
