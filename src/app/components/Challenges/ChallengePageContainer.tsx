@@ -38,23 +38,41 @@ export default async function ChallengePageContainer({
       notFound();
     }
     try {
+      // Try to load the localized version first
       const mdxModule = await import(
         `@/app/content/challenges/${challengeSlug}/${locale}/pages/${pageSlug}.mdx`
       );
       MdxComponent = mdxModule.default;
     } catch (error) {
-      console.error(error);
-      notFound();
+      try {
+        // Fall back to English version if localized version doesn't exist
+        const mdxModule = await import(
+          `@/app/content/challenges/${challengeSlug}/en/pages/${pageSlug}.mdx`
+        );
+        MdxComponent = mdxModule.default;
+      } catch (fallbackError) {
+        console.error("Failed to load both localized and English versions:", error, fallbackError);
+        notFound();
+      }
     }
   } else {
     try {
+      // Try to load the localized version first
       const mdxModule = await import(
         `@/app/content/challenges/${challengeSlug}/${locale}/challenge.mdx`
       );
       MdxComponent = mdxModule.default;
     } catch (error) {
-      console.error(error);
-      notFound();
+      try {
+        // Fall back to English version if localized version doesn't exist
+        const mdxModule = await import(
+          `@/app/content/challenges/${challengeSlug}/en/challenge.mdx`
+        );
+        MdxComponent = mdxModule.default;
+      } catch (fallbackError) {
+        console.error("Failed to load both localized and English versions:", error, fallbackError);
+        notFound();
+      }
     }
   }
 
@@ -73,19 +91,19 @@ export default async function ChallengePageContainer({
       if (accountInfo) {
         collectionSize = decodeCoreCollectionNumMinted(accountInfo.data);
         if (collectionSize === null) {
-          console.error(
-            `Failed to decode num_minted for collection ${collectionMintAddress}`,
+          console.warn(
+            `Could not decode num_minted for collection ${collectionMintAddress}`,
           );
         }
       } else {
-        console.error(
-          `Failed to fetch account info for ${collectionMintAddress}`,
+        console.warn(
+          `Could not fetch account info for ${collectionMintAddress}`,
         );
       }
     } catch (error) {
-      console.error(
-        `Failed to fetch collection details for ${collectionMintAddress}:`,
-        error,
+      console.warn(
+        `Could not fetch collection details for ${collectionMintAddress}:`,
+        error?.message || error,
       );
     }
   }

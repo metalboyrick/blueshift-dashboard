@@ -29,12 +29,22 @@ export default async function ChallengePage({ params }: ChallengePageProps) {
 
   let ChallengeContent;
   try {
+    // Try to load the localized version first
     const challengeModule = await import(
       `@/app/content/challenges/${challengeMetadata.slug}/${locale}/verify.mdx`
     );
     ChallengeContent = challengeModule.default;
-  } catch {
-    notFound();
+  } catch (error) {
+    try {
+      // Fall back to English version if localized version doesn't exist
+      const challengeModule = await import(
+        `@/app/content/challenges/${challengeMetadata.slug}/en/verify.mdx`
+      );
+      ChallengeContent = challengeModule.default;
+    } catch (fallbackError) {
+      console.error("Failed to load both localized and English versions:", error, fallbackError);
+      notFound();
+    }
   }
 
   return (
