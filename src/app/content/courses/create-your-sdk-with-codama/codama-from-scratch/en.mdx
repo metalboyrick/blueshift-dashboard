@@ -29,40 +29,40 @@ They define the schema without containing actual values.
 To differentiate between accounts and instructions in our program, we use discriminators. There are different methods to accomplish this, and the `DiscriminatorNode` provides all available options:
 
 - `ConstantDiscriminatorNode`: Used to describe a constant value at a given offset. It takes a `ConstantValueNode` as the constant and a `number` as the offset:
-
-```ts
-const discriminatorNode = constantDiscriminatorNode(constantValueNodeFromString('utf8', 'Hello'), 64);
-```
+    
+    ```ts
+    const discriminatorNode = constantDiscriminatorNode(constantValueNodeFromString('utf8', 'Hello'), 64);
+    ```
 
 - `FieldDiscriminatorNode`: Used to describe a default value of a struct field at a given offset. It takes a `CamelCaseString` as the field name and a `number` as the offset:
+    
+    ```ts
+    const discriminatorNode = fieldDiscriminatorNode('accountState', 64);
+    ```
 
-```ts
-const discriminatorNode = fieldDiscriminatorNode('accountState', 64);
-```
+    > The field must be available in the account data or instruction arguments and it must have a default value. For instance:
 
-> The field must be available in the struct, like this:
-
-```ts
-accountNode({
-    data: structTypeNode([
-        structFieldTypeNode({
-            name: 'discriminator',
-            type: numberTypeNode('u32'),
-            defaultValue: numberValueNode(42),
-            defaultValueStrategy: 'omitted',
-        }),
+    ```ts
+    accountNode({
+        data: structTypeNode([
+            structFieldTypeNode({
+                name: 'discriminator',
+                type: numberTypeNode('u32'),
+                defaultValue: numberValueNode(42),
+                defaultValueStrategy: 'omitted',
+            }),
+            // ...
+        ]),
+        discriminators: [fieldDiscriminatorNode('discriminator')],
         // ...
-    ]),
-    discriminators: [fieldDiscriminatorNode('discriminator')],
-    // ...
-});
-```
+    });
+    ```
 
-- `SizeDiscriminatorNode`: Used to describe discrimination based on size. It takes a `number` as the size parameter:
-
-```ts
-const discriminatorNode = sizeDiscriminatorNode(165);
-```
+- `SizeDiscriminatorNode`: Used to distinguish accounts or instructions based on the size of their data. It takes a `number` as the size parameter:
+    
+    ```ts
+    const discriminatorNode = sizeDiscriminatorNode(165);
+    ```
 
 > `DiscriminatorNode` is a type alias and cannot be used directly as a node. When a `DiscriminatorNode` is required, use one of the specific discriminator node types instead.
 
@@ -72,27 +72,31 @@ To define seeds for Program Derived Addresses (PDAs), we use `PdaSeedNode`. Thes
 
 - `ConstantPdaSeedNode`: Used to describe a constant seed for a program-derived address. It takes a `TypeNode` and `ValueNode` in combination:
 
-```ts
-const pdaSeedNode = constantPdaSeedNode(stringTypeNode('utf8'), stringValueNode('auth'));
-```
+    ```ts
+    const pdaSeedNode = constantPdaSeedNode(stringTypeNode('utf8'), stringValueNode('auth'));
+    ```
+
+    > A `constantPdaSeedNodeFromString` helper can also be used to define string-based constants more easily. For instance, the following example is equivalent to the one above:
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNodeFromString('utf8', 'auth');
+    ```
 
 - `VariablePdaSeedNode`: Used to describe a variable seed for a program-derived address. It takes a name and a `TypeNode`:
 
-```ts
-const pdaSeedNode = variablePdaSeedNode('authority', publicKeyTypeNode())
-```
+    ```ts
+    const pdaSeedNode = variablePdaSeedNode('authority', publicKeyTypeNode())
+    ```
 
 Here's how they're used in a `pdaNode`:
 
 ```ts
-const constantPda = pdaNode({
-    name: 'tickets',
-    seeds: [constantPdaSeedNodeFromString('utf8', 'tickets')],
-}); 
-
-const variablePda = pdaNode({
-    name: 'ticket',
-    seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+const counterPda = pdaNode({
+    name: 'counter',
+    seeds: [
+        constantPdaSeedNodeFromString('utf8', 'counter'),
+        variablePdaSeedNode('authority', publicKeyTypeNode()),
+    ],
 });
 ```
 
@@ -131,7 +135,7 @@ const node = programNode({
 });
 ```
 
-In the next section we'll examine all these elements in detail.
+In the next sections we'll examine all these elements in detail.
 
 ### Account Node
 
@@ -151,18 +155,11 @@ const node = accountNode({
     ]),
     discriminators: [sizeDiscriminatorNode(72)],
     size: 72,
-    pdas: [
-        pdaNode({
-            name: 'associated_token_account',
-            seeds: [
-                constantPdaSeedNodeFromString('utf8', 'token'),
-                variablePdaSeedNode('mint', publicKeyTypeNode()),
-                variablePdaSeedNode('owner', publicKeyTypeNode()),
-            ],
-        }),
-    ],
+    pda: pdaLinkNode("associatedTokenAccount"),
 });
 ```
+
+> The `AccountNode` does not store an array of `PdaNode` but a single optional link to a `PdaNode` via a `PdaLinkNode` so if a `PdaNode` is defined inside a `ProgramNode` the two can be linked together here.
 
 ### Instruction Node
 
@@ -170,13 +167,15 @@ To define program instructions, we use `InstructionNode`. This node represents a
 
 Additionally, you can include optional accounts. Based on your program's design, these optional accounts can be resolved in two ways: by being omitted or by passing the program ID as an account. You can select the resolution method using the `optionalAccountStrategy: "omitted" | "programId"` field.
 
+> When the `optionalAccountStrategy` is not provided, the `programId` strategy is assumed by default.
+
 The docs field can be used to add documentation explaining what this instruction accomplishes within the program.
 
 ```ts
 const node = instructionNode({
     name: 'increment',
-    discriminators: [constantDiscriminatorNode(constantValueNode(numberTypeNode("u8"), numberValueNode(1)))],
-        arguments: [
+    discriminators: [fieldDiscriminatorNode('discriminator')],
+    arguments: [
         instructionArgumentNode({
             name: 'discriminator',
             type: numberTypeNode('u8'),

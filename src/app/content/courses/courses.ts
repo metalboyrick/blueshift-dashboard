@@ -217,7 +217,8 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "introduction" },
       { slug: "codama-from-scratch" },
       { slug: "codama-with-anchor" },
-      { slug: "conclusions" },
+      { slug: "updating-codama-idl" },
+      { slug: "conclusion" },
     ],
   },
 ]);
