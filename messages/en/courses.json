@@ -164,6 +164,15 @@
         "advanced-functionalities": "Advanced Functionalities",
         "conclusions": "Conclusions"
       }
+    },
+    "solana-pay": {
+      "title": "Solana Pay",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-request": "Transfer Request",
+        "transaction-request": "Transaction Request",
+        "conclusion": "Conclusion"
+      }
     }
   }
 }

@@ -222,6 +222,19 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusions" },
     ],
   },
+  {
+    slug: "solana-pay",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "introduction" },
+      { slug: "transfer-request" },
+      { slug: "transaction-request" },
+      { slug: "conclusion" },
+    ],
+  },
 ]);
 
 const releasedCoursesSetting = process.env.NEXT_PUBLIC_RELEASED_COURSES?.trim();
