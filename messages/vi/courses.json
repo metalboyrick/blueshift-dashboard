@@ -31,6 +31,17 @@
         "conclusions": "Kết luận"
       }
     },
+    "introduction-to-assembly": {
+      "title": "Giới thiệu về Assembly",
+      "lessons": {
+        "assembly-101": "Assembly 101",
+        "registers-and-memory": "Thanh ghi và bộ nhớ",
+        "instructions": "Các hướng dẫn",
+        "tooling": "Công cụ",
+        "program-example": "Chương trình mẫu",
+        "conclusion": "Kết luận"
+      }
+    },
     "program-security": {
       "title": "Bảo mật chương trình",
       "lessons": {
@@ -152,6 +163,16 @@
         "mollusk-101": "Mollusk cơ bản",
         "advanced-functionalities": "Chức năng nâng cao",
         "conclusions": "Kết luận"
+      }
+    },
+    "create-your-sdk-with-codama": {
+      "title": "Tạo SDK của bạn với Codama",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "codama-from-scratch": "Tạo Codama IDL từ đầu",
+        "codama-with-anchor": "Tạo Codama IDL với Anchor",
+        "updating-codama-idl": "Cập nhật Codama IDL",
+        "conclusion": "Kết luận"
       }
     }
   }

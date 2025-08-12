@@ -172,7 +172,35 @@
       "title": "Assembly Memo",
       "requirements": {
         "log": {
-          "title": "Thử thách 1: Ghi dữ liệu lệnh vào nhật ký chương trình"
+          "title": "Challenge 1: Kiểm thử Memo"
+        },
+        "log_different": {
+            "title": "Challenge 2: Kiểm thử Memo with đầu vào khác"
+        }
+      }
+    },
+    "assembly-slippage": {
+      "title": "Assembly Slippage",
+      "requirements": {
+        "slippage": {
+          "title": "Challenge 1: Kiểm thử Slippage với SPL-Token"
+        },
+        "slippage_failure": {
+          "title": "Challenge 2: Kiểm thử trường hợp thất bại của Slippage"
+        },
+        "slippage_token2022": {
+          "title": "Challenge 3: Kiểm thử Slippage với Token2022"
+        }
+      }
+    },
+    "assembly-timeout": {
+      "title": "Assembly Timeout",
+      "requirements": {
+        "timeout": {
+          "title": "Challenge 1: Kiểm thử Timeout"
+        },
+        "timeout_failure": {
+          "title": "Challenge 2: Kiểm thử trường hợp thất bại của Timeout"
         }
       }
     },
@@ -180,7 +208,7 @@
       "title": "Mint SPL Token",
       "requirements": {
         "create_mint_account": {
-          "title": "Thử thách 1: Tạo tài khoản mint token"
+          "title": "Thử thách 1: Tạo tài khoản mint"
         },
         "initialize_mint": {
           "title": "Thử thách 2: Khởi tạo mint"
