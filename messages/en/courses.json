@@ -72,7 +72,7 @@
         "introduction": "Introduction",
         "metaplex-token-metadata": "Metaplex Token Metadata",
         "metaplex-core": "Metaplex Core",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "spl-token-with-web3js": {

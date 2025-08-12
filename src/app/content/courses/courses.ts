@@ -101,7 +101,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "introduction" },
       { slug: "metaplex-token-metadata" },
       { slug: "metaplex-core" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
