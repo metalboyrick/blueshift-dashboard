@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { generateBannerData } from "@/lib/banners/banner-generator";
+import sharp from "sharp";
 import { courses } from "@/app/content/courses/courses";
 import { challenges } from "@/app/content/challenges/challenges";
 
@@ -62,7 +63,20 @@ async function generateBannersFor(
     });
 
     if (bannerInfo && bannerInfo.data) {
-      await fs.writeFile(filePath, Buffer.from(bannerInfo.data));
+      // Optimize using sharp before writing to disk
+      let outputBuffer: Buffer;
+      try {
+        outputBuffer = await sharp(bannerInfo.data)
+          .png({ compressionLevel: 9, adaptiveFiltering: true, palette: true })
+          .toBuffer();
+        console.log(`Optimized PNG with sharp: ${filePath}`);
+      } catch (optErr) {
+        console.warn(`PNG optimization failed for ${filePath}:`, optErr);
+        outputBuffer = Buffer.from(bannerInfo.data);
+      }
+
+      await fs.writeFile(filePath, outputBuffer);
+
       existingFiles.add(filename);
       console.log(`Successfully generated and saved: ${filePath}`);
     } else {
