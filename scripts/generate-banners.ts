@@ -21,9 +21,13 @@ async function generateBannersFor(
   items: any[],
   type: "course" | "challenge",
   outputDir: string,
+  options: { force: boolean },
 ) {
   await fs.mkdir(outputDir, { recursive: true });
   console.log(`Output directory ensured: ${outputDir}`);
+
+  // Snapshot of existing files
+  const existingFiles = new Set(await fs.readdir(outputDir));
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     console.error(`No ${type}s found to generate banners for.`);
@@ -41,6 +45,15 @@ async function generateBannersFor(
     }
 
     const itemSlug = item.slug;
+    const filename = `${itemSlug}.png`;
+    const filePath = path.join(outputDir, filename);
+
+    // Skip if already exists and not forcing
+    if (!options.force && existingFiles.has(filename)) {
+      console.log(`Skipping existing ${type} banner: ${filePath}`);
+      continue;
+    }
+
     console.log(`Processing ${type} overview for: ${itemSlug}`);
 
     const bannerInfo = await generateBannerData({
@@ -49,11 +62,8 @@ async function generateBannersFor(
     });
 
     if (bannerInfo && bannerInfo.data) {
-      const safeItemSlug = itemSlug.replace(/[^a-zA-Z0-9_\-]/g, "");
-      const filename = `${safeItemSlug}.png`;
-      const filePath = path.join(outputDir, filename);
-
       await fs.writeFile(filePath, Buffer.from(bannerInfo.data));
+      existingFiles.add(filename);
       console.log(`Successfully generated and saved: ${filePath}`);
     } else {
       console.warn(
@@ -64,8 +74,13 @@ async function generateBannersFor(
 }
 
 async function main() {
-  await generateBannersFor(courses, "course", COURSE_BANNERS_DIR);
-  await generateBannersFor(challenges, "challenge", CHALLENGE_BANNERS_DIR);
+  const argv = process.argv.slice(2);
+  const force = argv.includes("-f") || argv.includes("--force");
+
+  await generateBannersFor(courses, "course", COURSE_BANNERS_DIR, { force });
+  await generateBannersFor(challenges, "challenge", CHALLENGE_BANNERS_DIR, {
+    force,
+  });
 
   console.log("Banner generation process complete.");
 }
