@@ -19,87 +19,134 @@ The `link` value should be a URL to your API endpoint that can handle both `GET`
 - Your server builds a custom transaction using this information and responds with a base64-encoded serialized transaction. 
 - The wallet presents this transaction to the user for approval and signing.
 
+> You can include query parameters, like amount and reference, in the URL to access it from your endpoint like this: `solana:<link>?<query_parameters>`.
+
 <ArticleSection name="The API Endpoint" id="the-api-endpoint" level="h2" />
 
-Creating a transaction request endpoint requires handling both `GET` and `POST` requests at the same URL. Using Next.js API Routes as an example, you'll create a file in your `pages/api` folder that exports a handler function:
+Creating a transaction request endpoint requires handling both GET and POST requests at the same URL. Using Next.js App Router as an example, you'll create a route.ts file in your `app/api/pay` folder:
 
 ```ts
-import { NextApiRequest, NextApiResponse } from "next";
+import { NextRequest, NextResponse } from 'next/server';
 
-export default async function handler(
-  request: NextApiRequest,
-  response: NextApiResponse,
-) {
-  if (request.method === "GET") {
-    return get(response);
-  }
-  if (request.method === "POST") {
-    return post(request, response);
-  }
-  return response.status(405).json({ error: "Method not allowed" });
+// CORS headers for wallet compatibility
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
+export async function GET() {
+  // Implementation details below...
+}
+
+export async function POST(request: NextRequest) {
+  // Implementation details below...
 }
 ```
 
-### GET request
+> Since wallets make cross-origin requests to your endpoint, CORS headers are mandatory. Without them, wallet requests will fail with CORS errors.
+
+### GET Request
 
 When wallets encounter a transaction request URL, they first issue a `GET` request to gather display information. Your endpoint should return a `JSON` object containing a label that describes your business or service, and an icon URL for visual branding:
 
 ```ts
-function get(response: NextApiResponse) {
-  response.status(200).json({
-    label: "Coffee Shop",
-    icon: "https://example.com/logo.png",
-  });
+export async function GET() {
+  return NextResponse.json({
+    label: "Coffee Shop Demo",
+    icon: "https://solana.com/src/img/branding/solanaLogoMark.svg",
+  }, { headers: corsHeaders });
+}
+```
+
+The response will look like this:
+
+```json
+{
+  "label": "Coffee Shop Demo",
+  "icon": "https://solana.com/src/img/branding/solanaLogoMark.svg"
 }
 ```
 
 This information helps the user understand what they're about to interact with before proceeding to the actual transaction composition.
 
-### Building Dynamic Transactions
+### POST Request
 
 The `POST` request handler is where transaction requests truly shine. Your endpoint receives the user's public key and any query parameters from the original URL, then builds a completely custom transaction:
 
 ```ts
-async function post(request: NextApiRequest, response: NextApiResponse) {
-  const { account, reference } = request.body;
+export async function POST(request: NextRequest) {
+  // Parse user's public key from request body
+  const body = await request.json();
+  const { account } = body;
 
+  // Connect to Solana network
   const connection = new Connection(clusterApiUrl("devnet"));
-  const { blockhash } = await connection.getLatestBlockhash();
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
+  // Create transaction with user as fee payer
   const transaction = new Transaction({
-    recentBlockhash: blockhash,
-    feePayer: account,
+    feePayer: new PublicKey(account),
+    blockhash: blockhash,
+    lastValidBlockHeight: lastValidBlockHeight,
   });
 
-  // Add your custom instructions
-  const instruction = SystemProgram.transfer({
-    fromPubkey: new PublicKey(account),
-    toPubkey: merchantWallet,
-    lamports: calculateDynamicAmount(), // Real-time pricing
-  });
+  // ========================================
+  // ADD YOUR CUSTOM INSTRUCTIONS HERE
+  // ========================================
+  
+  // This is where you build your transaction logic.
+  // You can add any combination of instructions:
+  
+  // Example 1: Simple SOL transfer
+  // const transferInstruction = SystemProgram.transfer({
+  //   fromPubkey: new PublicKey(account),
+  //   toPubkey: new PublicKey("YOUR_MERCHANT_WALLET"),
+  //   lamports: LAMPORTS_PER_SOL * 0.01, // 0.01 SOL
+  // });
+  // transaction.add(transferInstruction);
 
-  transaction.add(instruction);
-
+  // Serialize the transaction for the wallet
   const serializedTransaction = transaction.serialize({
     requireAllSignatures: false,
+    verifySignatures: false,
   });
 
-  response.status(200).json({
-    transaction: serializedTransaction.toString("base64"),
-    message: "Purchase processed successfully",
-  });
+  return NextResponse.json({
+    transaction: serializedTransaction.toString('base64'),
+    message: "Transaction created successfully", // Customize this message
+  }, { headers: corsHeaders });
 }
 ```
 
-> Your application doesn't submit the transaction to the network, you won't have access to the transaction signature for tracking purposes.
+> Your application doesn't submit the transaction to the network so you won't have access to the transaction signature for tracking purposes. You can use reference as explained in the [Introduction Lesson](/en/courses/solana-pay/introduction#reference)
 
-Transaction requests solve this by including reference values: unique identifiers that get embedded in transactions as non-signer keys.
+<ArticleSection name="QR Code Generation" id="qr-code-generation" level="h2" />
 
-Include reference parameters in your transaction request URLs, then add them to your transaction instructions. 
+Transform any transaction request into a scannable QR code using the` @solana/pay library`:
 
-This allows you to use Solana's `getSignaturesForAddress` RPC method or the `@solana/pay` library's `findReference` helper to locate and track transaction status.
+```ts
+import { createQR, encodeURL, TransactionRequestURLFields } from '@solana/pay'; 
 
-### Gated Transactions (Optional)
+const urlParams: TransactionRequestURLFields = {
+  link: new URL("https://yourapi.com/pay"),
+};
+const solanaUrl = encodeURL(urlParams);
+
+const qr = createQR(
+  solanaUrl,
+  400,
+  "transparent"
+);
+```
+
+<ArticleSection name="Advanced Features" id="advanced-features" level="h2" />
+
+### Gated Transactions
 
 Transaction requests enable sophisticated access control by letting you verify conditions before building transactions. Since you control the endpoint, you can check NFT ownership, whitelist membership, or any other criteria:
 
@@ -120,7 +167,7 @@ if (!hasRequiredNFT) {
 // Build transaction only for verified users
 ```
 
-### Partial Signing for Enhanced Security (Optional)
+### Partial Signing for Enhanced Security
 
 For transactions requiring approval from an admin keypair or multi-party authentication, Solana Pay supports partial signing. Your server can add its signature to a transaction before sending it to the user's wallet:
 
@@ -142,19 +189,3 @@ const serializedTransaction = transaction.serialize({
   requireAllSignatures: false,
 });
 ```
-
-### QR Code Implementation
-
-Transform any transaction request into a scannable QR code using the `@solana/pay` library's `createQR` helper function:
-
-```ts
-import { createQR } from "@solana/pay";
-
-const qr = createQR(
-  "solana:https://yourapi.com/pay?reference=abc123",
-  400,
-  "transparent"
-);
-```
-
-Transaction requests represent the pinnacle of Solana Pay's flexibility: enabling everything from dynamic NFT marketplaces to complex DeFi interactions, all accessible through a simple QR code or URL that works with any Solana wallet.
