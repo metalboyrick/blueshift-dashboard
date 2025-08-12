@@ -135,25 +135,6 @@ export async function POST(request: NextRequest) {
 
 > Your application doesn't submit the transaction to the network, so you won't have access to the transaction signature for tracking purposes. Use reference parameters as explained in the [Introduction Lesson](/en/courses/solana-pay/introduction#reference)
 
-<ArticleSection name="QR Code Generation" id="qr-code-generation" level="h2" />
-
-Transform any transaction request into a scannable QR code using the `@solana/pay` library:
-
-```ts
-import { createQR, encodeURL, TransactionRequestURLFields } from '@solana/pay'; 
-
-const urlParams: TransactionRequestURLFields = {
-  link: new URL("https://yourapi.com/pay"),
-};
-const solanaUrl = encodeURL(urlParams);
-
-const qr = createQR(
-  solanaUrl,
-  400,
-  "transparent"
-);
-```
-
 <ArticleSection name="Advanced Capabilities" id="advanced-capabilities" level="h2" />
 
 ### Gated Transactions
@@ -199,3 +180,7 @@ const serializedTransaction = transaction.serialize({
   requireAllSignatures: false,
 });
 ```
+
+<ArticleSection name="Example" id="example" level="h2" />
+
+As fully fledged example, you can use the [Solana NFT Minter Example](https://github.com/solana-developers/solana-pay-nft-minter/tree/main) from Solana Foundation

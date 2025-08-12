@@ -99,3 +99,22 @@ useEffect(() => {
     };
 }, [reference]);
 ```
+
+<ArticleSection name="QR Code Generation" id="qr-code-generation" level="h2" />
+
+Transform any transaction request into a scannable QR code using the `@solana/pay` library:
+
+```ts
+import { createQR, encodeURL, TransactionRequestURLFields } from '@solana/pay'; 
+
+const urlParams: TransactionRequestURLFields = {
+  link: new URL("https://yourapi.com/pay"),
+};
+const solanaUrl = encodeURL(urlParams);
+
+const qr = createQR(
+  solanaUrl,
+  400,
+  "transparent"
+);
+```

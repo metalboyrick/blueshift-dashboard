@@ -2,7 +2,6 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Transfer Requests
 
-
 Transfer requests are Solana Pay's most straightforward payment method, designed for simple SOL or SPL token transfers without requiring any server interaction. When a user scans a QR code or clicks a transfer request link, their wallet has everything needed to compose and execute the transaction immediately.
 
 The beauty of transfer requests lies in their simplicity: all payment information is encoded directly in the URL, making them completely self-contained and instantly executable.
@@ -58,3 +57,7 @@ Transfer requests excel in scenarios where payment details are predetermined and
 - **Universal Compatibility:** Any Solana wallet can process these requests without requiring wallet-specific integrations.
 
 Consider transfer requests when you need guaranteed payment amounts, want to reduce server dependencies, or require a payment method that works reliably in all network conditions.
+
+<ArticleSection name="Example" id="example" level="h2" />
+
+As fully fledged example, you can use the [Payment Flow Merchant Example](https://github.com/solana-foundation/solana-pay/blob/master/core/example/payment-flow-merchant/main.ts) from Solana Foundation
