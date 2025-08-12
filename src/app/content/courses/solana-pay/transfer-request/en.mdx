@@ -2,26 +2,28 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Transfer Requests
 
-The transfer request is Solana Pay's most straightforward payment method, designed for simple SOL or SPL token transfers without requiring any server interaction. 
 
-When a user scans a QR code or clicks a transfer request link, their wallet has everything needed to compose and execute the transaction immediately.
+Transfer requests are Solana Pay's most straightforward payment method, designed for simple SOL or SPL token transfers without requiring any server interaction. When a user scans a QR code or clicks a transfer request link, their wallet has everything needed to compose and execute the transaction immediately.
 
-<ArticleSection name="Core Functionalities" id="core-functionalities" level="h2" />
+The beauty of transfer requests lies in their simplicity: all payment information is encoded directly in the URL, making them completely self-contained and instantly executable.
 
-Transfer request URLs follow a simple, standardized format that any Solana wallet can interpret:
+<ArticleSection name="URL Structure and Parameters" id="url-structure" level="h2" />
+
+Transfer request URLs follow a standardized format that any Solana wallet can interpret:
 
 ```
 solana:<recipient>?<optional-query-params>
 ```
 
-The `recipient` is the only required parameter and must be a `base58-encoded` public key representing the destination wallet. This direct approach eliminates the need for payment processors or intermediaries: the payment goes straight from customer to merchant.
+**Required Parameter:**
+- `recipient`: A base58-encoded public key representing the destination wallet. This is the only mandatory field, ensuring payments go directly from customer to merchant without intermediaries.
 
-While only the recipient address is required, several optional parameters enhance the payment experience and provide crucial business functionality:
-- `amount`: Specifies the exact transfer amount as a decimal value. Without this parameter, wallets typically prompt users to enter an amount manually, which works well for donations or flexible payment scenarios.
-- `spl-token`: When transferring tokens other than SOL, include the mint address of the specific SPL token. This parameter transforms a SOL transfer into any token transfer, from USDC payments to custom loyalty tokens.
-- `reference`: Provides a unique identifier that helps businesses track payments on-chain. Since merchants don't control the transaction signature, reference values serve as searchable identifiers for payment reconciliation and customer support.
-- `label` and `message`: These user-facing strings explain the payment context. The label typically identifies the merchant or service, while the message describes the specific purchase or transaction purpose.
-- `memo`: Creates an on-chain record within the transaction itself using Solana's memo program. This is particularly valuable for compliance, accounting, or providing permanent transaction context.
+**Optional Parameters:**
+- **`amount`**: Specifies the exact transfer amount as a decimal value. Without this, wallets prompt users to enter an amount manually—perfect for donations or flexible payment scenarios.
+- **`spl-token`**: The mint address for SPL token transfers. Transforms a SOL transfer into any token transfer, from USDC payments to custom loyalty tokens.
+- **`reference`**: A unique identifier for tracking payments on-chain. Since merchants don't control transaction signatures, references serve as searchable identifiers for payment reconciliation and customer support.
+- **`label` and `message`**: User-facing strings that explain payment context. Label typically identifies the merchant, while message describes the specific purchase.
+- **`memo`**: Creates an on-chain record using Solana's memo program. Valuable for compliance, accounting, or providing permanent transaction context.
 
 ### Example 
 
@@ -37,12 +39,22 @@ For businesses accepting stablecoins, here's a USDC transfer request:
 solana:22222222222222222222222222222222222222222222?amount=200&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&label=Blueshift%20Subscription&message=1%20Month&memo=Order12345&reference=abc123def456
 ```
 
-<ArticleSection name="Implementation Strategy" id="implementation-strategy" level="h2" />
+<ArticleSection name="When to Use Transfer Requests" id="when-to-use" level="h2" />
 
-Transfer requests excel in scenarios where payment details are predetermined and unchanging. E-commerce checkout flows, donation campaigns, subscription payments, and point-of-sale systems all benefit from transfer requests' simplicity and immediate execution.
+Transfer requests excel in scenarios where payment details are predetermined and unchanging:
 
-The key advantage lies in their non-interactive nature.: once generated, these URLs work independently of your servers. This makes them perfect for situations where network connectivity might be unreliable or when you want to minimize infrastructure dependencies.
+**Perfect Use Cases:**
+- **E-commerce checkouts** with fixed pricing
+- **Donation campaigns** where users choose amounts
+- **Subscription payments** with known amounts
+- **Point-of-sale systems** for in-person transactions
+- **Invoice payments** with specific amounts
 
-Consider using transfer requests when you need guaranteed payment amounts, want to reduce server load, or require payments to work even if your backend systems are temporarily unavailable. An example of this is the possibility of generating this type of transaction locally on the POS that is used to accept payments.
+**Key Advantages:**
+- **Non-Interactive Nature:** Once generated, these URLs work independently of your servers. Perfect for situations where network connectivity might be unreliable or when you want to minimize infrastructure dependencies.
+- **Guaranteed Execution:** Payment parameters are locked in the URL, ensuring customers pay exactly what you expect without dynamic pricing changes.
+- **Offline Capability:** URLs can be generated locally on devices like POS terminals, enabling payments even if backend systems are temporarily unavailable.
+- **Reduced Server Load:** No API calls needed during payment processing, making them highly scalable for high-volume scenarios.
+- **Universal Compatibility:** Any Solana wallet can process these requests without requiring wallet-specific integrations.
 
-
+Consider transfer requests when you need guaranteed payment amounts, want to reduce server dependencies, or require a payment method that works reliably in all network conditions.
