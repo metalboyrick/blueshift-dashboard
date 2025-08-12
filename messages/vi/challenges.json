@@ -172,10 +172,10 @@
       "title": "Assembly Memo",
       "requirements": {
         "log": {
-          "title": "Challenge 1: Kiểm thử Memo"
+          "title": "Thử thách 1: Kiểm thử Memo"
         },
         "log_different": {
-            "title": "Challenge 2: Kiểm thử Memo with đầu vào khác"
+            "title": "Thử thách 2: Kiểm thử Memo with đầu vào khác"
         }
       }
     },
@@ -183,13 +183,13 @@
       "title": "Assembly Slippage",
       "requirements": {
         "slippage": {
-          "title": "Challenge 1: Kiểm thử Slippage với SPL-Token"
+          "title": "Thử thách 1: Kiểm thử Slippage với SPL-Token"
         },
         "slippage_failure": {
-          "title": "Challenge 2: Kiểm thử trường hợp thất bại của Slippage"
+          "title": "Thử thách 2: Kiểm thử trường hợp thất bại của Slippage"
         },
         "slippage_token2022": {
-          "title": "Challenge 3: Kiểm thử Slippage với Token2022"
+          "title": "Thử thách 3: Kiểm thử Slippage với Token2022"
         }
       }
     },
@@ -197,10 +197,10 @@
       "title": "Assembly Timeout",
       "requirements": {
         "timeout": {
-          "title": "Challenge 1: Kiểm thử Timeout"
+          "title": "Thử thách 1: Kiểm thử Timeout"
         },
         "timeout_failure": {
-          "title": "Challenge 2: Kiểm thử trường hợp thất bại của Timeout"
+          "title": "Thử thách 2: Kiểm thử trường hợp thất bại của Timeout"
         }
       }
     },
