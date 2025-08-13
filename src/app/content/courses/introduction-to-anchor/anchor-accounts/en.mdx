@@ -433,3 +433,69 @@ pub account: Account<'info, CustomAccountType>,
 ```
 
 These constraints can be combined to create powerful validation rules for your accounts. By placing validation at the account level, you keep your security checks close to the account definitions and avoid scattering `require!()` calls throughout your instruction logic.
+
+<ArticleSection name="Remaining Accounts" id="remaining-accounts" level="h2" />
+
+Sometimes when writing programs, the fixed structure of instruction accounts doesn't provide the flexibility your program needs. 
+
+Remaining accounts solve this by allowing you to pass additional accounts beyond the defined instruction structure, enabling dynamic behavior based on runtime conditions.
+
+### The Problem with Fixed Accounts 
+
+Traditional instruction definitions require you to specify exactly which accounts will be used:
+
+```rust
+#[derive(Accounts)]
+pub struct Transfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+```
+
+This works great for single operations, but what if you want to perform multiple token transfers in one instruction? You'd need to call the instruction multiple times, increasing transaction costs and complexity.
+
+Remaining accounts let you pass additional accounts that aren't part of the fixed instruction structure meaning that your program could iterate through these accounts and apply repeating logic dynamically.
+
+Instead of requiring separate instructions for each transfer, you can design one instruction that handles "N" transfers:
+
+```rust
+#[derive(Accounts)]
+pub struct BatchTransfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+
+pub fn batch_transfer(ctx: Context<BatchTransfer>, amounts: Vec<u64>) -> Result<()> {
+    // Handle the first transfer using fixed accounts
+    transfer_tokens(&ctx.accounts.from, &ctx.accounts.to, amounts[0])?;
+    
+    let remaining_accounts = &ctx.remaining_accounts;
+
+    // CRITICAL: Validate remaining accounts schema
+    // For batch transfers, we expect pairs of accounts
+    require!(
+        remaining_accounts.len() % 2 == 0,
+        TransferError::InvalidRemainingAccountsSchema
+    );
+
+    // Process remaining accounts in groups of 2 (from_account, to_account)
+    for (i, chunk) in remaining_accounts.chunks(2).enumerate() {
+        let from_account = &chunk[0];
+        let to_account = &chunk[1];
+        let amount = amounts[i + 1];
+        
+        // Apply the same transfer logic to remaining accounts
+        transfer_tokens(from_account, to_account, amount)?;
+    }
+    
+    Ok(())
+}
+```
+
+Batching instructions means: 
+- Smaller instruction size: the repeating accounts and data doesn't need to be included
+- Efficiency: each CPI costs 1000 CU, meaning that somebody that uses your program could invoke it only one time instead of 3 if they need to do batch instructions
+
+> Remaining accounts are passed as `UncheckedAccount`, meaning Anchor doesn't perform any validation on them. Always validate the `RemainingAccountSchema` and the underlying account.
