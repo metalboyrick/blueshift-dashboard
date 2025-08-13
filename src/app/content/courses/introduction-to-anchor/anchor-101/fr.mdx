@@ -1,0 +1,138 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Anchor 101
+
+![Introduction à Anchor](/graphics/course-banners/introduction-to-anchor.png)
+
+<ArticleSection name="Qu'est-ce que Anchor" id="what-is-anchor" level="h2" />
+
+Anchor est le premier framework pour le développement de smart-contracts sur Solana, offrant un ensemble complet pour écrire, tester, déployer et interagir avec des programmes on-chain.
+
+### Principaux Avantages
+
+- **Réduction du boilerplate (code passe-partout)**: Anchor rend abstrait le travail répétitif de gestion des comptes, de sérialisation des instructions et de traitement des erreurs, afin que vous puissiez vous concentrer sur la logique métier de base (core business logic).
+- **Sécurité intégrée**:  Des contrôles rigoureux, tels que la vérification du propriétaire des comptes et la validation des données, sont effectués dès le départ, ce qui permet de prévenir de nombreuses vulnérabilités avant qu'elles ne se manifestent.
+
+### Macros Anchor
+
+- `declare_id!()`: Déclare à quelle adresse on-chain se trouve le programme.
+- `#[program]`: Marque le module qui contient chaque point d'entrée des instructions et chaque fonction logique.
+- `#[derive(Accounts)]`: Liste les comptes dont une instruction a besoin et applique automatiquement leurs contraintes.
+- `#[error_code]`: Définit des types d'erreur personnalisés et facilement lisibles par l'homme, qui rendent le débogage plus clair et plus rapide.
+
+Ensemble, ces macros déclaratives rendent abstraite la gestion de bas niveau des octets, ce qui vous permet de créer des programmes Solana sûrs et de qualité avec beaucoup moins d'efforts.
+
+### Structure du Programme
+
+Commençons par une version simplifiée d'un programme afin d'expliquer en détail ce que fait chaque macro :
+
+```rust
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_vault {
+    use super::*;
+
+    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
+        // ...
+        Ok(())
+    }
+
+    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
+        // ...
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+    // ...
+}
+
+#[error_code]
+pub enum VaultError {
+    // ...
+}
+```
+
+Pour des programmes plus structurés, nous créerons des modules dédiés au lieu de tout mettre dans le `lib.rs`. L'arborescence des dossiers du programme se présentera sensiblement comme suit :
+
+```
+src
+├── instructions
+│       ├── instruction1.rs
+│       ├── mod.rs
+│       ├── instruction2.rs
+│       └── instruction3.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+#### `declare_id!()`
+
+La macro `declare_id!()` assigne à votre programme son adresse on-chain c'est à dire une clé publique unique dérivée à partir de la paire de clés située dans le dossier `target` du projet. Cette paire de clés signe et déploie le binaire compilé `.so` contenant toute la logique et les données du programme.
+
+**Remarque :** Nous utilisons le placeholder `222222...` dans les exemples de Blueshift à cause de notre ensemble de tests interne. En production, Anchor générera un nouvel identifiant de programme lorsque vous exécuterez les commandes de compilation et de déploiement.
+
+#### `#[program]` & `#[derive(Accounts)]`
+
+Chaque instruction possède sa propre structure **Context** qui liste tous les comptes et, éventuellement, toutes les données dont l'instruction aura besoin.  
+
+Dans cet exemple, `deposit` et `withdraw` utilisent les mêmes comptes. Pour cette raison, nous allons créer une structure de compte unique appelée `VaultAction` pour rendre les choses plus efficaces et plus faciles.
+
+#### A closer look at `#[derive(Accounts)]` macro
+
+```rust
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+  #[account(mut)]
+  pub signer: Signer<'info>,
+
+  #[account(
+    mut,
+    seeds = [b"vault", signer.key().as_ref()],
+    bump,
+  )]
+  pub vault: SystemAccount<'info>,
+
+  pub system_program: Program<'info, System>,
+}
+```
+
+Comme le montre ce bout de code, la macro `#[derive(Accounts)]` remplit trois fonctions essentielles :
+- Déclare tous les comptes dont une instruction donnée a besoin.
+- Renforce automatiquement les contrôles de contraintes, bloquant ainsi de nombreux bugs et exploits potentiels au moment de l'exécution.
+- Génère des fonctions d'aide qui vous permettent d'accéder aux comptes et de les modifier en toute sécurité.
+
+Pour ce faire, il utilise une combinaison de types de comptes et d'attributs *inline*.
+
+**Types de comptes dans notre exemple**
+- `Signer<'info>`: Vérifie que le compte a signé la transaction. Essentiel pour la sécurité et pour les CPIs qui exigent une signature.
+- `SystemAccount<'info>`: Confirme que le Programme Système (*System Program*) est propriétaire du compte.
+- `Program<'info, System>`: S'assure que le compte est exécutable et qu'il correspond à l'ID du Programme Système, ce qui permet de réaliser des CPIs tels que la création de comptes ou des transferts de lamport.
+
+**Attributs Inline que vous rencontrerez**
+- `mut`: Indique que le compte est mutable. Obligatoire à chaque fois que le solde de lamport ou les données changent.
+- `seeds & bump`: Vérifie que le compte est une Adresse Dérivée de Programme (*Program-Derived Address* ou PDA) générée à partir des seeds fournies et d'un octet de saut (*bump*).
+
+**Remarque** Les PDAs sont importants puisque :
+- Lorsqu'ils sont utilisés par le programme qui les possède, les PDAs peuvent signer des CPIs au nom du programme.
+- Ils fournissent des adresses déterministes et vérifiables pour la sauvegarde  de l'état du programme.
+
+#### `#[error_code]`
+
+La macro `#[error_code]` vous permet de définir des erreurs claires et personnalisées dans le programme.
+
+```rust
+#[error_code]
+pub enum VaultError {
+    #[msg("Vault already exists")]
+    VaultAlreadyExists,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+}
+```
+
+Chaque variant de l'enum peut comporter un attribut `#[msg(...)]` qui affiche une description de l'erreur à chaque fois qu'elle se produit, ce qui est bien plus utile qu'un code numérique brut lors du débogage.

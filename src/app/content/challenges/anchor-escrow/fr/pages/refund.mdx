@@ -1,0 +1,69 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
+
+<ArticleSection name="Accepter" id="refund" level="h2" />
+
+Nous pouvons maintenant passer à l'instruction `refund`, qui se trouve dans le fichier `refund.rs` et qui effectuera ces actions :
+- Fermer le PDA d'escrow et retourner la rente au créateur.
+- Transférer l'intégralité du solde du Jeton A du vault vers le créateur, puis clôturer le compte du vault.
+
+### Comptes 
+
+Les comptes nécessaires dans ce contexte sont :
+- `maker`: l'utilisateur qui décide des termes de cet échange
+- `escrow`: le compte où sont stockés tous les termes de cet échange
+- `mint_a`: le jeton que le `maker` a déposé
+- `vault`: le compte de jetons associé au `maker` et au `mint_a` où les jetons ont été déposés
+- `maker_ata_a`: le compte de jetons associé au `maker` et au `mint_a` qui recevra les jetons du `vault`
+- `associated_token_program`: le programme de jetons associé utilisé pour créer les comptes de jetons associés
+- `token_program`: le programme de jetons utilisé pour réaliser le transfert grâce à un CPI
+- `system_program`: le programme système utilisé pour créer l'`Escrow`
+
+Cette fois-ci, nous n'allons pas vous aider à créer le `Context`, essayez de le faire vous-même ! Veillez à respecter l'ordre des comptes, sinon nos tests échoueront.
+
+### Logique
+
+La logique est similaire à l'instruction `take` mais cette fois nous déplaçons les tokens du `vault` vers le `maker_ata_a` avant de fermer le vault désormais vide. 
+
+Cette fois, c'est à vous d'apprendre à le faire vous-même, nous n'allons pas vous donner la solution.
+
+Sachez simplement qu'une fois cette opération effectuée, l'offre est annulée, le vault disparaît et le créateur retrouve son Token A ainsi que sa rente dans son portefeuille.
+
+<ArticleSection name="Point d'entrée (entrypoint)" id="entrypoint" level="h2" />
+
+Maintenant que nous avons créé toutes les fonctions dans les différentes instructions, nous pouvons enfin compléter le fichier `lib.rs` avec toutes les fonctions que nous avons créées :
+
+<Codeblock lang="rust">
+```rust
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        instructions::make::handler(ctx, seed, receive, amount)
+    }
+
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        instructions::take::handler(ctx)
+    }
+
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        instructions::refund::handler(ctx)
+    }
+}
+```
+</Codeblock>
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Vous pouvez maintenant tester votre programme à l'aide de nos tests unitaires et réclamer votre NFT !
+
+Commencez par compiler votre programme en utilisant la commande suivante dans votre terminal :
+
+```bash
+anchor build
+```
+
+Cela générera un fichier `.so` directement dans votre dossier `target/deploy`. 
+
+Cliquez ensuite sur le bouton `Relever le challenge` et déposez le fichier !

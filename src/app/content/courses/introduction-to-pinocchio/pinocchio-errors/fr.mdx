@@ -1,0 +1,86 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Erreurs
+
+Des types d'erreurs clairs et descriptifs sont essentiels dans les programmes Solana créés avec Pinocchio. Ils facilitent le débogage et fournissent des commentaires utiles aux utilisateurs et aux clients qui interagissent avec votre programme.
+
+### L'Enum PinocchioError
+
+Lorsque vous définissez des types d'erreurs personnalisés dans Rust, plusieurs options s'offrent à vous, telles que `thiserror`, `anyhow` et `failure`. Pour les programmes Pinocchio, `thiserror` est le choix privilégié pour les raisons suivantes :
+- Il vous permet d'annoter chaque variante d'erreur avec un message lisible par l'utilisateur à l'aide de l'attribut `#[error("...")]`.
+- Il implémente automatiquement les traits `core::error::Error` et `Display` traits ce qui facilite l'affichage et le débogage de vos erreurs.
+- Tous les messages d'erreur et la formatage sont vérifiés lors de la compilation, ce qui réduit le risque de problèmes d'exécution.
+- Plus important encore, `thiserror` prend en charge les environnements `no_std` lorsque vous désactivez ses fonctionnalités par défaut, ce qui est nécessaire pour les programmes Pinocchio.
+
+Pour utiliser `thiserror` dans un programme Pinocchio, ajoutez-le à votre fichier `Cargo.toml` comme ceci :
+
+```
+[dependencies]
+thiserror = { version = "1.0", default-features = false }
+```
+
+Voici comment définir un type d'erreur personnalisé pour votre programme Pinocchio :
+
+```rust
+use {
+    num_derive::FromPrimitive,
+    pinocchio::program_error::{ProgramError, ToStr},
+    thiserror::Error,
+};
+
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum PinocchioError {
+    // 0
+    /// Lamport balance below rent-exempt threshold.
+    #[error("Lamport balance below rent-exempt threshold")]
+    NotRentExempt,
+}
+```
+
+Chaque variante est accompagnée d'un message qui s'affichera lorsque l'erreur se produira.
+
+Pour renvoyer vos erreurs personnalisées provenant des instructions Solana, implémentez `From<PinocchioError>` pour `ProgramError`:
+
+```rust
+impl From<PinocchioError> for ProgramError {
+    fn from(e: PinocchioError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+```
+
+Cela vous permet d'utiliser l'opérateur `?` et de renvoyer vos erreurs personnalisées de manière transparente.
+
+### Désérialiser les Erreurs à partir des Valeurs Brutes
+
+Si vous devez reconvertir des codes d'erreur bruts (tels que ceux provenant de journaux ou d'Invocations de Programme Croisé') en votre enum d'erreurs, implémentez `TryFrom<u32>` :
+
+```rust
+impl TryFrom<u32> for PinocchioError {
+    type Error = ProgramError;
+    fn try_from(error: u32) -> Result<Self, Self::Error> {
+        match error {
+            0 => Ok(PinocchioError::NotRentExempt),
+            _ => Err(ProgramError::InvalidArgument),
+        }
+    }
+}
+```
+
+> Ceci est facultatif mais utile pour la gestion avancée des erreurs et les tests
+### Erreurs Lisibles par l'Homme
+
+Pour la journalisation et le débogage, vous pouvez fournir une représentation sous forme de chaîne de caractères de vos erreurs. L'implémentation du trait `ToStr` vous permet de faire ceci :
+
+```rust
+impl ToStr for PinocchioError {
+    fn to_str<E>(&self) -> &'static str {
+        match self {
+            PinocchioError::NotRentExempt => "Error: Lamport balance below rent-exempt threshold",
+        }
+    }
+}
+```
+
+> Cette étape est également facultative mais elle peut rendre le suivi des erreurs plus pratique pour l'utilisateur

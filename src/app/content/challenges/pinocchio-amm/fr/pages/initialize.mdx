@@ -1,0 +1,179 @@
+# Initialize
+
+L'instruction `initialize` effectue deux tâches principales :
+- Initialise le compte `Config` et stocke toutes les informations nécessaires au bon fonctionnement de l'amm.
+- Crée le compte de Mint `mint_lp` et assigne la `mint_authority` au compte `config`.
+
+> Nous n'allons pas initialiser de Comptes de Jetons Associés (ATAs) ici car cela est souvent inutile et peut entraîner un gâchis de ressources. Dans les instructions `deposit`, `withdraw` et `swap` nous vérifierons que les jetons sont déposés dans les bons ATA. Cependant, vous devez créer une fonction d'aide “initializeAccount” dans le *frontend* afin de générer ces comptes à la demande.
+
+<ArticleSection name="Comptes Nécessaires" id="required-accounts" level="h2" />
+
+Voici les comptes nécessaires pour ce contexte :
+- `initializer`: Le créateur du compte `config`. Cela ne doit pas nécessairement être l'autorité qui le régit. Doit être `signer` et `mutable` étant donné que ce compte va payer l'initialisation de `config` et de `mint_lp`.
+- `mint_lp`: Le compte de Mint qui représentera la liquidité de la *pool*. La `mint_authority` doit être défini sur le compte `config`. Doit être `mutable`.
+- `config`: Le compte de configuration en cours d'initialisation. Doit être `mutable`.
+- `system` et `token` programs: Comptes de programme requis pour initialiser les comptes ci-dessus. Doit être `executable`.
+
+> Avec l'expérience, vous remarquerez que bon nombre de ces vérifications peuvent être omises en vous appuyant plutôt sur les contraintes imposées par les CPI eux-mêmes. Par exemple, pour cette structure de compte, aucun contrôle explicite n'est nécessaire. En effet, si les contraintes ne sont pas respectées, le programme échouera par défaut. Je soulignerai ces nuances au fur et à mesure que nous avancerons dans la logique.
+Comme il n'y a pas beaucoup de changements par rapport à la structure habituelle que nous créons, je vous laisse le soin de l'implémentation :
+
+<Codeblock lang="rust">
+```rust
+pub struct InitializeAccounts<'a> {
+    pub initializer: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    //..
+  }
+}
+```
+</Codeblock>
+
+> Vous devrez passer tous les comptes mentionnés ci-dessus mais tous ne doivent pas nécessairement être inclus dans la structure `InitializeAccounts` car vous n'aurez peut-être pas besoin de référencer directement chaque compte dans l'implémentation
+
+<ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
+
+Voici les données d'instruction que nous devons transmettre :
+- `seed`: Un nombre aléatoire utilisé pour la dérivation de la seed du PDA (Adresse Dérivée de Programme). Cela permet de créer des instances de *pool* uniques. Doit être un `[u64]`
+- `fee`: Les frais d'échange, exprimés en points de base (1 point de base = 0,01 %). Ces frais sont prélevés sur chaque transaction et distribués aux fournisseurs de liquidité. Doit être un `[u16]`
+- `mint_x`: L'adresse de mint du jeton SPL pour le jeton X de la *pool*. Doit être un `[u8; 32]`
+- `mint_y`: L'adresse de mint du jeton SPL pour le jeton Y de la *pool*. Doit être un `[u8; 32]`
+- `config_bump`: La seed de saut utilisée pour dériver le compte PDA `config`. Doit être un `u8`
+- `lp_bump`: La seed de saut utilisée pour dériver le compte PDA `lp_mint`. Doit être un`u8`
+- `authority`: La clé publique qui aura l'autorité administrative sur l'AMM. Si elle n'est pas fournie, la *pool* peut être définie comme immuable. Doit être un `[u8; 32]`
+
+> Comme vous pouvez le constater, plusieurs de ces champs pourraient être dérivés différemment. Par exemple, nous pourrions obtenir le `mint_x` en passant le compte de `Mint` et en le lisant directement ou générer la valeur `bump` dans le programme. Cependant, en les passant explicitement, nous visons à créer le programme le plus optimisé et le plus efficace possible.
+Dans cette implémentation, nous traitons le parsing des données d'instruction de manière plus flexible et à un niveau plus bas que d'habitude. C'est pourquoi nous allons expliquer les raisons qui nous poussent à prendre les décisions suivantes :
+
+<Codeblock lang="rust">
+```rust
+#[repr(C, packed)]
+pub struct InitializeInstructionData {
+    pub seed: u64,
+    pub fee: u16,
+    pub mint_x: [u8; 32],
+    pub mint_y: [u8; 32],
+    pub config_bump: [u8; 1],
+    pub lp_bump: [u8; 1],
+    pub authority: [u8; 32],
+}
+
+impl TryFrom<&[u8]> for InitializeInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        const INITIALIZE_DATA_LEN_WITH_AUTHORITY: usize = size_of::<InitializeInstructionData>();
+        const INITIALIZE_DATA_LEN: usize =
+            INITIALIZE_DATA_LEN_WITH_AUTHORITY - size_of::<[u8; 32]>();
+
+        match data.len() {
+            INITIALIZE_DATA_LEN_WITH_AUTHORITY => {
+                Ok(unsafe { (data.as_ptr() as *const Self).read_unaligned() })
+            }
+            INITIALIZE_DATA_LEN => {
+                // If the authority is not present, we need to build the buffer and add it at the end before transmuting to the struct
+                let mut raw: MaybeUninit<[u8; INITIALIZE_DATA_LEN]> = MaybeUninit::uninit();
+                let raw_ptr = raw.as_mut_ptr() as *mut u8;
+                unsafe {
+                    // Copy the provided data
+                    core::ptr::copy_nonoverlapping(data.as_ptr(), raw_ptr, INITIALIZE_DATA_LEN);
+                    // Add the authority to the end of the buffer
+                    core::ptr::write_bytes(raw_ptr.add(INITIALIZE_DATA_LEN), 0, 32);
+                    // Now transmute to the struct
+                    Ok((raw.as_ptr() as *const Self).read_unaligned())
+                }
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+}
+```
+</Codeblock>
+
+Le champ `authority` dans `InitializeInstructionData` est facultatif et peut être omis pour créer une *pool* immuable.
+
+Pour faciliter cela et économiser 32 octets de données de transaction lors de la création de pools immuables, nous vérifions la longueur des données d'instruction et parsons les données en conséquence. Si les données sont plus courtes, nous définissons le champ `authority` sur `None` en écrivant 32 octets nuls à la fin du buffer. Si le champ `authority` est plein, nous convertissons directement la slice d'octets en structure.
+
+<ArticleSection name="Logique d'Instruction" id="instruction-logic" level="h2" />
+
+Nous commençons par désérialiser les `instruction_data` et les `accounts`.
+
+Nous devons ensuite :
+- Créez le compte `Config` à l'aide de l'instruction `CreateAccount` du Programme Système et des *seeds* suivantes :
+<Codeblock lang="rust">
+```rust
+let seed_binding = self.instruction_data.seed.to_le_bytes();
+let config_seeds = [
+    Seed::from(b"config"),
+    Seed::from(&seed_binding),
+    Seed::from(&self.instruction_data.mint_x),
+    Seed::from(&self.instruction_data.mint_y),
+    Seed::from(&self.instruction_data.config_bump),
+];
+```
+</Codeblock>
+- Remplissez le compte `Config` en le chargeant à l'aide de `Config::load_mut_unchecked()` puis en le remplissant avec toutes les données nécessaires à l'aide de l'aide `config.set_inner()`.
+- Créez le compte de `Mint` pour la LP à l'aide des instructions `CreateAccount` et `InitializeMint2` et des *seeds* suivantes : 
+<Codeblock lang="rust">
+```rust
+let mint_lp_seeds = [
+    Seed::from(b"mint_lp"),
+    Seed::from(self.accounts.config.key()),
+    Seed::from(&self.instruction_data.lp_bump),
+];
+```
+</Codeblock>
+
+> La `mint_authority` de `mint_lp` est le compte `config`
+Vous devriez être suffisamment compétent pour le faire vous-même, je vous laisse donc le soin de l'implémenter :
+
+<Codeblock lang="rust">
+```rust
+pub struct Initialize<'a> {
+    pub accounts: InitializeAccounts<'a>,
+    pub instruction_data: InitializeInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Initialize<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = InitializeAccounts::try_from(accounts)?;
+        let instruction_data: InitializeInstructionData = InitializeInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Initialize<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+      //..
+
+      Ok(())
+    }
+}
+```
+</Codeblock>
+
+<ArticleSection name="Sécurité" id="security" level="h2" />
+
+Comme mentionné précédemment, cela peut sembler inhabituel mais nous n'avons pas besoin d'effectuer de vérifications explicites sur les comptes transmis.
+
+En effet, en pratique, l'instruction échouera si quelque chose ne va pas, soit lors d'un CPI (Invocation de Programme Croisé), soit en amont grâce à des vérifications que nous avons intégrées au programme.
+
+Prenons l'exemple du compte `initializer`. Nous nous attendons à ce qu'il soit `signer` et `mutable` mais si ce n'est pas le cas, l'instruction `CreateAccount` échouera automatiquement car elle requiert ces propriétés pour le `payer`.
+
+De même, si le compte `config` est transmis avec un `mint_x` ou un `mint_y` non valide, toute tentative de dépôt dans le protocole échouera pendant le transfert de jetons.
+
+Au fur et à mesure que vous gagnerez en expérience, vous constaterez que de nombreuses vérifications peuvent être omises, afin de simplifier et d'optimiser les instructions, en s'appuyant sur le système et les instructions en aval pour faire respecter les contraintes.

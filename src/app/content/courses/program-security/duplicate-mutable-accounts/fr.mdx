@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Comptes Mutables en Double
+
+Les attaques par comptes mutables en double exploitent les programmes qui acceptent plusieurs comptes mutables du même type en passant deux fois le même compte, ce qui amène le programme à écraser sans le savoir ses propres modifications. Cela crée une condition de concurrence au sein d'une seule instruction, où les mutations ultérieures pourraient annuler silencieusement les mutations antérieures.
+
+Cette vulnérabilité affecte principalement les instructions qui modifient les données dans les comptes appartenant au programme et non les opérations système telles que les transferts de lamports. L'attaque réussit parce que le runtime de Solana n'empêche pas le même compte d'être transmis plusieurs fois à différents paramètres. Il incombe au programme de détecter et de traiter les doublons.
+
+Le danger réside dans la nature séquentielle de l'exécution des instructions. Lorsque le même compte est transmis deux fois, le programme effectue la première mutation, puis la remplace immédiatement par la seconde mutation, laissant le compte dans un état inattendu qui peut ne pas refléter les intentions de l'utilisateur ou la logique du programme.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Considérez cette instruction vulnérable qui met à jour les champs de propriété de deux comptes de programme :
+
+```rust
+#[program]
+pub mod unsafe_update_account{
+    use super::*;
+    
+    //..
+
+    pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+        ctx.accounts.program_account_1.owner = pubkey_a;
+        ctx.accounts.program_account_2.owner = pubkey_b;
+        
+        Ok(())
+    }
+
+    //..
+
+}
+
+#[derive(Accounts)]
+pub struct UpdateAccount<'info> {
+   #[account(mut)]
+    pub program_account_1: Account<'info, ProgramAccount>,
+    #[account(mut)]
+    pub program_account_2: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Ce code présente une faille critique : il ne vérifie jamais que `program_account_1` et `program_account_2` sont des comptes différents.
+
+Un attaquant peut exploiter cette faille en passant le même compte pour les deux paramètres. Voici ce qui se passe :
+- Le programme fixe `program_account_1.owner = pubkey_a`
+- Étant donné que les deux paramètres font référence au même compte, le programme le remplace immédiatement par `program_account_2.owner = pubkey_b`
+
+Résultat final : le propriétaire du compte est défini sur `pubkey_b` ignorant complètement `pubkey_a`.
+
+Cela peut sembler anodin, mais réfléchissez aux implications. Un utilisateur qui s'attendait à mettre à jour deux comptes différents avec des attributions de propriété précises constate qu'un seul compte a été modifié, et ce, d'une manière qui ne correspond pas à ses intentions. Dans des protocoles complexes, cela pourrait entraîner des incohérences, l'échec d'opérations en plusieurs étapes, voire des pertes financières.
+
+La solution est simple. Il vous suffit de vérifier que les comptes sont uniques avant de continuer :
+
+```rust
+pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+    if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+        return Err(ProgramError::InvalidArgument)
+    }
+
+    ctx.accounts.program_account_1.owner = pubkey_a;
+    ctx.accounts.program_account_2.owner = pubkey_b;
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dans Pinocchio, le même modèle de validation s'applique :
+
+```rust
+if self.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+    return Err(ProgramError::InvalidArgument)
+}
+```

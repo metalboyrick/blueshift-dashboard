@@ -1,0 +1,28 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruction Transfer
+
+Déplace les jetons d'un compte à un autre. Il s'agit de l'opération de base permettant d'envoyer des jetons entre utilisateurs.
+
+Avant de pouvoir transférer un jeton, nous devons déjà avoir :
+- Initialisé un compte de `Mint`
+- Un compte de `Token` ou `Associated Token` source qui contient déjà au moins le montant que nous souhaitons transférer
+- Un compte de `Token` ou `Associated Token` de destination qui recevra les jetons du compte de `Token` source
+
+> Le nombre de jetons que nous transférons est "normalisé" au niveau des décimales. Cela signifie que si nous voulons transférer 1 jeton comportant 6 décimales, nous devrons en réalité saisir `1_000_000` comme montant
+
+Voici à quoi ressemble le CPI à l'instruction `transfer()` : 
+
+```rust
+transfer(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.from_token_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

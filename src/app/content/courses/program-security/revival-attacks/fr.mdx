@@ -1,0 +1,135 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Attaques de Résurrection
+
+Les attaques de résurrection exploitent le mécanisme de fermeture de compte de Solana en réactivant des comptes "morts" au sein d'une même transaction.
+
+Lorsque vous fermez un compte en transférant ses lamports, Solana ne procède pas immédiatement à son nettoyage. En effet, le compte n'est nettoyé qu'une fois la transaction terminée. Ce délai crée une fenêtre dangereuse pendant laquelle les attaquants peuvent "ressusciter" des comptes fermés en leur renvoyant des lamports, laissant ainsi des comptes zombies contenant des données obsolètes auxquelles votre programme pourrait encore faire confiance.
+
+L'attaque réussit en raison d'une incompréhension fondamentale du cycle de vie des comptes. Les développeurs partent du principe que la fermeture d'un compte le rend immédiatement inutilisable, mais en réalité, le compte reste accessible jusqu'à la fin de la transaction. Un attaquant peut intercaler votre instruction de fermeture avec un transfert qui rembourse l'exonération de rente du compte, empêchant ainsi le nettoyage et maintenant le compte dans un état exploitable.
+
+Cela est particulièrement dévastateur dans les protocoles où la fermeture d'un compte représente une finalisation, comme : la finalisation d'un escrow, le règlement d'un litige ou la destruction d'actifs. Un compte ressuscité peut tromper votre programme en lui faisant croire que ces opérations n'ont jamais été effectuées, ce qui peut entraîner des doubles dépenses, des accès non autorisés ou des manipulations du protocole.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Considérez cette instruction vulnérable qui ferme un compte de programme :
+
+```rust
+#[program]
+pub mod insecure_close{
+    use super::*;
+
+    //..
+
+    pub fn close(ctx: Context<Close>) -> Result<()> {
+        let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+        **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+            .checked_add(ctx.accounts.account_to_close.to_account_info().lamports())
+            .unwrap();
+        **ctx.accounts.account_to_close.to_account_info().lamports.borrow_mut() = 0;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Close<'info> {
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+Ce code semble correct : il transfère tous les lamports du compte vers la destination, ce qui devrait déclencher le nettoyage. Cependant, les données du compte restent inchangées et le compte reste accessible au sein de la même transaction.
+
+Un attaquant peut exploiter cette faille en créant une transaction comportant plusieurs instructions :
+- Instruction 1: Appelle votre fonction `close` pour vider les lamports du compte.
+- Instruction 2: Retransfert les lamports vers le compte fermé (résurrection)
+- Instruction 3: Utilise le compte réactivé dans les opérations suivantes
+
+Le résultat est un compte zombie qui semble fermé selon la logique de votre programme, mais qui reste fonctionnel avec toutes ses données d'origine intactes. Cela peut entraîner :
+- Double dépense : Utilisation répétée de comptes d'escrow "fermés"
+- Contournement d'autorisation : Résurrection de comptes administrateurs qui devraient être désactivés
+- Corruption de l'état : Opérations sur des comptes qui ne devraient plus exister
+
+La solution la plus sûre consiste à utiliser la contrainte `close` qui gère automatiquement la fermeture sécurisée :
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+   #[account(
+        mut,
+        close = owner,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Ou vous pouvez ajouter la contrainte de compte `signer` comme ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(signer)]
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Pour une logique de fermeture personnalisée, implémentez le modèle de fermeture sécurisée complet :
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    let account = ctx.accounts.account.to_account_info();
+
+    let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+    **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+        .checked_add(account.lamports())
+        .unwrap();
+    **account.lamports.borrow_mut() = 0;
+
+    let mut data = account.try_borrow_mut_data()?;
+    for byte in data.deref_mut().iter_mut() {
+        *byte = 0;
+    }
+
+    let dst: &mut [u8] = &mut data;
+    let mut cursor = std::io::Cursor::new(dst);
+    cursor
+        .write_all(&anchor_lang::__private::CLOSED_ACCOUNT_DISCRIMINATOR)
+        .unwrap();
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dans Pinocchio, implémentez manuellement le modèle de fermeture :
+
+```rust
+self.program_account.realloc(0, true)?;
+self.program_account.close()?;
+
+let mut data_ref = self.program_account.try_borrow_mut_data()?;
+data_ref[0] = 0xff;
+```

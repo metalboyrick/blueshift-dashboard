@@ -1,0 +1,160 @@
+{
+  "metadata": {
+    "title": "Blueshift",
+    "description": "Apprenez à écrire vos propres programmes on-chain avec les meilleurs instructeurs de l'écosystème Solana.",
+    "keywords": "Solana, Blueshift, apprendre, qualification, vault, escrow, AMM, natif, pinocchio, quantique, SPL token"
+  },
+  "header": {
+    "lessons": "Leçons",
+    "courses": "Cours",
+    "challenges": "Challenges",
+    "set_goal": "Définissez votre Objectif",
+    "connect_wallet": "Connecter un Portefeuille"
+  },
+  "lessons": {
+    "title": "Sélectionnez un cours pour commencer",
+    "subtitle": "Bienvenue",
+    "subtitle_returning": "Bon retour parmi nous",
+    "title_returning": "Revenir à un cours",
+    "get_started": "Commencer",
+    "continue_learning": "Poursuivre l'Apprentissage",
+    "completed_courses": "Cours Terminés",
+    "start_course": "Début du Cours",
+    "lessons": "leçons",
+    "review_course": "Revoir le cours",
+    "empty_results_title": "Aucun résultat trouvé",
+    "empty_results_description": "Essayez de rechercher un autre cours ou d'utiliser des filtres.",
+    "empty_filters_title": "Vous n'avez pas de filtres sélectionnés",
+    "empty_filters_description": "Sélectionnez un langage que vous souhaitez apprendre pour voir les résultats ici.",
+    "continue": "Continuer",
+    "completed": "Leçons Terminées",
+    "all_completed": "Toutes les Leçons sont Terminées",
+    "take_challenge": "Relever le Challenge",
+    "challenge_completed": "Challenge Terminé",
+    "challenge_incomplete": "Challenge Incomplet",
+    "take_challenge_cta": "Prêt à relever le challenge ?",
+    "skip_lesson_divider_title": "Ou passer au challenge",
+    "skip_lesson": "Sauter la Leçon",
+    "lesson_completed": "Félicitations, vous avez terminé ce cours !",
+    "view_other_courses": "Voir d'Autres Cours"
+  },
+  "ui": {
+    "search_placeholder": "Recherche par nom, catégorie ou niveau...",
+    "search_language_filter__label": "Toutes les Catégories",
+    "search_language_filter__all_languages": "Tous",
+    "search_language_filter__selected_languages": "Catégories"
+  },
+  "languages": {
+    "anchor": "Anchor",
+    "rust": "Rust",
+    "typescript": "Typescript",
+    "assembly": "Assembly",
+    "general": "General"
+  },
+  "ChallengeCenter": {
+    "title": "Compléter pour Obtenir des NFTs",
+    "subtitle": "Challenges",
+    "Unclaimed": "Non réclamé",
+    "claimed": "Minté",
+    "claim": "Mint",
+    "locked": "Verrouillé",
+    "empty_title": "Aucun challenge n'a été trouvé",
+    "empty_description": "Essayez de changer vos filtres pour voir les challenges ici.",
+    "locked_description": "Connectez votre portefeuille pour mint votre NFT",
+    "claimed_description": "Le NFT est disponible dans votre portefeuille",
+    "view_nft": "Voir NFT",
+    "filter__label": "Tous les Statuts",
+    "filter__all_statuses": "Tous",
+    "filter__selected_statuses": "Statuts"
+  },
+  "challenge_statuses": {
+    "open": "Ouvert",
+    "completed": "Completé",
+    "claimed": "Réclamé"
+  },
+  "challenge_status_descriptions": {
+    "locked": "Ce challenge est verrouillé",
+    "locked_cta": "Terminez les leçons en premier pour débloquer le challenge."
+  },
+  "shift_goal": {
+    "title": "Définir Votre Objectif",
+    "description": "Recevez des rappels hebdomadaires pour vous aider à atteindre vos objectifs !",
+    "connect_discord": "Connecter Discord"
+  },
+  "wallet_recommended": {
+    "title": "Connecter Votre Portefeuille",
+    "description": "Connectez votre portefeuille pour progresser dans les cours et gagner des récompenses NFT !",
+    "connect_wallet": "Connecter un Portefeuille",
+    "dont_show_again": "Ne plus afficher"
+  },
+  "contents": {
+    "contents": "Contenu",
+    "view_source": "Voir Source"
+  },
+  "notifications": {
+    "session_expired_logout": "Votre session a expiré. Veuillez vous reconnecter.",
+    "errors": {
+      "user_rejected_signature": "Vous devez approuver le message dans votre portefeuille pour vous connecter.",
+      "auth_unauthorized": "Échec de l'authentification. Veuillez réessayer.",
+      "network_error": "Impossible de se connecter au serveur. Veuillez vérifier votre connexion Internet.",
+      "auth_generic": "Une erreur inattendue s'est produite. Veuillez réessayer."
+    }
+  },
+  "course_levels": {
+    "1": "Débutant",
+    "2": "Intermédiaire",
+    "3": "Avancé",
+    "4": "Expert"
+  },
+  "ChallengePage": {
+    "pagination_header": "Challenges",
+    "connect_wallet": "Connecter un Portefeuille",
+    "connect_wallet_description": "Un portefeuille Solana est nécessaire pour relever le challenge et débloquer les NFT.",
+    "back_to_lessons": "Retour aux Leçons",
+    "back_to_homepage": "Retour à la Page d'Accueil",
+    "head_to_challenges": "Retour aux Challenges", 
+    "requirements_title": "Challenge",
+    "upload_program_btn": "Upload un Programme",
+    "run_program_btn": "Exécuter",
+    "view_logs_btn": "Consulter les Journaux",
+    "back_to_editor_btn": "Retour à l'éditeur",
+    "running_program_btn": "Exécution...",
+    "num_tests_passed": "Tests réussis",
+    "test_results": {
+      "passed": "Réussi",
+      "failed": "Échoué",
+      "incomplete": "Incomplet"
+    },
+    "challenge_completed": {
+      "title": "Challenge Terminé",
+      "body": "Vous avez déjà relevé ce challenge.",
+      "view_other_courses": "Voir d'Autres Cours",
+      "view_other_challenges": "Voir d'Autres Challenges",
+      "divider_label": "Ou",
+      "redo": "Refaire le Challenge"
+    },
+    "mint_modal_title": "Félicitations !",
+    "mint_modal_description": "Vous avez relevé le challenge et débloqué une récompense NFT !",
+    "mint_modal_button": "Mint NFT",
+    "minting": "Mint du NFT en cours...",
+    "mint_modal_skip": "Sauter pour le moment",
+    "mint_modal_skip_description": "Vous pouvez voir vos déblocages sur la page des Challenges.",
+    "mint_modal_tweet": "Partager sur X",
+    "assistance_prompt": {
+      "title": "Besoin d'aide ?",
+      "body": "On dirait que vous rencontrez des difficultés. Si vous êtes bloqué, n'hésitez pas à demander de l'aide à notre communauté Discord.",
+      "link_text": "Demander sur Discord"
+    },
+    "reset_code_modal": {
+      "title": "Réinitialiser le Code",
+      "description": "Êtes-vous sûr de vouloir réinitialiser votre code ? Cela annulera toutes les modifications et rétablira le modèle d'origine.",
+      "cancel": "Annuler",
+      "confirm": "Réinitialiser le Code"
+    },
+    "reset_button": "Réinitialiser",
+    "auto_saved": "Sauvegarde Automatique",
+    "unsaved_changes": "Modifications non sauvegardées",
+    "saving": "Sauvegarde...",
+    "loaded_from_auto_save": "Code chargé à partir de la session précédente"
+  }
+}
