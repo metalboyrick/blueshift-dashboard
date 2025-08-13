@@ -127,7 +127,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Memory Load Operations
 
-| String | Mnemonic                 | Description                         |
+| opcode | Mnemonic                 | Description                         |
 |--------|--------------------------|-------------------------------------|
 | lddw   | `lddw dst, imm`          | Load 64-bit immediate (first slot)  |
 | lddw   | `lddw dst, imm`          | Load 64-bit immediate (second slot) |
@@ -138,7 +138,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Memory Store Operations
 
-| String | Mnemonic                 | Description                    |
+| opcode | Mnemonic                 | Description                    |
 |--------|--------------------------|--------------------------------|
 | stw    | `stw [dst + off], imm`   | Store word immediate           |
 | sth    | `sth [dst + off], imm`   | Store halfword immediate       |
@@ -151,7 +151,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Arithmetic Operations (64-bit)
 
-| String | Mnemonic          | Description                    |
+| opcode | Mnemonic          | Description                    |
 |--------|-------------------|--------------------------------|
 | add64  | `add64 dst, imm`  | Add immediate                  |
 | add64  | `add64 dst, src`  | Add register                   |
@@ -171,7 +171,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Arithmetic Operations (32-bit)
 
-| String | Mnemonic          | Description                    |
+| opcode | Mnemonic          | Description                    |
 |--------|-------------------|--------------------------------|
 | add32  | `add32 dst, imm`  | Add immediate (32-bit)         |
 | add32  | `add32 dst, src`  | Add register (32-bit)          |
@@ -190,7 +190,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Logical Operations (64-bit)
 
-| String | Mnemonic          | Description                    |
+| opcode | Mnemonic          | Description                    |
 |--------|-------------------|--------------------------------|
 | or64   | `or64 dst, imm`   | Bitwise OR immediate           |
 | or64   | `or64 dst, src`   | Bitwise OR register            |
@@ -209,7 +209,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Logical Operations (32-bit)
 
-| String | Mnemonic          | Description                    |
+| opcode | Mnemonic          | Description                    |
 |--------|-------------------|--------------------------------|
 | or32   | `or32 dst, imm`   | Bitwise OR immediate (32-bit)  |
 | or32   | `or32 dst, src`   | Bitwise OR register (32-bit)   |
@@ -228,9 +228,9 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Control Flow Operations
 
-| String | Mnemonic             | Description                                   |
+| opcode | Mnemonic             | Description                                   |
 |--------|----------------------|-----------------------------------------------|
-| ja     | `ja off`             | Unconditional jump                            |
+| ja     | `ja off`             | Unconditional jump (jump 0 = jump to next)    |
 | jeq    | `jeq dst, imm, off`  | Jump if equal to immediate                    |
 | jeq    | `jeq dst, src, off`  | Jump if equal to register                     |
 | jgt    | `jgt dst, imm, off`  | Jump if greater than immediate (unsigned)     |
@@ -256,7 +256,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Function Call Operations
 
-| String | Mnemonic                    | Description                           |
+| opcode | Mnemonic                    | Description                           |
 |--------|-----------------------------|---------------------------------------|
 | call   | `call imm` or `syscall imm` | Call function or syscall              |
 | callx  | `callx imm`                 | Indirect call (register in imm field) |
@@ -264,7 +264,7 @@ Indirect calls through `callx` also evolved. Earlier versions encoded the target
 
 ### Byte Swap Operations
 
-| String | Mnemonic      | Description                        |
+| opcode | Mnemonic      | Description                        |
 |--------|---------------|------------------------------------|
 | be     | `be dst, imm` | Byte swap (16, 32, or 64 bit)      |
 | le     | `le dst, imm` | Little endian convert (deprecated) |
