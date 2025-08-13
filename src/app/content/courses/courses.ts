@@ -249,6 +249,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusion" },
      ],
   },
+  {
     slug: "create-your-sdk-with-codama",
     language: "General",
     color: "0,255,255",
