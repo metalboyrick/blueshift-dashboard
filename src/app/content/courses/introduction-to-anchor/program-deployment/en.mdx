@@ -2,136 +2,153 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Program Deployment
 
-![Introduction to Anchor](/graphics/course-banners/introduction-to-anchor.png)
+Once your program is complete, you'll need to deploy it to devnet or mainnet to start interacting with it.
 
-<ArticleSection name="What is Anchor" id="what-is-anchor" level="h2" />
+<ArticleSection name="Program Deployment" id="program-deployment" level="h2" />
 
-Anchor is the premier framework for Solana smart-contract development, offering a complete workflow for writing, testing, deploying, and interacting with onchain programs.
-
-### Key advantages
-
-- **Reduced boilerplate**: Anchor abstracts the repetitive work of account management, instruction serialization, and error handling so you can focus on just the core business logic.
-- **Built-in security**:  Rigorous checks such as account-ownership verification and data validation run out of the box, mitigating many common vulnerabilities before they surface.
-
-### Anchor Macros
-
-- `declare_id!()`: Declares at what onchain address the program lives.
-- `#[program]`: Marks the module that contains every instruction entrypoint and business-logic function.
-- `#[derive(Accounts)]`: Lists the accounts an instruction requires and enforces their constraints automatically.
-- `#[error_code]`: Defines custom, human-readable error types that make debugging clearer and faster.
-
-Together, these declarative macros abstract away low-level byte management, allowing you to deliver secure, production-grade Solana programs with far less effort.
-
-### Program Structure
-
-Let's begin with a bare-bones version of a program to explain in detail what each macro actually does:
-
-```rust
-declare_id!("22222222222222222222222222222222222222222222");
-
-#[program]
-pub mod blueshift_anchor_vault {
-    use super::*;
-
-    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
-        // ...
-        Ok(())
-    }
-
-    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
-        // ...
-        Ok(())
-    }
-}
-
-#[derive(Accounts)]
-pub struct VaultAction<'info> {
-    // ...
-}
-
-#[error_code]
-pub enum VaultError {
-    // ...
-}
-```
-
-This will transform into focused modules instead of cramming everything into the `lib.rs` for more structured programs. The program folder tree will look roughly like this:
+Start by building the program: 
 
 ```
-src
-├── instructions
-│       ├── instruction1.rs
-│       ├── mod.rs
-│       ├── instruction2.rs
-│       └── instruction3.rs
-├── errors.rs
-├── lib.rs
-└── state.rs
+anchor build
 ```
 
-#### `declare_id!()`
+This creates a target/deploy folder containing:
+- `<project-name>.so`: your program's bytecode
+- `<project-name>-keypair.json`: a generated keypair for deployment
 
-The `declare_id!()` macro assigns to your program its onchain address; a unique public key derived from the keypair in the project's `target` folder. That keypair signs and deploys the compiled `.so` binary containing all program logic and data.
+> You can replace this keypair with a vanity address if desired by substituting the keypair in the `<project-name>-keypair.json` file.
 
-**Note:** We use the placeholder `222222...` in Blueshift examples because of our internal test suite. In production, Anchor will generate a fresh program ID for you when you run the standard build and deploy commands.
+At this point you need to grab the program address by doing:
 
-#### `#[program]` & `#[derive(Accounts)]`
-
-Every instruction has its own **Context** struct that lists all the accounts and, optionally, any data the instruction will need.  
-
-In this example, both `deposit` and `withdraw` share the same accounts; for that reason, we're going to create a single account struct called `VaultAction` to keep things more efficient and easy.
-
-#### A closer look at `#[derive(Accounts)]` macro
-
-```rust
-#[derive(Accounts)]
-pub struct VaultAction<'info> {
-  #[account(mut)]
-  pub signer: Signer<'info>,
-
-  #[account(
-    mut,
-    seeds = [b"vault", signer.key().as_ref()],
-    bump,
-  )]
-  pub vault: SystemAccount<'info>,
-
-  pub system_program: Program<'info, System>,
-}
+```
+solana address -k target/deploy/<project-name>-keypair.json
 ```
 
-As we can see from the code snippet, the `#[derive(Accounts)]` macro serves three critical responsibilities:
-- Declares all the accounts a specific instruction needs.
-- Enforce constraint checks automatically, blocking many bugs and potential exploits at runtime.
-- Generates helper methods that let you access and mutate accounts safely.
+Update the `declare_id!()` function in the `lib.rs` to the right address and then update your `Anchor.toml` to specify the target cluster and program ID:
 
-It accomplishes this through a combination of account types and inline attributes.
+```
+[provider]
+cluster = "devnet"
 
-**Account types in our example**
-- `Signer<'info>`: Verifies the account signed the transaction; essential for security and for CPIs that demand a signature.
-- `SystemAccount<'info>`: Confirms ownership of the account by the System Program.
-- `Program<'info, System>`: Ensures the account is executable and matches the System Program ID, enabling CPIs such as account creation or lamport transfers.
-
-**Inline attributes you'll encounter**
-- `mut`: Flags the account as mutable; mandatory whenever its lamport balance or data may change.
-- `seeds & bump`: Verifies the account is a Program-Derived Address (PDA) generated from the provided seeds plus a bump byte.
-
-**Note** PDAs are important because:
-- When used by the program that owns them, PDAs can sign CPIs on the program's behalf.
-- They give you deterministic, verifiable addresses for persisting program state.
-
-#### `#[error_code]`
-
-The `#[error_code]` macro lets you define clear, custom errors inside the program.
-
-```rust
-#[error_code]
-pub enum VaultError {
-    #[msg("Vault already exists")]
-    VaultAlreadyExists,
-    #[msg("Invalid amount")]
-    InvalidAmount,
-}
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
 ```
 
-Each enum variant can carry a `#[msg(...)]` attribute that logs a descriptive string whenever the error occurs; far more helpful than a raw numeric code during debugging.
+At this point, we're finally ready to deploy the program:
+
+```
+anchor deploy
+```
+
+This deploys your program using the specified address, cluster, and wallet from the `Anchor.toml` file as the fee payer.
+
+### Deployment Fail
+
+Program Deployment can fail. 
+
+Failed deployments create intermediate buffer accounts that hold lamports. You'll see recovery instructions like:
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+In order to recoup that balance you can: 
+
+- Resume deployment recovering the keypair using:
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+    when asked, enter the 12-word seed phrase and issue a new deploy command by specifying the buffer:
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- Close the buffer calling:
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### Deployment through Solana CLI
+
+You can deploy directly using the Solana CLI instead of Anchor:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+During network congestion, the deployment might fail, to increase the possibility of deployment use these flags:
+- `--with-compute-unit-price`: Set compute unit price in micro-lamports per compute unit
+- `--use-rpc`: Send transactions to RPC instead of validator TPUs
+- `--max-sign-attempts`: Maximum retry attempts after blockhash expiration
+
+<ArticleSection name="Program Upgrade" id="program-upgrade" level="h2" />
+
+By default, `anchor deploy` creates a new program ID. To upgrade an existing program:
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+**If the new executable is larger than the deployed one, we need to extend the program account first:**
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### Upgrade through Solana CLI
+
+The process is the same: extend the program if needed, then deploy:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### Making Programs Immutable
+
+Remove the upgrade authority to make your program immutable:
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> This action is irreversible.
+
+### Migrating Programs
+
+Migrating transfers a program from an old address to a new address. The CLI closes the old program and redeploys it to the new location:
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> This "breaks" all existing PDAs since they derive from the new Program ID.
+
+<ArticleSection name="Uploading an IDL" id="uploading-an-idl" level="h2" />
+
+An Interface Description Language (IDL) file provides a standardized JSON description of your program's instructions and accounts, simplifying client integration.
+
+Upload the IDL on-chain to help others integrate your program:
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### Upgrading the IDL
+
+After redeploying your program, update the on-chain IDL:
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+
