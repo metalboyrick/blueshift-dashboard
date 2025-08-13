@@ -1,0 +1,281 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mollusk 101
+
+Pour tester efficacement des programmes Solana, il faut un framework qui offre un bon équilibre entre vitesse, précision et pertinence. Lorsque vous développez une logique de programme complexe, vous avez besoin d'un environnement qui permette des itérations rapides sans sacrifier la possibilité de tester les cas limites ou de mesurer les performances avec précision.
+
+Le framework de test Solana idéal devrait offrir trois fonctionnalités essentielles :
+- Une éxécution rapide pour des cycles de développement rapides,
+- Une manipulation flexible de l'état des comptes pour des tests complets des cas limites,
+- Des indicateurs de performance détaillés pour des informations précises sur l'optimisation.
+
+Mollusk répond à ces exigences en fournissant un environnement de test simplifié spécialement conçu pour le développement de programmes Solana.
+
+<ArticleSection name="Qu'est-ce que Mollusk ?" id="what-is-mollusk" level="h2" />
+
+[Mollusk](https://github.com/anza-xyz/mollusk), créé et maintenu par [Joe Caulfield](https://x.com/realbuffalojoe) de l'équipe d'[Anza](https://x.com/anza_xyz) est un harnais de test léger pour les programmes Solana qui fournit une interface directe à l'exécution des programmes sans la surcharge d'un environnement d'exécution complet d'un validateur.
+
+Plutôt que de simuler un environnement de validateur complet, Mollusk construit un pipeline d'exécution de programme à l'aide de composants de bas niveau de la machine virtuelle Solana (SVM). Cette approche élimine toute charge inutile tout en conservant les fonctionnalités essentielles nécessaires à un test approfondi du programme.
+
+Le framework atteint des performances exceptionnelles en excluant les composants lourds tels que `AccountsDB` et `Bank` de l'implémentation du validateur Agave. Ce choix de conception nécessite une création explicite des comptes, ce qui constitue en réalité un avantage, car cela permet un contrôle précis de l'état des comptes et permet de tester des scénarios qui seraient difficiles à reproduire dans un environnement de validateur complet.
+
+Le harnais de test de Mollusk prend en charge des options de configuration complètes, notamment les ajustements du budget de calcul (*compute budget*), les modifications des fonctionnalités et la personnalisation de sysvar. Ces configurations sont gérées directement via la structure `Mollusk` et peuvent être modifiées à l'aide de fonctions d'aide intégrées.
+
+<ArticleSection name="Premiers pas" id="first-steps" level="h2" />
+
+La crate principale `mollusk-svm` fournit l'infrastructure de test fondamentale tandis que des crates supplémentaires offrent des fonctions d'aides spécialisées pour les programmes Solana courants tels que les programmes `Token` et `Memo`.
+
+### Configuration
+
+Ajoutez la crate principale Mollusk à votre projet :
+
+```
+cargo add mollusk-svm  --dev
+```
+
+Ajoutez des fonctions d'aides spécifiques au programme si nécessaire :
+
+```
+cargo add mollusk-svm-programs-memo mollusk-svm-programs-token  --dev
+```
+
+Ces crates supplémentaires fournissent des fonctions d'aides préconfigurées pour les programmes Solana standard, réduisant ainsi le code passe-partout et simplifiant la configuration des scénarios de test courants impliquant des opérations de jetons ou des instructions mémo.
+
+> L'option `--dev` dans `cargo add <crate-name> --dev` permet de conserver la légèreté des binaires de votre programme en les ajoutant sous la section `[dev-dependencies]` de votre fichier `Cargo.toml`
+> Cette configuration garantit que les utilitaires de test n'augmentent pas la taille de déploiement de votre programme tout en donnant accès à tous les types Solana et fonctions d'assistance nécessaires pendant le développement.
+
+### Dépendances Supplémentaires
+
+Plusieurs crates Solana améliorent l'expérience de test en fournissant des types et des utilitaires essentiels :
+
+```
+cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk  --dev
+```
+
+<ArticleSection name="Les Bases de Mollusk" id="mollusk-basics" level="h2" />
+
+Commencez par déclarer le `program_id` et créez une instance `Mollusk` avec l'adresse que vous avez utilisée dans votre programme afin qu'il soit appelé correctement et ne génère aucune erreur "ProgramMismatch` pendant les tests, ainsi que le chemin d'accès au programme compilé, comme ceci :
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+// Alternative using an Array of bytes
+// pub const ID: [u8; 32] = [
+//    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+//    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+//    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+//    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+// ];
+
+#[test]
+fn test() {
+    let mollusk = Mollusk::new(&ID, "target/deploy/program");
+    
+    // Alternative using an Array of bytes
+    // let mollusk = Mollusk::new(&Pubkey::new_from_array(ID), "target/deploy/program")
+}
+```
+
+Pour les tests, nous pouvons ensuite utiliser l'une des quatre principales méthodes API proposées :
+- `process_instruction`: Traite une instruction et renvoit le résultat.
+- `process_and_validate_instruction`: Traite une instruction et effectue une série de vérifications sur le résultat, en déclenchant une alerte si l'une des vérifications échoue.
+- `process_instruction_chain`: Traite une chaîne d'instructions et renvoit le résultat.
+- `process_and_validate_instruction_chain`: Traite une chaîne d'instructions et effectue une série de vérifications sur chaque résultat, en déclenchant une alerte si l'une des vérifications échoue.
+
+Mais avant de pouvoir utiliser ces méthodes, nous devons créer nos structures de compte et d'instructions à transmettre :
+
+### Comptes
+
+Lorsque vous testez des programmes Solana avec Mollusk, vous travaillez avec plusieurs types de comptes qui reflètent des scénarios d'exécution de programmes réels. Il est essentiel de comprendre comment créer correctement ces comptes pour garantir l'efficacité des tests.
+
+Le type de compte le plus fondamental est le `SystemAccount` qui se décline en deux variantes principales :
+- Payer: Un compte avec des lamports qui finance la création de comptes de programme ou les transferts de lamports
+- Uninitialized Account: Un compte de programme en attente d'initialisation dans votre instruction
+
+Les comptes système ne contiennent aucune donnée et appartiennent au Programme Système. La principale différence entre les comptes `payer` et `uninitialized` réside dans leur solde de lamports : les comptes `payer` ont des fonds tandis que les comptes `uninitialized` sont vides.
+
+Voici comment créer ces comptes de base avec Mollusk :
+
+```rust
+use solana_sdk::{
+    account::Account,
+    system_program
+};
+
+// Payer account with lamports for transactions
+let payer = Pubkey::new_unique();
+let payer_account = Account::new(100_000_000, 0, &system_program::id());
+
+// Uninitialized account with no lamports
+let uninitialized_account = Pubkey::new_unique();
+let uninitialized_account_account = Account::new(0, 0, &system_program::id());
+```
+
+Pour les `ProgramAccounts` qui contiennent des données, vous avez deux approches de construction :
+
+```rust
+use solana_sdk::account::Account;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let program_account_account = Account {
+    lamports,
+    data,
+    owner: ID, // The program's that owns the account
+    executable: false,
+    rent_epoch: 0,
+};
+```
+
+Ou en utilisant `AccountSharedData` :
+
+```rust
+use solana_sdk::account::AccountSharedData;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let mut program_account_account = AccountSharedData::new(lamports, data.len(), &ID);
+program_account_account.set_data_from_slice(&data);
+```
+
+Une fois vos comptes créés, compilez-les dans le format attendu par Mollusk :
+
+```rust
+let accounts = [
+    (user, user_account),
+    (program_account, program_account_account)
+];
+```
+
+> Lorsque vous utilisez `AccountSharedData` n'oubliez pas d'appeler `.into()` pour le convertir au type `Account` requis par Mollusk pour l'exécution, comme ceci : `program_account_account.into()`.
+
+### Instructions
+
+La création d'instructions pour les tests Mollusk est simple une fois que vous comprenez les trois éléments essentiels : le `program_id` qui identifie votre programme, les `instruction_data` contenant le discriminateur et les paramètres, et les métadonnées des comptes précisant quels comptes sont impliqués et leurs autorisations.
+
+Voici la structure de base des instructions :
+
+```rust
+use solana_sdk::instruction::{Instruction, AccountMeta};
+
+let instruction = Instruction::new_with_bytes(
+    ID, // Your program's ID
+    &[0], // Instruction data (discriminator + parameters)
+    vec![AccountMeta::new(payer, true)], // Account metadata
+);
+```
+
+Les données d'instruction doivent inclure le discriminateur d'instruction suivi de tous les paramètres requis par votre instruction. Pour les programmes Anchor, les discriminateurs par défaut sont des valeurs de 8 octets dérivées du nom de l'instruction.
+
+Pour simplifier la génération du discriminateur Anchor, utilisez cette fonction d'aide et construisez vos données d'instruction en concaténant le discriminateur avec les paramètres sérialisés :
+
+```rust
+use sha2::{Sha256, Digest};
+
+let instruction_data = &[
+    &get_anchor_discriminator_from_name("deposit"),
+    &1_000_000u64.to_le_bytes()[..],
+]
+.concat();
+
+pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("global:{}", name));
+    let result = hasher.finalize();
+
+    [
+        result[0], result[1], result[2], result[3], 
+        result[4], result[5], result[6], result[7],
+    ]
+}
+```
+
+Pour la structure `AccountMeta`, nous devrons utiliser le constructeur approprié basé sur les autorisations du compte :
+- `AccountMeta::new(pubkey, is_signer)`: Pour les comptes mutables
+- `AccountMeta::new_readonly(pubkey, is_signer)`: Pour les comptes en lecture seule
+
+Le paramètre booléen indique si le compte doit signer la transaction. La plupart des comptes sont des comptes non signataires (*false*), à l'exception des `payers` et des autorités qui doivent autoriser les opérations.
+
+### Exécution
+
+Une fois les comptes et les instructions préparés, vous pouvez désormais exécuter et valider la logique de votre programme à l'aide des API d'exécution de Mollusk. Mollusk propose quatre méthodes d'exécution différentes selon que vous avez besoin de contrôles de validation et que vous testez une ou plusieurs instructions.
+
+La méthode d'exécution la plus simple traite une seule instruction sans validation :
+
+```rust
+mollusk.process_instruction(&instruction, &accounts);
+```
+This returns execution results that you can inspect manually, but doesn't perform automatic validation.
+
+For comprehensive testing, use the validation method that allows you to specify expected outcomes:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::success(), // Verify the transaction succeeded
+        Check::compute_units(5_000), // Expect specific compute usage
+        Check::account(&payer).data(&expected_data).build(), // Validate account data
+        Check::account(&payer).owner(&ID).build(), // Validate account owner
+        Check::account(&payer).lamports(expected_lamports).build(), // Check lamport balance
+    ],
+);
+```
+
+> Nous pouvons effectuer plusieurs vérifications sur le même compte en les "regroupant" comme ceci : `Check::account(&payer).data(&expected_data).owner(&ID).build()`
+
+Le système de validation prend en charge différents types de vérifications afin de contrôler divers aspects des résultats d'exécution. Pour les tests de cas limites, vous pouvez vérifier que les instructions échouent comme prévu :
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::err(ProgramError::MissingRequiredSignature), // Expect specific error
+    ],
+);
+```
+
+Pour tester des workflows complexes nécessitant plusieurs instructions, utilisez les méthodes de chaîne d'instructions :
+
+```rust
+mollusk.process_instruction_chain(
+    &[
+        (&instruction, &accounts),
+        (&instruction_2, &accounts_2)    
+    ]
+);
+```
+
+Combinez plusieurs instructions avec une validation complète :
+
+```rust
+mollusk.process_and_validate_instruction_chain(&[
+    (&instruction, &accounts, &[Check::success()]),
+    (&instruction_2, &accounts_2, &[
+        Check::success(),
+        Check::account(&target_account).lamports(final_balance).build(),
+    ]),
+]);
+```
+
+
+

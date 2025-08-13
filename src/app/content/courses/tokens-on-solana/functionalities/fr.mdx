@@ -1,0 +1,72 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Fonctionnalités
+
+Le Programme de Jetons fonctionne grâce à un ensemble d'instructions qui vous permettent de créer des jetons, d'initialiser des comptes de jetons, de transférer des jetons entre des comptes et de gérer les autorisations. 
+
+Il prend également en charge les comptes à signatures multiples pour une sécurité renforcée et fournit des mécanismes permettant de geler des comptes et de déléguer l'autorité qui gère les jetons.
+
+<ArticleSection name="Initialisation d'un Compte" id="intializing-an-account" level="h2" />
+
+Le programme de jetons dispose de différentes instructions et de fonctions d'aide qui simplifient l'initialisation d'un nouveau compte.
+
+Les instructions diffèrent selon que l'on souhaite initialiser un compte de `Mint` ou un compte de `Token`. Dans le cas d'un compte `Associated Token`, le programme de jeton associé utilise l'instruction `initializeAccount` après avoir dérivé la bonne Adresse Dérivée de Programme.
+
+> Cette fonction initialise seulement le compte. Nous devons donc nous assurer d'utiliser au préalable l'instruction `createAccount()` du Programme Système et de définir le propriétaire (programme de jeton), l'espace et les lamports appropriés afin de le rendre exempt de rente
+
+<ArticleSection name="Transfert (Transfer)" id="transfer" level="h2" />
+
+Déplace les jetons d'un compte à un autre. Il s'agit de l'opération de base permettant d'envoyer des jetons entre utilisateurs.
+
+Le propriétaire du compte de jeton doit être un `Signer` de la transaction et la destination de ce transfert doit être un autre compte de jeton. 
+
+> Le montant que nous décidons de transférer est sans décimale. C'est pourquoi, si nous voulons envoyer 1 jeton qui comporte 6 décimales nous devrons utiliser la notation `1e6`.
+
+<ArticleSection name="Approuver (Approve)" id="approve" level="h2" />
+
+Accorde à un délégué l'autorité (le pouvoir) de transférer un montant précis de jetons à la place du propriétaire du compte. Cela permet d'effectuer des transferts de jetons de manière programmatique sans donner le contrôle total du compte.
+
+> Nous fixons pour cela un montant "approuvé". Le délégué ne peut transférer que dans la limite de ce montant
+
+<ArticleSection name="Révoquer (Revoke)" id="revoke" level="h2" />
+
+Supprime l'autorité du délégué actuel sur le compte, redonnant ainsi le contrôle total au propriétaire du compte.
+
+> Annule immédiatement toute délégation existante. Seul le propriétaire du compte peut révoquer la délégation (et non le délégué lui-même)
+
+<ArticleSection name="Définir l'Autorité (Set Authority)" id="set-authority" level="h2" />
+
+Modifie l'autorité d'un mint ou d'un compte. Cela permet de transférer la propriété ou de mettre à jour certains types d'autorités.
+
+> Peux changer l'autorité de mint, l'autorité de gel ou le propriétaire d'un compte. Définir l'autorité sur `None` est une action irréversible qui supprime définitivement cette fonctionnalité
+
+<ArticleSection name="Créer (Mint To)" id="mint-to" level="h2" />
+
+Crée de nouveaux jetons et les dépose dans un compte donné. Seule l'autorité de mint peut effectuer cette opération.
+
+> Augmente l'offre totale du jeton. Cette quantité tient compte des décimales configurées du mint
+
+<ArticleSection name="Brûler (Burn)" id="burn" level="h2" />
+
+Détruit définitivement des jetons en les retirant de la circulation. Cela réduit l'offre totale du jeton.
+
+> Réduit de manière définitive l'offre totale de jetons. Cette action peut être effectuée par le propriétaire du compte ou son délégué
+
+<ArticleSection name="Fermer un Compte (Close Account)" id="close-account" level="h2" />
+
+Ferme un compte de jeton et transfère la rente en SOL restante vers un compte de destination. Le compte de jetons doit avoir un solde nul, sauf s'il s'agit d'un compte SOL natif.
+
+> Depuis Token2022, il est possible de fermer un compte de `Mint` qui a une offre de 0
+
+<ArticleSection name="Geler un Compte (Freeze Account)" id="set-mint-to" level="h2" />
+
+Empêche toutes les opérations liées aux jetons sur un compte jusqu'à ce qu'il soit débloqué. Seule l'autorité de gel du mint peut effectuer cette opération.
+
+> Désactive complètement les transferts, les approbations et les *burn*. Cela n'affecte que le compte gelé concerné
+
+<ArticleSection name="Débloquer un Compte(Thaw Account)" id="thaw-account" level="h2" />
+
+Réactive les opérations liées aux jetons sur un compte précédemment gelé. Seule l'autorité de gel du mint peut débloquer des comptes.
+
+> Restaure toutes les fonctionnalités du compte gelé. Ne peut être effectuée que par l'autorité de gel du mint
+

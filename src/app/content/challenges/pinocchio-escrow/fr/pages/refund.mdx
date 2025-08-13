@@ -1,0 +1,28 @@
+# Refund
+
+L'instruction `refund` permet au créateur d'annuler une offre en cours :
+- Ferme le PDA d'escrow et retourne la rente au créateur.
+- Transfére l'intégralité du solde du Jeton A du vault vers le créateur, puis clôture le compte du vault.
+
+<ArticleSection name="Comptes nécessaires" id="required-account" level="h2" />
+
+En sachant cela, voici les comptes nécessaires :
+
+- maker: le créateur de l'escrow. Doit être un signataire et mutable
+- escrow: le compte d'escrow que nous initialisons. Doit être mutable
+- mint_a: le jeton que nous déposons dans l'escrow
+- vault: le compte de jetons associé appartenant à l'escrow. Doit être mutable
+- maker_ata_a: le compte de jetons associé appartenant au créateur. Doit être mutable
+- system_program: le programme système. Doit être executable
+- token_program: le programme de jeton. Doit être executable
+
+Nous allons vous laisser créer votre propre structure de compte puisque vous devriez maintenant être familiarisé avec le concept.
+
+<ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
+
+Toutes les données dont nous avons besoin pour exécuter la logique se trouvent déjà dans le compte Escrow ou dans les comptes que nous désérialisons. C'est pourquoi nous n'avons pas besoin de `instruction_data` pour cette instruction.
+
+<ArticleSection name="Logique" id="logic" level="h2" />
+
+Là encore, nous allons vous laisser voler de vos propres ailes et créer votre propre logique ! N'hésitez pas à consulter les sections précédentes pour voir comment nous avons implémenté les instructions *make* et *take* instruction ou à nous contacter sur Discord si vous êtes bloqué.
+

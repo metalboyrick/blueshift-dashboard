@@ -10,6 +10,7 @@ import CrosshairCorners from "@/app/components/Graphics/CrosshairCorners";
 import { notFound } from "next/navigation";
 import { getChallenge } from "@/app/utils/mdx";
 import BackToCourseButtonClient from "@/app/components/Challenges/BackToCourseButtonClient";
+import ContentFallbackNotice from "@/app/components/ContentFallbackNotice";
 
 interface ChallengePageProps {
   params: Promise<{
@@ -28,21 +29,20 @@ export default async function ChallengePage({ params }: ChallengePageProps) {
   }
 
   let ChallengeContent;
+  let challengeLocale = locale;
   try {
-    // Try to load the localized version first
     const challengeModule = await import(
       `@/app/content/challenges/${challengeMetadata.slug}/${locale}/verify.mdx`
     );
     ChallengeContent = challengeModule.default;
-  } catch (error) {
+  } catch {
     try {
-      // Fall back to English version if localized version doesn't exist
       const challengeModule = await import(
         `@/app/content/challenges/${challengeMetadata.slug}/en/verify.mdx`
       );
       ChallengeContent = challengeModule.default;
-    } catch (fallbackError) {
-      console.error("Failed to load both localized and English versions:", error, fallbackError);
+      challengeLocale = "en";
+    } catch {
       notFound();
     }
   }
@@ -104,6 +104,10 @@ export default async function ChallengePage({ params }: ChallengePageProps) {
           currentChallenge={challengeMetadata}
           content={
             <MdxLayout>
+              <ContentFallbackNotice
+                locale={locale}
+                originalLocale={challengeLocale}
+              />
               <ChallengeContent />
             </MdxLayout>
           }
@@ -113,6 +117,10 @@ export default async function ChallengePage({ params }: ChallengePageProps) {
           currentChallenge={challengeMetadata}
           content={
             <MdxLayout>
+              <ContentFallbackNotice
+                locale={locale}
+                originalLocale={challengeLocale}
+              />
               <ChallengeContent />
             </MdxLayout>
           }

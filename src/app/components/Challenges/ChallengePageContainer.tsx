@@ -8,6 +8,8 @@ import { Link } from "@/i18n/navigation";
 import Button from "@/app/components/Button/Button";
 import Icon from "@/app/components/Icon/Icon";
 import ChallengeLayout from "@/app/components/Layout/ChallengeLayout";
+import MdxLayout from "@/app/mdx-layout";
+import ContentFallbackNotice from "@/app/components/ContentFallbackNotice";
 
 interface ChallengePageContainerProps {
   params: Promise<{
@@ -30,6 +32,7 @@ export default async function ChallengePageContainer({
   }
 
   let MdxComponent;
+  let challengeLocale = locale;
   if (pageSlug) {
     const pageExists = challengeMetadata.pages?.some(
       (p) => p.slug === pageSlug,
@@ -38,39 +41,35 @@ export default async function ChallengePageContainer({
       notFound();
     }
     try {
-      // Try to load the localized version first
       const mdxModule = await import(
         `@/app/content/challenges/${challengeSlug}/${locale}/pages/${pageSlug}.mdx`
       );
       MdxComponent = mdxModule.default;
     } catch (error) {
       try {
-        // Fall back to English version if localized version doesn't exist
         const mdxModule = await import(
           `@/app/content/challenges/${challengeSlug}/en/pages/${pageSlug}.mdx`
         );
         MdxComponent = mdxModule.default;
-      } catch (fallbackError) {
-        console.error("Failed to load both localized and English versions:", error, fallbackError);
+        challengeLocale = "en";
+      } catch (error) {
         notFound();
       }
     }
   } else {
     try {
-      // Try to load the localized version first
       const mdxModule = await import(
         `@/app/content/challenges/${challengeSlug}/${locale}/challenge.mdx`
       );
       MdxComponent = mdxModule.default;
     } catch (error) {
       try {
-        // Fall back to English version if localized version doesn't exist
         const mdxModule = await import(
           `@/app/content/challenges/${challengeSlug}/en/challenge.mdx`
         );
         MdxComponent = mdxModule.default;
-      } catch (fallbackError) {
-        console.error("Failed to load both localized and English versions:", error, fallbackError);
+        challengeLocale = "en";
+      } catch (error) {
         notFound();
       }
     }
@@ -91,19 +90,19 @@ export default async function ChallengePageContainer({
       if (accountInfo) {
         collectionSize = decodeCoreCollectionNumMinted(accountInfo.data);
         if (collectionSize === null) {
-          console.warn(
-            `Could not decode num_minted for collection ${collectionMintAddress}`,
+          console.error(
+            `Failed to decode num_minted for collection ${collectionMintAddress}`,
           );
         }
       } else {
-        console.warn(
-          `Could not fetch account info for ${collectionMintAddress}`,
+        console.error(
+          `Failed to fetch account info for ${collectionMintAddress}`,
         );
       }
     } catch (error) {
-      console.warn(
-        `Could not fetch collection details for ${collectionMintAddress}:`,
-        error?.message || error,
+      console.error(
+        `Failed to fetch collection details for ${collectionMintAddress}:`,
+        error,
       );
     }
   }
@@ -208,7 +207,10 @@ export default async function ChallengePageContainer({
       pagination={pagination}
       footer={footer}
     >
-      <MdxComponent />
+      <MdxLayout>
+        <ContentFallbackNotice locale={locale} originalLocale={challengeLocale} />
+        <MdxComponent />
+      </MdxLayout>
     </ChallengeLayout>
   );
-} 
+}
