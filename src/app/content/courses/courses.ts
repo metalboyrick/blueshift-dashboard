@@ -47,7 +47,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   {
     slug: "introduction-to-assembly",
     language: "Assembly",
-    color: "0,255,255",
+    color: "140,255,102",
     difficulty: 1,
     isFeatured: true,
     lessons: [
