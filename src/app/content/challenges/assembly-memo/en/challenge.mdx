@@ -5,7 +5,7 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Assembly Memo
 
-In this unit we'll use sBPF Assembly to create a logging mechanism for our prgram.
+In this unit we'll use sBPF Assembly to create a logging mechanism for our program.
 
 The simplicity of a bite-size memo program is the perfect starting point for your sBPF assembly journey!
 
@@ -17,9 +17,9 @@ Our program will simply put the right memory location into the right register an
 
 <Codeblock lang="assembly">
 ```sbpf
-.equ NUM_ACCOUNTS, 0x00;
-.equ DATA_LEN, 0x08;
-.equ DATA, 0x10;
+.equ NUM_ACCOUNTS, 0x00
+.equ DATA_LEN, 0x08
+.equ DATA, 0x10
 .globl entrypoint
 entrypoint:
   ldxdw r0, [r1+NUM_ACCOUNTS]
@@ -36,9 +36,9 @@ The program begins by declaring three `.equ` constants that define the memory la
 
 <Codeblock lang="assembly">
 ```sbpf
-.equ NUM_ACCOUNTS, 0x00;  ; Offset for number of accounts
-.equ DATA_LEN, 0x08;      ; Offset for data length
-.equ DATA, 0x10;          ; Offset for actual data
+.equ NUM_ACCOUNTS, 0x00  ; Offset for number of accounts
+.equ DATA_LEN, 0x08      ; Offset for data length
+.equ DATA, 0x10          ; Offset for actual data
 ```
 </Codeblock>
 

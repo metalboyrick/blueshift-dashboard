@@ -39,7 +39,7 @@
         "instructions": "Instructions",
         "tooling": "Tooling",
         "program-example": "Program Example",
-        "conclusion": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "program-security": {
@@ -73,6 +73,16 @@
         "introduction": "Introduction",
         "mint-and-token-accounts": "Mint and Token Accounts",
         "functionalities": "Functionalities",
+        "metaplex-token-metadata": "Metaplex Token Metadata",
+        "conclusion": "Conclusion"
+      }
+    },
+    "nfts-on-solana": {
+      "title": "NFTs on Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "metaplex-token-metadata": "Metaplex Token Metadata",
+        "metaplex-core": "Metaplex Core",
         "conclusion": "Conclusion"
       }
     },
@@ -162,6 +172,16 @@
       "lessons": {
         "mollusk-101": "Mollusk 101",
         "advanced-functionalities": "Advanced Functionalities",
+        "conclusion": "Conclusion"
+      }
+    },
+    "create-your-sdk-with-codama": {
+      "title": "Create your SDK with Codama",
+      "lessons": {
+        "introduction": "Introduction",
+        "codama-from-scratch": "Codama IDL from Scratch",
+        "codama-with-anchor": "Codama IDL with Anchor",
+        "updating-codama-idl": "Updating Codama IDL",
         "conclusion": "Conclusion"
       }
     }
