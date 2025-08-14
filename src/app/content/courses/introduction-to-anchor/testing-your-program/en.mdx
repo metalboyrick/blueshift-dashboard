@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Testing your Program  
+
+Thoroughly testing your program is essential before deploying to mainnet to catch potential bugs and exploits that may be present. 
+
+A well-tested program not only prevents financial losses but also builds trust with users and ensures your application behaves as expected under various conditions.
+
+<ArticleSection name="Typescript Tests" id="typescript-tests" level="h2" />
+
+Testing your program with TypeScript is the most commonly used approach since you'll typically need to create a TypeScript implementation for your dApp anyway. 
+
+This way, you kill two birds with one stone by developing both your tests and client-side code simultaneously.
+
+We already covered how to set up your client-side code in detail [here](/en/courses/anchor-for-dummies/client-side-development). 
+
+> Every project initialized through the Anchor CLI comes with a test folder that includes a TypeScript file where you can write your tests.
+
+TypeScript tests are particularly valuable because they:
+- Mirror the actual client interactions your dApp will perform
+- Allow you to test complex user workflows and edge cases
+- Provide immediate feedback on API changes or breaking modifications
+- Enable you to validate both successful operations and error handling
+
+Once you're done writing your tests, simply run:
+
+```
+anchor test
+```
+
+> It's usually preferred to run tests on localnet by changing the `cluster` setting to localnet. A local validator will be spun up and the wallet used in the provider will have 1,000 SOL added to it automatically.
+
+<ArticleSection name="Mollusk Tests" id="mollusk-tests" level="h2" />
+
+Sometimes, setting up certain states in your program is difficult or requires complex on-chain interactions. 
+
+For these scenarios, using a testing environment like Mollusk is preferred because it provides more granular control over the testing environment.
+
+Mollusk is a Rust testing framework specifically designed for Solana programs that allows you to:
+- Test program logic in isolation without network overhead
+- Set up complex account states and program conditions easily
+- Run tests faster than full integration tests
+- Mock specific blockchain conditions and edge cases
+
+We covered testing your program with Mollusk thoroughly [here](/en/courses/testing-with-mollusk).
+
+You can create a new Anchor program with Mollusk using the Anchor CLI with this setup:
+
+```
+anchor init <name-of-the-project> --test-template mollusk
+```
+
+And then run your tests using:
+
+```
+anchor test
+```
+
+<ArticleSection name="Running a Local Validator" id="running-a-local-validator" level="h2" />
+
+You can mirror mainnet behavior on localnet using the local validator on your machine. This happens automatically on anchor when you change your cluster to localnet, but sometimes you need additional configuration for more comprehensive testing.
+
+A local validator acts as your personal blockchain node, providing a sandbox environment for testing applications without connecting to a live network. It operates a local test ledger: a simplified version of the Solana ledger equipped with all native programs pre-installed and various features enabled. 
+
+This ledger is fully customizable to meet your specific testing needs.
+
+However, the local validator only stores data created during your tests by default. This means it doesn't have access to accounts and programs already available on mainnet, which can limit your testing scenarios when you need to interact with existing protocols or account states.
+
+### Configuring Your Local Validator
+
+To add different programs and accounts to your Anchor local validator, add configuration fields in your `Anchor.toml` file under the `[test]` section:
+
+```
+[test]
+startup_wait = 10000
+```
+
+The `startup_wait` flag delays the startup of the solana-test-validator. This delay is especially beneficial when cloning multiple accounts, as it extends the validator's startup time to accommodate the increased load and ensure all accounts are properly loaded.
+
+### Cloning Mainnet Accounts
+
+To clone existing mainnet accounts and programs to your local validator, use the `[test.validator]` configuration:
+
+```
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+[[test.validator.clone]]
+address = "7NL2qWArf2BbEBBH1vTRZCsoNqFATTddH6h8GkVvrLpG"
+[[test.validator.clone]]
+address = "2RaN5auQwMdg5efgCaVqpETBV8sacWGR8tkK4m9kjo5r"
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+```
+
+The `[test.validator.clone]` section clones accounts from the specified cluster to your test environment. When an account is linked to a program managed by the "BPF upgradeable loader," Anchor automatically clones the associated program data account, ensuring the complete program state is available locally.
+
+### Loading Local Account Data
+
+To integrate local accounts from JSON files into your validator setup, use the `[test.validator.account]` flag for seamless account uploads:
+
+```
+[[test.validator.account]]
+address = "Ev8WSPQsGb4wfjybqff5eZNcS3n6HaMsBkMk9suAiuM"
+filename = "some_account.json"
+```
+
+This approach is particularly useful when you have pre-configured account states saved locally or when testing with specific account configurations that don't exist on mainnet.
+
+

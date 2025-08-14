@@ -26,6 +26,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "anchor-accounts" },
       { slug: "anchor-instructions" },
       { slug: "program-deployment" },
+      { slug: "client-side-development" },
       { slug: "conclusions" },
     ],
   },
