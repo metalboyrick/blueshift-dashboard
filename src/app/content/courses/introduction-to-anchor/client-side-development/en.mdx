@@ -142,5 +142,172 @@ const transaction = new Transaction().add(instructionOne, instructionTwo);
 await sendTransaction(transaction, connection);
 ```
 
+<ArticleSection name="Fetch and Filter Accounts" id="fetch-and-filter-accounts" level="h2" />
 
+Once your program creates hundreads of accounts, it becomes hard to keep track of all of them. Luckily the `Program` object also allows you to easily fetch and filter all program accounts.
 
+You can fetch all addresses of a specific account in your program by doing:
+
+```ts
+const accounts = await program.account.counter.all();
+```
+
+If you want specific accounts out of all of these, you can create filters using the `memcmp` flag like this:
+
+```ts
+const accounts = await program.account.counter.all([
+  {
+    memcmp: {
+      offset: 8,
+      bytes: bs58.encode(new BN(0, "le").toArray()),
+    },
+  },
+]);
+```
+
+> This fetches all the `Counter` accounts with 0 as the first field.
+
+Alternatively, for example when checking if the account data actually changed, you can get the deserialized account data for a specific account using `fetch` if you know the address of the account you're looking for:
+
+```ts
+const account = await program.account.counter.fetch(ACCOUNT_ADDRESS);
+```
+
+Similarly, you can fetch multiple accounts using `fetchMultiple`:
+
+```ts
+const accounts = await program.account.counter.fetchMultiple([
+  ACCOUNT_ADDRESS_ONE,
+  ACCOUNT_ADDRESS_TWO,
+]);
+```
+
+<ArticleSection name="Events and Webhooks" id="events-and-webhooks" level="h2" />
+
+Most of the time, as a developer, you don't want to fetch onchain data every time a user logs in with their wallet. For this reason, it's fundamental to set up systems that listen to the blockchain and save the data you need in a database.
+
+There are two main ways of listening to on-chain events:
+- Polling
+- Streaming
+
+Polling is a method where the client or application repeatedly checks a server or data source for new data at set intervals or on-demand. When a request is sent to the server, it responds with the latest data, whether or not there has been any change. This means the client may receive the same data repeatedly, even if there has been no update.
+
+Streaming is a technique where the server pushes data to the client when there is an update. The client does not need to request data repeatedly, and the server only sends data when there is a change. This results in more efficient and real-time data transfer, as the server sends only relevant data.
+
+To stream your Anchor instructions, you can use webhooks. Webhooks listen to events and send them to a server you've set up when they happen. For example, you might want to change a database entry whenever an NFT sale happens on your marketplace: a webhook can accomplish this seamlessly.
+
+> For extremely low latency use cases where a 5ms difference might make or break your application, you shouldn't use webhooks.
+
+Anchor provides two macros for emitting events in your programs:
+- `emit!()`: emits events directly to program logs using the `sol_log_data()` syscall and encoding the event data as a `base64` string prefixed with "Program Data"
+- `emit_cpi!()`: emits events through Cross Program Invocations (CPIs) to the program itself. The event data is encoded and included in the CPI's instruction data (instead of program logs)
+
+### `emit!()` macro
+
+This is how the `emit!()` macro looks like in your program:
+
+```rust
+use anchor_lang::prelude::*;
+ 
+declare_id!("8T7MsCZyzxboviPJg5Rc7d8iqEcDReYR2pkQKrmbg7dy");
+ 
+#[program]
+pub mod event {
+    use super::*;
+ 
+    pub fn emit_event(_ctx: Context<EmitEvent>, input: String) -> Result<()> {
+        emit!(CustomEvent { message: input });
+        Ok(())
+    }
+}
+ 
+#[derive(Accounts)]
+pub struct EmitEvent {}
+ 
+#[event]
+pub struct CustomEvent {
+    pub message: String,
+}
+```
+
+Since the event data is base64 encoded, to make it readable, the Anchor SDK has helpers that we can use like this:
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { Event } from "../target/types/event";
+ 
+describe("event", () => {
+  // Configure the client to use the local cluster.
+  anchor.setProvider(anchor.AnchorProvider.env());
+ 
+  const program = anchor.workspace.Event as Program<Event>;
+ 
+  it("Emits custom event", async () => {
+    // Set up listener before sending transaction
+    const listenerId = program.addEventListener("customEvent", event => {
+      // Do something with the event data
+      console.log("Event Data:", event);
+    });
+  });
+});
+```
+
+### `emit_cpi!()` macro
+
+This is how the `emit_cpi!()` macro looks in your program:
+
+```rust
+use anchor_lang::prelude::*;
+ 
+declare_id!("2cDQ2LxKwQ8fnFUz4LLrZ157QzBnhPNeQrTSmWcpVin1");
+ 
+#[program]
+pub mod event_cpi {
+    use super::*;
+ 
+    pub fn emit_event(ctx: Context<EmitEvent>, input: String) -> Result<()> {
+        emit_cpi!(CustomEvent { message: input });
+        Ok(())
+    }
+}
+ 
+#[event_cpi]
+#[derive(Accounts)]
+pub struct EmitEvent {}
+ 
+#[event]
+pub struct CustomEvent {
+    pub message: String,
+}
+```
+
+And on the client side:
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { EventCpi } from "../target/types/event_cpi";
+ 
+describe("event-cpi", () => {
+  // Configure the client to use the local cluster.
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const program = anchor.workspace.EventCpi as Program<EventCpi>;
+ 
+  it("Emits custom event", async () => { 
+    // Fetch the transaction data
+    const transactionData = await program.provider.connection.getTransaction(
+      transactionSignature,
+      { commitment: "confirmed" },
+    );
+ 
+    // Decode the event data from the CPI instruction data
+    const eventIx = transactionData.meta.innerInstructions[0].instructions[0];
+    const rawData = anchor.utils.bytes.bs58.decode(eventIx.data);
+    const base64Data = anchor.utils.bytes.base64.encode(rawData.subarray(8));
+    const event = program.coder.events.decode(base64Data);
+
+    console.log(event);
+  });
+});
+```
