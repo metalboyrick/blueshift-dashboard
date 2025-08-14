@@ -73,6 +73,16 @@
         "introduction": "Giới thiệu",
         "mint-and-token-accounts": "Tài khoản Mint và Token",
         "functionalities": "Các chức năng",
+        "metaplex-token-metadata": "Metaplex Token Metadata",
+        "conclusion": "Kết luận"
+      }
+    },
+    "nfts-on-solana": {
+      "title": "NFTs trên Solana",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "metaplex-token-metadata": "Metaplex Token Metadata",
+        "metaplex-core": "Metaplex Core",
         "conclusion": "Kết luận"
       }
     },
