@@ -1,0 +1,146 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Client Side Development
+
+Most dApp, will use typescript to interact with the program you deployed. For this reason, it's important to know how to integrate your program client side.
+
+<ArticleSection name="Anchor Client SDK" id="anchor-client-sdk" level="h2" />
+
+Anchor simplifies client interaction with Solana programs by providing an Interface Description Language (IDL) file that reflects the program's structure.
+
+Using the IDL with Anchor's TypeScript library (@coral-xyz/anchor) provides a streamlined format for building instructions and transactions.
+
+### Setup
+
+The `@coral-xyz/anchor` package is automatically installed when creating an Anchor program. After running `anchor build`, Anchor generates an IDL at `target/idl/<program-name>.json` and a TypeScript SDK at `target/types/<program-name>.ts` that abstracts away much of the complexity.
+
+You can then transfer them into a TypeScript client that interacts with an Anchor program, that usually is structured this way:
+
+```
+src
+├── anchor
+│     ├── <program-name>.json
+│     └── <program-name>.ts
+└── integration.ts
+```
+
+> The `integration.ts` file contains all logic for interacting with the smart contract. The `<program-name>.json` file is the IDL, and `<program-name>.ts` contains the generated TypeScript types.
+
+To use the wallet adapter with the Anchor TypeScript SDK, create an Anchor `Provider` object. The `Provider` combines the `Connection` (localhost, devnet, or mainnet) and the `Wallet` (the address used to pay for and sign transactions).
+
+Start by setting up the `Wallet` and `Connection`:
+
+```ts
+import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
+
+const { connection } = useConnection();
+const wallet = useAnchorWallet();
+```
+
+> The `useWallet` hook from `@solana/wallet-adapter-react` is incompatible with the `Wallet` object that the Anchor `Provider` expects. Use the `useAnchorWallet` hook instead.
+
+Now create the Provider object and set it as the default provider using `setProvider`:
+
+```
+import { AnchorProvider, setProvider } from "@coral-xyz/anchor";
+
+const provider = new AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
+
+setProvider(provider);
+```
+
+### Program
+
+Anchor provides a `Program` object that creates a custom API for interacting with Solana programs.
+
+This API serves as the central interface for all onchain program communication:
+- Send transactions, 
+- Fetch deserialized accounts, 
+- Decode instruction data, 
+- Subscribe to account changes, 
+- Listen to events
+
+Create the `Program` object by importing the types and IDL:
+
+```ts
+import <program-name> from "./<program-name>.json";
+import type { <Program-Type> } from "./<program-name>.ts";
+import { Program, Idl } from "@coral-xyz/anchor";
+
+const program = new Program(<program-name> as <Program-Type>);
+```
+
+If you haven't set a default provider, specify it explicitly:
+
+```ts
+const program = new Program(<program-name> as <Program-Type>, provider);
+```
+
+Once the `Program` object is configured, use the Anchor Methods Builder to construct instructions and transactions for the program.
+
+The `MethodsBuilder` uses the IDL to provide a streamlined format for building transactions that invoke program instructions.
+
+The basic `MethodsBuilder` format follows this pattern:
+
+```ts
+await program.methods
+  .instructionName(instructionDataInputs)
+  .accounts({})
+  .signers([])
+  .rpc();
+```
+
+> The API uses camel case naming convention instead of the snake case convention typical for Rust, and simply calls the instruction using dot syntax with the instruction's name, passing any instruction arguments as comma-separated values.
+
+If additional signers are required by the instruction beyond the provider, pass them using the `.signers()` call.
+
+### Accounts
+
+On the `MethodsBuilder`, use dot syntax to call `.accounts`, passing an object with each account the instruction expects based on the IDL.
+
+> From Anchor 0.30.0, accounts that can be "resolved" automatically, like PDAs or explicit addresses, are added to the IDL and are not required in the `.accounts` call (`.accountPartial()` becomes the default account resolution). To pass all accounts manually, use the `.accountsStrict()` call.
+
+### Transactions 
+
+The default method for sending transactions through Anchor is using the `.rpc()` call that directly sends the transaction to the chain.
+
+Sometimes, for example when creating a transaction on the frontend using the user's wallet and needing to safely sign the transaction with a keypair held in the backend, use the `.transaction()` call that creates a transaction to be signed later:
+
+```ts
+const transaction = await program.methods
+  .instructionName(instructionDataInputs)
+  .accounts({})
+  .transaction();
+
+//... Sign the transaction in the backend
+
+// Send the transaction to the chain
+await sendTransaction(transaction, connection);
+```
+
+To bundle multiple Anchor instructions, use the `.instruction()` call to get an instruction object to add to the transaction:
+
+```ts
+// creates first instruction
+const instructionOne = await program.methods
+  .instructionOneName(instructionOneDataInputs)
+  .accounts({})
+  .instruction();
+
+// creates second instruction
+const instructionTwo = await program.methods
+  .instructionTwoName(instructionTwoDataInputs)
+  .accounts({})
+  .instruction();
+
+// add both instruction to one transaction
+const transaction = new Transaction().add(instructionOne, instructionTwo);
+
+// send transaction
+await sendTransaction(transaction, connection);
+```
+
+
+
