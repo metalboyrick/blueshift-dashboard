@@ -151,4 +151,24 @@ After redeploying your program, update the on-chain IDL:
 anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
 ```
 
+<ArticleSection name="Verified Builds" id="verified-builds" level="h2" />
 
+Verified builds guarantee that the executable program deployed to Solana's network matches the source code in your repository. This process enables developers and users to confirm that the onchain program corresponds exactly to the public codebase, ensuring transparency and security.
+
+The verification process compares the hash of the onchain program against the hash of the locally built program from source code. This comparison detects any discrepancies between versions.
+
+Building programs with the Solana CLI can embed machine-specific code into the resulting binary. Consequently, compiling the same program on different machines may produce different executables. To resolve this issue, build inside a Docker image with pinned dependencies to produce a verifiable build.
+
+Anchor simplifies this process by providing CLI commands that handle both building and Docker configuration:
+
+```
+anchor build --verifiable
+```
+
+To verify a build against a program deployed on mainnet, run:
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+where `<lib-name>` is defined in your program's `Cargo.toml` file.
