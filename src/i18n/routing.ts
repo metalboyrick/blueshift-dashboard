@@ -10,6 +10,6 @@ export const localeNames = {
 };
 
 export const routing = defineRouting({
-  locales: ["en", "zh-CN", "fr", "id", "vi"],
+  locales: ["en", "zh-CN", "zh-HK", "fr", "id", "vi"],
   defaultLocale: "en",
 });
