@@ -1,0 +1,69 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Advanced Anchor
+
+Sometimes, some abstraction done with Anchor makes it impossible to build out the logic that our program needs. For this reason, in this section we're going to talk about how to use some advanced concept to work with out program.
+
+<ArticleSection name="Feature Flags" id="feature-flags" level="h2" />
+
+Software engineers routinely need distinct environments for local development, testing, and production. Feature flags provide an elegant solution by enabling conditional compilation and environment-specific configurations without maintaining separate codebases.
+
+### Cargo Features
+
+Cargo features offer a powerful mechanism for conditional compilation and optional dependencies. You define named features in your `Cargo.toml`'s `[features]` table, then enable or disable them as needed:
+- Enable features via command line: --features feature_name
+- Enable features for dependencies directly in Cargo.toml
+
+This gives you fine-grained control over what gets included in your final binary.
+
+### Feature Flags in Anchor
+
+Anchor programs commonly use feature flags to create different behaviors, constraints, or configurations based on the target environment. Use the `cfg` attribute to conditionally compile code:
+
+```rust
+#[cfg(feature = "testing")]
+fn function_for_testing() {
+   // Compiled only when "testing" feature is enabled
+}
+
+#[cfg(not(feature = "testing"))]
+fn function_for_production() {
+   // Compiled only when "testing" feature is disabled
+}
+```
+
+Feature flags excel at handling environment differences. Since not all tokens deploy across Mainnet and Devnet, you often need different addresses for different networks:
+
+```rust
+#[cfg(feature = "localnet")]
+pub const TOKEN_ADDRESS: &str = "Local_Token_Address_Here";
+
+#[cfg(not(feature = "localnet"))]
+pub const TOKEN_ADDRESS: &str = "Mainnet_Token_Address_Here";
+```
+
+This approach eliminates deployment configuration errors and streamlines your development workflow by switching environments at compile time rather than runtime.
+
+This is how you would set it up in your `Cargo.toml` file:
+
+```toml
+[features]
+default = ["localnet"]
+localnet = []
+```
+
+After that, you can specify the flag you want to build your program with like this:
+
+```
+# Uses default (localnet)
+anchor build
+
+# Build for mainnet
+anchor build --no-default-features
+```
+
+> Once you build the program, the binary will just have the conditional flag you enabled meaning that once you test and deploy it will respect that condition
+
+
+
+
