@@ -12,7 +12,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "blockchain-fundamentals" },
       { slug: "blockchain-evolution" },
       { slug: "introduction-to-solana" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -29,7 +29,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "program-deployment" },
       { slug: "client-side-development" },
       { slug: "advanced-anchor" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -45,13 +45,13 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "pinocchio-errors" },
       { slug: "reading-and-writing-data" },
       { slug: "performance" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
     slug: "introduction-to-assembly",
     language: "Assembly",
-    color: "0,255,255",
+    color: "140,255,102",
     difficulty: 1,
     isFeatured: true,
     lessons: [
@@ -80,7 +80,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "arbitrary-cpi" },
       { slug: "type-cosplay" },
       { slug: "pda-sharing" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -93,7 +93,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "introduction" },
       { slug: "secp256r1-with-anchor" },
       { slug: "secp256r1-with-pinocchio" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -107,7 +107,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "mint-and-token-accounts" },
       { slug: "functionalities" },
       { slug: "metaplex-token-metadata" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -138,7 +138,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "approve-and-revoke" },
       { slug: "freeze-and-thaw" },
       { slug: "set-authority" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -156,7 +156,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "approve-and-revoke" },
       { slug: "freeze-and-thaw" },
       { slug: "set-authority" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -168,7 +168,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     lessons: [
       { slug: "introduction" },
       { slug: "token-extensions" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -190,7 +190,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "permanent-delegate-extension" },
       { slug: "metadata-extension" },
       { slug: "group-and-member-extension" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -212,7 +212,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "permanent-delegate-extension" },
       { slug: "metadata-extension" },
       { slug: "group-and-member-extension" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -225,7 +225,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "introduction" },
       { slug: "introspection-with-anchor" },
       { slug: "introspection-with-pinocchio" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
   },
   {
@@ -237,8 +237,21 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     lessons: [
       { slug: "mollusk-101" },
       { slug: "advanced-functionalities" },
-      { slug: "conclusions" },
+      { slug: "conclusion" },
     ],
+  },
+  {
+    slug: "solana-pay",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "introduction" },
+      { slug: "transfer-request" },
+      { slug: "transaction-request" },
+      { slug: "conclusion" },
+     ],
   },
   {
     slug: "create-your-sdk-with-codama",
