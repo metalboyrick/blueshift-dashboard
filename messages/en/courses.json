@@ -175,6 +175,15 @@
         "conclusion": "Conclusion"
       }
     },
+    "solana-pay": {
+      "title": "Solana Pay",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-request": "Transfer Request",
+        "transaction-request": "Transaction Request",
+        "conclusion": "Conclusion"
+      }
+    },
     "create-your-sdk-with-codama": {
       "title": "Create your SDK with Codama",
       "lessons": {
