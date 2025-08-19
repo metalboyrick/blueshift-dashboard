@@ -16,7 +16,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     ],
   },
   {
-    slug: "introduction-to-anchor",
+    slug: "anchor-for-dummies",
     language: "Anchor",
     color: "221,234,224",
     difficulty: 1,
