@@ -64,6 +64,52 @@ anchor build --no-default-features
 
 > Once you build the program, the binary will just have the conditional flag you enabled meaning that once you test and deploy it will respect that condition
 
+<ArticleSection name="Working with Raw Accounts" id="working-with-raw-accounts" level="h2" />
+
+Anchor streamlines account handling by automatically deserializing accounts through the account context:
 
 
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub account: Account<'info, MyAccount>,
+}
 
+#[account]
+pub struct MyAccount {
+    pub data: u8,
+}
+```
+
+However, this automatic deserialization becomes problematic when you need conditional account processing, such as deserializing and modifying an account only when specific criteria are met.
+
+For conditional scenarios, use `UncheckedAccount` to defer validation and deserialization until runtime. This prevents hard errors when accounts might not exist or when you need to validate them programmatically:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    /// CHECK: Validated conditionally in instruction logic
+    pub account: UncheckedAccount<'info>,
+}
+
+#[account]
+pub struct MyAccount {
+    pub data: u8,
+}
+
+pub fn instruction(ctx: Context<Instruction>, should_process: bool) -> Result<()> {
+    if should_process {
+        // Deserialize the account data
+        let mut account = MyAccount::try_deserialize(&mut &ctx.accounts.account.to_account_info().data.borrow_mut()[..])
+            .map_err(|_| error!(InstructionError::AccountNotFound))?;
+
+        // Modify the account data
+        account.data += 1;
+
+        // Serialize back the data to the account
+        account.try_serialize(&mut &mut ctx.accounts.account.to_account_info().data.borrow_mut()[..])?;
+    }
+
+    Ok(())
+}
+```
