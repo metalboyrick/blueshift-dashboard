@@ -81,8 +81,8 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   },
   {
     slug: "secp256r1-on-solana",
-    language: "Rust",
-    color: "255,173,102",
+    language: "General",
+    color: "0,255,255",
     difficulty: 1,
     isFeatured: true,
     lessons: [
