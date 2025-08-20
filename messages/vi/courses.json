@@ -175,6 +175,15 @@
         "conclusion": "Kết luận"
       }
     },
+    "solana-pay": {
+      "title": "Solana Pay",
+      "lessons": {
+        "introduction":  "Giới thiệu",
+        "transfer-request": "Yêu cầu Transfer",
+        "transaction-request": "Yêu cầu Transaction",
+        "conclusion": "Kết luận"
+      }
+    },
     "create-your-sdk-with-codama": {
       "title": "Tạo SDK của bạn với Codama",
       "lessons": {
