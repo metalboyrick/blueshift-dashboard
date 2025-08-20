@@ -237,6 +237,19 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     ],
   },
   {
+    slug: "solana-pay",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "introduction" },
+      { slug: "transfer-request" },
+      { slug: "transaction-request" },
+      { slug: "conclusion" },
+     ],
+  },
+  {
     slug: "create-your-sdk-with-codama",
     language: "General",
     color: "0,255,255",
