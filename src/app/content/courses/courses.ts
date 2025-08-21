@@ -263,6 +263,19 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusion" },
     ],
   },
+  {
+    slug: "winternitz-signatures-on-solana",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "introduction" },
+      { slug: "winternitz-signatures-with-anchor" },
+      { slug: "winternitz-signatures-with-pinocchio" },
+      { slug: "conclusion" },
+    ],
+  },
 ]);
 
 const releasedCoursesSetting = process.env.NEXT_PUBLIC_RELEASED_COURSES?.trim();
