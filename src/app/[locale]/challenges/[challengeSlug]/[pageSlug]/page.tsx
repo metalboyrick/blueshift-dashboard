@@ -18,7 +18,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale });
   const pathname = getPathname({
     locale,
-    href: `/challenges/${challengeSlug}`,
+    href: `/challenges/${challengeSlug}/${pageSlug}`,
   });
 
   const ogImage = {
