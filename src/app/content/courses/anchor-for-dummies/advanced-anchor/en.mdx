@@ -62,7 +62,7 @@ anchor build
 anchor build --no-default-features
 ```
 
-> Once you build the program, the binary will just have the conditional flag you enabled meaning that once you test and deploy it will respect that condition
+> Once you build the program, the binary will just have the conditional flag you enabled meaning that once you test and deploy it will respect that condition.
 
 <ArticleSection name="Working with Raw Accounts" id="working-with-raw-accounts" level="h2" />
 
@@ -367,7 +367,7 @@ pub struct CallOtherProgram<'info> {
 }
 ```
 
-> You can CPI another Anchor program by adding in the your `Cargo.toml` under `[dependencies]`: `callee = { path = "../callee", features = ["cpi"] }` after building your program doing `anchor build -- --features cpi` and using `callee::cpi::<instruction>()`. This is not raccpomended since it could give you a circular dependency error.
+> You can CPI another Anchor program by adding in the your `Cargo.toml` under `[dependencies]`: `callee = { path = "../callee", features = ["cpi"] }` after building your program doing `anchor build -- --features cpi` and using `callee::cpi::<instruction>()`. This is not recommended since it could give you a circular dependency error.
 `
 
 
