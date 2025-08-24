@@ -8,7 +8,7 @@ This implementation is particularly valuable to provide quantum-resistant securi
 
 <ArticleSection name="Introduction" id="introduction" level="h2" />
 
-This implementation uses` w = 8` to balance Solana's constraints: transaction size limits and compute unit restrictions.
+This implementation uses `w = 8` to balance Solana's constraints: transaction size limits and compute unit restrictions.
 
 The Winternitz parameter `w` creates a fundamental trade-off between signature size and computational requirements:
 - Higher w values mean smaller signatures but more compute since verification requires more hash operations per signature component
@@ -67,7 +67,7 @@ To implement Winternitz signature verification in your Pinocchio program, you ne
 1. The `solana-winternitz` crate: This provides the core Winternitz signature functionality
 2. PDA creation and verification using quantum-secure address derivation
 
-Let's start by adding the `solana-winterntiz` crate
+Let's start by adding the `solana-winternitz` crate
 
 ```
 cargo add solana-winternitz
@@ -175,9 +175,9 @@ impl VerifyWinternitzSignature {
 }
 ```
 
-The `recover_pubkey()` function reconstructs the original public key by converting the signed message into digest values that specify how many additional hashes each component needs and èroducing 28 public key components that can only be generated with the correct private key.
+The `recover_pubkey()` function reconstructs the original public key by converting the signed message into digest values that specify how many additional hashes each component needs and producing 28 public key components that can only be generated with the correct private key.
 
-The `merklize()` function then build a binary tree from the 28 public key components producing a single 32-byte root that uniquely represents all 28 components
+The `merklize()` function then builds a binary tree from the 28 public key components producing a single 32-byte root that uniquely represents all 28 components
 
 <ArticleSection name="Security Considerations" id="security-considerations" level="h2" />
 

@@ -22,8 +22,6 @@ Robert Winternitz realized in the 1990s that instead of signing individual bits 
 
 ### The Winternitz Parameter and Base Representation
 
-### The Winternitz Parameter and Base Representation
-
 The crucial parameter in Winternitz signatures is `w`, which determines how we group message bits:
 - Base: `b = 2^w`
 - Digit range: Each digit represents `w` bits and can have values from `0` to `2^w - 1`
@@ -51,9 +49,9 @@ The checksum ensures that the total "hash budget" across all chains remains cons
 
 For a message length of `n` bits with Winternitz parameter `w`:
 
-1. Calculate signature length: First, figure out how many "chunks" you'll need to represent any message. If your messages are 256 bits long and you choose a Winternitz parameter of `w = 4`, you'll need 64 chunks total: `l₁ = ⌈n/w⌉`. Using the `l₂ = ⌊log₂(l₁ × (2^w - 1))/w⌋ + 1` we then find that for `w = 4`, which maximum checksum is 960, `l₂ = 3` and the size of the signature is going to be `l = l₁ + l₂`
+1. Calculate signature length: First, figure out how many "chunks" you'll need to represent any message. If your messages are 256 bits long and you choose a Winternitz parameter of `w = 4`, you'll need 64 chunks total: `l₁ = ⌈n/w⌉`. Using the formula `l₂ = ⌊log₂(l₁ × (2^w - 1))/w⌋ + 1` we then find that for `w = 4`, where the maximum checksum is 960, `l₂ = 3` and the size of the signature is going to be `l = l₁ + l₂`
 
-> During key generation, you don't know what the checksum will be because you haven't chosen a message to sign yet but still you need `l₂` private key components reserved for checksum.
+> During key generation, you don't know what the checksum will be because you haven't chosen a message to sign yet, but still you need `l₂` private key components reserved for checksum.
 
 2. Create random starting points: Generate one random secret value for each hash chain you'll need. These random values become your private key components. Think of each one as the "starting point" of a separate hash chain: `sk = (sk₁, sk₂, ..., skₗ)`
 
@@ -69,7 +67,7 @@ To sign message `M`:
 
 > To calculate the actual checksum value for that message we can use the appropriate checksum private key components and hash them the right number of times based on the checksum digits
 
-3. Generate signature: Where the base representation indicate the number of time the private key needs to be hashed.
+3. Generate signature: Where the base representation indicate the number of times the private key needs to be hashed.
 
 ### Verification Process
 
