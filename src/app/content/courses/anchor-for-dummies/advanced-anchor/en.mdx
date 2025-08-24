@@ -2,7 +2,7 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Advanced Anchor
 
-Sometimes, some abstraction done with Anchor makes it impossible to build out the logic that our program needs. For this reason, in this section we're going to talk about how to use some advanced concept to work with out program.
+Sometimes, the abstraction done with Anchor makes it impossible to build out the logic that our program needs. For this reason, in this section we're going to talk about how to use some advanced concept to work with out program.
 
 <ArticleSection name="Feature Flags" id="feature-flags" level="h2" />
 
@@ -135,7 +135,7 @@ pub struct Data {
 The `#[account(zero_copy)]` attribute automatically implements several traits required for zero-copy deserialization:
 - `#[derive(Copy, Clone)]`, 
 - `#[derive(bytemuck::Zeroable)]`, 
-- `#[derive(bytemuck::Pod)]`, 
+- `#[derive(bytemuck::Pod)]`, and 
 - `#[repr(C)]`
 
 > Note: To use zero-copy, add the `bytemuck` crate to your dependencies with the `min_const_generics` feature to work with arrays of any size in your zero-copy types.
@@ -369,8 +369,3 @@ pub struct CallOtherProgram<'info> {
 
 > You can CPI another Anchor program by adding in the your `Cargo.toml` under `[dependencies]`: `callee = { path = "../callee", features = ["cpi"] }` after building your program doing `anchor build -- --features cpi` and using `callee::cpi::<instruction>()`. This is not recommended since it could give you a circular dependency error.
 `
-
-
-
-
-
