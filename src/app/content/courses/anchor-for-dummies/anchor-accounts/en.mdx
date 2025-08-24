@@ -133,7 +133,7 @@ pub account: Account<'info, CustomAccountType>,
 
 **Note**: that PDAs are deterministic: same seeds + program + bump always produce the same address and that the bump ensures the address is off the ed25519 curve
 
-Since the calculating the bump can "burn" a lot of CUs, it's always good to save it into the account or pass it into the instruction and validate it without having to calculate like this:
+Since calculating the bump can "burn" a lot of CUs, it's always good to save it into the account or pass it into the instruction and validate it without having to calculate like this:
 
 ```rust
 #[account(
@@ -143,7 +143,7 @@ Since the calculating the bump can "burn" a lot of CUs, it's always good to save
 pub account: Account<'info, CustomAccountType>,
 ```
 
-And it's possible to derive a PDA that is derived from another program by passing the address of the program is derived from like this:
+And it's possible to derive a PDA from another program by passing the address of the program it's derived from like this:
 
 ```rust
 #[account(
@@ -556,7 +556,7 @@ We can easily pass remaining accounts using the Anchor SDK generated once we do 
 
 ```ts
 await program.methods.someMethod().accounts({
-  // somme accounts
+  // some accounts
 })
 .remainingAccounts([
   {
