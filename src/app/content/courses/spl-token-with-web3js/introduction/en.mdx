@@ -26,8 +26,6 @@ Without any abstraction, creating a `Mint` account would look like this:
 
 ```ts
 import {
-    clusterApiUrl,
-    Connection,
     Keypair,
     sendAndConfirmTransaction,
     SystemProgram,
@@ -41,32 +39,9 @@ import {
     TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
-(async() => {
-
-const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-
 const mint = Keypair.generate();
-const feePayer = Keypair.generate();
 
 const mintRent = await getMinimumBalanceForRentExemptMint(connection);
-
-const existingBalance = await connection.getBalance(feePayer.publicKey);
-console.log("Existing balance:", existingBalance);
-
-if (existingBalance < mintRent + 5000) { // Need extra for transaction fees
-    console.log("Requesting airdrop...");
-    const airdropSignature = await connection.requestAirdrop(feePayer.publicKey, 1_000_000_000);
-
-    const confirmationResult = await connection.confirmTransaction(airdropSignature, "confirmed");
-
-    if (confirmationResult.value.err) {
-        throw new Error(`Airdrop failed: ${confirmationResult.value.err}`);
-    }
-
-    console.log("Airdrop confirmed!");
-
-    await new Promise(resolve => setTimeout(resolve, 1000));
-}
 
 const createAccountInstruction = SystemProgram.createAccount({
     fromPubkey: feePayer.publicKey,
@@ -89,10 +64,9 @@ const transaction = new Transaction().add(
     initializeMintInstruction,
 );
 
-const signature = await sendAndConfirmTransaction(connection, transaction, [feePayer, mint]);
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
 
 console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-})();
 ```
 
 Thankfully, the `@solana/spl-token` package has some abstraction. So we can create a `Mint` account with a single `createMint()` function like so: 
@@ -126,11 +100,7 @@ import {
     TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
-(async() => {
-const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-
 const token = Keypair.generate();
-const feePayer = Keypair.generate();
 
 const tokenRent = await getMinimumBalanceForRentExemptAccount(connection);
 
@@ -154,10 +124,9 @@ const transaction = new Transaction().add(
     initializeTokenInstruction,
 );
 
-const signature = await sendAndConfirmTransaction(connection, transaction, [feePayer, token]);
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, token]);
 
 console.log(`Token created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-})();
 ```
 
 But same as the `Mint` account, the `@solana/spl-token` package has some abstraction to create the `Token` account. We can use the `createAccount()` function like so:
@@ -179,24 +148,15 @@ So here's how we create an `Associated Token` account without any abstractions:
 
 ```ts
 import {
-    clusterApiUrl,
-    Connection,
-    Keypair,
     sendAndConfirmTransaction,
     Transaction,
 } from "@solana/web3.js";
 
 import {
-    TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID
     createAssociatedTokenAccountIdempotentInstruction,
     getAssociatedTokenAddress,
 } from "@solana/spl-token";
-
-(async() => {
-
-const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-
-const keypair = Keypair.generate();
 
 const associatedTokenAccount = await getAssociatedTokenAddress(
     mint.publicKey, // mint pubkey
@@ -221,7 +181,6 @@ const transaction = new Transaction().add(
 const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
 
 console.log(`Associated Token created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-})();
 ```
 
 And here's how it looks with abstractions: 
