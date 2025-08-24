@@ -42,7 +42,7 @@ Include program-specific helpers as needed:
 cargo add mollusk-svm-programs-memo mollusk-svm-programs-token --dev
 ```
 
-These additional crates provide pre-configured helpers for standard Solana programs, reducing boilerplate code and simplifying the setup of common testing scenarios involving token operations or memo instructions.
+These additional crates provide pre-configured helpers for standard Solana programs. This reduces boilerplate code and simplifies the setup of common testing scenarios involving token operations or memo instructions.
 
 > The `--dev` flag in `cargo add <crate-name> --dev` is used to  keep your program binary lightweight by adding them under the `[dev-dependencies]` section in your `Cargo.toml`
 > This configuration ensures that testing utilities don't increase your program's deployment size while providing access to all necessary Solana types and helper functions during development.
