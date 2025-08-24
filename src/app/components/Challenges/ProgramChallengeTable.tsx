@@ -60,6 +60,7 @@ export default function ChallengeTable({
   const [isCompletedModalOpen, setIsCompletedModalOpen] = useState(false);
   const [allowRedo, setAllowRedo] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isCopied, setIsCopied] = useState(false);
   const { challengeStatuses, setChallengeStatus } = usePersistentStore();
   const auth = useAuth();
 
@@ -120,6 +121,44 @@ export default function ChallengeTable({
   };
 
   /**
+   * Handle copying program logs content
+   */
+  const handleCopyLogs = async (requirement: ChallengeRequirement) => {
+    if (!verificationData) return;
+
+    const result = verificationData.results.find(
+      (result) => result.instruction === requirement.instructionKey
+    );
+
+    if (!result) return;
+
+    let logContent = '';
+
+    // Add error message if present
+    if (result.message) {
+      logContent += `ERROR: ${result.message}\n`;
+    }
+
+    // Add program logs if present
+    if (result.program_logs && result.program_logs.length > 0) {
+      if (logContent) logContent += '\n';
+      logContent += 'PROGRAM LOGS:\n';
+      result.program_logs.forEach((log) => {
+        logContent += `${log.slice(7)}\n`;
+      });
+    }
+
+    if (!logContent) return;
+
+    await navigator.clipboard.writeText(logContent.trim());
+    setIsCopied(true);
+
+    setTimeout(() => {
+      setIsCopied(false);
+    }, 3000);
+  };
+
+  /**
    * Renders the assistance prompt when failed attempts threshold is reached
    */
   const renderAssistancePrompt = () => {
@@ -164,51 +203,51 @@ export default function ChallengeTable({
       <div className="relative flex flex-col gap-y-4 w-full overflow-hidden px-1.5 pt-1.5 pb-12 border rounded-2xl border-border bg-background-card">
         {(challengeStatuses[challengeSlug] === "completed" ||
           challengeStatuses[challengeSlug] === "claimed") && !allowRedo && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute z-10 inset-0 w-full h-full bg-background/80 backdrop-blur gap-y-5 flex flex-col items-center justify-center"
-          >
-            <div className="flex flex-col items-center justify-center gap-y-1">
-              <span className="text-lg font-medium text-primary">
-                {t("ChallengePage.challenge_completed.title")}
-              </span>
-              <span className="text-tertiary">
-                {t("ChallengePage.challenge_completed.body")}
-              </span>
-            </div>
-            <Link href={fromCourse ? "/courses" : "/challenges"}>
-              <Button
-                variant="primary"
-                size="md"
-                icon="Lessons"
-                label={t(
-                  fromCourse
-                    ? "ChallengePage.challenge_completed.view_other_courses"
-                    : "ChallengePage.challenge_completed.view_other_challenges"
-                )}
-              />
-            </Link>
-            <div className="relative w-full">
-              <div className="font-mono absolute text-xs text-mute top-1/2 z-10 -translate-y-1/2 left-1/2 -translate-x-1/2 px-4 bg-background">
-                {t(`ChallengePage.challenge_completed.divider_label`).toUpperCase()}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute z-10 inset-0 w-full h-full bg-background/80 backdrop-blur gap-y-5 flex flex-col items-center justify-center"
+            >
+              <div className="flex flex-col items-center justify-center gap-y-1">
+                <span className="text-lg font-medium text-primary">
+                  {t("ChallengePage.challenge_completed.title")}
+                </span>
+                <span className="text-tertiary">
+                  {t("ChallengePage.challenge_completed.body")}
+                </span>
               </div>
-              <div className="w-full h-[1px] bg-border absolute"></div>
-            </div>
-            <Button
-              variant="secondary"
-              size="md"
-              icon="Refresh"
-              label={t("ChallengePage.challenge_completed.redo")}
-              onClick={() => {
-                handleRedoChallenge();
-                setAllowRedo(true);
-                setIsCompletedModalOpen(false);
-              }}
-            />
-          </motion.div>
-        )}
+              <Link href={fromCourse ? "/courses" : "/challenges"}>
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon="Lessons"
+                  label={t(
+                    fromCourse
+                      ? "ChallengePage.challenge_completed.view_other_courses"
+                      : "ChallengePage.challenge_completed.view_other_challenges"
+                  )}
+                />
+              </Link>
+              <div className="relative w-full">
+                <div className="font-mono absolute text-xs text-mute top-1/2 z-10 -translate-y-1/2 left-1/2 -translate-x-1/2 px-4 bg-background">
+                  {t(`ChallengePage.challenge_completed.divider_label`).toUpperCase()}
+                </div>
+                <div className="w-full h-[1px] bg-border absolute"></div>
+              </div>
+              <Button
+                variant="secondary"
+                size="md"
+                icon="Refresh"
+                label={t("ChallengePage.challenge_completed.redo")}
+                onClick={() => {
+                  handleRedoChallenge();
+                  setAllowRedo(true);
+                  setIsCompletedModalOpen(false);
+                }}
+              />
+            </motion.div>
+          )}
         <div
           className={classNames(
             "gap-y-6 sm:gap-y-0 flex sm:flex-row flex-col items-center justify-between px-4 sm:px-6 py-4 sm:py-5 rounded-[10px] bg-background-card-foreground"
@@ -232,9 +271,9 @@ export default function ChallengeTable({
                       className={classNames(
                         "first:rounded-l-full last:rounded-r-full left-[1px]",
                         requirement.status === "passed" &&
-                          "[background:linear-gradient(180deg,rgba(255,255,255,0.5)_0%,rgba(255,255,255,0)_100%),#00E66B]",
+                        "[background:linear-gradient(180deg,rgba(255,255,255,0.5)_0%,rgba(255,255,255,0)_100%),#00E66B]",
                         requirement.status === "failed" &&
-                          "[background:linear-gradient(180deg,rgba(255,255,255,0.5)_0%,rgba(255,255,255,0)_100%),#FF285A]",
+                        "[background:linear-gradient(180deg,rgba(255,255,255,0.5)_0%,rgba(255,255,255,0)_100%),#FF285A]",
                         // Make incomplete segments transparent to show the parent background
                         requirement.status === "incomplete" && "bg-transparent"
                       )}
@@ -318,10 +357,10 @@ export default function ChallengeTable({
               className={classNames(
                 "flex flex-col gap-y-4 group sm:px-4 enabled:hover:cursor-pointer py-3 rounded-xl transition duration-200 enabled:hover:bg-background-card-foreground/50",
                 selectedRequirement === requirement &&
-                  "pb-6 bg-background-card-foreground/50",
+                "pb-6 bg-background-card-foreground/50",
                 selectedRequirement !== null &&
-                  selectedRequirement !== requirement &&
-                  "opacity-40"
+                selectedRequirement !== requirement &&
+                "opacity-40"
               )}
               key={requirement.instructionKey}
             >
@@ -373,145 +412,170 @@ export default function ChallengeTable({
                     (result) =>
                       result.instruction === requirement.instructionKey
                   ) && (
-                    <div className="flex flex-col gap-y-2 text-sm">
-                      <div className="flex flex-col gap-y-4 items-start overflow-hidden bg-background pt-4 px-1 pb-1 rounded-xl">
-                        <HeadingReveal
-                          baseDelay={0.1}
-                          text="PROGRAM LOGS"
-                          headingLevel="h3"
-                          className="font-mono px-3"
-                          color="#00ffff"
-                        />
-                        <div className="px-2 w-full">
-                          <Divider />
-                        </div>
-                        <div className="flex gap-x-2 items-center w-full">
-                          <div className="flex flex-col gap-y-2 pt-1 pb-2">
-                            {verificationData.results.find(
-                              (result) =>
-                                result.instruction ===
-                                requirement.instructionKey
-                            )?.message && (
-                              <HeadingReveal
-                                baseDelay={0}
-                                text="ERROR"
-                                headingLevel="h3"
-                                splitBy="chars"
-                                speed={0.1}
-                                color="#FF5555"
-                                className="font-mono px-3 flex-shrink-0 w-max sticky left-0"
+                      <div className="flex flex-col gap-y-2 text-sm">
+                        <div className="flex flex-col gap-y-4 items-start overflow-hidden bg-background pt-4 px-1 pb-1 rounded-xl">
+                          <div className="flex items-center justify-between w-full px-3">
+                            <HeadingReveal
+                              baseDelay={0.1}
+                              text="PROGRAM LOGS"
+                              headingLevel="h3"
+                              className="font-mono"
+                              color="#00ffff"
+                            />
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2, ease: anticipate }}
+                              key={isCopied ? "success" : "copy"}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent event bubbling
+                                if (isCopied) return;
+                                handleCopyLogs(requirement);
+                              }}
+                            >
+                              <Icon
+                                name={isCopied ? "Success" : "Copy"}
+                                size={16 as 18 | 14 | 12}
+                                className={classNames(
+                                  "text-mute hover:text-secondary transition cursor-pointer",
+                                  {
+                                    "!text-brand-primary !cursor-default": isCopied,
+                                  }
+                                )}
                               />
-                            )}
-                            {verificationData.results
-                              .find(
-                                (result) =>
-                                  result.instruction ===
-                                  requirement.instructionKey
-                                                          )
-                            ?.program_logs?.map((log, index) => (
-                              <HeadingReveal
-                                baseDelay={index * 0.1}
-                                text="PROGRAM"
-                                headingLevel="h3"
-                                key={index}
-                                splitBy="chars"
-                                speed={0.1}
-                                className="font-mono px-3 flex-shrink-0 w-max sticky left-0"
-                              />
-                            ))}
-                        </div>
-                          <div className="flex flex-col gap-y-2 items-start px-1 overflow-x-auto pr-5 pb-2">
-                            {verificationData.results.find(
-                              (result) =>
-                                result.instruction ===
-                                requirement.instructionKey
-                            )?.message && (
-                              <motion.span
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{
-                                  duration: 0.4,
-                                  ease: anticipate,
-                                  delay: 0.8,
-                                }}
-                                className="text-start w-full font-geist-mono font-medium text-nowrap text-[#FF5555]"
-                              >
-                                {
-                                  verificationData.results.find(
-                                    (result) =>
-                                      result.instruction ===
-                                      requirement.instructionKey
-                                  )?.message
-                                }
-                              </motion.span>
-                            )}
-                            {verificationData.results
-                              .find(
-                                (result) =>
-                                  result.instruction ===
-                                  requirement.instructionKey
-                              )
-                              ?.program_logs?.map((log, index) => (
-                                <motion.span
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  transition={{
-                                    duration: 0.4,
-                                    ease: anticipate,
-                                    delay: 1 + index * 0.1,
-                                  }}
-                                  key={index}
-                                  className="text-start font-geist-mono font-medium text-nowrap text-secondary"
-                                >
-                                  {log.slice(7, log.length)}
-                                </motion.span>
-                              ))}
+                            </motion.div>
                           </div>
-                        </div>
-
-                        <div className="bg-background-card/80 rounded-lg px-4 py-2 flex gap-x-4 text-sm font-medium w-full justify-between items-center">
-                          <Icon
-                            name="ShiftArrow"
-                            size={14}
-                            className="text-brand-primary"
-                          />
-                          <div className="flex items-center gap-x-2">
-                            <div>
-                              <span className="text-text-tertiary">
-                                Compute Units:{" "}
-                              </span>
-                              <span className="font-medium text-brand-secondary">
-                                {
-                                  verificationData.results.find(
-                                    (result) =>
-                                      result.instruction ===
-                                      requirement.instructionKey
-                                  )?.compute_units_consumed
-                                }
-                              </span>
+                          <div className="px-2 w-full">
+                            <Divider />
+                          </div>
+                          <div className="flex gap-x-2 items-center w-full">
+                            <div className="flex flex-col gap-y-2 pt-1 pb-2">
+                              {verificationData.results.find(
+                                (result) =>
+                                  result.instruction ===
+                                  requirement.instructionKey
+                              )?.message && (
+                                  <HeadingReveal
+                                    baseDelay={0}
+                                    text="ERROR"
+                                    headingLevel="h3"
+                                    splitBy="chars"
+                                    speed={0.1}
+                                    color="#FF5555"
+                                    className="font-mono px-3 flex-shrink-0 w-max sticky left-0"
+                                  />
+                                )}
+                              {verificationData.results
+                                .find(
+                                  (result) =>
+                                    result.instruction ===
+                                    requirement.instructionKey
+                                )
+                                ?.program_logs?.map((log, index) => (
+                                  <HeadingReveal
+                                    baseDelay={index * 0.1}
+                                    text="PROGRAM"
+                                    headingLevel="h3"
+                                    key={index}
+                                    splitBy="chars"
+                                    speed={0.1}
+                                    className="font-mono px-3 flex-shrink-0 w-max sticky left-0"
+                                  />
+                                ))}
                             </div>
-                            <div>
-                              <span className="text-text-tertiary">
-                                Execution Time:{" "}
-                              </span>
-                              <span className="font-medium text-brand-secondary">
-                                {
-                                  verificationData.results.find(
-                                    (result) =>
-                                      result.instruction ===
-                                      requirement.instructionKey
-                                  )?.execution_time
-                                }
-                                ms
-                              </span>
+                            <div className="flex flex-col gap-y-2 items-start px-1 overflow-x-auto pr-5 pb-2">
+                              {verificationData.results.find(
+                                (result) =>
+                                  result.instruction ===
+                                  requirement.instructionKey
+                              )?.message && (
+                                  <motion.span
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{
+                                      duration: 0.4,
+                                      ease: anticipate,
+                                      delay: 0.8,
+                                    }}
+                                    className="text-start w-full font-geist-mono font-medium text-nowrap text-[#FF5555]"
+                                  >
+                                    {
+                                      verificationData.results.find(
+                                        (result) =>
+                                          result.instruction ===
+                                          requirement.instructionKey
+                                      )?.message
+                                    }
+                                  </motion.span>
+                                )}
+                              {verificationData.results
+                                .find(
+                                  (result) =>
+                                    result.instruction ===
+                                    requirement.instructionKey
+                                )
+                                ?.program_logs?.map((log, index) => (
+                                  <motion.span
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{
+                                      duration: 0.4,
+                                      ease: anticipate,
+                                      delay: 1 + index * 0.1,
+                                    }}
+                                    key={index}
+                                    className="text-start font-geist-mono font-medium text-nowrap text-secondary"
+                                  >
+                                    {log.slice(7, log.length)}
+                                  </motion.span>
+                                ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-background-card/80 rounded-lg px-4 py-2 flex gap-x-4 text-sm font-medium w-full justify-between items-center">
+                            <Icon
+                              name="ShiftArrow"
+                              size={14}
+                              className="text-brand-primary"
+                            />
+                            <div className="flex items-center gap-x-2">
+                              <div>
+                                <span className="text-text-tertiary">
+                                  Compute Units:{" "}
+                                </span>
+                                <span className="font-medium text-brand-secondary">
+                                  {
+                                    verificationData.results.find(
+                                      (result) =>
+                                        result.instruction ===
+                                        requirement.instructionKey
+                                    )?.compute_units_consumed
+                                  }
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-text-tertiary">
+                                  Execution Time:{" "}
+                                </span>
+                                <span className="font-medium text-brand-secondary">
+                                  {
+                                    verificationData.results.find(
+                                      (result) =>
+                                        result.instruction ===
+                                        requirement.instructionKey
+                                    )?.execution_time
+                                  }
+                                  ms
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </motion.div>
               )}
             </motion.button>
