@@ -27,6 +27,7 @@ Và với tất cả các ràng buộc, nó sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
+#[derive(Accounts)]
 #[instruction(seed: u64)]
 pub struct Make<'info> {
     #[account(mut)]

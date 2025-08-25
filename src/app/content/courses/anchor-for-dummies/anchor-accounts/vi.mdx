@@ -133,7 +133,7 @@ pub account: Account<'info, CustomAccountType>,
 
 **Chú ý**: Các PDA là xác định: cùng một seeds + program + bump luôn luôn tạo ra cùng một địa chỉ và bump đảm bảo rằng địa chỉ nằm ngoài đường cong ed25519.
 
-Bởi vì việc tính toán số bump có thể "đôt" nhiều tài nguyên CU, nên luôn tốt hơn là lưu trữ nó trong tài khoản hoặc chuyển nó vào trong lệnh và xác minh nó mà không cần phải tính toán như thế này:
+Bởi vì việc tính toán số bump có thể "đốt" nhiều tài nguyên CU, nên luôn tốt hơn là lưu trữ nó trong tài khoản hoặc chuyển nó vào trong lệnh và xác minh nó mà không cần phải tính toán như thế này:
 
 
 ```rust
@@ -153,6 +153,56 @@ Và có thể tạo ra một PDA được tạo từ một chương trình khác
     seeds::program = <expr>
 )]
 pub account: Account<'info, CustomAccountType>,
+```
+
+### Lazy Account
+
+Bắt đầu từ Anchor 0.31.0, `LazyAccount` cung cấp một cách hiệu quả hơn để đọc dữ liệu tài khoản. Không giống như loại `Account` tiêu chuẩn mà deserialize toàn bộ tài khoản vào stack, `LazyAccount` là một tài khoản chỉ đọc, được cấp phát trên heap, chỉ sử dụng 24 byte bộ nhớ stack và cho phép bạn chọn lọc tải các trường cụ thể.
+
+Bắt đầu bằng cách kích hoạt tính năng trong `Cargo.toml` của bạn:
+
+```
+anchor-lang = { version = "0.31.1", features = ["lazy-account"] }
+```
+
+Bây giờ bạn có thể dùng nó như thế này:
+
+```rust
+#[derive(Accounts)]
+pub struct MyInstruction<'info> {
+    pub account: LazyAccount<'info, CustomAccountType>,
+}
+
+#[account(discriminator = 1)]
+pub struct CustomAccountType {
+    pub balance: u64,
+    pub metadata: String,
+}
+
+pub fn handler(ctx: Context<MyInstruction>) -> Result<()> {
+    // Load specific field
+    let balance = ctx.accounts.account.get_balance()?;
+    let metadata = ctx.accounts.account.get_metadata()?;
+    
+    Ok(())
+}
+```
+
+> `LazyAccount` là account chỉ đọc. Việc cố gắng thay đổi các trường sẽ dẫn đến lỗi panic vì bạn đang làm việc trên tham chiếu, không phải dữ liệu được cấp phát trên stack.
+
+Khi CPI thay đổi tài khoản, các giá trị được cache sẽ trở nên lỗi thời. Vì lý do này, bạn cần sử dụng hàm `unload()` để làm mới:
+
+```rust
+// Load the initial value
+let initial_value = ctx.accounts.my_account.load_field()?;
+
+// Do CPI...
+
+// We still have a reference to the account from `initial_value`, drop it before `unload`
+drop(initial_value);
+
+// Load the updated value
+let updated_value = ctx.accounts.my_account.unload()?.load_field()?;
 ```
 
 <ArticleSection name="Token Accounts" id="token-program" level="h2" />
@@ -434,3 +484,69 @@ pub account: Account<'info, CustomAccountType>,
 ```
 
 Những ràng buộc này có thể được kết hợp để tạo ra các quy tắc validation mạnh mẽ cho tài khoản của bạn. Bằng cách đặt validation ở cấp độ tài khoản, bạn giữ các kiểm tra bảo mật gần với định nghĩa tài khoản và tránh việc rải rác các lời gọi `require!()` trong suốt logic instruction của bạn.
+
+<ArticleSection name="Các account còn lại" id="remaining-accounts" level="h2" />
+
+Thỉnh thoảng khi viết chương trình, cấu trúc cố định của các tài khoản cho instruction không cung cấp đủ tính linh hoạt mà chương trình của bạn cần.
+
+Các tài khoản còn lại (remaining account) giải quyết vấn đề này bằng cách cho phép bạn truyền thêm các tài khoản ngoài cấu trúc tài khoản của instruction đã định nghĩa, cho phép các hành vi động dựa trên các điều kiện thời gian chạy.
+
+### Vấn đề với các account cố định 
+
+Các định nghĩa instruction truyền thống yêu cầu bạn chỉ định chính xác các tài khoản sẽ được sử dụng:
+
+```rust
+#[derive(Accounts)]
+pub struct Transfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+```
+
+Điều này hoạt động tốt cho các thao tác đơn lẻ, nhưng nếu bạn muốn thực hiện nhiều lần chuyển token trong một instruction thì sao? Bạn sẽ cần gọi instruction nhiều lần, làm tăng chi phí giao dịch và độ phức tạp.
+
+Các tài khoản còn lại cho phép bạn truyền thêm các tài khoản không phải là một phần của cấu trúc instruction cố định, có nghĩa là chương trình của bạn có thể lặp qua các tài khoản này và áp dụng logic lặp lại một cách động.
+
+Thay vì yêu cầu các instruction riêng biệt cho mỗi lần chuyển, bạn có thể thiết kế một instruction xử lý "N" lệnh chuyển:
+
+```rust
+#[derive(Accounts)]
+pub struct BatchTransfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+
+pub fn batch_transfer(ctx: Context<BatchTransfer>, amounts: Vec<u64>) -> Result<()> {
+    // Handle the first transfer using fixed accounts
+    transfer_tokens(&ctx.accounts.from, &ctx.accounts.to, amounts[0])?;
+    
+    let remaining_accounts = &ctx.remaining_accounts;
+
+    // CRITICAL: Validate remaining accounts schema
+    // For batch transfers, we expect pairs of accounts
+    require!(
+        remaining_accounts.len() % 2 == 0,
+        TransferError::InvalidRemainingAccountsSchema
+    );
+
+    // Process remaining accounts in groups of 2 (from_account, to_account)
+    for (i, chunk) in remaining_accounts.chunks(2).enumerate() {
+        let from_account = &chunk[0];
+        let to_account = &chunk[1];
+        let amount = amounts[i + 1];
+        
+        // Apply the same transfer logic to remaining accounts
+        transfer_tokens(from_account, to_account, amount)?;
+    }
+    
+    Ok(())
+}
+```
+
+Xử lý hàng loạt instruction có nghĩa là: 
+- Kích thước instruction nhỏ hơn: các tài khoản và dữ liệu lặp lại không cần phải được đính kèm
+- Hiệu quả: mỗi CPI tốn 1000 CU, có nghĩa là ai đó sử dụng chương trình của bạn có thể gọi nó chỉ một lần thay vì 3 lần nếu họ cần thực hiện các instruction hàng loạt
+
+> Các tài khoản còn lại được truyền dưới dạng `UncheckedAccount`, có nghĩa là Anchor không thực hiện bất kỳ xác thực nào trên chúng. Luôn luôn xác thực `RemainingAccountSchema` và tài khoản cơ sở.

@@ -1,0 +1,105 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Kiểm thử chương trình
+
+Kiểm thử kỹ lưỡng là rất quan trọng trước khi triển khai lên mainnet để xác định các lỗi và lỗ hổng tiềm ẩn.
+
+Các chương trình được kiểm thử tốt giúp ngăn ngừa tổn thất tài chính, xây dựng lòng tin của người dùng và đảm bảo ứng dụng hoạt động chính xác dưới nhiều điều kiện khác nhau.
+
+<ArticleSection name="Kiểm thử bằng Typescript" id="typescript-tests" level="h2" />
+
+Kiểm thử bằng Typescript là phương pháp phổ biến nhất vì bạn sẽ cần triển khai Typescript cho dApp của mình. Phương pháp này cho phép bạn phát triển các bài kiểm tra và mã phía client đồng thời.
+
+Chúng tôi đã đề cập đến việc thiết lập phía client một cách chi tiết [tại đây](/vi/courses/anchor-for-dummies/client-side-development).
+
+> Mỗi dự án Anchor CLI đều bao gồm một thư mục kiểm thử với một tệp TypeScript để viết các bài kiểm thử.
+
+Các bài kiểm thử TypeScript cung cấp một số lợi ích:
+- Phản ánh các tương tác thực tế của client mà ứng dụng của bạn sẽ thực hiện
+- Kiểm tra các quy trình làm việc của người dùng phức tạp và các trường hợp biên
+- Cung cấp phản hồi ngay lập tức về các thay đổi API
+- Xác thực cả các hoạt động thành công và xử lý lỗi
+
+Chạy kiểm thử bằng lệnh:
+
+```
+anchor test
+```
+
+> Chạy các bài kiểm thử trên localnet bằng cách đặt cluster thành localnet trong cấu hình của bạn. Điều này sẽ khởi động một validator cục bộ và tự động thêm 1.000 SOL vào ví provider.
+
+<ArticleSection name="Kiểm thử bằng Mollusk" id="mollusk-tests" level="h2" />
+
+Khi thiết lập các trạng thái chương trình phức tạp hoặc yêu cầu các tương tác onchain trở nên khó khăn, Mollusk cung cấp khả năng kiểm soát chi tiết hơn về môi trường kiểm thử.
+
+Mollusk là một framework kiểm thử viết bằng Rust được thiết kế đặc biệt cho các chương trình Solana, cho phép bạn:
+- Kiểm thử logic chương trình một cách độc lập mà không bị ảnh hưởng bởi mạng
+- Thiết lập các trạng thái tài khoản và điều kiện chương trình phức tạp một cách dễ dàng
+- Chạy các bài kiểm thử nhanh hơn so với các bài kiểm thử tích hợp đầy đủ
+- Giả lập các điều kiện blockchain cụ thể và các trường hợp biên
+
+Chúng tôi đã đề cập đến việc kiểm thử Mollusk một cách chi tiết [tại đây](/vi/courses/testing-with-mollusk).
+
+Tạo một chương trình Anchor mới với Mollusk:
+
+```
+anchor init <name-of-the-project> --test-template mollusk
+```
+
+Chạy các kiểm thử bằng lệnh:
+
+```
+anchor test
+```
+
+<ArticleSection name="Chạy một Local Validator" id="running-a-local-validator" level="h2" />
+
+Bạn có thể phản ánh hành vi của mainnet trên localnet bằng cách sử dụng một local validator. Điều này xảy ra tự động khi bạn đặt cluster của mình thành localnet, nhưng cấu hình bổ sung cho phép các kịch bản kiểm thử toàn diện hơn.
+
+Một local validator hoạt động như một nút blockchain cá nhân của bạn, cung cấp một môi trường sandbox cho việc kiểm thử mà không cần kết nối với các mạng trực tiếp. Nó vận hành một sổ cái thử nghiệm cục bộ: một sổ cái Solana đơn giản với tất cả các chương trình gốc được cài đặt sẵn và nhiều tính năng khác nhau được kích hoạt.
+
+Sổ cái này hoàn toàn có thể tùy chỉnh cho nhu cầu kiểm thử của bạn.
+
+Theo mặc định, local validator chỉ lưu trữ dữ liệu được tạo trong quá trình kiểm thử. Nó không có quyền truy cập vào các tài khoản và chương trình mainnet hiện có, điều này có thể hạn chế các kịch bản kiểm thử khi tương tác với các giao thức hoặc trạng thái tài khoản đã được thiết lập.
+
+### Cấu hình Local Validator của Bạn
+
+Thêm các trường cấu hình vào tệp `Anchor.toml` của bạn dưới phần `[test]` để tùy chỉnh local validator của bạn:
+
+```
+[test]
+startup_wait = 10000
+```
+
+Cờ startup_wait trì hoãn việc khởi động `solana-test-validator`. Sự trì hoãn này là có lợi khi bạn nhân bản nhiều tài khoản, kéo dài thời gian khởi động để đáp ứng tải trọng tăng lên và đảm bảo các tài khoản được tải đúng cách.
+
+### Nhân bản các tài khoản từ Mainnet
+
+Việc nhân bản các tài khoản và các chương trình đã tồn tại ở mainnet đến local validator của bạn có thể được thực hiện bằng cách sử dụng cấu hình `[test.validator]`:
+
+```
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+[[test.validator.clone]]
+address = "7NL2qWArf2BbEBBH1vTRZCsoNqFATTddH6h8GkVvrLpG"
+[[test.validator.clone]]
+address = "2RaN5auQwMdg5efgCaVqpETBV8sacWGR8tkK4m9kjo5r"
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+```
+
+Phần `[test.validator.clone]` nhân bản các tài khoản từ cluster xác định đến môi trường kiểm thử của bạn. Khi một tài khoản liên kết với một chương trình được quản lý bởi "BPF upgradeable loader", Anchor tự động nhân bản tài khoản dữ liệu chương trình liên quan, đảm bảo tính khả dụng hoàn chỉnh của trạng thái chương trình tại môi trường cục bộ.
+
+### Tải dữ liệu tài khoản cục bộ
+
+Tích hợp các tài khoản cục bộ từ các tệp JSON vào thiết lập validator của bạn bằng cách sử dụng cờ `[test.validator.account]`:
+
+```
+[[test.validator.account]]
+address = "Ev8WSPQsGb4wfjybqff5eZNcS3n6HaMsBkMk9suAiuM"
+filename = "some_account.json"
+```
+
+Cách tiếp cận này là hữu ích khi kiểm thử với các trạng thái tài khoản đã được cấu hình trước được lưu trữ cục bộ hoặc các cấu hình tài khoản cụ thể không tồn tại trên mainnet.
+
