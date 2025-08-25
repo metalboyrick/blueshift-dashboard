@@ -208,7 +208,7 @@ const allChallenges: ChallengeMetadata[] = [
       { instructionKey: "open" },
       { instructionKey: "close" },
     ],
-    collectionMintAddress: "9L975Y5Y6Gub2RHNFECyP3cJh3aiE1eVgo2A6mVV8YQu",
+    collectionMintAddress: "HEZn1PnhPBejGJQS7wtNAeBv73ExhqDhxYMxdRs8AM8W",
   },
 ];
 
