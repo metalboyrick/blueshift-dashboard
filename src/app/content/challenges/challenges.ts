@@ -191,6 +191,25 @@ const allChallenges: ChallengeMetadata[] = [
     ],
     collectionMintAddress: "FW9LJEjJwGL1fkAjfM9HxuJuftTU9KrRvPBgP5ZzJx3D",
   },
+  {
+    slug: "pinocchio-quantum-vault",
+    language: "Rust",
+    color: "255,173,102",
+    difficulty: 2,
+    isFeatured: true,
+    unitName: "Pinocchio Quantum Vault",
+    apiPath: "/v1/verify/pinocchio/quantum-vault",
+    pages: [
+      { slug: "open" },
+      { slug: "split" },
+      { slug: "close" },
+    ],
+    requirements: [
+      { instructionKey: "open" },
+      { instructionKey: "close" },
+    ],
+    collectionMintAddress: "9L975Y5Y6Gub2RHNFECyP3cJh3aiE1eVgo2A6mVV8YQu",
+  },
 ];
 
 const releasedChallengesSetting =
