@@ -21,6 +21,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { ChallengeMetadata } from "@/app/utils/challenges";
 import { useSearchParams } from "next/navigation";
 
+// Copy feedback timeout duration
+const COPY_FEEDBACK_TIMEOUT_MS = 3000; // 3 seconds
+
 interface ChallengeTableProps {
   onUploadClick: () => void;
   requirements: ChallengeRequirement[];
@@ -155,7 +158,7 @@ export default function ChallengeTable({
 
     setTimeout(() => {
       setIsCopied(false);
-    }, 3000);
+    }, COPY_FEEDBACK_TIMEOUT_MS);
   };
 
   /**
