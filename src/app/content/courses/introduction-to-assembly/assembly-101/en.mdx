@@ -42,10 +42,10 @@ Additionally, sBPF includes syscalls for account access, cross-program calls, an
 ### Why Understanding sBPF Assembly Matters
 
 While the Rust compiler efficiently translates high-level code into sBPF instructions, understanding assembly provides several advantages:
-**Understanding Compute Costs**: Every sBPF instruction consumes compute units (CUs). A single line of Rust can compile to hundreds of instructions—assembly reveals why certain operations are expensive.
-**Smaller Program Sizes**: Programs written directly in sBPF assembly are dramatically smaller than compiled Rust equivalents, reducing deployment costs and improving load times.
-**Optimization Opportunities**: The Rust compiler generates safe, correct code but not always the most efficient. Assembly exposes redundant safety checks and suboptimal instruction sequences.
-**Debugging and Analysis**: When programs behave unexpectedly, assembly provides ground truth. You can trace exactly which instructions executed and identify failure points.
+- **Understanding Compute Costs**: Every sBPF instruction consumes compute units (CUs). A single line of Rust can compile to hundreds of instructions—assembly reveals why certain operations are expensive.
+- **Smaller Program Sizes**: Programs written directly in sBPF assembly are dramatically smaller than compiled Rust equivalents, reducing deployment costs and improving load times.
+- **Optimization Opportunities**: The Rust compiler generates safe, correct code but not always the most efficient. Assembly exposes redundant safety checks and suboptimal instruction sequences.
+- **Debugging and Analysis**: When programs behave unexpectedly, assembly provides ground truth. You can trace exactly which instructions executed and identify failure points.
 
 ### Architecture
 

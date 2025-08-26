@@ -38,7 +38,7 @@ fn process_instruction(
 
 If we build this code with `cargo build-sbf --dump`, we will get an ELF dump that gives us information about our binary in the `/target/deploy/` directory.
 
-We will then want to look for the `.text` section; the part of our binary where executable code is stored.
+We will then want to look for the `.text` section — the part of our binary where executable code is stored.
 
 ```pinocchio_noop-dump.txt
 Disassembly of section .text
@@ -69,14 +69,15 @@ And this is the second instruction: `128 95 00 00 00 00 00 00 00`
 If we were to disassemble the binary to turn it back into compilable sBPF Assembly, the code would look like this:
 
 ```sbpf
-.globl entrypoint:
-    mov64 r0, 0x00   ; r0 <- success
-    exit             ; finish, return r0
+.globl entrypoint
+entrypoint:
+    mov64 r0, 0x00   # r0 <- success
+    exit             # finish, return r0
 ```
 
 Let's break down the code:
 - `.globl entrypoint`: This is an assembler directive that tells the linker to make the entrypoint symbol globally visible. The Solana runtime looks for this symbol to know where to start executing your program.
-- `entrypoint`:: This is a label that marks the memory address where program execution begins. When the runtime loads your program, it jumps to this address.
+- `entrypoint`: This is a label that marks the memory address where program execution begins. When the runtime loads your program, it jumps to this address.
 - `mov64 r0, 0x00`: Move the immediate value 0 into register r0. Since r0 is the return register, this sets up a success return code.
 - `exit`: Terminate program execution and return the value in r0 to the runtime.
 
@@ -92,7 +93,8 @@ This is an extremely small program, with just 2 instructions consuming only 2 co
 However, we can optimize this further. Since the Solana runtime initializes `r0` to 0 by default, we can eliminate the redundant `mov64` instruction:
 
 ```sbpf
-.globl entrypoint:
+.globl entrypoint
+entrypoint:
     exit
 ```
 
@@ -102,4 +104,4 @@ This optimized version:
 
 > This is why understanding assembly helps with optimization!
 
-This optimization is possible because we know the initial register states; something the Rust compiler doesn't always take advantage of. Understanding sBPF assembly lets you identify and eliminate such inefficiencies in performance-critical code.
+This optimization is possible because we know the initial register states — something the Rust compiler doesn't always take advantage of. Understanding sBPF assembly lets you identify and eliminate such inefficiencies in performance-critical code.
