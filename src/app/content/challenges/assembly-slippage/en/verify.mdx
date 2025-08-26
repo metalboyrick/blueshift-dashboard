@@ -1,4 +1,6 @@
 import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
 
 <ChallengeTitle>sBPF Assembly Slippage</ChallengeTitle>
 
@@ -26,18 +28,15 @@ Now click on the `take challenge` button and drop the file there!
 
 
 <RequirementList>
-  <Requirement
-    title="Challenge 1: Testing the Slippage with SPL-Token"
-    description="Your program should suceed when the amount of token in an SPL-Token Account is higher than the amount passed in."
-  />
+  <Requirement title="Challenge 1: Testing the Slippage with SPL-Token">
+    Your program should suceed when the amount of token in an SPL-Token Account is higher than the amount passed in.
+  </Requirement>
 
-  <Requirement
-    title="Challenge 2: Testing the Failure of a Slippage"
-    description="Your program should fail when the amount of token in an Token Account is lower than the amount passed in."
-  />
+  <Requirement title="Challenge 2: Testing the Failure of a Slippage">
+    Your program should fail when the amount of token in an Token Account is lower than the amount passed in.
+  </Requirement>
 
-<Requirement
-    title="Challenge 3: Testing the Slippage with Token2022"
-    description="Your program should suceed when the amount of token in an Token2022 Account is higher than the amount passed in."
-  />
+  <Requirement title="Challenge 3: Testing the Slippage with Token2022">
+    Your program should suceed when the amount of token in an Token2022 Account is higher than the amount passed in.
+  </Requirement>
 </RequirementList>
