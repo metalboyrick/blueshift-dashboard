@@ -123,8 +123,7 @@ h4 {
 p code,
 li code,
 h3 code,
-h2 code,
-div code {
+h2 code {
   @apply bg-background-primary;
 }
 
