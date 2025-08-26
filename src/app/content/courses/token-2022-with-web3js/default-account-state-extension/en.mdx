@@ -61,7 +61,7 @@ const initializeMintInstruction = createInitializeMintInstruction(
 // Combine all instructions in the correct order
 const transaction = new Transaction().add(
     createAccountInstruction,
-    initializeMintCloseAuthority,
+    initializeDefaultAccountState,
     initializeMintInstruction,
 );
 
