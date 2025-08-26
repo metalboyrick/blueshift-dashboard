@@ -10,12 +10,16 @@
         "conclusion": "Kết luận"
       }
     },
-    "introduction-to-anchor": {
-      "title": "Giới thiệu về Anchor",
+    "anchor-for-dummies": {
+      "title": "Anchor cho người mới bắt đầu",
       "lessons": {
-        "anchor-101": "Anchor cơ bản",
-        "anchor-accounts": "Tài khoản trong Anchor",
-        "anchor-instructions": "Lệnh trong Anchor",
+        "anchor-101": "Anchor 101",
+        "anchor-accounts": "Account trong Anchor",
+        "anchor-instructions": "Instruction trong Anchor",
+        "testing-your-program": "Kiểm thử chương trình của bạn",
+        "program-deployment": "Triển khai chương trình",
+        "client-side-development": "Phát triển phía client",
+        "advanced-anchor": "Anchor nâng cao",
         "conclusion": "Kết luận"
       }
     },

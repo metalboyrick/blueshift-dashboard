@@ -17,7 +17,7 @@ Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qu
 - **Take**: Người nhận (người dùng thứ hai) chấp nhận đề nghị bằng cách chuyển số lượng Token B đã hứa cho người tạo, và đổi lại, nhận được Token A đã bị khóa. Đây là thời điểm cả hai bên hoàn thành phần việc của mình.
 - **Refund**: Nếu người tạo thay đổi ý định hoặc không tìm thấy người nhận phù hợp, họ có thể hủy đề nghị và lấy lại Token A của mình. Điều này giống như lấy lại vật phẩm từ két an toàn nếu thỏa thuận thất bại.
 
-**Lưu ý**: Nếu bạn chưa quen với Anchor, bạn nên bắt đầu bằng cách đọc [Giới thiệu về Anchor](/vi/courses/introduction-to-anchor) để làm quen với khái niệm cốt lõi mà chúng ta sẽ sử dụng trong chương trình này.
+**Lưu ý**: Nếu bạn chưa quen với Anchor, bạn nên bắt đầu bằng cách đọc [Anchor cho người mới bắt đầu](/vi/courses/anchor-for-dummies) để làm quen với khái niệm cốt lõi mà chúng ta sẽ sử dụng trong chương trình này.
 
 <ArticleSection name="Cài đặt" id="installation" level="h2" />
 
@@ -39,7 +39,7 @@ Sau đó chúng ta tiếp tục bằng cách kích hoạt `init-if-needed` trên
   ```
 </Codeblock>
 
-Vì chúng ta đang sử dụng `anchor-spl`, chúng ta cũng cần cập nhật file `Cargo.toml` để bao gồm `anchor-spl/idl-build` trong tính năng `idl-build`.
+Vì chúng ta đang sử dụng `anchor-spl`, chúng ta cũng cần cập nhật file `programs/blueshift_anchor_escrow/Cargo.toml` để bao gồm `anchor-spl/idl-build` trong tính năng `idl-build`.
 
 Mở `Cargo.toml` và bạn sẽ thấy dòng `idl-build` hiện có trông như thế này:
 

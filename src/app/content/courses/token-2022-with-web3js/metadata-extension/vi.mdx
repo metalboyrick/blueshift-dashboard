@@ -129,7 +129,7 @@ const signature = await sendAndConfirmTransaction(connection, transaction, [keyp
 console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
-> Instruction `initialize` của `metadata-interface` không cho phép `additionalMetdata` vì vậy nếu chúng ta muốn tạo một `tài sản` có nó, chúng ta sẽ cần sử dụng instruction `token_metadata_update_field()` như chúng ta sẽ thấy trong phần tiếp theo.
+> Instruction `initialize` của `metadata-interface` không cho phép `additionalMetadata` vì vậy nếu chúng ta muốn tạo một tài sản có nó, chúng ta sẽ cần sử dụng instruction `token_metadata_update_field()` như chúng ta sẽ thấy trong phần tiếp theo.
 
 <ArticleSection name="Cập nhật Metadata" id="updating-the-metadata" level="h2" />
 

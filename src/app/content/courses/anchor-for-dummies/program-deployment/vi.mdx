@@ -1,0 +1,173 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Triển khai chương trình
+
+Khi chương trình đã hoàn tất, hãy triển khai nó lên devnet hoặc mainnet để cho phép người dùng tương tác.
+
+<ArticleSection name="Triển khai chương trình" id="program-deployment" level="h2" />
+
+Build chương trình của bạn để tạo ra các tệp triển khai cần thiết:
+
+```
+anchor build
+```
+
+Lệnh này sẽ tạo ra 1 thư mục `target/deploy` chứa:
+- `<project-name>.so`: bytecode của chương trình
+- `<project-name>-keypair.json`: một keypair được tạo ra cho việc triển khai
+
+> Bạn có thể thay thế keypair này bằng một địa chỉ vanity bằng cách thay thế keypair trong tệp `<project-name>-keypair.json`.
+
+Lấy địa chỉ chương trình:
+
+```
+solana address -k target/deploy/<project-name>-keypair.json
+```
+
+Cập nhật hàm `declare_id!()` trong `lib.rs` với địa chỉ này, sau đó cấu hình `Anchor.toml` của bạn với cluster đích và ID chương trình đúng:
+
+```
+[provider]
+cluster = "devnet"
+
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
+```
+
+Triển khai chương trình của bạn:
+
+```
+anchor deploy
+```
+
+Việc triển khai này sử dụng địa chỉ, cluster và ví được chỉ định từ `Anchor.toml` làm người trả phí.
+
+### Triển khai thất bại
+
+Các triển khai thất bại tạo ra các tài khoản bộ đệm trung gian giữ lamports. Bạn sẽ thấy các hướng dẫn phục hồi như:
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+Để thu hồi tạo số dư của bạn:
+
+- **Tiếp tục triển khai** bằng cách khôi phục keypair:
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+    Nhập cụm từ hạt giống 12 từ khi được nhắc, sau đó triển khai với bộ đệm:
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- **Đóng** bộ đệm để thu hồi lamports:
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### Triển khai thông qua Solana CLI
+
+Bạn có thể triển khai chương trình của mình trực tiếp bằng cách sử dụng Solana CLI thay vì Anchor:
+
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+Trong thời gian tắc nghẽn mạng, hãy sử dụng các cờ này để cải thiện khả năng triển khai:
+- `--with-compute-unit-price`: Đặt giá đơn vị tính toán bằng micro-lamports
+- `--use-rpc`: Gửi giao dịch đến RPC thay vì validator TPUs
+- `--max-sign-attempts`: Số lần thử lại tối đa sau khi hết thời gian blockhash
+
+<ArticleSection name="Cập nhật chương trình" id="program-upgrade" level="h2" />
+
+Mặc định, `anchor deploy` tạo ra một ID chương trình mới. Để nâng cấp một chương trình hiện có trong khi vẫn giữ nguyên địa chỉ và các tài khoản liên quan:
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+Nếu tệp thực thi mới có kích thước lớn hơn tệp đã triển khai, hãy mở rộng tài khoản chương trình trước:
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### Cập nhật thông qua Solana CLI
+
+Quá trình thực hiện cũng tương tự: mở rộng nếu cần, sau đó triển khai:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### Làm cho chương trình không thể thay đổi
+
+Bạn có thể xóa quyền nâng cấp để làm cho chương trình của bạn không thể thay đổi:
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> Hành động này không thể thay đổi. Một khi đã thiết lập, chương trình không thể được cập nhật.
+
+### Di chuyển chương trình
+
+Di chuyển chuyển một chương trình từ địa chỉ này sang địa chỉ khác. CLI sẽ đóng chương trình cũ và triển khai lại tại vị trí mới:
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> Quá trình di chuyển sẽ làm hỏng tất cả các PDA hiện có vì chúng được tạo ra từ ID chương trình cũ. Người dùng phải cập nhật ứng dụng của họ để sử dụng địa chỉ mới và thay đổi quyền sở hữu đối với bất kỳ tài khoản token nào có quyền sở hữu là PDA.
+
+<ArticleSection name="Tải lên một IDL" id="uploading-an-idl" level="h2" />
+
+Một tệp Interface Description Language (IDL) cung cấp mô tả JSON chuẩn hóa về các instruction và account của chương trình của bạn, giúp việc tích hợp với client dễ dàng hơn.
+
+Tải lên IDL lên chuỗi để giúp các nhà phát triển tích hợp với chương trình của bạn:
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### Cập nhật IDL
+
+Sau khi triển khai lại chương trình của bạn, hãy cập nhật IDL trên chuỗi:
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+<ArticleSection name="Xác minh bản dựng" id="verified-builds" level="h2" />
+
+Xác minh bản dựng đảm bảo rằng chương trình thực thi được triển khai trên Solana khớp với mã nguồn trong kho lưu trữ của bạn. Việc xác minh này cho phép các nhà phát triển và người dùng xác nhận rằng chương trình trên chuỗi tương ứng chính xác với mã nguồn công khai.
+
+Quá trình xác minh so sánh hash của chương trình trên chuỗi với chương trình được xây dựng cục bộ từ mã nguồn, phát hiện bất kỳ sự khác biệt nào giữa các phiên bản.
+
+Việc xây dựng các chương trình với Solana CLI có thể nhúng mã cụ thể cho máy vào các tệp nhị phân. Biên dịch cùng một chương trình trên các máy khác nhau có thể tạo ra các tệp thực thi khác nhau. Để giải quyết vấn đề này, hãy xây dựng bên trong một container Docker với các phụ thuộc đã được cố định để có cùng một kết quả.
+
+Anchor cung cấp các lệnh CLI xử lý việc xây dựng và cấu hình Docker:
+
+```
+anchor build --verifiable
+```
+
+Việc xác minh một bản dựng dựa trên một chương trình đã triển khai trên mainnet:
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+> `<lib-name>` tương ứng với tên chương trình của bạn được định nghĩa trong tệp `Cargo.toml`.

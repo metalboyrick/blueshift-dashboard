@@ -8,17 +8,17 @@ Chương trình Token2022, còn được gọi là Token Extensions, là một s
 
 Nếu bạn muốn tìm hiểu thêm về những chức năng bổ sung có sẵn và sự khác biệt với legacy token program, hãy theo dõi [khóa học này](/vi/courses/token-2022-program)
 
-> Nếu bạn không quen thuộc với anchor, chúng tôi khuyên bạn nên xem qua [khóa học giới thiệu về anchor](/vi/courses/introduction-to-anchor) trước khi tiếp tục.
+> Nếu bạn không quen thuộc với anchor, chúng tôi khuyên bạn nên xem qua [Anchor cho người mới bắt đầu](/vi/courses/anchor-for-dummies) trước khi tiếp tục.
 
 Đối với anchor, mọi thứ liên quan đến token có thể được tìm thấy trong crate `anchor-spl`. Vì lý do này, sau khi đã khởi tạo workspace `Anchor`, chúng ta chỉ cần làm thế này:
 
-```
+```bash
 cargo add anchor-spl
 ```
 
 > Phiên bản của `anchor-spl` cần giống với crate `anchor-lang` của chúng ta. Và token2022 extension chỉ có sẵn từ phiên bản 0.30.0 trở đi.
 
-Đừng quên cập nhật feature `idl-build` có thể được tìm thấy trong phần `[features]` của file `cargo.toml` của chương trình với `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
+Đừng quên cập nhật feature `idl-build` có thể được tìm thấy trong phần `[features]` của file `Cargo.toml` của chương trình với `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
 
 <ArticleSection name="Mint và Token Account" id="mint-and-token-accounts" level="h2" />
 
