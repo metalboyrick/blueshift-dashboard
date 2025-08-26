@@ -9,7 +9,7 @@ export function Requirement({ title, children }: RequirementProps) {
   return (
     <div className="flex flex-col gap-y-3">
       <span className="font-medium text-primary">{title}</span>
-      <div className="text-secondary leading-[160%] not-prose">{children}</div>
+      <div className="text-secondary leading-[160%]">{children}</div>
     </div>
   );
 }
