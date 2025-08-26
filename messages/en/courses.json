@@ -197,6 +197,15 @@
         "updating-codama-idl": "Updating Codama IDL",
         "conclusion": "Conclusion"
       }
+    },
+    "winternitz-signatures-on-solana": {
+      "title": "Winternitz Signatures on Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "winternitz-signatures-with-anchor": "Winternitz Signatures with Anchor",
+        "winternitz-signatures-with-pinocchio": "Winternitz Signatures with Pinocchio",
+        "conclusion": "Conclusion"
+      }
     }
   }
 }

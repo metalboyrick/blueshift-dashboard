@@ -85,8 +85,8 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   },
   {
     slug: "secp256r1-on-solana",
-    language: "Rust",
-    color: "255,173,102",
+    language: "General",
+    color: "0,255,255",
     difficulty: 1,
     isFeatured: true,
     lessons: [
@@ -264,6 +264,19 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "codama-from-scratch" },
       { slug: "codama-with-anchor" },
       { slug: "updating-codama-idl" },
+      { slug: "conclusion" },
+    ],
+  },
+  {
+    slug: "winternitz-signatures-on-solana",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "introduction" },
+      { slug: "winternitz-signatures-with-anchor" },
+      { slug: "winternitz-signatures-with-pinocchio" },
       { slug: "conclusion" },
     ],
   },
