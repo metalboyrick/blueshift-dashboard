@@ -207,6 +207,15 @@
         "winternitz-signatures-with-pinocchio": "Winternitz Signatures with Pinocchio",
         "conclusion": "Conclusion"
       }
+    },
+    "testing-with-litesvm": {
+      "title": "Testing with LiteSVM",
+      "lessons": {
+        "litesvm-101": "LiteSVM 101",
+        "typescript": "LiteSVM with Typescript",
+        "rust": "LiteSVM with Rust",
+        "conclusion": "Conclusion"
+      }
     }
   }
 }

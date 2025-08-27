@@ -1,0 +1,24 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mollusk 101
+
+![Testing with LiteSVM](/graphics/course-banners/testing-with-litesvm.png)
+
+Testing Solana programs efficiently requires a framework that balances speed, precision, and insight. When developing complex program logic, you need an environment that enables rapid iteration without sacrificing the ability to test edge cases or measure performance accurately.
+
+The ideal Solana testing framework should provide three essential capabilities: 
+- Fast execution for quick development cycles, 
+- Flexible account state manipulation for comprehensive edge case testing, 
+- Detailed performance metrics for optimization insights.
+
+Litesvm addresses these requirements by providing a streamlined testing environment specifically designed for Solana program development.
+
+<ArticleSection name="What is LitSVM" id="what-is-litesvm" level="h2" />
+
+[LiteSVM](https://github.com/LiteSVM/litesvm), created and maintained by [Aursen](https://x.com/exoaursen) from the [Exotic Market](https://x.com/exotic_markets_) team, is a fast and lightweight library for testing Solana programs. 
+
+It works by creating an in-process Solana VM optimized for program developers. This makes it much faster to run and compile than alternatives like `solana-program-test` and `solana-test-validator`. 
+
+In a further break from tradition, it has an ergonomic API with sane defaults and extensive configurability for those who want it.
+
+`LiteSVM` is available in Rust, TS/JS and Python (as part of the `solders` library).

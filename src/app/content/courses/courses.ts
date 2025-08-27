@@ -281,6 +281,19 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusion" },
     ],
   },
+  {
+    slug: "testing-with-litesvm",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "litesvm-101" },
+      { slug: "typescript" },
+      { slug: "rust" },
+      { slug: "conclusion" },
+    ],
+  },
 ]);
 
 const releasedCoursesSetting = process.env.NEXT_PUBLIC_RELEASED_COURSES?.trim();

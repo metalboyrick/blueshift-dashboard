@@ -1,0 +1,286 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM with Rust
+
+<ArticleSection name="First Steps" id="first-steps" level="h2" />
+
+The `litesvm` package provides the fundamental testing infrastructure to create your `litesvm` envorinoment and operate directly on the bank by modifying accounts and state.
+
+### Setup
+
+Add the LiteSVM crate to your project:
+
+```
+cargo add --dev litesvm
+```
+
+<ArticleSection name="LiteSVM Basics" id="basics" level="h2" />
+
+Start by declaring the `program_id` and creating a `LiteSVM` instance with the address that you used in your program so it gets called correctly and doesn't throw any "ProgramMismatch` error during testing, and the path to the built program like so:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::{pubkey, Pubkey};
+
+const program_id: Pubkey = pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Load the program with the right publickey
+    svm.add_program_from_file(program_id, "target/deploy/program.so");
+}
+```
+
+To tests, we can then execute a transaction by getting a transaction object and then using the `.sendTransaction(tx)` function:
+
+```rust
+use litesvm::LiteSVM;
+use solana_transaction::Transaction
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Transaction
+    let mut tx = Transaction::new_signed_with_payer(
+        &[...ixs],
+        Some(&payer.pubkey()),
+        &[...signersKeypair],
+        svm.latest_blockhash(),
+    );
+
+    // Send the Transaction
+    let result = svm.send_transaction(tx).unwrap();
+}
+```
+
+<ArticleSection name="Accounts" id="accounts" level="h2" />
+
+When testing Solana programs with LiteSVM, you'll work with several types of accounts that mirror real-world program execution scenarios. Understanding how to construct these accounts properly is essential for effective testing.
+
+### System Accounts
+
+The most fundamental account type is the `SystemAccount`, which comes in two primary variants:
+- Payer: An account with lamports that funds program account creation or lamport transfers
+- Default Account: An empty and lamport-less account, usually used to represent program account awaiting initialization within the instruction
+
+System accounts contain no data and are owned by the System Program. The key difference between payer and uninitialized accounts is their lamport balance: payers have funds, while uninitialized accounts start empty.
+
+Here's how to create a `payer` accounts in LiteSVM:
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.publickey(),
+        Account {
+            lamports: 100_000_000,
+            data: [],
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> A default account is just a normal generated account with `Keypair::new()`;
+
+### Program Accounts
+
+For `ProgramAccounts` that contain data, you can use a similar approach as the payer account:
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT].
+    account_data = STATE_STRUCT {
+        ..default()
+    }.as_bytes()
+
+    let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.publickey(),
+        Account {
+            lamports,
+            data: account_data,
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> We don't actually need to calculate rent, we can set the lamports to `100_000_000_000` and just gloss over it since this are not real funds.
+
+### Token Accounts - todo
+
+There are no helper specifically for the Token program, so we're going to use a similar approach that we used for `ProgramAccounts`:  
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair, AccountLayout } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, Account, Mint, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const mint = Keypair.generate();
+
+    // Populate the data of the Account
+    let mintData: Mint = {
+        address: mint.publicKey,
+        mintAuthority: null,
+        supply: BigInt(0),
+        decimals: 6,
+        isInitialized: true,
+        freezeAuthority: null,
+        tlvData: Buffer.from([]),
+    }
+    const accountData = Buffer.alloc(MINT_SIZE);
+    AccountLayout.encode(mintData, accountData);
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publickey, {
+        lamports,
+        data: accountData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    }); 
+
+    // Create a new Account
+    const tokenAccount = Keypair.generate();
+
+    // Populate the data of the Account
+    let tokenAccountData: Account = {
+        address: tokenAccount.publicKey,
+        mint: mint.publicKey,
+        owner: Keypair.generate().publickey
+        amount: BigInt(0),
+        delegate: null
+        delegatedAmount: BigInt(0),
+        isInitialized: true,
+        isFrozen: false,
+        isNative: false,
+        rentExemptReserve: null,
+        closeAuthority: null,
+        tlvData: Buffer.from([]),
+    }
+    const accountData = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(mintData, accountData);
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publickey, {
+        lamports,
+        data: accountData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    }); 
+})
+```
+
+<ArticleSection name="Execution" id="execution" level="h2" />
+
+With accounts generated and added to your LiteSVM instance, you can now send transactions and validate your program logic.
+
+Before sending a transaction, we can simulate the result using: 
+
+```
+let simulated_result = svm.simulate_transaction(tx);
+```
+
+We can then send the transaction and listen for its logs like this:
+
+```
+let result = svm.send_transaction(tx);
+let logs = result.logs;
+```
+
+### Advanced Features
+
+Before and after execution, the entire ledger contained in your LiteSVM instance is readable and customizable.
+
+For example it's possible to change some sysvar values like this:
+
+```ts
+// Change the Clock
+let mut new_clock = svm.get_sysvar::<Clock>();
+new_clock.unix_timestamp = 1735689600;
+svm.set_sysvar::<Clock>(&new_clock);
+
+// Jump to a certain Slot
+svm.warp_to_slot(500);
+
+// Expire the current blockhash
+svm.expire_blockhash();
+```
+
+Of for example is possible to read both accounts or protocol data like:
+
+```ts
+// Get all the information about an account (data, lamports, owner, ...)
+svm.get_account(&account.publickey);
+
+// Get the lamport balance of an account
+svm.get_balance(&account.publickey);
+
+// Get the number of Compute Unit used till now
+svm.get_compute_budget();
+```
+
+Or to change how the protocol foundamentally behave:
+
+```ts
+// Sets the compute budget
+svm.with_compute_budget(2_000_000);
+
+// Sets Sigverify as active or not
+svm.with_sigverify(true);
+
+// Sets the Blockhash check as active or not
+svm.with_blockhash_check(true);
+
+// Sets the default Sysvars
+svm.with_sysvars();
+
+// Set the FeautureSet to use
+svm.with_feature_set(FeatureSet::default())
+```
