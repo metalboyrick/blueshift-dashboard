@@ -6,7 +6,7 @@ The `DefaultAccountState` extension is a Mint extension that allows all newly cr
 
 <ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
 
-To initialie the `DefaultAccountState` extension on a `Mint` account we're going to need the `initializeDefaultAccountState()` function. 
+To initialize the `DefaultAccountState` extension on a `Mint` account we're going to need the `initializeDefaultAccountState()` function. 
 
 Here's how to create a mint with the Default Account State extension:
 
@@ -27,7 +27,7 @@ import {
 
 const mint = Keypair.generate();
 
-// Calculate the size needed for a Mint account with Transfer Fee extension
+// Calculate the size needed for a Mint account with Default Account State extension
 const mintLen = getMintLen([ExtensionType.DefaultAccountState]);
 
 // Calculate minimum lamports required for rent exemption
@@ -61,7 +61,7 @@ const initializeMintInstruction = createInitializeMintInstruction(
 // Combine all instructions in the correct order
 const transaction = new Transaction().add(
     createAccountInstruction,
-    initializeMintCloseAuthority,
+    initializeDefaultAccountState,
     initializeMintInstruction,
 );
 

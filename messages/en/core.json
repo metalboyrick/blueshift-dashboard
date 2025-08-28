@@ -4,10 +4,6 @@
     "description": "Learn how to write your own on-chain programs from the top instructors in the Solana ecosystem.",
     "keywords": "Solana, Blueshift, learn, qualification, vault, escrow, AMM, native, pinocchio, quantum, SPL token"
   },
-  "locales_native_name": {
-    "en": "English",
-    "zh-hant": "繁體中文"
-  },
   "header": {
     "lessons": "Lessons",
     "courses": "Courses",
@@ -96,7 +92,14 @@
     "view_source": "View Source"
   },
   "notifications": {
-    "session_expired_logout": "Your session has expired. Please log in again."
+    "session_expired_logout": "Your session has expired. Please sign in again.",
+    "errors": {
+      "user_rejected_signature": "You must approve the message in your wallet to sign in.",
+      "auth_unauthorized": "Authentication failed. Please try again.",
+      "network_error": "Could not connect to the server. Please check your internet connection.",
+      "auth_generic": "An unexpected error occurred. Please try again."
+    },
+    "content_fallback": "This content is being translated and will be available here when ready."
   },
   "course_levels": {
     "1": "Beginner",
@@ -109,6 +112,8 @@
     "connect_wallet": "Connect Wallet",
     "connect_wallet_description": "A Solana wallet is required to complete the challenge and unlock NFTs",
     "back_to_lessons": "Back to Lessons",
+    "back_to_homepage": "Back to Homepage",
+    "head_to_challenges": "Back to Challenges", 
     "requirements_title": "Challenge",
     "upload_program_btn": "Upload Program",
     "run_program_btn": "Execute",
@@ -137,9 +142,9 @@
     "mint_modal_skip_description": "You can see your unlocks on the Challenges page.",
     "mint_modal_tweet": "Share on X",
     "assistance_prompt": {
-      "title": "Getting stuck?",
-      "body": "Don't give up just yet! Join our Discord community for help and support.",
-      "link_text": "Get support"
+      "title": "Need some help?",
+      "body": "It looks like you're having some trouble. If you're stuck, feel free to ask for help in our Discord community.",
+      "link_text": "Ask on Discord"
     },
     "reset_code_modal": {
       "title": "Reset Code",

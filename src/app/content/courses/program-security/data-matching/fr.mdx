@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Correspondance des Données
+
+La correspondance des données est une pratique de sécurité qui consiste à vérifier que les données d'un compte contiennent les valeurs attendues avant de les utiliser dans la logique de votre programme. Alors que les vérifications de l'`owner` permettent de vérifier qui contrôle un compte et que les vérifications du `signer` permettent de vérifier l'autorisation, la correspondance des données garantit que l'état interne du compte correspond aux hypothèses de votre programme.
+
+Cela devient crucial lorsque les handlers d'instructions dépendent des relations entre les comptes ou lorsque des valeurs de données précises déterminent le comportement du programme. Sans validation adéquate des données, les attaquants peuvent manipuler le flux du programme en créant des comptes avec des combinaisons de données inattendues, même si ces comptes passent les contrôles de base relatifs à la propriété et à l'autorisation.
+
+Le danger réside dans l'écart entre la validation structurelle et la validation logique. Votre programme peut vérifier correctement qu'un compte est du bon type et appartient au bon programme, mais faire néanmoins des suppositions erronées sur les relations entre différentes données.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Considérez cette instruction vulnérable qui met à jour la propriété d'un compte de programme :
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+À première vue, ce code semble sécurisé. L'`owner` est correctement indiqué comme `Signer` ce qui garantit qu'il a autorisé la transaction. Le `program_account` est correctement typé et appartient au programme. Tous les contrôles de sécurité de base sont réussis.
+
+Mais il y a un défaut majeur : le programme ne vérifie jamais que l'`owner` qui a signé la transaction est bien le même que l'`owner` enregistré dans les données du `program_account`.
+
+Un attaquant peut exploiter cette faille en :
+- Créant sa propre paire de clés (appelons-la `attacker_keypair`)
+- Trouvant tout compte de programme qu'il souhaite pirater
+- Fabriquant une transaction où : l'`owner` est l'`attacker_keypair` (qu'il contrôle et avec lequel il peut signer), le `new_owner` est sa clé publique principale et le `program_account` est le compte de la victime
+
+La transaction réussit parce que `attacker_keypair` la signe correctement, mais le programme ne vérifie jamais si `attacker_keypair` correspond au `owner` actuel stocké dans `program_account.owner`. L'attaquant réussit à transférer la propriété du compte d'une autre personne vers son propre compte.
+
+Heureusement, `Anchor` facilite grandement cette vérification directement dans la structure de compte en ajoutant la contrainte `has_one` comme ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut, has_one = owner)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Ou nous pourrions décider de modifier la conception du programme et faire du `program_account` un PDA dérivé de l'`owner` comme ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        seeds = [owner.key().as_ref()],
+        bump
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Ou vous pouvez simplement vérifier ces données dans l'instruction à l'aide de la vérification `ctx.accounts.program_account.owner` comme ceci :
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+    Ok(())
+}
+```
+
+En ajoutant cette vérification, l'handler d'instructions ne poursuivra que si le compte a le bon `owner`. Si l'`owner` n'est pas correct, la transaction échouera.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dans Pinocchio, comme nous n'avons pas la possibilité d'ajouter des contrôles de sécurité directement dans la structure de compte, nous sommes obligés de le faire dans la logique d'instruction. 
+
+Nous pouvons le faire en désérialisant les données du compte et en vérifiant la valeur `owner` :
+
+```rust
+let account_data = ctx.accounts.program_account.try_borrow_data()?;
+let mut account_data_slice: &[u8] = &account_data;
+let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+if account_state.owner != self.accounts.owner.key() {
+    return Err(ProgramError::InvalidAccountData.into());
+}
+```
+
+> Vous devrez créer votre fonction `ProgramAccount::try_deserialize()` car Pinocchio nous permet de gérer la désérialisation et la sérialisation comme nous le souhaitons

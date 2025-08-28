@@ -1,0 +1,125 @@
+# Open Vault
+
+The `open` instruction creates a Program Derived Address (PDA) vault where lamports will be securely deposited. This PDA uses a hashed public key as its seed, ensuring only the holder of the original key can later withdraw funds.
+
+PDAs provide a secure way to store funds because:
+- Only your program can control the account (no private key exists)
+- The vault address is deterministically derived from the user's hash
+- Withdrawals can only occur through your program's logic
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+The instruction requires these accounts:
+- `payer`: Pays for vault creation (must be signer and mutable)
+- `vault`: The PDA being initialized (must be mutable)  
+- `system_program`: Required for account creation (must be executable)
+
+In code, this looks like:
+
+<Codeblock lang="rust">
+```rust
+pub struct OpenVaultAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for OpenVaultAccounts<'a> {
+    type Error = ProgramError;
+ 
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+ 
+        Ok(Self { payer, vault })
+    }
+}
+```
+</Codeblock>
+
+> Account validation is handled by the `CreateAccount` CPI. If accounts don't meet requirements (signer, mutability, executability), the instruction will fail automatically.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Two pieces of data are required:
+- `hash`: SHA-256 hash of the user's winternitz keypair public key ([u8; 32])
+- `bump`: PDA derivation bump passed from client (u8)
+
+> We pass the bump from the client rather than deriving it on-chain to save computation costs.
+
+Here's how it looks in code:
+
+<Codeblock lang="rust">
+```rust
+pub struct OpenVaultInstructionData {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for OpenVaultInstructionData {
+    type Error = ProgramError;
+ 
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<OpenVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let hash = data[0..32].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+        let bump = data[32..33].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+ 
+        Ok(Self { hash, bump })
+    }
+}
+```
+</Codeblock>
+
+> Here again, invalid parameters are self-correcting: passing a wrong hashes brick the vault, passing a wrong bumps fail PDA derivation.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+The instruction creates an empty PDA assigned to our program. While the account holds no data, program ownership ensures withdrawals can only occur through our controlled logic.
+
+> Even empty accounts must be rent-exempt to persist on Solana.
+
+Here's how it looks in code:
+
+<Codeblock lang="rust">
+```rust
+pub struct OpenVault<'a> {
+    pub accounts: OpenVaultAccounts<'a>,
+    pub instruction_data: OpenVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for OpenVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = OpenVaultInstructionData::try_from(data)?;
+        let accounts = OpenVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> OpenVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+ 
+    pub fn process(&self) -> ProgramResult {
+        let lamports = Rent::get()?.minimum_balance(0);
+        let seeds = [Seed::from(&self.instruction_data.hash), Seed::from(&self.instruction_data.bump)];
+
+        // Create our vault
+        CreateAccount {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&[Signer::from(&seeds)])
+    }
+}
+```
+</Codeblock>
+
+> This instruction only creates the vault structure. Deposits are handled separately through simple lamport transfers to the vault account.

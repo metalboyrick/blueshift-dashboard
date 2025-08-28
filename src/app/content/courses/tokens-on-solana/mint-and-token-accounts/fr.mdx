@@ -1,0 +1,102 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Comptes de Mint et Token
+
+Comme nous l'avons mentionné dans la section précédente, les composants de base du programme `SPL Token` sont les comptes : les comptes de mint contiennent toutes les informations relatives aux jetons et les comptes de jetons contiennent toutes les informations relatives à qui possèdent un jeton en particulier.
+
+Pour chaque mint unique, il existe des milliers de comptes de jetons différents qui correspondent au nombre de détenteurs de ce jeton inscrits dans le registre.
+
+Dans cette section, nous allons aborder plus en détail ces différents comptes :
+
+<ArticleSection name="Le Compte de Mint" id="the-mint-account" level="h2" />
+
+Les jetons sur Solana sont identifiés de manière unique par l'adresse d'un compte de Mint appartenant au Programme de Jetons. Ce compte sert de compteur global pour un jeton en particulier et stocke des données telles que :
+- Supply: Offre totale du jeton
+- Decimals: Précision décimale du jeton
+- Mint authority: Le compte autorisé à créer de nouvelles unités du jeton, augmentant ainsi l'offre
+- Freeze authority: Le compte autorisé à geler les jetons dans un Compte de Jetons, les empêchant ainsi d'être transférés ou détruits
+
+Voici à quoi ressemblent ces données on-chain :
+
+```rust
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+```
+
+### Métadonnées
+
+Dans les explorateurs et les portefeuilles, les jetons apparaissent généralement sous une forme reconnaissable et lisible par l'utilisateur grâce à un nom et une image précis qui leur sont associés.
+
+Nous appelons ce nom, ce symbole et cette image les `Metadata` d'un jeton. En effet, dans sa forme native, un compte de `Mint` n'est qu'une clé publique de 32 octets sans aucune information lisible par l'utilisateur.
+
+Dans le programme SPL-Token d'origine, il n'est pas possible de définir directement des métadonnées dans le jeton. C'est pourquoi des protocoles tels que [Metaplex](https://www.metaplex.com/) ont développé le programme [MPL-token-metadata](https://github.com/metaplex-foundation/mpl-token-metadata) afin de permettre à chaque jeton d'être associé à des métadonnées.
+
+> Avec les Extensions de Jetons et le [programme Token2022](/en/courses/token-2022-program), la situation change. L'extension Metadata (*Metadata extension*) vous permet d'intégrer des métadonnées directement dans le compte de Mint, éliminant ainsi le besoin de programmes externes.
+
+### Jetons non fongibles
+
+Bien que l'utilité des jetons soit spécifiquement déléguée au créateur, qui peut décider de faire d'un jeton en particulier un jeton de gouvernance, un jeton utilitaire ou un jeton communautaire, certaines caractéristiques permettent de distinguer les jetons fongibles des jetons non fongibles :
+
+Les jetons non fongibles doivent avoir :
+- Une offre de 1 étant donné qu'ils sont uniques
+- 0 décimale étant donné qu'ils sont indivisibles
+- Aucune autorité de mint étant donné que nous ne voulons pas ajouter davantage de jetons présentant les mêmes caractéristiques, ce qui "détruirait" le caractère unique du jeton
+
+Il est impossible d'appliquer ces caractéristiques dans le Programme de Jetons. Pour cette raison, des programmes tels que `MPL-token-metadata` offrent non seulement une implémentation pour les métadonnées, mais également une implémentation permettant d'appliquer ces contraintes et de créer facilement des NFTs.
+
+<ArticleSection name="Le Compte de Token" id="the-token-account" level="h2" />
+
+Le Programme de Jetons crée des Comptes de Jetons pour suivre à qui appartient chaque unité de jeton. Un Compte de Jetons stocke des données telles que :
+- Mint: Le jeton que le Compte de Jetons détient 
+- Owner: Le compte autorisé à transférer des jetons depuis le Compte de Jetons
+- Amount: Nombre de jetons actuellement détenus par le Compte de Jetons
+
+Voici à quoi ressemblent ces données on-chain :
+
+```rust
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If is_native.is_some, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Un portefeuille doit disposer d'un Compte de Jetons pour chaque jeton (mint) qu'il souhaite détenir, l'adresse du portefeuille étant définie comme propriétaire du Compte de Jetons. Un portefeuille peut posséder plusieurs Comptes de Jetons pour le même jeton (mint), mais un Compte de Jetons ne peut avoir qu'un seul propriétaire et ne peut contenir que des unités d'un seul jeton (mint).
+
+<ArticleSection name="Le Compte de Jetons Associé" id="the-associated-token-account" level="h2" />
+
+Les Comptes de Jetons Associés simplifient le processus de recherche de l'adresse d'un Compte de Jetons pour un mint et un propriétaire donnés. Vous pouvez voir le Compte de Jetons Associé comme le Compte de Jetons "par défaut" pour un mint et un propriétaire donnés.
+
+Un Compte de Jetons Associé est créé à partir d'une adresse dérivée de l'adresse du propriétaire et de l'adresse du compte de mint. Il est important de comprendre qu'un Compte de Jetons Associé n'est qu'un Compte de Jetons avec une adresse particulière.
+
+Cela introduit un concept clé dans le développement sur Solana : les [Adresses Dérivées de Programme](https://solana.com/docs/core/pda) (PDAs). Un PDA génère une adresse de manière déterministe à partir d'entrées prédéfinies, ce qui facilite la recherche de l'adresse d'un compte.

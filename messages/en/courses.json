@@ -1,12 +1,26 @@
 {
   "courses": {
-    "introduction-to-anchor": {
-      "title": "Introduction to Anchor",
+    "introduction-to-blockchain-and-solana": {
+      "title": "Introduction to Blockchain and Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "blockchain-fundamentals": "Blockchain Fundamentals",
+        "blockchain-evolution": "Blockchain Evolution",
+        "introduction-to-solana": "Introduction to Solana",
+        "conclusion": "Conclusion"
+      }
+    },
+    "anchor-for-dummies": {
+      "title": "Anchor for Dummies",
       "lessons": {
         "anchor-101": "Anchor 101",
-        "anchor-accounts": "Anchor Accounts",
+        "anchor-accounts": "Anchor Accounts", 
         "anchor-instructions": "Anchor Instructions",
-        "conclusions": "Conclusions"
+        "testing-your-program": "Testing your Program",
+        "program-deployment": "Program Deployment",
+        "client-side-development": "Client Side Development",
+        "advanced-anchor": "Advanced Anchor",
+        "conclusion": "Conclusion"
       }
     },
     "introduction-to-pinocchio": {
@@ -15,7 +29,38 @@
         "pinocchio-101": "Pinocchio 101",
         "pinocchio-accounts": "Pinocchio Accounts",
         "pinocchio-instructions": "Pinocchio Instructions",
-        "conclusions": "Conclusions"
+        "pinocchio-errors": "Pinocchio Errors",
+        "reading-and-writing-data": "Reading and Writing Data",
+        "testing-your-program": "Testing your Program",
+        "performance": "Performance",
+        "conclusion": "Conclusion"
+      }
+    },
+    "introduction-to-assembly": {
+      "title": "Introduction to Assembly",
+      "lessons": {
+        "assembly-101": "Assembly 101",
+        "registers-and-memory": "Registers and Memory",
+        "instructions": "Instructions",
+        "tooling": "Tooling",
+        "program-example": "Program Example",
+        "conclusion": "Conclusion"
+      }
+    },
+    "program-security": {
+      "title": "Program Security",
+      "lessons": {
+        "introduction": "Introduction",
+        "signer-checks": "Signer Checks",
+        "owner-checks": "Owner Checks",
+        "data-matching": "Data Matching",
+        "duplicate-mutable-accounts": "Duplicate Mutable Accounts",
+        "reinitialization-attacks": "Reinitialization Attacks",
+        "revival-attacks": "Revival Attacks",
+        "arbitrary-cpi": "Arbitrary CPI",
+        "type-cosplay": "Type Cosplay",
+        "pda-sharing": "PDA Sharing",
+        "conclusion": "Conclusion"
       }
     },
     "secp256r1-on-solana": {
@@ -24,7 +69,7 @@
         "introduction": "Secp256r1 on Solana",
         "secp256r1-with-anchor": "Secp256r1 with Anchor",
         "secp256r1-with-pinocchio": "Secp256r1 with Pinocchio",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "tokens-on-solana": {
@@ -33,10 +78,20 @@
         "introduction": "Introduction",
         "mint-and-token-accounts": "Mint and Token Accounts",
         "functionalities": "Functionalities",
-        "conclusions": "Conclusions"
+        "metaplex-token-metadata": "Metaplex Token Metadata",
+        "conclusion": "Conclusion"
       }
     },
-    "spl-token-with-web3js": { 
+    "nfts-on-solana": {
+      "title": "NFTs on Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "metaplex-token-metadata": "Metaplex Token Metadata",
+        "metaplex-core": "Metaplex Core",
+        "conclusion": "Conclusion"
+      }
+    },
+    "spl-token-with-web3js": {
       "title": "SPL Token with Web3.js",
       "lessons": {
         "introduction": "Introduction",
@@ -47,7 +102,7 @@
         "approve-and-revoke": "Approve and Revoke",
         "freeze-and-thaw": "Freeze and Thaw",
         "set-authority": "Set Authority",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "spl-token-with-anchor": {
@@ -61,7 +116,7 @@
         "approve-and-revoke": "Approve and Revoke",
         "freeze-and-thaw": "Freeze and Thaw",
         "set-authority": "Set Authority",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "token-2022-program": {
@@ -69,7 +124,7 @@
       "lessons": {
         "introduction": "Introduction",
         "token-extensions": "Token Extensions",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "token-2022-with-web3js": {
@@ -87,7 +142,7 @@
         "permanent-delegate-extension": "Permanent Delegate Extension",
         "metadata-extension": "Metadata Extension",
         "group-and-member-extension": "Group and Member Extension",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "token-2022-with-anchor": {
@@ -105,7 +160,7 @@
         "permanent-delegate-extension": "Permanent Delegate Extension",
         "metadata-extension": "Metadata Extension",
         "group-and-member-extension": "Group and Member Extension",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
       }
     },
     "instruction-introspection": {
@@ -114,7 +169,43 @@
         "introduction": "Introduction",
         "introspection-with-anchor": "Introspection with Anchor",
         "introspection-with-pinocchio": "Introspection with Pinocchio",
-        "conclusions": "Conclusions"
+        "conclusion": "Conclusion"
+      }
+    },
+    "testing-with-mollusk": {
+      "title": "Testing with Mollusk",
+      "lessons": {
+        "mollusk-101": "Mollusk 101",
+        "advanced-functionalities": "Advanced Functionalities",
+        "conclusion": "Conclusion"
+      }
+    },
+    "solana-pay": {
+      "title": "Solana Pay",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-request": "Transfer Request",
+        "transaction-request": "Transaction Request",
+        "conclusion": "Conclusion"
+      }
+    },
+    "create-your-sdk-with-codama": {
+      "title": "Create your SDK with Codama",
+      "lessons": {
+        "introduction": "Introduction",
+        "codama-from-scratch": "Codama IDL from Scratch",
+        "codama-with-anchor": "Codama IDL with Anchor",
+        "updating-codama-idl": "Updating Codama IDL",
+        "conclusion": "Conclusion"
+      }
+    },
+    "winternitz-signatures-on-solana": {
+      "title": "Winternitz Signatures on Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "winternitz-signatures-with-anchor": "Winternitz Signatures with Anchor",
+        "winternitz-signatures-with-pinocchio": "Winternitz Signatures with Pinocchio",
+        "conclusion": "Conclusion"
       }
     }
   }

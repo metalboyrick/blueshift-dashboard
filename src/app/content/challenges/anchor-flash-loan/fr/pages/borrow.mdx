@@ -1,0 +1,93 @@
+# Borrow
+
+L'instruction `borrow` est la première partie de notre système de prêt flash. Il effectue deux étapes essentielles pour garantir des prêts sûrs et atomiques :
+1. Transfert de fonds : Transfère le `borrow_amount` demandé de la trésorerie du protocole vers le compte de l'emprunteur
+2. Vérifie le remboursement : Utilise l'introspection des instructions pour confirmer l'existence d'une instruction de remboursement valide à la fin de la transaction
+
+<ArticleSection name="Transfert de fonds" id="fund-transfer" level="h2" />
+
+Tout d'abord, nous implémentons le transfert de fonds avec une validation adéquate :
+
+<Codeblock lang="rust">
+```rust
+// Make sure we're not sending in an invalid amount that can crash our Protocol
+require!(borrow_amount > 0, ProtocolError::InvalidAmount);
+
+// Derive the Signer Seeds for the Protocol Account
+let seeds = &[
+    b"protocol".as_ref(),
+    &[ctx.bumps.protocol]
+];
+let signer_seeds = &[&seeds[..]];
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(), 
+        Transfer {
+            from: ctx.accounts.protocol_ata.to_account_info(),
+            to: ctx.accounts.borrower_ata.to_account_info(),
+            authority: ctx.accounts.protocol.to_account_info(),
+        }, 
+        signer_seeds
+    ), 
+    borrow_amount
+)?;
+```
+</Codeblock>
+
+Ce code s'assure que le montant transféré est valide et utilise l'Adresse Dérivée de Programme (PDA) du protocole pour autoriser le transfert.
+
+<ArticleSection name="Introspection des Instructions" id="instruction-introspection" level="h2" />
+
+Vient maintenant la partie critique de la sécurité : l'utilisation de l'introspection des instructions pour vérifier la structure de la transaction et s'assurer que notre prêt flash sera remboursé.
+
+Nous commençons par accéder au sysvar `instructions` qui contient les informations sur toutes les instructions de la transaction actuelle :
+
+
+<Codeblock lang="rust">
+```rust
+/*
+    Instruction Introspection
+
+    This is the primary means by which we secure our program,
+    enforce atomicity while making a great UX for our users.
+*/
+
+let ixs = ctx.accounts.instructions.to_account_info();
+```
+</Codeblock>
+
+Enfin, nous effectuons la vérification la plus critique : nous nous assurons que la dernière instruction de la transaction est une instruction de remboursement valide :
+- Nous commençons par vérifier le nombre d'instructions et nous nous assurons que nous chargeons la dernière instruction de la transaction
+- TNous vérifions ensuite qu'il s'agit bien de l'instruction de remboursement en vérifiant l'ID du programme et le discriminateur de l'instruction
+- Nous terminons en vérifiant que les ATAs passés dans l'instruction de remboursement sont les mêmes que ceux que nous passons dans notre instruction `Borrow`
+
+<Codeblock lang="rust">
+```rust
+/*
+    Repay Instruction Check
+
+    Make sure that the last instruction of this transaction is a repay instruction
+*/
+
+// Check how many instruction we have in this transaction
+let instruction_sysvar = ixs.try_borrow_data()?;
+let len = u16::from_le_bytes(instruction_sysvar[0..2].try_into().unwrap());
+
+// Ensure we have a repay ix
+if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
+
+    // Instruction checks
+    require_keys_eq!(repay_ix.program_id, ID, ProtocolError::InvalidProgram);
+    require!(repay_ix.data[0..8].eq(instruction::Repay::DISCRIMINATOR), ProtocolError::InvalidIx);
+
+    // We could check the Wallet and Mint separately but by checking the ATA we do this automatically
+    require_keys_eq!(repay_ix.accounts.get(3).ok_or(ProtocolError::InvalidBorrowerAta)?.pubkey, ctx.accounts.borrower_ata.key(), ProtocolError::InvalidBorrowerAta);
+    require_keys_eq!(repay_ix.accounts.get(4).ok_or(ProtocolError::InvalidProtocolAta)?.pubkey, ctx.accounts.protocol_ata.key(), ProtocolError::InvalidProtocolAta);
+
+} else {
+    return Err(ProtocolError::MissingRepayIx.into());
+}
+```
+</Codeblock>

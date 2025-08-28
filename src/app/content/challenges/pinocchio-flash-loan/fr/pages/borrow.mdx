@@ -1,0 +1,254 @@
+# Loan
+
+L'instruction `loan` est la première partie de notre système de prêt flash. Il effectue quatre étapes essentielles pour garantir des prêts sûrs et atomiques :
+1. Désérialise un nombre dynamique de comptes qui dépend du nombre de prêts que l'utilisateur souhaite contracter.
+2. Enregistre tous ces prêts dans le compte "temporaire" `loan` et calcule le solde final que `protocol_token_account` doit avoir.
+3. Vérifie le remboursement : Utilise l'introspection des instructions pour confirmer qu'une instruction valide de remboursement se trouve à la fin de la transaction.
+4. Transfert des fonds: Transfére tous les montants de prêt demandés de la trésorerie du protocole vers le compte de l'emprunteur.
+
+<ArticleSection name="Comptes Nécessaires" id="required-accounts" level="h2" />
+
+- `borrower`: l'utilisateur qui demande le prêt flash. Doit être un signataire
+- `protocol`: une Adresse Dérivée de Programme (PDA) qui détient la pool de liquidités du protocole.
+- `loan`: le compte "temporaire" utilisé pour enregistrer le `protocol_token_account` et la `balance` finale qu'il doit avoir. Doit être mutable
+- `token_program`: le programme de jeton. Doit être executable
+
+Voici l'implémentation:
+
+<Codeblock lang="rust">
+```rust
+pub struct LoanAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub protocol: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub instruction_sysvar: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, protocol, loan, instruction_sysvar, _token_program, _system_program, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+        
+        if instruction_sysvar.key() != &INSTRUCTIONS_ID {
+            return Err(ProgramError::UnsupportedSysvar);
+        }
+
+        // Verify that the number of token accounts is valid
+        if (token_accounts.len() % 2).ne(&0) || token_accounts.len().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        if loan.try_borrow_data()?.len().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self {
+            borrower,
+            protocol,
+            loan,
+            instruction_sysvar,
+            token_accounts,
+        })
+    }
+}
+```
+</Codeblock>
+
+Étant donné que `token_accounts` est un tableau dynamique de comptes, nous les transmettons de la même manière que les `remaining_accounts`.
+
+Pour nous assurer que la structure est correcte, nous ajoutons des vérifications. Chaque prêt nécessite un `protocol_token_account` et un `borrower_token_account`. Nous devons donc vérifier que le tableau contient des comptes et que leur nombre est divisible par deux.
+
+<ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
+
+Notre programme de prêts flash doit traiter des quantités variables de données qui dépendent du nombre de prêts qu'un utilisateur souhaite contracter simultanément. Voici la structure de données dont nous avons besoin :
+- `bump`: Un seul octet utilisé pour dériver le PDA `protocol` sans avoir à utiliser la fonction `find_program_address()`
+- `fee`: le taux de commission (en points de base) que les utilisateurs paient pour emprunter
+- `amounts`: un tableau dynamique des montants des prêts puisqu'un utilisateur peut demander plusieurs prêts en une seule transaction
+
+Voici l'implémentation :
+
+<Codeblock lang="rust">
+```rust
+pub struct LoanInstructionData<'a> {
+    pub bump: [u8; 1],
+    pub fee: u16,
+    pub amounts: &'a [u64],
+}
+
+impl<'a> TryFrom<&'a [u8]> for LoanInstructionData<'a> {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // Get the bump
+        let (bump, data) = data.split_first().ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Get the fee
+        let (fee, data) = data.split_at_checked(size_of::<u16>()).ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Verify that the data is valid
+        if data.len() % size_of::<u64>() != 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // Get the amounts
+        let amounts: &[u64] = unsafe {
+            core::slice::from_raw_parts(
+                data.as_ptr() as *const u64,
+                data.len() / size_of::<u64>()
+            )
+        };
+
+        Ok(Self { bump: [*bump], fee: u16::from_le_bytes(fee.try_into().map_err(|_| ProgramError::InvalidInstructionData)?), amounts })
+    }
+}
+```
+</Codeblock>
+
+Nous utilisons les fonctions `split_first` et `split_at_checked` pour extraire séquentiellement `bump` et `fee` des données d'instruction, ce qui nous permet de traiter les octets restants et de les convertir directement en un *slice* `u64` à l'aide de la fonction `core::slice::from_raw_parts()` pour un *parsing* efficace.
+
+> Deriver l'Adresse Dérivée de Programme `protocol` avec `fee` permet de créer des pools de liquidités isolés pour chaque niveau de frais, éliminant ainsi la nécessité de stocker les données relatives aux frais dans les comptes. Cette conception est à la fois sûre et optimale car chaque PDA avec des frais précis ne possède que la liquidité associée à ce taux de frais. Si quelqu'un paie des frais incorrects, le compte de jetons correspondant à ce niveau de frais sera vide, ce qui entraînera automatiquement l'échec du transfert pour cause de fonds insuffisants.
+
+<ArticleSection name="Logique d'Instruction" id="instruction-logic" level="h2" />
+
+Après avoir désérialisé `instruction_data` et `accounts`, nous vérifions que le nombre d'`amounts` est égal aux `token_accounts` divisé par deux. Cela nous permet de nous assurer que nous disposons du nombre correct de comptes pour les prêts demandés.
+
+<Codeblock lang="rust">
+```rust
+pub struct Loan<'a> {
+    pub accounts: LoanAccounts<'a>,
+    pub instruction_data: LoanInstructionData<'a>,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = LoanAccounts::try_from(accounts)?;
+        let instruction_data = LoanInstructionData::try_from(data)?;
+
+        // Verify that the number of amounts matches the number of token accounts
+        if instruction_data.amounts.len() != accounts.token_accounts.len() / 2 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+```
+</Codeblock>
+
+Ensuite, nous créons les `signer_seeds` nécessaires pour transférer les jetons à l'emprunteur et créer un compte `loan`. La taille de ce compte est calculée à l'aide de `size_of::<LoanData>() * self.instruction_data.amounts.len()` pour s'assurer qu'il peut contenir toutes les données relatives au prêt de la transaction.
+
+<Codeblock lang="rust">
+```rust
+impl<'a> Loan<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Get the fee
+        let fee = self.instruction_data.fee.to_le_bytes();
+
+        // Get the signer seeds
+        let signer_seeds = [
+            Seed::from("protocol".as_bytes()),
+            Seed::from(&fee),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signer_seeds = [Signer::from(&signer_seeds)];
+
+        // Open the LoanData account and create a mutable slice to push the Loan struct to it
+        let size = size_of::<LoanData>() * self.instruction_data.amounts.len();
+        let lamports = Rent::get()?.minimum_balance(size);
+
+        CreateAccount {
+            from: self.accounts.borrower,
+            to: self.accounts.loan,
+            lamports,
+            space: size as u64,
+            owner: &ID,
+        }.invoke()?;
+
+        //..
+    }
+}
+```
+</Codeblock>
+
+Nous créons ensuite une *slice* mutable à partir des données du compte `loan`. Nous remplirons cette *slice* dans une boucle `for` au fur et à mesure que nous traiterons chaque prêt et son transfert correspondant :
+
+<Codeblock lang="rust">
+```rust
+let mut loan_data = self.accounts.loan.try_borrow_mut_data()?;
+let loan_entries = unsafe {
+    core::slice::from_raw_parts_mut(
+        loan_data.as_mut_ptr() as *mut LoanData,
+        self.instruction_data.amounts.len()
+    )
+};
+```
+</Codeblock>
+
+Enfin, nous parcourons tous les prêts. À chaque itération, nous récupérons `protocol_token_account` et `borrower_token_account`, calculons le montant dû au protocole, enregistrons ces données dans le compte `loan` et transférons les jetons.
+
+<Codeblock lang="rust">
+```rust
+for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
+    let protocol_token_account = &self.accounts.token_accounts[i * 2];
+    let borrower_token_account = &self.accounts.token_accounts[i * 2 + 1];
+
+    // Get the balance of the borrower's token account and add the fee to it so we can save it to the loan account
+    let balance = get_token_amount(&borrower_token_account.try_borrow_data()?);
+    let balance_with_fee = balance.checked_add(
+        amount.checked_mul(self.instruction_data.fee as u64)
+            .and_then(|x| x.checked_div(10_000))
+            .ok_or(ProgramError::InvalidInstructionData)?
+    ).ok_or(ProgramError::InvalidInstructionData)?;
+
+    // Push the Loan struct to the loan account
+    loan_entries[i] = LoanData {
+        protocol_token_account: *protocol_token_account.key(),
+        balance: balance_with_fee,
+    };
+
+    // Transfer the tokens from the protocol to the borrower
+    Transfer {
+        from: protocol_token_account,
+        to: borrower_token_account,
+        authority: self.accounts.protocol,
+        amount: *amount,
+    }.invoke_signed(&signer_seeds)?;
+}
+```
+</Codeblock>
+
+Nous terminons en utilisant l'introspection des instructions pour effectuer les vérifications nécessaires. Nous vérifions que la dernière instruction de la transaction est une instruction `repay` et qu'elle utilise le même compte `loan` que notre instruction `loan` actuelle.
+
+<Codeblock lang="rust">
+```rust   
+// Introspecting the Repay instruction
+let instruction_sysvar = unsafe { Instructions::new_unchecked(self.accounts.instruction_sysvar.try_borrow_data()?) };
+let num_instructions = instruction_sysvar.num_instructions();
+let instruction = instruction_sysvar.load_instruction_at(num_instructions as usize - 1)?;
+
+if instruction.get_program_id() != &crate::ID {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { *(instruction.get_instruction_data().as_ptr()) } != *Repay::DISCRIMINATOR {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts.loan.key() {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+</Codeblock>
+
+> Utiliser un compte `loan` et structurer l'introspection des instructions de cette manière garantit que nous n'avons pas besoin d'effectuer d'introspection dans l'instruction `repay` puisque toutes les vérifications de remboursement seront gérées par le compte `loan`.

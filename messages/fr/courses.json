@@ -1,0 +1,158 @@
+{
+  "courses": {
+     "introduction-to-blockchain-and-solana": {
+      "title": "Introduction à la Blockchain et à Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "blockchain-fundamentals": "Principes Fondamentaux de la Blockchain",
+        "blockchain-evolution": "Évolution de la Blockchain",
+        "introduction-to-solana": "Introduction à Solana",
+        "conclusion": "Conclusion"
+      }
+    },
+    "introduction-to-anchor": {
+      "title": "Introduction à Anchor",
+      "lessons": {
+        "anchor-101": "Anchor 101",
+        "anchor-accounts": "Les Comptes avec Anchor",
+        "anchor-instructions": "Les Instructions avec Anchor",
+        "conclusion": "Conclusion"
+      }
+    },
+    "introduction-to-pinocchio": {
+      "title": "Introduction à Pinocchio",
+      "lessons": {
+        "pinocchio-101": "Pinocchio 101",
+        "pinocchio-accounts": "Les Comptes avec Pinocchio",
+        "pinocchio-instructions": "Les Instructions avec Pinocchio",
+        "pinocchio-errors": "Les Erreurs avec Pinocchio",
+        "reading-and-writing-data": "Lecture et Écriture des Données",
+        "performance": "Performance",
+        "conclusion": "Conclusion"
+      }
+    },
+    "program-security": {
+      "title": "Sécurité des Programmes",
+      "lessons": {
+        "introduction": "Introduction",
+        "signer-checks": "Vérification du Signataire",
+        "owner-checks": "Vérification du Propriétaire",
+        "data-matching": "Correspondance des Données",
+        "duplicate-mutable-accounts": "Comptes Mutables en Double",
+        "reinitialization-attacks": "Attaques par Réinitialisation",
+        "revival-attacks": "Attaques de Résurrection",
+        "arbitrary-cpi": "CPI Arbitraire",
+        "type-cosplay": "Cosplay de Type",
+        "pda-sharing": "Partage de PDA",
+        "conclusion": "Conclusion"
+      }
+    },
+    "secp256r1-on-solana": {
+      "title": "Secp256r1 sur Solana",
+      "lessons": {
+        "introduction": "Secp256r1 sur Solana",
+        "secp256r1-with-anchor": "Secp256r1 avec Anchor",
+        "secp256r1-with-pinocchio": "Secp256r1 avec Pinocchio",
+        "conclusion": "Conclusion"
+      }
+    },
+    "tokens-on-solana": {
+      "title": "Jetons sur Solana",
+      "lessons": {
+        "introduction": "Introduction",
+        "mint-and-token-accounts": "Comptes de Mint et Comptes de Jeton",
+        "functionalities": "Fonctionnalités",
+        "conclusion": "Conclusion"
+      }
+    },
+    "spl-token-with-web3js": {
+      "title": "SPL Token avec Web3.js",
+      "lessons": {
+        "introduction": "Introduction",
+        "mint-to": "Mint To",
+        "transfer": "Transfer",
+        "burn": "Burn",
+        "close-account": "Close Account",
+        "approve-and-revoke": "Approve and Revoke",
+        "freeze-and-thaw": "Freeze and Thaw",
+        "set-authority": "Set Authority",
+        "conclusion": "Conclusion"
+      }
+    },
+    "spl-token-with-anchor": {
+      "title": "SPL Token avec Anchor",
+      "lessons": {
+        "introduction": "Introduction",
+        "mint-to": "Mint To",
+        "transfer": "Transfer",
+        "burn": "Burn",
+        "close-account": "Close Account",
+        "approve-and-revoke": "Approve and Revoke",
+        "freeze-and-thaw": "Freeze and Thaw",
+        "set-authority": "Set Authority",
+        "conclusion": "Conclusion"
+      }
+    },
+    "token-2022-program": {
+      "title": "Programme Token2022",
+      "lessons": {
+        "introduction": "Introduction",
+        "token-extensions": "Extensions de Jetons",
+        "conclusion": "Conclusion"
+      }
+    },
+    "token-2022-with-web3js": {
+      "title": "Token2022 avec Web3.js",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-fee-extension": "Extension Transfer Fee",
+        "mint-close-authority-extension": "Extension Mint Close Authority",
+        "default-account-state-extension": "Extension Default Account State",
+        "immutable-owner-extension": "Extension Immutable Owner",
+        "memo-transfer-extension": "Extension Memo Transfer",
+        "non-transferable-extension": "Extension Non Transferable",
+        "interest-bearing-extension": "Extension Interest Bearing",
+        "cpi-guard-extension": "Extension CPI Guard",
+        "permanent-delegate-extension": "Extension Permanent Delegate",
+        "metadata-extension": "Extension Metadata",
+        "group-and-member-extension": "Extension Group and Member",
+        "conclusion": "Conclusion"
+      }
+    },
+    "token-2022-with-anchor": {
+      "title": "Token2022 avec Anchor",
+      "lessons": {
+        "introduction": "Introduction",
+        "transfer-fee-extension": "Extension Transfer Fee",
+        "mint-close-authority-extension": "Extension Mint Close Authority",
+        "default-account-state-extension": "Extension Default Account State",
+        "immutable-owner-extension": "Extension Immutable Owner",
+        "memo-transfer-extension": "Extension Memo Transfer",
+        "non-transferable-extension": "Extension Non Transferable",
+        "interest-bearing-extension": "Extension Interest Bearing",
+        "cpi-guard-extension": "Extension CPI Guard",
+        "permanent-delegate-extension": "Extension Permanent Delegate",
+        "metadata-extension": "Extension Metadata",
+        "group-and-member-extension": "Extension Group and Member",
+        "conclusion": "Conclusion"
+      }
+    },
+    "instruction-introspection": {
+      "title": "Introspection des Instructions",
+      "lessons": {
+        "introduction": "Introduction",
+        "introspection-with-anchor": "Introspection avec Anchor",
+        "introspection-with-pinocchio": "Introspection avec Pinocchio",
+        "conclusion": "Conclusion"
+      }
+    },
+    "testing-with-mollusk": {
+      "title": "Test avec Mollusk",
+      "lessons": {
+        "mollusk-101": "Mollusk 101",
+        "advanced-functionalities": "Fonctionnalités Avancées",
+        "conclusion": "Conclusion"
+      }
+    }
+  }
+}

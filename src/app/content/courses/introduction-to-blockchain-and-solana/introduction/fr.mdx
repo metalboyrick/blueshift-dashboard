@@ -1,0 +1,97 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Introduction à la Blockchain
+
+Vous avez probablement déjà entendu parler de la blockchain comme étant "l'argent numérique" ou "l'avenir d'Internet". Ces explications passent complètement à côté du sujet.
+
+Les blockchains sont des systèmes distribués : des réseaux d'ordinateurs qui doivent s'accorder sur des données partagées sans se faire confiance. Ce cours présente les principes fondamentaux de la blockchain : les problèmes liés aux systèmes distribués qu'elle résout, comment elle les résout et pourquoi les compromis sont importants.
+
+Commençons par comprendre pourquoi la conception de systèmes distribués est l'un des problèmes les plus complexes en informatique.
+
+<ArticleSection name="Systèmes Distribués" id="distributed-systems" level="h2" />
+
+La plupart des gens pensent que passer d'un seul ordinateur à plusieurs c'est juste "la même chose en plus grand". C'est comme penser que coordonner une seule personne revient à coordonner un millier de personnes réparties dans différents fuseaux horaires et qui ne sont pas toujours joignables.
+
+Lorsque vous écrivez du code sur un seul ordinateur, vous évoluez dans un monde prévisible :
+- Les opérations réussissent ou échouent immédiatement
+- Les données ne changent pas mystérieusement entre les lectures
+- Le temps avance de façon constante
+- Lorsque vous sauvegardez quelque chose, cela est réellement sauvegardé
+
+Prenons un système bancaire simple. Dans ce cas, transférer 100$ d'Alice à Bob est extrêmement simple :
+
+```python
+def transfer(from_account, to_account, amount):
+    if from_account.balance >= amount:
+        from_account.balance -= amount
+        to_account.balance += amount
+        return "Transfer successful"
+    return "Insufficient funds"
+```
+
+Cela fonctionne parfaitement... jusqu'à ce que vous ayez besoin de passer à l'échelle supérieure.
+
+Votre banque se développe au-delà de ce qu'un seul ordinateur peut gérer, vous répartissez donc désormais les comptes de manière égale entre différentes bases de données :
+- Serveur A: Comptes 1 à 1,000,000
+- Serveur B: Comptes 1,000,001 à 2,000,000
+- Serveur C: Comptes 2,000,001 à 3,000,000
+
+Maintenant, Alice (sur le Serveur A) veut envoyer 100$ à Bob (sur le Serveur B). Ce simple transfert devient :
+
+```python
+def distributed_transfer(alice_server, bob_server, amount):
+    # Check Alice's balance on Server A
+    if alice_server.get_balance("alice") >= amount:
+        alice_server.deduct("alice", amount)    # Step 1
+        bob_server.add("bob", amount)           # Step 2
+        return "Transfer successful"
+    return "Insufficient funds"
+```
+Cela vous semble toujours simple ? Voici ce qui peut mal tourner :
+- Partitionnement du Réseau : La connexion entre les serveurs échoue juste après l'Étape 1 mais avant l'Étape 2. Les 100$ d'Alice disparaissent dans le vide numérique.
+- Panne du Serveur : Le serveur B plante après avoir reçu la commande "ajouter de l'argent" mais avant d'avoir confirmé son traitement. Bob a-t-il reçu l'argent ? Personne ne le sait.
+- Situation de Compétition : Deux transferts provenant d'Alice ont lieu simultanément. Les deux vérifient son solde de 100$, constatent qu'elle dispose de fonds suffisants et poursuivent la procédure. Alice a maintenant dépensé 100$ qu'elle n'avait pas.
+
+### Théorème CAP
+
+En 1999, l'informaticien Eric Brewer a formulé le théorème CAP qui stipule que tout système distribué peut garantir au maximum deux des trois propriétés suivantes :
+- Cohérence (*Consistency*) (C): Tous les serveurs affichent toujours les mêmes données. Lorsque le solde d'Alice change sur le Serveur A, tous les autres serveurs reflètent immédiatement ce changement.
+- Disponibilité (*Availability*) (A): Le système continue de fonctionner même en cas de panne des serveurs. Si le Serveur A tombe en panne, les utilisateurs peuvent toujours accéder à leurs comptes via les Serveur B et C.
+- Tolérance au Partitionnement (*Partition Tolerance*) (P): Le système résiste aux pannes réseau qui divisent les serveurs en groupes isolés.
+
+Nous devons garantir la tolérance au partitionnement, car les partitions réseau sont inévitables : câbles qui sont coupés, routeurs qui tombent en panne, centres de données qui sont privés d'électricité. Cela nous oblige à choisir entre la cohérence OU la disponibilité.
+
+Les systèmes bancaires traditionnels choisissent généralement la Cohérence + la Tolérance au Partitionnement (systèmes CP). Ils préfèrent arrêter leurs activités plutôt que d'afficher des soldes de comptes incorrects.
+
+Les plateformes de réseaux sociaux choisissent souvent la Disponibilité + la Tolérance au Partitionnement (systèmes AP). Ils préfèrent vous laisser publier (même si vos amis ne peuvent pas le voir immédiatement) plutôt que de vous empêcher complètement de publier.
+
+### Le Problème des Généraux Byzantins
+
+En complément du théorème CAP, la plupart des systèmes distribués partent du principe que les participants sont honnêtes : ils peuvent tomber en panne ou se déconnecter, mais ne chercheront pas activement à tromper les autres. Cette hypothèse ne tient plus lorsque certains participants peuvent agir de manière malveillante.
+
+Formulé par des informaticiens en 1982, le problème des généraux byzantins illustre ce défi :
+
+Vous êtes un général byzantin qui prévoit d'attaquer une ville fortifiée. Vous disposez de plusieurs généraux alliés positionnés autour de la ville, chacun commandant sa propre armée. Pour réussir, vous devez coordonner une attaque simultanée. Si certains attaquent tandis que d'autres battent en retraite, les forces attaquantes seront massacrées.
+
+Vous ne communiquez que par messagers et certains généraux pourraient être des traîtres qui souhaitent que l'attaque échoue. Les traîtres peuvent :
+- Envoyer des messages "attaque" à certains généraux et "retraite" à d'autres
+- Modifier les messages des généraux fidèles lorsqu'ils passent par là
+- Coordonner avec d'autres traîtres pour maximiser la confusion
+
+Comment parvenir à un consensus sur la question "attaque" ou "retraite" lorsque vous ne pouvez pas distinguer les généraux loyaux des traîtres et que vous ne pouvez pas vous fier aux canaux de communication ?
+
+Cela semblait impossible. Pendant des décennies, les informaticiens ont cru qu'il était impossible de construire un système qui soit à la fois :
+- Tolérant aux Pannes Byzantines (fonctionne malgré la présence de participants malveillants)
+- Sans Autorisation (tout le monde peut participer sans autorisation préalable)
+- Decentralisé (pas d'autorité centrale)
+
+Puis, en 2008, quelqu'un se faisant appeler Satoshi Nakamoto leur a prouvé qu'ils avaient tort.
+
+### Bitcoin: la première blockchain
+
+Bitcoin a été la première implementation pratique de la technologie blockchain. Bien que les composants individuels existaient déjà auparavant (hachage cryptographique, signatures numériques, réseaux peer-to-peer), Satoshi a été le premier à les combiner pour résoudre le problème de la double dépense dans le domaine des monnaies numériques.
+
+La blockchain, ou "chaîne de blocs" comme elle était appelée dans le [livre blanc](https://bitcoin.org/bitcoin.pdf) originel de Bitcoin, a finalement permis de créer un système à la fois distribué, tolérant aux pannes byzantines et sans autorisation.
+
+
+La percée n'a pas consisté à essayer d'identifier à qui faire confiance mais à rendre le mensonge plus coûteux économiquement que de dire la vérité. Le Proof of Work (Preuve de Travail) permet d'atteindre cet objectif en exigeant des participants qu'ils dépensent une énergie de calcul réelle pour proposer des modifications. Un attaquant devrait dépenser plus en électricité qu'il ne pourrait gagner grâce à une attaque.

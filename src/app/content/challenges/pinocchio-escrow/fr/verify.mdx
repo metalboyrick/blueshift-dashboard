@@ -1,0 +1,21 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Escrow avec Pinocchio</ChallengeTitle>
+
+Il est maintenant temps de mettre à l'épreuve ce que vous avez appris. En utilisant ce que vous avez appris dans cette leçon, créez un programme d'escrow en utilisant le framework Pinocchio qui répond aux exigences suivantes :
+
+<RequirementList>
+  <Requirement title="Challenge 1: Créer une offre d'escrow">
+    Votre programme doit permettre à un créateur de créer une offre d'escrow. Définissez une instruction pour cela en utilisant un discriminateur d'instruction valant `0`.
+  </Requirement>
+
+  <Requirement title="Challenge 2: Accepter une offre d'escrow">
+    Votre programme doit permettre à un preneur d'accepter une offre d'escrow. Définissez une instruction pour cela en utilisant un discriminateur d'instruction valant `1`.
+  </Requirement>
+
+  <Requirement title="Challenge 3: Annuler une offre d'escrow">
+    Votre programme doit permettre au créateur d'annuler une offre d'escrow et de restituer les fonds déposés. Assurez-vous que votre instruction est définie avec une valeur de discriminateur d'instruction valant `2`.
+  </Requirement>
+</RequirementList>

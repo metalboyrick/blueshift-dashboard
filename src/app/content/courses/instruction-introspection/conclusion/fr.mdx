@@ -1,0 +1,44 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Conclusion
+
+Félicitations ! Vous avez terminé le cours Introspection des Instructions sur Solana. Vous avez désormais une bonne compréhension de la manière d'analyser et de répondre à d'autres instructions au sein d'une même transaction.
+
+<ArticleSection name="Ce que vous avez appris" id="what-you-learned" level="h2" />
+
+Tout au long de ce cours, vous avez appris :
+- Le sysvar `Instructions` et la manière dont il expose les données d'instructions de la transaction
+- Comment charger et analyser des instructions en toute sécurité à l'aide de `load_current_index_checked` et `load_instruction_at_checked`
+- Implémenter l'introspection des instructions dans Pinocchio et le framework Anchor
+- Les contraintes de sécurité critiques et les techniques de validation pour prévenir les comportements malveillants
+- Le rôle essentiel joué par l'atomicité des transactions dans la validation des instructions
+- Les bonnes pratiques pour la vérification des programmes, la validation des comptes et le *parsing* des données
+
+<ArticleSection name="Compétences clés" id="key-capabilities" level="h2" />
+
+Grâce à l'introspection des instructions, vous avez le pouvoir de :
+- Répondre de manière dynamique à d'autres instructions de la même transaction
+- Intégrer des mesures de sécurité et une logique de validation
+- Intégrer les instructions de programmes externes dans votre propre logique
+- Créer des interactions inter-programmes modulables et sécurisées
+- Créer des systèmes de validation sophistiqués au niveau des transactions
+
+<ArticleSection name="Prochaines étapes" id="next-steps" level="h2" />
+
+Vous êtes désormais prêt à commencer à développer de puissants systèmes d'introspection des instructions sur Solana ! Voici quelques étapes recommandées à suivre :
+
+1. Essayer d'implémenter l'introspection des instructions dans vos programmes
+2. Explorer la [section Challenges](/en/challenges) pour des exercices pratiques
+3. Réfléchisser à la manière dont vous pouvez utiliser l'introspection des instructions pour améliorer la sécurité et la composabilité de votre application
+4. Rejoidre notre communauté pour partager vos progrès et obtenir de l'aide
+
+N'oubliez pas que si l'introspection des instructions est un outil puissant, son implémentation sécurisée nécessite une réflexion approfondie sur les points suivants :
+- Vérification adéquate des instructions et validation de l'identifiant du programme
+- Validation de la structure de compte et vérification des rôles
+- Le *parsing* des données et application des contraintes
+- Protection contre l'injection d'instructions malveillantes
+- Optimisation des performances pour l'accès à sysvar
+
+L'atomicité des transactions de Solana, combinée à l'introspection des instructions, ouvre de nouvelles possibilités pour créer des applications DeFi sécurisées, modulables et sophistiquées. N'hésitez pas à expérimenter et à explorer les limites du possible grâce à cette fonctionnalité unique !
+
+> L'introspection des instructions est l'une des fonctionnalités les plus puissantes de Solana mais elle nécessite également une implémentation minutieuse. Toujours privilégier la sécurité et la validation dans vos conceptions.

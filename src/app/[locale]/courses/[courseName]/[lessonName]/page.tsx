@@ -15,6 +15,7 @@ import { getPathname } from "@/i18n/navigation";
 import { Metadata } from "next";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { decodeCoreCollectionNumMinted } from "@/lib/nft/decodeCoreCollectionNumMinted";
+import ContentFallbackNotice from "@/app/components/ContentFallbackNotice";
 
 interface LessonPageProps {
   params: Promise<{
@@ -28,7 +29,7 @@ export async function generateMetadata({
   params,
 }: LessonPageProps): Promise<Metadata> {
   const { courseName, lessonName, locale } = await params;
-  const t = await getTranslations({ locale, namespace: "metadata" });
+  const t = await getTranslations({ locale });
   const pathname = getPathname({
     locale,
     href: `/courses/${courseName}/${lessonName}`,
@@ -40,14 +41,16 @@ export async function generateMetadata({
     height: 630,
   };
 
+  const title = `${t("metadata.title")} | ${t(`courses.${courseName}.title`)} | ${t(`courses.${courseName}.lessons.${lessonName}`)}`;
+
   return {
-    title: t("title"),
-    description: t("description"),
+    title: title,
+    description: t("metadata.description"),
     openGraph: {
-      title: t("title"),
+      title: title,
       type: "website",
-      description: t("description"),
-      siteName: t("title"),
+      description: t("metadata.description"),
+      siteName: title,
       url: pathname,
       images: [
         {
@@ -65,13 +68,22 @@ export default async function LessonPage({ params }: LessonPageProps) {
   const { courseName, lessonName, locale } = await params;
 
   let Lesson;
+  let lessonLocale = locale;
   try {
     const lessonModule = await import(
       `@/app/content/courses/${courseName}/${lessonName}/${locale}.mdx`
     );
     Lesson = lessonModule.default;
   } catch {
-    notFound();
+    try {
+      const lessonModule = await import(
+        `@/app/content/courses/${courseName}/${lessonName}/en.mdx`
+      );
+      Lesson = lessonModule.default;
+      lessonLocale = "en";
+    } catch {
+      notFound();
+    }
   }
 
   const courseMetadata = await getCourse(courseName);
@@ -193,6 +205,10 @@ export default async function LessonPage({ params }: LessonPageProps) {
           />
           <div className="pb-8 pt-[36px] -mt-[36px] order-2 lg:order-1 col-span-1 md:col-span-7 flex flex-col gap-y-8 lg:border-border lg:border-x border-border lg:px-6">
             <MdxLayout>
+              <ContentFallbackNotice
+                locale={locale}
+                originalLocale={lessonLocale}
+              />
               <Lesson />
             </MdxLayout>
 

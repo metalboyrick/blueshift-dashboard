@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instructions Freeze et Thaw
+
+`Freeze` empêche toutes les opérations liées aux jetons sur un compte jusqu'à ce qu'il soit débloqué. Seule l'autorité de gel du mint peut effectuer cette opération.
+
+> Désactive complètement les transferts, les approbations et les *burn*. Cela n'affecte que le compte gelé concerné
+
+`Thaw` réactive les opérations liées aux jetons sur un compte précédemment gelé. Seule l'autorité de gel du mint peut débloquer des comptes.
+
+> Restaure toutes les fonctionnalités du compte gelé. Ne peut être effectuée que par l'autorité de gel du mint
+
+Avant de pouvoir geler et débloquer un jeton, nous devons déjà avoir :
+- Initialisé un compte de `Mint` pour lequel nous détenons la `freezeAuthority`
+- Initialisé un compte de `Token` ou `Associated Token` que nous voulons geler ou débloquer
+
+<ArticleSection name="Instruction Brute" id="raw-instruction" level="h2" />
+
+En utilisant uniquement une instruction "brute" sans aucune abstraction, voici à quoi ressemble le gel d'un jeton :
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    tokenAccount.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Freeze an ATA 
+const freezeInstruction = createFreezeAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    freezeInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and frozen! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+En utilisant uniquement une instruction "brute" sans aucune abstraction, voici à quoi ressemble le déblocage d'un jeton :
+
+```ts
+// Thaw an ATA 
+const thawInstruction = createThawAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(thawInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token account thawed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Instruction Abstraite" id="abstracted-instruction" level="h2" />
+
+Voici à quoi ressemble la même instruction si elle est abstraite à l'aide de l'instruction `freezeAccount()` :
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    tokenAccount.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await freezeAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Frozen!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+Voici à quoi ressemble la même instruction si elle est abstraite à l'aide de l'instruction `thawAccount()` :
+
+```ts
+let tx = await thawAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Thawed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

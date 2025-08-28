@@ -1,9 +1,9 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
-![Pinocchio Secp256r1 Vault Challenge](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
-
 # The Secp256r1 Vault
+
+![Pinocchio Secp256r1 Vault Challenge](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
 
 A vault is a fundamental building block in DeFi that provides a secure way for users to store their assets. 
 
@@ -17,24 +17,28 @@ In this challenge, we'll update the simple lamport vault that we built in the [P
 
 Before you begin, be sure Rust and Pinocchio are installed. Then in your terminal run:
 
-```
+<Codeblock lang="terminal">
+```bash
 # create workspace
 cargo new blueshift_secp256r1_vault --lib --edition 2021
 cd blueshift_secp256r1_vault
 ```
+</Codeblock>
 
 Add Pinocchio and the Pinocchio-compatible `Secp256r1` crate
-
-```
+<Codeblock lang="terminal">
+```bash
 cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
 ```
+</Codeblock>
 
 Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
-
-```
+<Codeblock lang="toml">
+```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
+</Codeblock>
 
 <ArticleSection name="Template" id="template" level="h2" />
 
@@ -439,9 +443,11 @@ You can now test your program against our unit tests and claim your NFTs!
 
 Start by building your program using the following command in your terminal:
 
-```
+<Codeblock lang="terminal">
+```bash
 cargo build-sbf
 ```
+</Codeblock>
 
 This generated a `.so` file directly in your `target/deploy` folder. 
 

@@ -1,0 +1,111 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Attaques par Réinitialisation
+
+Les attaques par réinitialisation exploitent les programmes qui ne vérifient pas si un compte a déjà été initialisé, permettant ainsi aux attaquants de remplacer les données existantes et de prendre le contrôle de comptes précieux.
+
+Alors que l'initialisation permet de créer légitimement de nouveaux comptes pour une première utilisation, la réinitialisation réinitialise de manière malveillante les comptes existants pour les mettre sous le contrôle de l'attaquant.
+
+Sans validation d'initialisation appropriée, les attaquants peuvent appeler des fonctions d'initialisation sur des comptes déjà utilisés, prenant ainsi le contrôle malveillant de l'état actuel du programme. Cela est particulièrement dévastateur dans les protocoles tels que les escrows, les vaults ou tout autre système où la propriété du compte détermine le contrôle des actifs de valeur.
+
+L'initialisation permet de configurer les données d'un nouveau compte pour la première fois. Il est essentiel de vérifier si un compte a déjà été initialisé afin d'éviter d'écraser les données existantes.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Considérez cette instruction vulnérable qui initialise un compte de programme :
+
+```rust
+#[program]
+pub mod unsafe_initialize_account{
+    use super::*;
+
+    //..
+
+    pub fn unsafe_initialize_account(ctx: Context<InitializeAccount>) -> Result<()> {
+        let mut writer: Vec<u8> = vec![];
+
+        ProgramAccount {
+            owner: ctx.accounts.owner.key()
+        }.try_serialize(&mut writer)?;
+
+        let mut data = ctx.accounts.program_account.try_borrow_mut_data()?;
+        sol_memcpy(&mut data, &writer, writer.len());
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct InitializeAccount<'info> {
+    pub owner: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Ce code présente une faille critique : Il ne vérifie jamais si le compte a déjà été initialisé. Chaque fois que cette instruction est appelée, elle écrase sans condition les données du compte et définit l'appelant comme nouveau propriétaire, quel que soit l'état précédent du compte.
+
+Un attaquant peut exploiter cette faille en :
+- Identifiant un compte initialisé de valeur (comme un PDA d'escrow contrôlant des comptes de jetons)
+- Appelant `unsafe_initialize_account` avec ce compte existant
+- Devenant le nouveau "propriétaire" en écrasant les données du propriétaire précédent
+- Utilsant sa nouvelle propriété pour vider tous les actifs contrôlés par ce compte
+
+Cette attaque est particulièrement dévastatrice dans les scénarios d'escrow. Imaginez un PDA d'escrow qui détient des comptes de jetons contenant des actifs d'une valeur de plusieurs milliers de dollars. L'initialisation initiale de l'escrow a correctement configuré le compte avec les participants légitimes. Mais si un attaquant peut appeler la fonction de réinitialisation, il peut écraser les données de l'escrow, se désigner comme propriétaire et prendre le contrôle de tous les jetons.
+
+Heureusement, `Anchor` facilite grandement cette vérification directement dans la structure de compte en utilisant simplement la contrainte `init` lors de l'initialisation du compte, comme ceci :
+
+```rust
+#[derive(Accounts)]
+pub struct InitializeAccount<'info> {
+    pub owner: Signer<'info>,
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + ProgramAccount::INIT_SPACE
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Ou vous pouvez simplement vérifier que le compte a déjà été initialisé dans l'instruction à l'aide de la vérification `ctx.accounts.program_account.is_initialized` comme ceci :
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.is_initialized {
+        return Err(ProgramError::AccountAlreadyInitialized.into());
+    }
+
+    Ok(())
+}
+```
+
+> La contrainte `init_if_needed` d'Anchor, protégée par un drapeau de fonctionnalité, doit être utilisée avec une extrême prudence. Bien qu'il initialise convenablement un compte uniquement s'il n'a pas encore été initialisé, il crée un piège dangereux : si le compte est déjà initialisé, l'handler d'instructions continue à s'exécuter normalement. Cela signifie que votre programme pourrait, à votre insu, agir sur des comptes existants, risquant ainsi d'écraser des données critiques ou de permettre un accès non autorisé.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dans Pinocchio, comme nous n'avons pas la possibilité d'ajouter des contrôles de sécurité directement dans la structure de compte, nous sommes obligés de le faire dans la logique d'instruction.
+
+Nous pouvons le faire en vérifiant si le compte dispose du bon discriminateur :
+
+```rust
+let account_data = self.accounts.program_account.try_borrow_data()?;
+
+if account_data[0] == DISCRIMINATOR {
+    return Err(ProgramError::AccountAlreadyInitialized.into());
+}
+```

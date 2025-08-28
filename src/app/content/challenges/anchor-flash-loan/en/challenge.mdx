@@ -3,6 +3,8 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Anchor Flash Loan
 
+![Anchor Flash Loan](/graphics/challenge-banners/anchor-flash-loan.png)
+
 Instruction introspection is a powerful feature that allows a blockchain program to examine and analyze other instructions within the same transaction bundle. This includes instructions that haven't been executed yet, giving your program the ability to "look ahead" and make decisions based on what will happen later in the transaction.
 
 Think of it like having X-ray vision for transactions: your program can see through the entire transaction to understand the complete sequence of operations before deciding how to proceed.
@@ -24,17 +26,21 @@ If you're new to instruction introspection, we recommend starting with the[ Inst
 
 Before you begin, ensure you have Rust and Anchor installed. If you need setup instructions, refer to the [official anchor documentation](https://www.anchor-lang.com/docs/installation). Then in your terminal run:
 
-```
+<Codeblock lang="terminal">
+```bash
 anchor init blueshift_anchor_flash_loan
 ```
+</Codeblock>
 
 Add the required dependencies:
 - `anchor-spl`: Provides utilities for working with SPL tokens (Solana's token standard)
 
-```
+<Codeblock lang="terminal">
+```bash
 cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
+</Codeblock>
 
 Now you're ready to dive into building your flash loan program!
 

@@ -1,0 +1,104 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Performance
+
+Si de nombreux développeurs se tournent vers Pinocchio pour son contrôle précis des champs des compte, sa véritable force réside dans sa capacité à offrir des performances maximales.
+
+Dans cette section, nous explorerons des stratégies pratiques pour optimiser l'efficacité de vos programmes Solana.
+
+<ArticleSection name="Vérifications Superflues" id="superflous-checks" level="h2" />
+
+Les développeurs ajoutent souvent des contraintes supplémentaires aux comptes pour des raisons de sécurité mais celles-ci peuvent entraîner une charge inutile. Il est important de faire la distinction entre les vérifications essentielles et les vérifications redondantes.
+
+Par exemple, lors de la lecture d'un `Token Account` ou d'un `Mint`, la désérialisation et la validation sont nécessaires. Mais si ces mêmes comptes sont ensuite utilisés dans un CPI (Invocation de Programme Croisé), toute incompatibilité ou erreur entraînera l'échec de l'instruction à ce stade. Ainsi, les contrôles préventifs peuvent s'avérer redondants.
+
+De même, vérifier le "propriétaire" d'un Compte de Jetons est souvent superflu, en particulier si le compte est contrôlé par une Adresse Dérivée de Programme (PDA). Si le propriétaire est incorrect, le CPI échouera en raison de seeds invalides. Dans les cas où le transfert n'est pas effectué par un PDA, vous devez vous concentrer sur la validation du destinataire, en particulier lors d'un dépôt sur un compte contrôlé par un PDA car les attentes de l'expéditeur correspondent à celles du programme.
+
+Prenons l'exemple d'un `Escrow`:
+
+...
+
+### Programme de Jetons Associés
+
+`Associated Token Accounts` (Comptes de Jetons Associés ou ATAs) sont pratiques mais ont un coût en termes de performances. Évitez d'imposer leur utilisation sauf en cas d'absolue nécessité et n'exigez jamais leur création dans votre logique d'instruction. Dans la plupart des cas, `init-if-needed` ajoute une complexité et une utilisation des ressources qui pourraient être évitées (comme dans les instructions d'Amm qui sont composées par un routeur tel que Jupiter).
+
+Si votre programme utilise des ATAs, assurez-vous qu'ils sont créés en externe. Dans votre programme, vérifiez leur exactitude en dérivant directement l'adresse attendue comme ceci :
+
+```rust
+let (associated_token_account, _) = find_program_address(
+    &[
+        self.accounts.owner.key(),
+        self.accounts.token_program.key(),
+        self.accounts.mint.key(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+```
+
+En minimisant les vérifications inutiles et les exigences liées aux comptes, vous réduisez les coûts de calcul et rationalisez l'exécution de votre programme, libérant ainsi tout le potentiel de performance du développement natif sur Solana.
+
+> L'ajout de vérifications permettant à l'instruction d'échouer rapidement présente des avantages car les unités de calcul consommées seront certainement moins nombreuses. Réfléchissez donc si l'instruction sera principalement utilisée avec des drapeaux tels que `{ skipPreflight: true }`.
+<ArticleSection name="Drapeau Perf" id="perf-flag" level="h2" />
+
+Les drapeaux de fonctionnalité (*Feature flags*) de Rust constituent un moyen puissant de compiler du code de manière conditionnelle, vous permettant d'activer ou de désactiver des fonctionnalités pour différents profils de compilation, tels que le développement, les tests ou les performances maximales en production. 
+
+Cela est particulièrement utile dans les programmes Solana où chaque unité de calcul compte.
+
+### Configuration des Drapeaux de Fonctionnalité
+
+Les drapeaux de fonctionnalités sont définis dans votre fichier `Cargo.toml` sous la section `[features]`. Par exemple, vous pouvez avoir envie d'un drapeau `perf` qui active les optimisations de performance en désactivant la journalisation et les vérifications supplémentaires :
+
+```
+[features]
+default = ["perf"]
+perf = []
+```
+
+Ici, la fonctionnalité perf est activée par défaut, mais vous pouvez la désactiver lors de la compilation ou des tests.
+
+### Utilisation des Drapeaux de Fonctionnalité dans le Code
+
+Vous pouvez utiliser les attributs de compilation conditionnelle de Rust pour inclure ou exclure du code en fonction de la fonctionnalité active. Par exemple :
+
+```rust
+pub fn process(ctx: Context<'info>) -> ProgramResult {
+    #[cfg(not(feature = "perf"))]
+    sol_log("Create Class");
+    Self::try_from(ctx)?.execute()
+}
+```
+
+La plupart des programmes renvoient le nom de l'instruction sous forme de *log* afin de faciliter le débogage et de s'assurer que la bonne instruction est appelée.
+
+Cependant, cela coûte cher et n'est pas vraiment nécessaire, sauf pour rendre l'explorateur plus lisible et améliorer le débogage.
+
+```rust
+#[cfg(not(feature = "perf"))]
+if name.len() > MAX_NAME_LEN {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+Un autre exemple est celui des contrôles superflus évoqués précédemment.
+
+Si nous savons que notre instruction est sûre sans ces vérifications, nous ne devrions pas les définir comme paramètres par défaut, mais plutôt les masquer derrière un drapeau.
+
+> Dans cet exemple, nous avons créé un drapeau `perf` qui indique que, si nous voulons que le programme soit aussi performant que possible, nous devons utiliser le drapeau `perf` lors de sa compilation.
+### Compilation avec Différents Drapeaux
+
+Pour compiler votre programme avec ou sans la fonctionnalité `perf`, utilisez :
+
+- Avec optimisations des performances (par défaut):
+
+```
+cargo build-bpf
+```
+
+- Avec des vérifications supplémentaires et la journalisation :
+
+```
+cargo build-bpf --no-default-features
+```
+
+Cette approche vous permet de conserver une base de code unique qui peut être optimisée pour la sécurité du développement ou la vitesse de production simplement en activant ou désactivant un drapeau de fonctionnalité.

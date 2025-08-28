@@ -1,0 +1,128 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Secp256r1 avec Pinocchio
+
+[Dean](https://x.com/deanmlittle) de l'équipe de Blueshift a publié la première crate permettant la compatibilité avec Pinocchio pour vérifier les instructions qui exécutent le précompilé `Secp256r1`.
+
+Cela est particulièrement utile pour mettre en œuvre des méthodes d'authentification modernes telles que les passkeys dans les programmes Pinocchio.
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+Le SDK fournit des abstractions claires grâce à des structures de données fondamentales :
+
+```rust
+// 33-byte compressed public key (1 byte parity + 32 byte x-coordinate)
+pub type Secp256r1Pubkey = [u8; 33];
+// 64-byte signature (r,s values)
+pub type Secp256r1Signature = [u8; 64];
+
+// Main instruction parser
+pub struct Secp256r1Instruction<'a> {
+    header: Secp256r1InstructionHeader,    // Number of signatures
+    offsets: &'a [Secp256r1SignatureOffsets], // Data location pointers
+    data: &'a [u8],                        // Raw instruction data
+}
+```
+
+La structure `Secp256r1SignatureOffsets` agit comme une carte mémoire, contenant des décalages (*offsets*) d'octets qui pointent vers l'emplacement de chaque composant dans la charge utile (*payload*) de l'instruction :
+
+```rust
+pub struct Secp256r1SignatureOffsets {
+    pub signature_offset: u16,
+    pub signature_instruction_index: u16,
+    pub public_key_offset: u16,
+    pub public_key_instruction_index: u16,
+    pub message_data_offset: u16,
+    pub message_data_size: u16,
+    pub message_instruction_index: u16,
+}
+```
+
+Dans les données, nous trouvons les trois composants critiques référencés par la structure de décalage :
+- Publickey: La clé publique compressée `Secp256r1` de 33 octets. Dans le cadre de méthodes d'authentification modernes telles que les passkeys, cela représente l'identité cryptographique du dispositif/utilisateur qui s'authentifie.
+- Signature: La signature `ECDSA` de 64 octets (valeurs r, s) générée par la clé privée. Cela prouve que le détenteur de la clé privée correspondante a autorisé le message en question.
+- Message Data: Les octets arbitraires qui ont été signés cryptographiquement. En pratique, cela correspond aux données spécifiques à l'application, telles que les détails des transactions, les horodatages ou les identifiants utilisateur. Cela empêche les attaques par rejeu et garantit que les signatures sont liées au contexte.
+
+Comme vous pouvez le constater, la clé publique a une longueur de 33 octets car elle utilise une représentation compressée des points c'est à dire un codage peu encombrant des points de courbes elliptiques.
+
+Sur Secp256r1, une clé publique est mathématiquement un point (x, y) dont les deux coordonnées sont de 32 octets (64 octets au total).
+
+Cependant, pour toute coordonnée x donnée, seules deux coordonnées y possibles satisfont l'équation de la courbe.
+
+Le format compressé stocke la coordonnée x de 32 octets plus un seul octet de parité (0x02 pour y pair et 0x03 pour y impair), ce qui permet une reconstruction complète des points avec 48 % d'espace de stockage en moins.
+
+<ArticleSection name="Implémentation" id="implementation" level="h2" />
+
+Pour vérifier les signatures `Secp256r1`, nous avons besoin de deux composants principaux :
+1. L'instruction sysvar : Cela nous permet d'introspecter la signature `Secp256r1`
+2. La crate `pinocchio-secp256r1-instruction` : Cela fournit les outils nécessaires pour désérialiser l'instruction.
+
+L'instruction sysvar est déjà incluse dans la crate Pinocchio donc aucune installation supplémentaire n'est nécessaire.
+
+Cependant, nous devons ajouter la crate `pinocchio-secp256r1-instruction` à notre programme Pinocchio :
+
+```
+cargo add pinocchio-secp256r1-instruction
+```
+
+Pour implémenter la vérification, nous devons :
+1. Inclure le programme d'Instruction Sysvar (`Sysvar1nstructions1111111111111111111111111` que nous appellerons `instructions`)
+2. Placer l'instruction `Secp256r1` après notre instruction actuelle
+
+Voici comment accéder aux instructions et les désérialiser :
+
+```rust
+// Deserialize the instructions sysvar
+let instructions: Instructions<Ref<[u8]>> = Instructions::try_from(self.accounts.instructions)?;
+// Get the instruction that follows our current one
+let ix: IntrospectedInstruction = instructions.get_instruction_relative(1)?;
+```
+
+Ensuite, nous désérialisons l'instruction `Secp256r1` :
+
+```rust
+// Deserialize the Secp256r1 instruction
+let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+```
+
+Nous effectuons ensuite quelques vérifications de sécurité.
+
+Il est essentiel de mettre en place plusieurs vérifications de sécurité :
+1. **Vérification de l'Autorité**: Garantit que seuls les destinataires autorisés peuvent recevoir des fonds provenant du PDA qui encapsule la clé publique Secp256r1. Cela empêche les attaques MEV dans lesquelles quelqu'un pourrait intercepter la transaction, capturer la signature valide et remplacer le destinataire prévu.
+2. **Vérification de l'Expiration**: Impose une limite de temps à la validité de la signature. Étant donné que les signatures validées restent valides indéfiniment, l'implémentation d'un horodatage d'expiration empêche les attaques par rejeu.
+
+Nous effectuons ces vérifications en intégrant ces données dans le message de la signature.
+
+Voici comment implémenter ces vérifications de sécurité :
+
+```rust
+// Verify the fee payer is authorized
+let (receiver, expiry) = secp256r1_ix.get_message_data(0)?.split_at_checked(32).ok_or(ProgramError::InvalidInstructionData)?;
+if self.accounts.payer.key().ne(payer) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+
+// Check signature expiration
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(expiry.try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+Enfin, nous pouvons dériver les Adresses Dérivées de Programme (PDAs) directement à partir des clés publiques Secp256r1, créant ainsi des adresses de compte déterministes que les utilisateurs peuvent contrôler grâce à des méthodes d'authentification modernes :
+
+```rust
+// Verify the first signature matches our PDA owner
+let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+// Create signer seeds for CPI
+let seeds = [
+    Seed::from(signer[..1].as_ref()),
+    Seed::from(signer[1..].as_ref()),
+];
+let signers = [Signer::from(&seeds)];
+```
+
+> Nous devons diviser la clé publique en deux parties distinctes car les seeds acceptent une longueur maximale de 32 octets
+

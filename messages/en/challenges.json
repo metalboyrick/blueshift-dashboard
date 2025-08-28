@@ -107,6 +107,40 @@
         }
       }
     },
+    "pinocchio-amm": {
+      "title": "Pinocchio AMM",
+      "pages": {
+        "initialize": {
+          "title": "Initialize"
+        },
+        "deposit": {
+          "title": "Deposit"
+        },
+        "withdraw": {
+          "title": "Withdraw"
+        },
+        "swap": {
+          "title": "Swap"
+        },
+        "conclusion": {
+          "title": "Conclusion"
+        }
+      },
+      "requirements": {
+        "initialize": {
+          "title": "Challenge 1: Initializing the Amm"
+        },
+        "deposit": {
+          "title": "Challenge 2: Depositing liquidity"
+        },
+        "withdraw": {
+          "title": "Challenge 3: Withdrawing liquidity"
+        },
+        "swap": {
+          "title": "Challenge 4: Swapping tokens"
+        }
+      }
+    },
     "pinocchio-secp256r1-vault": {
       "title": "Pinocchio Secp256r1 Vault",
       "requirements": {
@@ -138,7 +172,35 @@
       "title": "Assembly Memo",
       "requirements": {
         "log": {
-          "title": "Challenge 1: Logs the instruction data to program log"
+          "title": "Challenge 1: Testing the Memo"
+        },
+        "log_different": {
+            "title": "Challenge 2: Testing the Memo with different input"
+        }
+      }
+    },
+    "assembly-slippage": {
+      "title": "Assembly Slippage",
+      "requirements": {
+        "slippage": {
+          "title": "Challenge 1: Testing the Slippage with SPL-Token"
+        },
+        "slippage_failure": {
+          "title": "Challenge 2: Testing the Failure of a Slippage"
+        },
+        "slippage_token2022": {
+          "title": "Challenge 3: Testing the Slippage with Token2022"
+        }
+      }
+    },
+    "assembly-timeout": {
+      "title": "Assembly Timeout",
+      "requirements": {
+        "timeout": {
+          "title": "Challenge 1: Testing the Timeout"
+        },
+        "timeout_failure": {
+          "title": "Challenge 2: Testing the Failure of a Timeout"
         }
       }
     },
@@ -156,6 +218,28 @@
         },
         "mint_to": {
           "title": "Challenge 4: Mint tokens"
+        }
+      }
+    },
+    "pinocchio-quantum-vault": {
+      "title": "Pinocchio Quantum Vault",
+      "pages": {
+        "open": {
+          "title": "Open Vault"
+        },
+        "split": {
+          "title": "Split Vault"
+        },
+        "close": {
+          "title": "Close Vault"
+        }
+      },
+      "requirements": {
+        "open": {
+          "title": "Challenge 1: Opening a Quantum Vault"
+        },
+        "close": {
+          "title": "Challenge 2: Closing a Quantum Vault"
         }
       }
     }

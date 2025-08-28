@@ -1,0 +1,125 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Le Programme Token2022
+
+Le Programme Token2022, également connu sous le nom de Token Extensions (Extension de Jetons), est un ensembles plus large de fonctionnalités fournies par le Programme de Jetons. 
+
+Si vous souhaitez en savoir plus sur les fonctionnalités supplémentaires disponibles et les différences avec le Programme de Jetons d'origine, suivez [ce cours](/en/courses/token-2022-program)
+
+> Si vous n'êtes pas familier avec Anchor, vous devriez commencer par lire l'[Introduction à Anchor](/en/courses/introduction-to-anchor) avant de continuer
+
+Pour Anchor, tout ce qui concerne les jetons se trouve dans la crate `anchor-spl`. Pour cette raison, après avoir initialisé un espace de travail `Anchor` nous pouvons simplement faire :
+
+```
+cargo add anchor-spl
+```
+
+> La version de `anchor-spl` doit être la même que celle de notre crate `anchor-lang`. Les extensions token2022 ne sont disponibles qu'à partir de la version 0.30.0.
+
+N'oubliez pas de mettre à jour ensuite la fonctionnalité `idl-build` qui se trouve dans la section `[features]` du fichier `cargo.toml` de notre programme avec `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
+
+<ArticleSection name="Comptes de Mint et Comptes de Jetons" id="mint-and-token-accounts" level="h2" />
+
+Si vous êtes familier avec `Anchor`, vous savez qu'il existe un ensemble de macros qui aident l'utilisateur à simplifier bon nombre des complexités liées à l'initialisation des comptes.
+
+Il en va de même ici pour les comptes de `Mint`, de `Token` et `Associated Token`.
+
+### Compte de Mint avec Extensions
+
+Étant donné que les comptes de `Mint` avec extensions ont des tailles différentes et appartiennent à des programmes différents, `Anchor` a créé un nouveau type de comptes qui fonctionne indépendamment selon que le compte de `Mint` provient du programme Legacy Token ou du programme Token2022.
+
+Pour les utiliser, il suffit d'importer `TokenInterface` et `Mint` depuis `anchor_spl::token_interface` comme ceci :
+
+```rust
+use anchor_spl::token_interface::{TokenInterface, Mint};
+```
+
+Après ça, nous pouvons simplement faire `pub mint: InterfaceAccount<'info, Mint>,` et spécifier que nous voulons que le mint utilise le compte token_program que nous avons dans la structure de compte comme ceci : `mint::token_program = token_program`
+
+> L'interface token fournit un moyen commun d'interagir avec les deux types de comptes sans avoir à gérer les différences dans leur logique de désérialisation, tout en conservant la sécurité des types et une validation appropriée
+
+Avant de voir comment ajouter une extension au compte de Mint, voici comment créer un Mint avec le programme Token2022 :
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+Heureusement, `Anchor` nous aide et a créé des macros pour ajouter les extensions les plus populaires directement lors de l'étape d'initialisation, comme ceci :
+
+```rust
+#[account(
+    // ...init
+    extensions::metadata_pointer::authority = <target_account>,
+    extensions::metadata_pointer::metadata_address = <target_account>,
+    extensions::group_pointer::authority = <target_account>,
+    extensions::group_pointer::group_address = <target_account>,
+    extensions::group_member_pointer::authority = <target_account>,
+    extensions::group_member_pointer::member_address = <target_account>,
+    extensions::transfer_hook::authority = <target_account>,
+    extensions::transfer_hook::program_id = <target_pubkey>
+    extensions::close_authority::authority = <target_account>,
+    extensions::permanent_delegate::delegate = <target_account>,
+)]
+pub mint: InterfaceAccount<'info, Mint>,
+
+### Compte de Jetons Associé avec Extensions
+
+Les comptes `Associated Token` sont automatiquement dotés de l'extension `ImmutableOwner`. La seule différence entre la création d'un `Token Account` "classique" ou Token2022 réside donc dans le programme propriétaire.
+
+ici comment créer un compte `Associated Token` :
+
+```rust
+#[derive(Accounts)]
+pub struct CreateAssociatedToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program,
+    )]
+    pub associated_token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+### Compte de Jetons avec Extensions
+
+Les comptes de `Token` ne sont pas dotés d'extension par défaut et ne disposent d'aucune macro susceptible de nous aider. Ainsi, à l'aide de macros, nous ne pouvons créer qu'un compte Token2022 normal.
+
+Voici comment créer un compte de jeton :
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+        token::token_program = token_program,
+    )]
+    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```

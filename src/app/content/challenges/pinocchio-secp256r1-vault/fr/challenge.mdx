@@ -1,0 +1,456 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+![Pinocchio Secp256r1 Vault Challenge](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
+
+# Le Vault Secp256r1
+
+Un vault est un composant fondamental de la DeFi qui permet aux utilisateurs de stocker leurs actifs en toute sécurité. 
+
+Dans ce challenge, nous allons créer un vault qui utilise les signatures Secp256r1 pour vérifier les transactions. Ceci est particulièrement intéressant car Secp256r1 est la même courbe elliptique utilisée par les méthodes d'authentification modernes telles que les *passkeys*, qui permettent aux utilisateurs de signer des transactions à l'aide d'une authentification biométrique (comme Face ID ou Touch ID) au lieu des signatures traditionnelles basées sur un portefeuille.
+
+La principale innovation ici réside dans le fait que nous dissocions le paiement des frais de transaction de l'authentification de l'utilisateur. Cela signifie que, pendant que les utilisateurs puissent authentifier les transactions à l'aide de leurs signatures Secp256r1 (qui peuvent être générées à l'aide de méthodes d'authentification modernes), les frais de transaction peuvent être payés par un prestataire de services. Cela permet d'offrir une expérience utilisateur plus fluide tout en garantissant la sécurité.
+
+In this challenge, we'll update the simple lamport vault that we built in the [Pinocchio Vault Challenge](/en/challenges/pinocchio-vault) to allow Secp256r1 signatures as a verification method for transactions.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Avant de commencer, assurez-vous que Rust et Pinocchio sont installés. Exécutez ensuite dans votre terminal :
+
+<Codeblock lang="terminal">
+```bash
+# create workspace
+cargo new blueshift_secp256r1_vault --lib --edition 2021
+cd blueshift_secp256r1_vault
+```
+</Codeblock>
+
+Ajoutez Pinocchio et la crate `Secp256r1` compatible avec Pinocchio
+
+<Codeblock lang="terminal">
+```bash
+cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
+```
+</Codeblock>
+
+Déclarez les types de crate dans `Cargo.toml` pour générer les artefacts de déploiement dans `target/deploy` :
+
+<Codeblock lang="toml">
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+</Codeblock>
+
+<ArticleSection name="Modèle" id="template" level="h2" />
+
+Commençons par la structure de base du programme. Nous allons tout implémenter dans `lib.rs` puisqu'il s'agit d'un programme simple. Voici le modèle initial avec les composants clés dont nous aurons besoin :
+
+<Codeblock lang="rust">
+```rust
+#![no_std]
+
+use pinocchio::{account_info::AccountInfo, entrypoint, nostd_panic_handler, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+
+entrypoint!(process_instruction);
+nostd_panic_handler!();
+
+pub mod instructions;
+pub use instructions::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, _)) => Withdraw::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+</Codeblock>
+
+
+<ArticleSection name="Deposit" id="deposit" level="h2" />
+
+L'instruction `deposit` effectue les étapes suivantes :
+1. Vérifie que le vault est vide (contient zéro lamport) afin d'empêcher les doubles dépôts
+2. S'assure que le montant du dépôt dépasse la rente minimale pour qu'un compte de base soit exempt de rente
+3. Transfert des lamports du payeur au vault à l'aide d'un CPI au Programme Système
+
+La principale différence entre un vault normal et un vault Secp256r1 réside dans la manière dont nous dérivons le PDA et de qui est considéré comme "propriétaire ".
+
+Étant donné qu'avec les signatures Secp256r1 le propriétaire du portefeuille n'a pas besoin de payer les frais de transaction, nous modifions le compte `owner` pour adopter une nomenclature plus générale. Nous l'appellerons ainsi `payer`.
+
+La structure de compte pour `deposit` ressemblera donc à ceci :
+
+<Codeblock lang="rust">
+```rust
+pub struct DepositAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // Accounts Checks
+        if !payer.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Return the accounts
+        Ok(Self { payer, vault })
+    }
+}
+```
+</Codeblock>
+
+Détaillons chaque vérification de compte :
+1. `payer`: Il doit être un signataire car il doit autoriser le transfert de lamports
+2. `vault`: 
+   - Doit appartenir au Programme Système
+   - Doit avoir zéro lamport (garantit un premier dépôt)
+
+Pour le `vault`, nous allons vérifier si :
+- Il est dérivé à partir des bonnes seeds
+- Il correspond à l'adresse de PDA attendue
+Puisqu'une partie des seeds se trouve dans `instruction_data` et que nous n'y avons pas accès pour le moment.
+
+Implémentons maintenant la structure des données d'instruction :
+
+<Codeblock lang="rust">
+```rust
+#[repr(C, packed)]
+pub struct DepositInstructionData {
+    pub pubkey: Secp256r1Pubkey,
+    pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let (pubkey_bytes, amount_bytes) = data.split_at(size_of::<Secp256r1Pubkey>());
+
+        Ok(Self {
+            pubkey: pubkey_bytes.try_into().unwrap(),
+            amount: u64::from_le_bytes(amount_bytes.try_into().unwrap()),
+      })
+    }
+}
+```
+</Codeblock>
+
+Nous désérialisons les données d'instruction dans une structure `DepositInstructionData` qui contient :
+- `pubkey`: La clé publique Secp256r1 de l'utilisateur effectuant le dépôt
+- `amount`: La quantité de lamports à déposer
+
+Bien que *unwrap* soit généralement déconseillé en production, dans ce cas précis il est utilisé en toute sécurité car nous avons déjà validé la taille des données dans la méthode `try_from`. Si la taille des données n'est pas correcte, une erreur sera renvoyée avant d'atteindre ce point.
+
+Enfin, implémentons l'instruction `deposit` :
+
+<Codeblock lang="rust">
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_data: DepositInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_data = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Check vault address
+        let (vault_key, _) = find_program_address(
+            &[
+                b"vault",
+                &self.instruction_data.pubkey[..1],
+                &self.instruction_data.pubkey[1..33]
+            ],
+            &crate::ID
+        );
+        if vault_key.ne(self.accounts.vault.key()) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        Transfer {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports: self.instruction_data.amount,
+        }
+        .invoke()
+    }
+}
+```
+</Codeblock>
+
+Comme mentionné précédemment, nous devons vérifier que le PDA du vault est dérivé à partir des bonnes seeds. Dans ce vault basé sur Secp256r1, nous utilisons `Secp256r1Pubkey` comme seed à la place de la clé publique du propriétaire. Il s'agit d'une mesure de sécurité cruciale qui garantit que seul le détenteur de la clé Secp256r1 correspondante peut accéder au vault.
+
+`Secp256r1Pubkey` a une taille de 33 octets car elle utilise une représentation par points compressés pour les clés publiques à courbe elliptique. Ce format comprend :
+- 1 octet pour la parité du point (indique si la coordonnée y est paire ou impaire)
+- 32 octets pour la coordonnée x
+
+Étant donné que la fonction `find_program_address` de Solana impose une limite de 32 octets pour chaque seed, nous devons diviser `Secp256r1Pubkey` en deux parties :
+1. L'octet de parité (`pubkey[..1]`)
+2. Les octets de la coordonnée x (`pubkey[1..33]`)
+
+<ArticleSection name="Withdraw" id="withdraw" level="h2" />
+
+L'instruction `withdraw` effectue les étapes suivantes :
+1. Vérifie que le vault contient des lamports (n'est pas vide)
+2. Utilise le PDA du vault pour signer le transfert en son nom
+3. Transfère tous les lamports du vault au propriétaire
+
+Tout d'abord, définissons la structure de compte pour `withdraw` :
+
+<Codeblock lang="rust">
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+    pub instructions: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, instructions, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        if !payer.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self { payer, vault, instructions })
+    }
+}
+```
+</Codeblock>
+
+Implémentons maintenant la structure des données d'instruction :
+
+<Codeblock lang="rust">
+```rust
+pub struct WithdrawInstructionData {
+    pub bump: [u8;1]
+}
+
+impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bump: [*data.first().ok_or(ProgramError::InvalidInstructionData)?],
+        })
+    }
+}
+```
+</Codeblock>
+
+Comme vous pouvez le constater, à des fins d'optimisation, nous avons transmis le bump en tant que données d'instruction afin de ne pas avoir à le dériver dans `process()` qui est déjà "lourd" en raison de toutes les autres vérifications nécessaires.
+
+Enfin, implémentons l'instruction `withdraw` :
+
+<Codeblock lang="rust">
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+    pub instruction_data: WithdrawInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+        let instruction_data = WithdrawInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Deserialize our instructions
+        let instructions: Instructions<Ref<[u8]>> = Instructions::try_from(self.accounts.instructions)?;
+        // Get instruction directly after this one
+        let ix: IntrospectedInstruction = instructions.get_instruction_relative(1)?;
+        // Get Secp256r1 instruction
+        let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+        // Enforce that we only have one signature
+        if secp256r1_ix.num_signatures() != 1 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        // Enforce that the signer of the first signature is our PDA owner
+        let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+
+        // Check that our fee payer is the correct 
+        let (payer, expiry) = secp256r1_ix
+            .get_message_data(0)?
+            .split_at_checked(32)
+            .ok_or(ProgramError::InvalidInstructionData)?;
+
+        if self.accounts.payer.key().ne(payer) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // Get current timestamp
+        let now = Clock::get()?.unix_timestamp;
+        // Get signature expiry timestamp
+        let expiry = i64::from_le_bytes(
+            expiry
+                .try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+        );
+        if now > expiry {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        
+        // Create signer seeds for our CPI
+        let seeds = [
+            Seed::from(b"vault"),
+            Seed::from(signer[..1].as_ref()),
+            Seed::from(signer[1..].as_ref()),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signers = [Signer::from(&seeds)];
+
+        Transfer {
+            from: self.accounts.vault,
+            to: self.accounts.payer,
+            lamports: self.accounts.vault.lamports(),
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+</Codeblock>
+
+Le processus de retrait comprend plusieurs vérifications de sécurité afin de garantir la légitimité de la transaction. Voyons comment nous vérifions la signature Secp256r1 et comment nous nous protégeons contre de potentielles attaques :
+
+1. **Introspection des Instructions**
+- Nous utilisons l'instruction sysvar pour inspecter l'instruction suivante de la transaction
+- Cela nous permet de vérifier la signature Secp256r1 qui prouve la propriété de la clé de signature
+- La vérification de signature pour Secp256r1 s'effectue toujours dans une instruction distincte
+
+2. **Vérification de Signature**
+```rust
+let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+if secp256r1_ix.num_signatures() != 1 {
+    return Err(ProgramError::InvalidInstructionData);
+}
+let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+```
+- Nous vérifions qu'il n'y a qu'une seule signature
+- À des fins de vérification, nous extrayons la clé publique du signataire qui doit correspondre à celle utilisée pour créer le PDA du vault
+
+3. **Validation du Message**
+```rust
+let (payer, expiry) = secp256r1_ix.get_message_data(0)?.split_at_checked(32)?;
+if self.accounts.payer.key().ne(payer) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```
+- Le message signé contient deux informations essentielles :
+    - L'adresse du destinataire prévu (32 octets)
+    - Une date d'expiration pour la signature (8 octets)
+- Cela empêche les attaques MEV dans lesquelles quelqu'un pourrait intercepter et réutiliser une signature valide en passant un autre `payer` et en réclamant le solde qui se trouve dans le vault
+
+4. **Vérification de l'Expiration**
+```rust
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(expiry.try_into()?);
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+- Nous vérifions que la signature n'a pas expiré
+- Cela ajoute une couche de sécurité basée sur le temps pour empêcher la réutilisation des signatures
+- Le délai d'expiration doit être considéré comme une "période réfractaire". Aucun nouveau vault ne peut être créé avant son expiration sinon elle pourrait être réutilisée à l'insu du propriétaire actuel.
+
+5. **Signature de PDA**
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(signer[..1].as_ref()),
+    Seed::from(signer[1..].as_ref()),
+    Seed::from(&self.instruction_data.bump),
+];
+```
+- Enfin, nous utilisons la clé publique vérifiée pour créer les seeds du PDA
+- Cela garantit que seul le détenteur légitime de la clé Secp256r1 peut signer la transaction de retrait
+
+
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Vous pouvez maintenant tester votre programme à l'aide de nos tests unitaires et réclamer votre NFT !
+
+Commencez par compiler votre programme en utilisant la commande suivante dans votre terminal :
+
+<Codeblock lang="terminal">
+```bash
+cargo build-sbf
+```
+</Codeblock>
+
+Cela générera un fichier `.so` directement dans votre dossier `target/deploy`. 
+
+Cliquez ensuite sur le bouton `Relever le challenge` et déposez le fichier !

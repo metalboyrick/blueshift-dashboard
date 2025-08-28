@@ -1,0 +1,198 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { Codeblock } from "../../../../components/Codeblock/Codeblock";
+
+# Pinocchio 101
+
+![Introduction to Pinocchio](/graphics/course-banners/introduction-to-pinocchio.png)
+
+<ArticleSection name="Qu'est-ce que Pinocchio" id="what-is-pinocchio" level="h2" />
+
+Bien que la plupart des développeurs Solana utilisent Anchor, il existe de nombreuses bonnes raisons d'écrire un programme sans. Peut-être avez-vous besoin d'un contrôle plus précis sur chaque champ du compte, recherchez-vous des performances maximales ou souhaitez-vous simplement éviter les macros.
+
+Écrire des programmes Solana sans framework tel qu'Anchor est appelé **développement natif**. C'est plus exigeant, mais dans ce cours, vous apprendrez à créer un programme Solana à partir de zéro avec Pinocchio, une bibliothèque légère qui vous permet d'éviter les frameworks externes et de contrôler chaque octet de votre code.
+
+Pinocchio est une bibliothèque Rust minimaliste qui vous permet de créer des programmes Solana sans avoir à utiliser la lourde crate `solana-program`. Elle fonctionne en traitant la charge utile (*payload*) de la transaction entrante (comptes, données d'instruction, tout) comme un *slice* d'un seul octet et le lit en place via des techniques de zéro-copie. 
+
+### Principaux avantages
+
+Le design minimaliste offre trois avantages majeurs :
+- Moins d'unités de calcul (*ompute units*). Pas de désérialisation supplémentaire ni de copies en mémoire.
+- Des fichiers binaires plus petits. Des *code paths* plus légers signifient un fichier `.so` plus léger on-chain.
+- Aucune dépendance. Aucune mise à jour (ou rupture) de crates externes.
+
+Le projet a été lancé par [Febo](https://x.com/0x_febo) d'[Anza](https://www.anza.xyz) avec la contribution essentielle de l'écosystème Solana et de l'équipe Blueshift, et est disponible [ici](https://github.com/anza-xyz/pinocchio). 
+
+En plus de la crate principale, vous trouverez `pinocchio-system` et `pinocchio-token`, En plus de la crate principale, vous trouverez `pinocchio-system` et `pinocchio-token` qui fournissent des fonctions d'aide zéro-copie et des utilitaires CPI pour le Programme Système et le Programme SPL-Token de Solana.
+
+### Développement Natif
+
+Le développement natif peut sembler intimidant, mais c'est précisément pour cette raison que ce chapitre existe. À la fin, vous comprendrez chaque octet qui traverse votre programme et comment garder votre logique rigoureuse, sécurisée et rapide.
+
+Anchor utilise des **Macros Procédurales et Dérivées** pour simplifier les tâches récurrentes liées à la gestion des comptes, des données d'instructions et des erreurs qui sont au cœur de la création de programmes Solana.
+
+Passer au natif signifie que nous n'avons plus ce luxe et que nous devrons :
+- Créer notre propre Discriminateur et Point d'Entrée (*Entrypoint*) pour les différentes instructions
+- Créer notre propre Compte, Instruction et logique de désérialisation
+- Implémenter toutes les vérifications de sécurité qu'Anchor effectuait pour nous auparavant
+
+**Remarque** : Il n'existe pas encore de "framework" pour créer des programmes Pinocchio. C'est pourquoi nous allons vous présenter ce que nous considérons comme la meilleure façon d'écrire des programmes Pinocchio, d'après notre expérience.
+
+<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+
+Dans Anchor, la macro `#[program]` cache une grande partie du câblage. Sous le capot, elle construit un discriminateur de 8 octets (taille personnalisable depuis la version 0.31) pour chaque instruction et compte.
+
+<AnchorDiscriminatorCalculator value={"Test"} />
+
+Les programmes natifs sont généralement plus légers. Un discriminateur d'un seul octet (valeurs 0x01…0xFF) suffit pour un maximum de 255 instructions, ce qui est suffisant pour la plupart des cas d'utilisation. Si vous avez besoin de plus, vous pouvez passer à une variante à deux octets, ce qui étend le nombre de variantes possibles à 65 535.
+
+La macro `entrypoint!` est le point de départ de l'exécution du programme. Elle fournit trois *slices* brutes :
+- **program_id**: la clé publique du programme déployé
+- **accounts**: chaque compte passé dans l'instruction
+- **instruction_data**: un tableau d'octets opaque contenant votre discriminateur ainsi que toutes les données fournies par l'utilisateur
+
+Cela signifie qu'après le point d'entrée nous pouvons créer un modèle (*pattern*) qui exécute toutes les différentes instructions via un gestionnaire approprié, que nous appellerons `process_instruction`. Voici à quoi cela ressemble généralement :
+
+```rust
+entrypoint!(process_instruction);
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((Instruction1::DISCRIMINATOR, data)) => Instruction1::try_from((data, accounts))?.process(),
+        Some((Instruction2::DISCRIMINATOR, _)) => Instruction2::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+En coulisses, ce gestionnaire :
+1. Utilise `split_first()` pour extraire l'octet du discriminateur
+2. Utilise `match` pour déterminer quelle structure d'instruction instancier
+3. L'implémentation `try_from` de chaque instruction valide et désérialise ses entrées
+4. Un appel à `process()` exécute la logique métier
+
+### La différence entre `solana-program` et `pinocchio`
+
+La principale différence et optimisation réside dans le comportement de la fonction `entrypoint()`. 
+- Les points d'entrée standard de Solana utilisent des modèles de sérialisation traditionnels dans lesquels le runtime désérialise les données d'entrée à l'avance, créant ainsi des structures de données en mémoire. Cette approche utilise la sérialisation Borsh, copie les données lors de la désérialisation et alloue de la mémoire pour les types de données structurés.
+- Les points d'entrée de Pinocchio implémentent des opérations zéro-copie en lisant les données directement à partir du tableau d'octets d'entrée sans les copier. Le framework définit des types zéro-copie qui font référence aux données d'origine, élimine le temps perdu lié à la sérialisation/désérialisation et utilise l'accès direct à la mémoire pour éviter les couches d'abstraction.
+
+<ArticleSection name="Comptes and Instructions" id="accounts-and-instructions" level="h2" />
+
+Comme nous n'avons pas de macros et que nous voulons les éviter afin de conserver un programme léger et efficace, chaque octet des données d'instruction et des comptes doit être validé manuellement.
+
+Pour organiser ce processus, nous utilisons un modèle qui offre une ergonomie similaire à celle d'Anchor mais sans les macros, ce qui permet de conserver la méthode `process()` pratiquement sans code passe-partout (*boilerplate*) grâce à l'implémentation du trait `TryFrom`.
+
+### Le Trait `TryFrom`
+
+`TryFrom` fait partie de la famille des conversions standard de Rust. Contrairement à `From`, qui suppose qu'une conversion ne peut pas échouer, `TryFrom` retourne un `Result`, vous permettant ainsi de détecter rapidement les erreurs, ce qui est idéal pour la validation on-chain.
+
+Le trait est défini comme ceci :
+
+```rust
+pub trait TryFrom<T>: Sized {
+    type Error;
+    fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+```
+
+Dans un programme Solana, nous implémentons `TryFrom` pour convertir les *slices* des compte brutes (et, si nécessaire, les octets d'instruction) en structures fortement typées tout en appliquant toutes les contraintes.
+
+<ArticleSection name="Validation des comptes" id="accounts-validation" level="h2" />
+
+Nous traitons généralement toutes les vérifications spécifiques qui ne nécessitent pas de double emprunt (emprunt à la fois dans la validation du compte et éventuellement dans le processus) dans chaque implémentation `TryFrom`. Cela permet de garder la fonction `process()`, où se déroule toute la logique des instructions, aussi claire que possible.
+
+Nous commençons par implémenter la structure de compte nécessaire à l'instruction, de manière similaire au `Context` d'Anchor. 
+
+**Remarque** : Contrairement à Anchor, nous n'incluons dans cette structure de compte que les comptes que nous voulons utiliser dans le processus et nous marquons d'un `_` les comptes restants qui sont nécessaires dans l'instruction mais qui ne seront pas utilisés (comme `SystemProgram`).
+
+Pour quelque chose comme un `Vault`, cela ressemblerait à ceci :
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub owner: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+```
+
+Maintenant que nous savons quels comptes nous voulons utiliser dans notre instruction, nous pouvons utiliser le trait `TryFrom` pour désérialiser et effectuer toutes les vérifications nécessaires :
+
+```rust
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        // 1. Destructure the slice
+        let [owner, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // 2. Custom checks
+        if !owner.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // 3. Return the validated struct
+        Ok(Self { owner, vault })
+    }
+}
+```
+
+Comme vous pouvez le voir, nous allons utiliser dans cette instruction un CPI au `SystemProgram` pour transférer les lamports du propriétaire vers le vault mais nous n'avons pas besoin d'utiliser le SystemProgram dans l'instruction elle-même. Il suffit donc d'inclure le programme dans l'instruction et de le passer sous la forme `_`.
+
+Nous effectuons ensuite des vérifications personnalisées sur les comptes, similaires aux vérifications `Signer` et `SystemAccount` d'Anchor, puis renvoyons la structure validée.
+
+<ArticleSection name="Validation des Instructions" id="instruction-validation" level="h2" />
+
+La validation des instructions suit un processus similaire à celui de la validation des comptes. Nous utilisons le trait `TryFrom` pour valider et désérialiser les données d'instruction dans des structures fortement typées ce qui permet de garder la logique métier dans `process()` claire et ciblée.
+
+Commençons par définir la structure qui représente nos données d'instruction :
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+}
+```
+
+Nous implémentons ensuite `TryFrom` pour valider les données d'instruction et les convertir en notre type structuré. Cela implique :
+1. Vérifier que la longueur des données correspond à la taille attendue
+2. Convertir la *slice* d'octets en notre type concret
+3. Effectuer toutes les vérifications de validation nécessaires
+
+Voici à quoi ressemble l'implémentation :
+
+```rust
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // 1. Verify the data length matches a u64 (8 bytes)
+        if data.len() != core::mem::size_of::<u64>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // 2. Convert the byte slice to a u64
+        let amount = u64::from_le_bytes(data.try_into().unwrap());
+
+        // 3. Validate the amount (e.g., ensure it's not zero)
+        if amount == 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self { amount })
+    }
+}
+```
+
+Ce modèle nous permet de :
+- VValider les données d'instruction avant qu'elles n'atteignent la logique métier
+- Séparez la logique de validation des fonctionnalités principales
+- Afficher des messages d'erreur clairs lorsque la validation échoue
+- Maintenir la sécurité des types tout au long du programme
