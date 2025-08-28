@@ -20,7 +20,7 @@ sBPF assigns specific roles to each register:
 | `r6-r9`  | General purpose      | Yes            | Must preserve across calls                  |
 | `r10`    | Frame pointer        | Yes, read-only | Stack base, cannot modify directly          |
 
-Registers `r6` through `r9` are "callee-saved", meaning their values persist across function calls. Use these for important data that must survive function invocations. 
+Registers `r6` through `r9` are _callee-saved_, meaning their values persist across function calls. Use these for important data that must survive function invocations. 
 
 The remaining registers (`r0`-`r5`) get overwritten during syscalls and function calls.
 
@@ -95,7 +95,7 @@ Your program begins execution at the symbol marked with `.globl` (typically entr
 entrypoint:
     # On entry:
     # r1 = 0x400000000 (input buffer pointer)
-    # r10 = 0x200001000 (stack base)
+    # r10 = 0x200001000 (0x200000000 stack start + 0x1000 4KiB frame size)
     # r0, r2-r9 = 0 (all other registers zeroed)
 
     # Your program logic here
