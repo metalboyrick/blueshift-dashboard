@@ -124,9 +124,15 @@ export default function ChallengesList({
       ) : (
         <>
           {Object.entries(challengeSections).map(([language, section]) => {
-            const languageChallenges = filteredChallenges.filter(
-              (challenge) => challenge.language === language,
-            );
+            const languageChallenges = filteredChallenges
+              .filter((challenge) => challenge.language === language)
+              .sort((a, b) => {
+                // Sort by status: open -> completed -> claimed
+                const statusOrder = { open: 0, completed: 1, claimed: 2 };
+                const aStatus = challengeStatuses[a.slug] || "open";
+                const bStatus = challengeStatuses[b.slug] || "open";
+                return statusOrder[aStatus] - statusOrder[bStatus];
+              });
             if (languageChallenges.length === 0) return null;
 
             return (
