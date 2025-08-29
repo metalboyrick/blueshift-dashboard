@@ -30,8 +30,8 @@ describe("test", () => {
     // Create a new instance of LiteSVM
     const svm = new LiteSVM();
 
-    // Load the program with the right publickey
-    svm.addProgramFromFile(programId, "target/deploy/program.so");
+    // Load the program with the right publicKey
+    svm.addProgramFromFile(programID, "target/deploy/program.so");
 })
 ```
 
@@ -58,6 +58,7 @@ describe("test", () => {
     // Send the transaction
     svm.sendTransaction(tx);
 })
+```
 
 <ArticleSection name="Accounts" id="accounts" level="h2" />
 
@@ -87,10 +88,10 @@ describe("test", () => {
     const account = Keypair.generate();
 
     // Add the Account with the modified data
-    svm.setAccount(account.publickey, {
+    svm.setAccount(account.publicKey, {
         lamports: 100_000_000,
-        data: 0,
-        owner: SystemProgram.programId
+        data: Buffer.alloc(0),
+        owner: SystemProgram.programId,
         executable: false,
     }); 
 })
@@ -126,7 +127,7 @@ describe("test", () => {
     const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
 
     // Add the Account with the modified data
-    svm.setAccount(account.publickey, {
+    svm.setAccount(account.publicKey, {
         lamports,
         data: accountData,
         owner: PROGRAM_ID,
@@ -170,7 +171,7 @@ describe("test", () => {
     const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
 
     // Add the Account with the modified data
-    svm.setAccount(account.publickey, {
+    svm.setAccount(mint.publicKey, {
         lamports,
         data: accountData,
         owner: TOKEN_PROGRAM_ID,
@@ -184,9 +185,9 @@ describe("test", () => {
     let tokenAccountData: Account = {
         address: tokenAccount.publicKey,
         mint: mint.publicKey,
-        owner: Keypair.generate().publickey
+        owner: Keypair.generate().publicKey,
         amount: BigInt(0),
-        delegate: null
+        delegate: null,
         delegatedAmount: BigInt(0),
         isInitialized: true,
         isFrozen: false,
@@ -196,13 +197,13 @@ describe("test", () => {
         tlvData: Buffer.from([]),
     }
     const accountData = Buffer.alloc(ACCOUNT_SIZE);
-    AccountLayout.encode(mintData, accountData);
+    AccountLayout.encode(tokenAccountData, accountData);
 
     // Grab the minimum amount of lamports to make it rent exempt
     const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
 
     // Add the Account with the modified data
-    svm.setAccount(account.publickey, {
+    svm.setAccount(tokenAccount.publicKey, {
         lamports,
         data: accountData,
         owner: TOKEN_PROGRAM_ID,
@@ -240,7 +241,7 @@ You can manipulate sysvar values like the clock:
 // Change the Clock
 const newClock = svm.getClock();
 newClock.unixTimestamp = 50n;
-svm.setClock(initialClock);
+svm.setClock(newClock);
 
 // Jump to a certain Slot
 svm.warpToSlot(500);
@@ -253,12 +254,12 @@ You can also read account and protocol data:
 
 ```ts
 // Get all the information about an account (data, lamports, owner, ...)
-svm.getAccount(account.publickey);
+svm.getAccount(account.publicKey);
 
 // Get the lamport balance of an account
-svm.getBalance(account.publickey);
+svm.getBalance(account.publicKey);
 
-// Get the number of Compute Unit used till now
+// Get the number of Compute Units used so far
 svm.getComputeBudget();
 ```
 
@@ -278,5 +279,5 @@ svm.withBlockhashCheck(true);
 svm.withSysvars();
 
 // Set the FeautureSet to use
-svm.withFeatureSet(FeatureSet::default())
+svm.withFeatureSet(FeatureSet(...))
 ```

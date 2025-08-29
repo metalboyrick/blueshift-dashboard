@@ -40,7 +40,7 @@ To execute tests, create a transaction object and use the `.send_transaction(tx)
 
 ```rust
 use litesvm::LiteSVM;
-use solana_transaction::Transaction
+use solana_transaction::Transaction;
 
 #[test]
 fn test() {
@@ -92,7 +92,7 @@ fn test() {
 
     // Add the Account with the modified data
     svm.set_account(
-        account.publickey(),
+        account.pubkey(),
         Account {
             lamports: 100_000_000,
             data: [],
@@ -100,7 +100,7 @@ fn test() {
             executable: false,
             rent_epoch: 0,
         },
-    )
+    );
 }
 ```
 
@@ -123,16 +123,16 @@ fn test() {
     // Create a new Account
     let account = Keypair::new();
 
-    let mut account_data = [0; SIZE_OF_THE_ACCOUNT].
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
     account_data = STATE_STRUCT {
         ..default()
-    }.as_bytes()
+    }.as_bytes();
 
     let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
 
     // Add the Account with the modified data
     svm.set_account(
-        account.publickey(),
+        account.pubkey(),
         Account {
             lamports,
             data: account_data,
