@@ -71,8 +71,8 @@ If we were to disassemble the binary to turn it back into compilable sBPF Assemb
 ```sbpf
 .globl entrypoint
 entrypoint:
-    mov64 r0, 0x00   # r0 <- success
-    exit             # finish, return r0
+    mov64 r0, 0x00   // r0 <- success
+    exit             // finish, return r0
 ```
 
 Let's break down the code:
