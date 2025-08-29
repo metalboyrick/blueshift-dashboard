@@ -81,7 +81,7 @@ mov64 r0, 42
 stxdw [r10 - 8], r0         // Store at first stack slot
 
 # Load it back
-ldxdw r1, [r10 - 8]         # Load from first stack slot
+ldxdw r1, [r10 - 8]         // Load from first stack slot
 ```
 
 Stack slots are typically 8 bytes wide, so consecutive variables use offsets like `[r10 - 8]`, `[r10 - 16]`, `[r10 - 24]`, and so on.
