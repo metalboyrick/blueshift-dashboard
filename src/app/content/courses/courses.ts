@@ -283,8 +283,8 @@ const allCourses: CourseMetadata[] = withCourseNumber([
   },
   {
     slug: "testing-with-litesvm",
-    language: "General",
-    color: "0,255,255",
+    language: "Typescript",
+    color: "105,162,241",
     difficulty: 1,
     isFeatured: true,
     lessons: [
