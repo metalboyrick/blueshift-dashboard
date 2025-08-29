@@ -225,21 +225,21 @@
       "title": "Pinocchio Quantum Vault",
       "pages": {
         "open": {
-          "title": "Open Vault"
+          "title": "Mở Vault"
         },
         "split": {
-          "title": "Split Vault"
+          "title": "Chia tách Vault"
         },
         "close": {
-          "title": "Close Vault"
+          "title": "Đóng Vault"
         }
       },
       "requirements": {
         "open": {
-          "title": "Challenge 1: Opening a Quantum Vault"
+          "title": "Thử thách 1: Mở một vault lượng tử"
         },
         "close": {
-          "title": "Challenge 2: Closing a Quantum Vault"
+          "title": "Challenge 2: Đóng một vault lượng tử"
         }
       }
     }
