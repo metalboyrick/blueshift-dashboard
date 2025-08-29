@@ -1,24 +1,22 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Mollusk 101
+# LiteSVM 101
 
 ![Testing with LiteSVM](/graphics/course-banners/testing-with-litesvm.png)
 
-Testing Solana programs efficiently requires a framework that balances speed, precision, and insight. When developing complex program logic, you need an environment that enables rapid iteration without sacrificing the ability to test edge cases or measure performance accurately.
+Solana program testing traditionally forces you to choose between speed and accuracy. LiteSVM eliminates this tradeoff by delivering an in-process testing environment that's both lightning-fast and feature-complete.
 
-The ideal Solana testing framework should provide three essential capabilities: 
-- Fast execution for quick development cycles, 
-- Flexible account state manipulation for comprehensive edge case testing, 
-- Detailed performance metrics for optimization insights.
+LiteSVM provides three critical advantages for Solana developers:
+- **Faster execution** compared to `solana-program-test` and `solana-test-validator`
+- **Direct account state manipulation** for testing complex edge cases
+- **Built-in performance profiling** for identifying optimization and improvments
 
-Litesvm addresses these requirements by providing a streamlined testing environment specifically designed for Solana program development.
+<ArticleSection name="What is LiteSVM" id="what-is-litesvm" level="h2" />
 
-<ArticleSection name="What is LitSVM" id="what-is-litesvm" level="h2" />
+[LiteSVM](https://github.com/LiteSVM/litesvm) is a lightweight Solana Virtual Machine that runs directly in your test process. Created by [Aursen](https://x.com/exoaursen) from [Exotic Markets](https://x.com/exotic_markets_), it eliminates the overhead of external validators while maintaining full compatibility with Solana's runtime.
 
-[LiteSVM](https://github.com/LiteSVM/litesvm), created and maintained by [Aursen](https://x.com/exoaursen) from the [Exotic Market](https://x.com/exotic_markets_) team, is a fast and lightweight library for testing Solana programs. 
+Unlike traditional testing approaches that spawn separate validator processes, LiteSVM embeds the VM within your tests. This architecture delivers dramatically faster compilation and execution times without sacrificing testing accuracy.
 
-It works by creating an in-process Solana VM optimized for program developers. This makes it much faster to run and compile than alternatives like `solana-program-test` and `solana-test-validator`. 
+The library offers an intuitive API with smart defaults for quick setup, plus extensive configuration options for advanced testing scenarios. 
 
-In a further break from tradition, it has an ergonomic API with sane defaults and extensive configurability for those who want it.
-
-`LiteSVM` is available in Rust, TS/JS and Python (as part of the `solders` library).
+> LiteSVM supports Rust, TypeScript/JavaScript, and Python (via `solders`).

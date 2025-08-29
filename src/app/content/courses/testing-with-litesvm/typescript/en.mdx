@@ -1,22 +1,24 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# LiteSVM with Typescript
+# LiteSVM with TypeScript
+
+The `litesvm` package provides the core testing infrastructure for creating a lightweight Solana environment where you can directly manipulate account state and execute transactions against your programs.
 
 <ArticleSection name="First Steps" id="first-steps" level="h2" />
 
-The `litesvm` package provides the fundamental testing infrastructure to create your `litesvm` envorinoment and operate directly on the bank by modifying accounts and state.
+Add LiteSVM to your project:
 
-### Setup
-
-Add the LiteSVM package to your project:
-
-```
+<Codeblock lang="terminal">
+```bash
 npm i litesvm
 ```
+</Codeblock>
 
 <ArticleSection name="LiteSVM Basics" id="basics" level="h2" />
 
-Start by declaring the `program_id` and creating a `LiteSVM` instance with the address that you used in your program so it gets called correctly and doesn't throw any "ProgramMismatch` error during testing, and the path to the built program like so:
+Start by declaring your program ID and creating a LiteSVM instance. 
+
+Use the exact same program ID that you defined in your program to ensure transactions execute correctly and don't throw `ProgramMismatch` errors during testing:
 
 ```ts
 import { LiteSVM } from "litesvm";
@@ -33,7 +35,7 @@ describe("test", () => {
 })
 ```
 
-To tests, we can then execute a transaction by getting a transaction object and then using the `.sendTransaction(tx)` function:
+To execute tests, create a transaction object and use the `.sendTransaction(tx)` function:
 
 ```ts
 import { LiteSVM } from "litesvm";
@@ -59,17 +61,19 @@ describe("test", () => {
 
 <ArticleSection name="Accounts" id="accounts" level="h2" />
 
-When testing Solana programs with LiteSVM, you'll work with several types of accounts that mirror real-world program execution scenarios. Understanding how to construct these accounts properly is essential for effective testing.
+When testing Solana programs with LiteSVM, you'll work with several types of accounts that mirror real-world program execution scenarios. 
+
+Understanding how to construct these accounts properly is essential for effective testing.
 
 ### System Accounts
 
-The most fundamental account type is the `SystemAccount`, which comes in two primary variants:
-- Payer: An account with lamports that funds program account creation or lamport transfers
-- Default Account: An empty and lamport-less account, usually used to represent program account awaiting initialization within the instruction
+The most fundamental account type is the system account, which comes in two primary variants:
+- **Payer accounts**: Accounts with lamports that fund program account creation or lamport transfers
+- **Uninitialized accounts**: Empty accounts with no lamports, typically used to represent program accounts awaiting initialization
 
-System accounts contain no data and are owned by the System Program. The key difference between payer and uninitialized accounts is their lamport balance: payers have funds, while uninitialized accounts start empty.
+System accounts contain no data and are owned by the System Program. The key difference between payers and uninitialized accounts is their lamport balance: payers have funds, while uninitialized accounts start empty.
 
-Here's how to create a `payer` accounts in LiteSVM:
+Here's how to create a `payer` account in LiteSVM:
 
 ```ts
 import { LiteSVM } from "litesvm";
@@ -92,11 +96,11 @@ describe("test", () => {
 })
 ```
 
-> A default account is just a normal generated account with `Keypair.generate()`;
+> An uninitialized account is simply a normal generated account with `Keypair.generate()` - no additional setup required.
 
 ### Program Accounts
 
-For `ProgramAccounts` that contain data, you can use a similar approach as the payer account:
+For program accounts that contain custom data structures, you can use a similar approach:
 
 ```ts
 import { LiteSVM } from "litesvm";
@@ -131,11 +135,11 @@ describe("test", () => {
 })
 ```
 
-> We don't actually need to calculate rent, we can set the lamports to `100_000_000_000` and just gloss over it since this are not real funds.
+> In testing, you don't need to calculate exact rent. You can set lamports to a large value like `100_000_000_000` and skip the rent calculation since these aren't real funds.
 
 ### Token Accounts
 
-There are no helper specifically for the Token program, so we're going to use a similar approach that we used for `ProgramAccounts`:  
+There are no specific helpers for SPL Token accounts, so we use the same approach as program accounts:
 
 ```ts
 import { LiteSVM } from "litesvm";
@@ -209,26 +213,28 @@ describe("test", () => {
 
 <ArticleSection name="Execution" id="execution" level="h2" />
 
-With accounts generated and added to your LiteSVM instance, you can now send transactions and validate your program logic.
+With accounts created and added to your LiteSVM instance, you can now send transactions and validate your program logic.
 
-Before sending a transaction, we can simulate the result using: 
+Before sending a transaction, you can simulate the result:
 
-```
+```ts
+// Simulate before executing
 const simulatedResult = svm.simulateTransaction(tx);
 ```
 
-We can then send the transaction and listen for its logs like this:
+Then send the transaction and inspect its logs:
 
-```
+```ts
+// Execute and inspect logs
 const result = svm.sendTransaction(tx);
-console.log(result.logs());
+console.log(result.logs);
 ```
 
 ### Advanced Features
 
 Before and after execution, the entire ledger contained in your LiteSVM instance is readable and customizable.
 
-For example it's possible to change some sysvar values like this:
+You can manipulate sysvar values like the clock:
 
 ```ts
 // Change the Clock
@@ -243,7 +249,7 @@ svm.warpToSlot(500);
 svm.expireBlockhash();
 ```
 
-Of for example is possible to read both accounts or protocol data like:
+You can also read account and protocol data:
 
 ```ts
 // Get all the information about an account (data, lamports, owner, ...)
@@ -256,7 +262,7 @@ svm.getBalance(account.publickey);
 svm.getComputeBudget();
 ```
 
-Or to change how the protocol foundamentally behave:
+Or configure how the runtime behaves:
 
 ```ts
 // Sets the compute budget
