@@ -78,7 +78,7 @@ The stack operates with `r10` as the frame pointer, pointing to the base of your
 ```sbpf
 # Store a value on the stack
 mov64 r0, 42
-stxdw [r10 - 8], r0         # Store at first stack slot
+stxdw [r10 - 8], r0         // Store at first stack slot
 
 # Load it back
 ldxdw r1, [r10 - 8]         # Load from first stack slot
