@@ -1,17 +1,17 @@
-# Close Vault
+# Đóng Vault
 
-The `close` instruction performs a complete withdrawal from quantum-resistant vaults, transferring all lamports to a single recipient account. 
+Instruction `close` thực hiện việc rút toàn bộ từ các vault kháng lượng tử, chuyển tất cả lamports đến một tài khoản người nhận duy nhất.
 
-Unlike the `split` instruction, this provides a simpler full-withdrawal mechanism when fund distribution isn't needed.
+Khác với instruction `split`, việc này cung cấp một cơ chế rút tiền đơn giản hơn khi không cần phân phối quỹ.
 
-<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+<ArticleSection name="Các account cần thiết" id="required-accounts" level="h2" />
 
-The instruction requires three accounts:
+Instruction yêu cầu 2 account:
 
-- `vault`: Source vault containing stored lamports (must be mutable)
-- `refund`: Recipient account for the vault lamports balance (must be mutable)
+- `vault`: Vault nguồn để chứa tất cả lamports (phải là mutable)
+- `refund`: Account nhận số dư lamports của vault (phải là mutable)
 
-Here's how it looks in code:
+Mã sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -35,15 +35,15 @@ impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
 ```
 </Codeblock>
 
-> Account validation is handled by the runtime. If accounts don't meet requirements (mutability), the instruction will fail automatically.
+> Việc xác minh account được xử lý bởi runtime. Nếu các account không đáp ứng yêu cầu (khả năng có thể sửa đổi), instruction sẽ tự động thất bại.
 
-<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+<ArticleSection name="Dữ liệu cho instruction" id="instruction-data" level="h2" />
 
-Two pieces of data are required:
-- `signature`: Winternitz signature proving ownership of the vault's keypair
-- `bump`: PDA derivation bump for optimization (1 byte)
+Hai phần dữ liệu là cần thiết:
+- `signature`: chữ Winternitz chứng minh quyền sở hữu cặp khóa của vault
+- `bump`: số bump để dẫn xuất ra PDA nhằm tối ưu hóa (1 byte)
 
-Here's how it looks in code:
+Mã sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -74,21 +74,21 @@ impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
 ```
 </Codeblock>
 
-<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+<ArticleSection name="Logic của instruction" id="instruction-logic" level="h2" />
 
-The verification process follows these steps:
+Quá trình xác minh tuân theo các bước sau:
 
-1. Message Assembly: A 32-byte message is constructed containing the `refund` account publickey
+1. Đóng gói thông điệp: Một thông điệp 32 byte được xây dựng chứa khóa công khai của tài khoản `refund`
 
-2. Signature Verification: The Winternitz signature is used to recover the original public key hash, which is then compared against the vault's PDA derivation seeds.
+2. Xác minh chữ ký: Chữ ký Winternitz được sử dụng để khôi phục lại mã băm khóa công khai gốc, sau đó được so sánh với các hạt giống dẫn xuất PDA của vault.
 
-3. PDA Validation: A fast equivalence check ensures the recovered hash matches the vault's PDA, proving the signer owns the vault.
+3. Xác thực PDA: Một kiểm tra tương đương nhanh đảm bảo rằng băm đã khôi phục khớp với PDA của vault, chứng minh rằng người ký sở hữu vault.
 
-4. Fund Distribution If validation succeeds: the whole balance is transferred to the `refund` account and the `vault` acount is closed.
+4. Phân phối quỹ nếu xác minh thành công: toàn bộ số dư được chuyển đến tài khoản `refund` và tài khoản `vault` được đóng.
 
-> Since the program owns the `vault` account, you can transfer lamports directly without having to call a Cross-Program Invocation (CPI).
+> Vì chương trình sở hữu tài khoản `vault`, bạn có thể chuyển lamports trực tiếp mà không cần gọi Cross-Program Invocation (CPI).
 
-Here's how it looks in code:
+Mã sẽ trông như thế này:
 
 <Codeblock lang="rust">
 ```rust
@@ -135,4 +135,4 @@ impl<'a> CloseVault<'a> {
 ```
 </Codeblock>
 
-> Reconstructing the message prevents signature replay attacks where malicious actors substitute different recipient accounts while MEV-ing valid signatures captured from the mempool.
+> Việc tái tạo thông điệp ngăn chặn các cuộc tấn công phát lại chữ ký, nơi các tác nhân độc hại thay thế các tài khoản người nhận khác nhau trong khi MEV-ing các chữ ký hợp lệ được ghi lại từ mempool.

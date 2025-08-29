@@ -220,6 +220,28 @@
           "title": "Thử thách 4: Mint token"
         }
       }
+    },
+    "pinocchio-quantum-vault": {
+      "title": "Pinocchio Quantum Vault",
+      "pages": {
+        "open": {
+          "title": "Mở Vault"
+        },
+        "split": {
+          "title": "Chia tách Vault"
+        },
+        "close": {
+          "title": "Đóng Vault"
+        }
+      },
+      "requirements": {
+        "open": {
+          "title": "Thử thách 1: Mở một vault lượng tử"
+        },
+        "close": {
+          "title": "Challenge 2: Đóng một vault lượng tử"
+        }
+      }
     }
   }
 }

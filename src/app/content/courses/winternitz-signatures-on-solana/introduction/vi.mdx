@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Chữ ký Winternitz trên Solana
+
+![Winternitz Signatures on Solana](/graphics/course-banners/winternitz-signatures-on-solana.png)
+
+Không giống như các chữ ký RSA hoặc ECDSA dựa vào các vấn đề toán học như phân tích số nguyên hoặc logarit rời rạc, cả hai đều dễ bị tấn công lượng tử—chữ ký Winternitz chỉ dựa vào tính chất một chiều của các hàm băm mật mã.
+
+Sự khác biệt cơ bản này khiến chúng trở thành một viên gạch nền tảng của mật mã kháng lượng tử.
+
+<ArticleSection name="Chữ ký Winternitz là gì?" id="what-is-a-winternitz-signature" level="h2" />
+
+Winternitz One-Time Signatures (WOTS) được phát triển từ công trình tiên phong của Leslie Lamport vào những năm 1970. Lamport đã chứng minh rằng bạn có thể tạo chữ ký số chỉ bằng cách sử dụng một hàm băm mật mã, mà không cần các giả định toán học phức tạp.
+
+Lược đồ ban đầu của Lamport ký một bit duy nhất bằng cách sử dụng hai giá trị bí mật. Để ký bit `b`, bạn tiết lộ tiền ảnh của giá trị băm `H₀` (nếu b=0) hoặc `H₁` (nếu b=1). Bảo mật hoàn toàn dựa vào tính bất khả thi về mặt tính toán của việc tìm kiếm tiền ảnh băm: về cơ bản, làm việc ngược lại từ đầu ra của hàm băm để tìm đầu vào của nó.
+
+Tuy nhiên, chữ ký Lamport cực kỳ kém hiệu quả. Để ký một thông điệp `n-bit` yêu cầu `2n` giá trị bí mật và tạo ra chữ ký `2n` giá trị. Đối với một thông điệp 256-bit, điều này có nghĩa là quản lý 512 giá trị bí mật và tạo ra chữ ký 512 giá trị.
+
+Vào những năm 1990 Robert Winternitz đã nhận ra rằng thay vì ký từng bit trong hệ cơ số 2, bạn có thể ký các "chữ số" lớn hơn trong các hệ cơ số cao hơn như cơ số 16 hoặc cơ số 256. Sự đổi mới này đã giảm đáng kể cả kích thước khóa và chữ ký trong khi vẫn duy trì các yêu cầu bảo mật tương tự.
+
+<ArticleSection name="Nền tảng toán học" id="mathematical-foundations" level="h2" />
+
+### Tham số Winternitz và Biểu diễn Cơ số
+
+Tham số quan trọng trong chữ ký Winternitz là `w`, xác định cách chúng ta nhóm các bit của thông điệp:
+- Cơ số: `b = 2^w`
+- Phạm vi chữ số: Mỗi chữ số đại diện cho `w` bit và có thể có giá trị từ `0` đến `2^w - 1`
+
+Các lựa chọn tham số phổ biến:
+- `w = 1`: Mỗi vị trí đại diện cho 1 bit (giá trị 0 hoặc 1), tương đương với chữ ký Lamport trong hệ cơ số 2
+- `w = 4`: Mỗi vị trí đại diện cho 4 bit (giá trị 0-15), biểu diễn cơ số 16
+- `w = 8`: Mỗi vị trí đại diện cho 8 bit (giá trị 0-255), biểu diễn cơ số 256
+
+> Các giá trị `w` lớn hơn tạo ra chữ ký nhỏ hơn nhưng yêu cầu nhiều phép toán hơn để đảm bảo an toàn. Sự đánh đổi này là cơ bản để hiểu các đặc điểm hiệu suất của WOTS.
+
+### Chuỗi Băm
+
+Chữ ký Winternitz sử dụng chuỗi băm—các chuỗi các lần áp dụng băm lặp lại bắt đầu từ một giá trị bí mật: `H⁰(s) = s`, `H¹(s) = H(s)`, `H²(s) = H(H(s))`, ..., `Hⁱ(s) = H(H^(i-1)(s))`
+
+Tính chất bảo mật là bất đối xứng: cho `Hⁱ(s)`, việc tính toán bất kỳ `Hʲ(s)` nào với `j > i` là dễ dàng (chỉ cần băm thêm `j-i` lần), nhưng việc tính toán bất kỳ `Hʲ(s)` nào với `j < i` là bất khả thi về mặt tính toán vì nó sẽ yêu cầu đảo ngược hàm băm.
+
+### Cơ chế kiểm tra
+
+Cơ chế kiểm tra chống lại một loại tấn công giả mạo cụ thể. Nếu không có nó, một kẻ tấn công nhìn thấy chữ ký có thể thay đổi thông điệp thành một thông điệp yêu cầu nhiều phép băm hơn trên một số chuỗi, sau đó giả mạo các thành phần đó.
+
+Cơ chế kiểm tra đảm bảo rằng tổng "ngân sách băm" trên tất cả các chuỗi vẫn không đổi: nếu một kẻ tấn công sửa đổi các chữ số thông điệp thành các giá trị lớn hơn (yêu cầu nhiều phép băm hơn), các chữ số kiểm tra tự động trở nên nhỏ hơn (yêu cầu ít phép băm hơn ở các giá trị khác, điều này là không thể giả mạo mà không có khóa riêng).
+
+### Quy trình tạo khóa
+
+Đối với một thông điệp có độ dài `n` bit với tham số Winternitz `w`:
+
+1. Tính toán độ dài chữ ký: Đầu tiên, xác định số lượng "đoạn" bạn sẽ cần để đại diện cho bất kỳ thông điệp nào. Nếu thông điệp của bạn dài 256 bit và bạn chọn tham số Winternitz là `w = 4`, bạn sẽ cần tổng cộng 64 đoạn: `l₁ = ⌈n/w⌉`. Sử dụng công thức `l₂ = ⌊log₂(l₁ × (2^w - 1))/w⌋ + 1`, chúng ta thấy rằng đối với `w = 4`, nơi kiểm tra tối đa là 960, `l₂ = 3` và kích thước của chữ ký sẽ là `l = l₁ + l₂`
+
+> Trong quá trình tạo khóa, bạn không biết giá trị kiểm tra sẽ là gì vì bạn chưa chọn một thông điệp để ký, nhưng bạn vẫn cần các thành phần khóa riêng tư `l₂` được dành riêng cho việc kiểm tra.
+
+2. Tạo các điểm khởi đầu ngẫu nhiên: Tạo một giá trị bí mật ngẫu nhiên cho mỗi chuỗi băm mà bạn cần. Những giá trị ngẫu nhiên này trở thành các thành phần khóa riêng của bạn. Hãy nghĩ về mỗi giá trị như là "điểm khởi đầu" của một chuỗi băm riêng biệt: `sk = (sk₁, sk₂, ..., skₗ)`
+
+3. Đối với mỗi thành phần khóa riêng, áp dụng hàm băm lặp đi lặp lại cho đến khi bạn đã băm nó số lần tối đa có thể (`2^w - 1`):`pk = (H^(2^w-1)(sk₁), H^(2^w-1)(sk₂), ..., H^(2^w-1)(skₗ))`
+
+### Quy trình ký
+
+Để ký thông điệp `M`:
+
+1. Chuyển đổi thông điệp sang biểu diễn cơ số: `M → (m₁, m₂, ..., m_l₁)` trong đó mỗi `mᵢ ∈ [0, 2^w - 1]`
+
+2. Tính toán giá trị kiểm tra: `c = Σ((2^w - 1) - mᵢ) cho i = 1 đến l₁` và chuyển đổi c sang biểu diễn cơ số: `c → (c₁, c₂, ..., c_l₂)`
+
+> Để tính toán giá trị kiểm tra thực tế cho thông điệp đó, chúng ta có thể sử dụng các thành phần khóa riêng tư kiểm tra phù hợp và băm chúng đúng với số lần dựa trên các chữ số kiểm tra
+
+3. Tạo chữ ký: khi biểu diễn cơ số chỉ ra số lần khóa riêng cần được băm.
+
+### Quy trình xác minh
+
+Để xác minh chữ ký `σ` trên thông điệp `M` với khóa công khai `pk`:
+
+1. Tính toán lại biểu diễn thông điệp: `M → (m₁, m₂, ..., m_l₁)`
+
+2. Tính toán lại giá trị kiểm tra: `c = Σ((2^w - 1) - mᵢ) → (c₁, c₂, ..., c_l₂)`
+
+3. Với mỗi thành phần ký, băm số lần còn lại:
+   - Đối với các phần thông điệp: xác minh `H^((2^w-1)-mᵢ)(σᵢ) = pkᵢ`
+   - Đối với các phần kiểm tra: xác minh `H^((2^w-1)-cⱼ)(σ_(l₁+j)) = pk_(l₁+j)`
+
+> Trình xác minh "tiếp tục" mỗi chuỗi băm từ nơi mà người ký dừng lại, đạt đến điểm cuối khóa công khai đã biết nếu chữ ký hợp lệ.
+
+<ArticleSection name="Bảo mật" id="security" level="h2" />
+
+### Giới hạn sử dụng 1 lần
+
+Chữ ký Winternitz là Chữ ký Sử dụng Một lần (OTS): chúng chỉ có thể được sử dụng an toàn một lần đối với mỗi cặp khóa.
+
+Cuộc tấn công hoạt động như sau: khi bạn ký nhiều thông điệp bằng cùng một khóa riêng, bạn vô tình tiết lộ các giá trị trung gian trong các chuỗi băm của mình.
+
+Cơ chế kiểm tra đòi hỏi việc tăng một số chữ số thông điệp (nhiều băm hơn) phải được cân bằng bằng việc giảm các chữ số kiểm tra (ít băm hơn). Với nhiều chữ ký tiết lộ các giá trị trung gian ở các vị trí khác nhau, một kẻ tấn công có thể tạo ra các bản giả mạo mà họ sử dụng các vị trí trung gian cao hơn để đi cao hơn nữa cho các thành phần thông điệp, trong khi sử dụng các vị trí trung gian thấp hơn để cân bằng kiểm tra do đó tôn trọng ràng buộc ngân sách băm tổng thể.
+
+### Bảo mật sau lượng tử
+
+Chữ ký Winternitz có được bảo mật hoàn toàn từ khả năng kháng tiền ảnh của các hàm băm. Máy tính lượng tử không thể đảo ngược hiệu quả các hàm băm mật mã như SHA-256 hoặc SHA-3—khác với các thuật toán lượng tử thời gian đa thức (các thuật toán của Shor) phá vỡ RSA và ECDSA.
+
+Sử dụng SHA-256 với các tham số phù hợp cung cấp 128 bit bảo mật sau lượng tử, làm cho các chữ ký này phù hợp cho các ứng dụng mật mã lâu dài ngay cả trong một thế giới sau lượng tử.
+
+<ArticleSection name="Các chữ ký Winternitz trên Solana" id="winternitz-on-solana" level="h2" />
+
+Nền tảng mật mã hiện tại của Solana hoàn toàn dựa vào chữ ký Ed25519, vốn dễ bị tấn công lượng tử thông qua thuật toán của Shor.
+
+Khi máy tính lượng tử trở nên phổ biến, mọi ví, quyền kiểm soát chương trình và giao dịch trên Solana đều trở nên có thể giả mạo.
+
+Việc di chuyển sau lượng tử không phải là điều bạn có thể thực hiện qua đêm. Các hệ thống cần được thiết kế ngay hôm nay với khả năng kháng lượng tử trong tâm trí, tạo ra các phương pháp kết hợp hoạt động trong cả thế giới trước và sau lượng tử.
+
+Trong khi lớp cơ sở của Solana vẫn dễ bị tấn công lượng tử, các nhà phát triển có thể xây dựng các ứng dụng kháng lượng tử trên nền tảng này bằng cách sử dụng chữ ký Winternitz.

@@ -1,0 +1,125 @@
+# Mở Vault
+
+Instruction `open` tạo ra một PDA cho vault, nơi lamports sẽ được lưu trữ một cách an toàn. PDA này sử dụng một khóa công khai được băm làm hạt giống, đảm bảo rằng chỉ người nắm giữ khóa gốc mới có thể rút tiền sau này.
+
+PDAs cung cấp một cách an toàn để lưu trữ quỹ vì:
+- Chỉ chương trình của bạn có thể kiểm soát tài khoản (không có khóa riêng tồn tại)
+- Địa chỉ vault được xác định một cách xác định từ mã băm của người dùng
+- Việc rút tiền chỉ có thể xảy ra thông qua logic của chương trình của bạn
+
+<ArticleSection name="Các tài khoản cần thiết" id="required-accounts" level="h2" />
+
+Instruction yêu cầu các tài khoản sau:
+- `payer`: Thanh toán cho việc tạo vault (phải là signer và mutable)
+- `vault`: PDA sẽ được khởi tạo (phải là mutable)
+- `system_program`: Cần thiết cho việc tạo tài khoản (phải là executable)
+
+Trong mã, nó sẽ trông như thế này:
+
+<Codeblock lang="rust">
+```rust
+pub struct OpenVaultAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for OpenVaultAccounts<'a> {
+    type Error = ProgramError;
+ 
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+ 
+        Ok(Self { payer, vault })
+    }
+}
+```
+</Codeblock>
+
+> Việc xác minh account được xử lý bởi CPI `CreateAccount`. Nếu các account không đáp ứng yêu cầu (signer, mutability, executability), instruction sẽ tự động thất bại.
+
+<ArticleSection name="Dữ liệu cho instruction" id="instruction-data" level="h2" />
+
+Hai phần dữ liệu là cần thiết:
+- `hash`: mã băm SHA-256 của khóa công khai trong cặp khóa winternitz của người dùng ([u8; 32])
+- `bump`: số bump để dẫn xuất PDA được truyền từ client (u8)
+
+> Chúng tôi truyền bump từ client thay vì dẫn xuất nó trên chuỗi để tiết kiệm chi phí tính toán.
+
+Mã sẽ trông như thế này:
+
+<Codeblock lang="rust">
+```rust
+pub struct OpenVaultInstructionData {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for OpenVaultInstructionData {
+    type Error = ProgramError;
+ 
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<OpenVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let hash = data[0..32].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+        let bump = data[32..33].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+ 
+        Ok(Self { hash, bump })
+    }
+}
+```
+</Codeblock>
+
+> Ở đây một lần nữa, các tham số không hợp lệ sẽ tự động sửa chữa: việc truyền một mã băm sai sẽ làm hỏng vault, việc truyền một bump sai sẽ làm thất bại việc dẫn xuất PDA.
+
+<ArticleSection name="Logic của instruction" id="instruction-logic" level="h2" />
+
+Instruction này tạo ra một PDA trống được gán cho chương trình của chúng ta. Trong khi account không chứa dữ liệu, quyền sở hữu chương trình đảm bảo rằng việc rút tiền chỉ có thể xảy ra thông qua logic được kiểm soát của chúng ta.
+
+> Ngay cả các account trống cũng phải được miễn phí thuê để tồn tại trên Solana.
+
+Mã sẽ trông như thế này:
+
+<Codeblock lang="rust">
+```rust
+pub struct OpenVault<'a> {
+    pub accounts: OpenVaultAccounts<'a>,
+    pub instruction_data: OpenVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for OpenVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = OpenVaultInstructionData::try_from(data)?;
+        let accounts = OpenVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> OpenVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+ 
+    pub fn process(&self) -> ProgramResult {
+        let lamports = Rent::get()?.minimum_balance(0);
+        let seeds = [Seed::from(&self.instruction_data.hash), Seed::from(&self.instruction_data.bump)];
+
+        // Create our vault
+        CreateAccount {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&[Signer::from(&seeds)])
+    }
+}
+```
+</Codeblock>
+
+> Instruction này chỉ tạo cấu trúc của vault. Các khoản tiền gửi được xử lý riêng biệt thông qua các lệnh chuyển khoản lamport đơn giản đến account vault.

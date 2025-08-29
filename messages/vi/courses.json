@@ -31,6 +31,7 @@
         "pinocchio-instructions": "Lệnh trong Pinocchio",
         "pinocchio-errors": "Xử lý lỗi trong Pinocchio",
         "reading-and-writing-data": "Đọc và ghi dữ liệu",
+        "testing-your-program": "Kiểm thử chương trình của bạn",
         "performance": "Tối ưu hiệu suất",
         "conclusion": "Kết luận"
       }
@@ -195,6 +196,15 @@
         "codama-from-scratch": "Tạo Codama IDL từ đầu",
         "codama-with-anchor": "Tạo Codama IDL với Anchor",
         "updating-codama-idl": "Cập nhật Codama IDL",
+        "conclusion": "Kết luận"
+      }
+    },
+    "winternitz-signatures-on-solana": {
+      "title": "Chữ ký Winternitz Solana",
+      "lessons": {
+        "introduction": "Giới thiệu",
+        "winternitz-signatures-with-anchor": "Chữ ký Winternitz với Anchor",
+        "winternitz-signatures-with-pinocchio": "Chữ ký Winternitz với Pinocchio",
         "conclusion": "Kết luận"
       }
     }

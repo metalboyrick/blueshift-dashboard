@@ -1,0 +1,32 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Kiểm thử chương trình của bạn  
+
+Thông qua việc kiểm thử, bạn có thể phát hiện các lỗi và lỗ hổng tiềm ẩn trước khi triển khai lên mainnet.
+
+Các chương trình được kiểm thử kỹ lưỡng giúp ngăn chặn tổn thất tài chính, xây dựng lòng tin của người dùng và đảm bảo ứng dụng hoạt động chính xác trong nhiều điều kiện khác nhau.
+
+<ArticleSection name="Kiểm thử bằng Mollusk" id="mollusk-tests" level="h2" />
+
+Khi thiết lập các trạng thái chương trình phức tạp hoặc yêu cầu các tương tác onchain tinh vi gặp khó khăn, Mollusk cung cấp khả năng kiểm soát chi tiết hơn đối với môi trường kiểm thử.
+
+Mollusk là một framework kiểm thử Rust được thiết kế đặc biệt cho các chương trình Solana, cho phép bạn:
+- Kiểm thử logic chương trình một cách độc lập mà không bị ảnh hưởng bởi mạng
+- Thiết lập các trạng thái tài khoản và điều kiện chương trình phức tạp một cách dễ dàng
+- Chạy các bài kiểm tra nhanh hơn so với các bài kiểm tra tích hợp đầy đủ
+- Giả lập các điều kiện blockchain cụ thể và các trường hợp biên
+
+Chúng tôi đã đề cập đến việc kiểm thử Mollusk một cách chi tiết [tại đây](/vi/courses/testing-with-mollusk).
+
+Để kiểm thử chương trình pinocchio của bạn, chỉ cần import tệp `test.rs` của bạn với cờ cấu hình `test` trong tệp `lib.rs` của bạn:
+
+```rust
+#[cfg(test)]
+pub mod tests;
+```
+
+Chạy các kiểm thử của bạn bằng lệnh:
+
+```
+cargo test-sbf
+```
