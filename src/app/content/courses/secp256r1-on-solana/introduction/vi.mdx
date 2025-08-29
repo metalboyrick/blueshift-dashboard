@@ -5,68 +5,113 @@ import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Secp256r1 on Solana](/graphics/course-banners/secp256r1-on-solana.png)
 
+Secp256r1 là một trong những đường cong elliptic được áp dụng rộng rãi nhất trong mật mã hiện đại, nó hỗ trợ mọi thứ, từ kết nối TLS đến khóa bảo mật phần cứng. Đường cong này tạo thành xương sống của bảo mật kỹ thuật số trên hàng triệu ứng dụng.
+
+Tính năng biên dịch trước secp256r1, được đề xuất bởi [Orion](https://x.com/BasedOrion_) trong [SIMD 75](https://github.com/solana-foundation/solana-improvement-documents/blob/main/proposals/0075-precompile-for-secp256r1-sigverify.md), đã được kích hoạt trên Solana tại khối 800.
+
 <ArticleSection name="Secp256r1 là gì" id="what-is-secp256r1" level="h2" />
 
-Secp256r1, còn được biết đến với tên P-256 hoặc prime256v1, là một đường cong elliptic được định nghĩa bởi Standards for Efficient Cryptography Group (SECG) và được NIST chấp nhận như một phần của các đường cong elliptic được khuyến nghị sử dụng.
+Đường cong mà chúng ta biết đến với tên gọi secp256r1 đã được Standards for Efficient Cryptography Group (SECG) chuẩn hóa vào đầu những năm 2000. Quy ước đặt tên cho chúng ta biết mọi thông tin cần thiết:
+- `sec`: Standards for Efficient Cryptography
+- `p`: Đường cong được định nghĩa trên một tập số nguyên tố
+- `256`: modulus số nguyên tố xấp xỉ 2^256
+- `r`: Đường cong ngẫu nhiên (khác với đường cong Koblitz)
+- `1`: Đường cong đầu tiên trong danh mục này
 
-Đây là đường cong elliptic được triển khai rộng rãi nhất trong các ứng dụng mật mã hiện đại, cung cấp sức mạnh cho mọi thứ từ kết nối TLS đến khóa bảo mật phần cứng.
+Secp256r1 sau đó được NIST chấp nhận là P-256 và trở thành một phần của FIPS 186-2. Việc chuẩn hóa bởi cả SECG và NIST đã mang lại tính hợp pháp rộng rãi cho đường cong này và dẫn đến việc nó được áp dụng trên nhiều giao thức và ứng dụng - khiến nó trở thành một trong những đường cong đã được kiểm nghiệm thực tế tốt nhất trong các hệ thống trên toàn thế giới.
 
-Đường cong cung cấp khoảng 128 bit độ mạnh bảo mật với kích thước khóa 256-bit, làm cho nó hiệu quả hơn đáng kể so với RSA trong khi cung cấp bảo mật tương đương.
+<ArticleSection name="Nền tảng toán học" id="mathematical-foundations" level="h2" />
 
-Các tính chất toán học của nó, kết hợp với việc mở rộng tối ưu hóa phần cứng, đã làm cho nó trở thành nhân tố tiêu chuẩn cho mật mã đường cong elliptic.
+### Tập số nguyên tố và số học hữu hạn
 
-### Tại sao nó lại thống trị?
+Để hiểu secp256r1, trước tiên chúng ta phải nắm được khái niệm làm việc với tập số hữu hạn. Không giống như số học thông thường, nơi các số có thể tăng vô hạn, mật mã đường cong elliptic hoạt động trong một không gian toán học giới hạn.
 
-Secp256r1 đạt được sự thống trị thông qua sự kết hợp của tiêu chuẩn hóa từ sớm, hỗ trợ đa dạng phần cứng, và được phê duyệt theo quy định.
+Đường cong hoạt động trên tập số nguyên tố 𝔽p, trong đó: `p = 2^256 - 2^224 + 2^192 + 2^96 - 1`.
+
+Đây không phải là một số nguyên tố 256 bit ngẫu nhiên; nó được gọi là số nguyên tố giả Mersenne. Số nguyên tố Mersenne có dạng `2^n - 1`, cho phép chai dư cực nhanh bằng cách sử dụng phép dịch bit và phép trừ thay vì các phép chia tốn kém. Số nguyên tố giả Mersenne mở rộng khái niệm này sang các số "gần" với lũy thừa của 2, duy trì phần lớn lợi thế tính toán đồng thời bổ sung thêm các thuộc tính bảo mật.
+
+Đối với số nguyên tố của secp256r1, chúng ta có thể viết lại thành: `p = 2^256 - c`, trong đó `c = 2^224 - 2^192 - 2^96 + 1`
+
+Cấu trúc này có nghĩa là khi chúng ta cần giảm một số `mod p` (điều này xảy ra liên tục trong các phép toán đường cong elliptic), chúng ta có thể sử dụng các thuật toán giảm nhanh thay vì phép chia chung chậm.
+
+> Điều này làm cho secp256r1 hoạt động nhanh hơn đáng kể so với các đường cong sử dụng số nguyên tố tùy ý: một lợi thế lớn đối với các ứng dụng quan tâm đến hiệu suất như bắt tay TLS và các mô-đun bảo mật phần cứng.
+
+### Phương trình đường cong Elliptic
+
+Secp256r1 tuân theo dạng Weierstrass rút gọn của đường cong elliptic: `y² = x³ + ax + b (mod p)`
+
+Đối với secp256r1, các tham số là:
+- `a = -3` (hoặc tương đương, p-3)
+- `b = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
+
+> `a = -3` không phải là một số tùy ý nhưng nó cho phép tối ưu hóa đáng kể trong các phép cộng và nhân các điểm, giảm số phép nhân tập hợp cần thiết.
+
+Mỗi hệ mật mã đường cong elliptic cần một điểm sinh G có thứ tự đã biết. Đối với secp256r1:
+
+
+```
+G = (Gx, Gy) where:
+Gx = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+Gy = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
+```
+> Các giá trị này được tạo ra thông qua một quy trình "ngẫu nhiên có thể kiểm chứng" để đảm bảo không có mối nguy tiềm ẩn. Nếu các nhà thiết kế đường cong có thể dễ dàng chọn các giá trị tùy ý, họ có thể chọn các tham số chứa các mối quan hệ toán học bí mật mà chỉ họ biết, tạo ra các mối nguy tiềm ẩn có thể gây hại cho mọi hệ thống sử dụng đường cong đó.
+
+### Bậc đường cong và mức độ bảo mật
+
+**Bậc đường cong (n)** biểu thị tổng số điểm trên đường cong elliptic, bao gồm điểm ở vô cực: `n = 0xffffffff00000000ffffffffffffbce6faada7179e84f3b9cac2fc632551`
+
+Bậc của đường cong xác định kích thước của không gian khóa riêng và ảnh hưởng trực tiếp đến bảo mật. Mặc dù được gọi là "256-bit", secp256r1 thực tế cung cấp khoảng 128 bit bảo mật, chứ không phải 256 bit. Điều này là do các cuộc tấn công phổ biến nhất chống lại các bài toán đường cong elliptic logarit rời rạc có độ phức tạp khoảng `√n`, nghĩa là một đường cong có bậc `~2^256` cung cấp mức bảo mật `~2^128`.
+
+**Hệ số đồng đẳng (h)** là 1, nghĩa là secp256r1 là đường cong bậc nguyên tố. Điều này quan trọng vì:
+- Mọi điểm không đồng nhất đều có cùng bậc n
+- Không thể xảy ra các cuộc tấn công nhóm con nhỏ
+- Việc triển khai được đơn giản hóa vì chúng ta không cần phải lo lắng về các điểm bậc thấp
+
+### Tập vô hướng
+
+Trong khi đường cong được xác định trên tập tọa độ 𝔽p, khóa riêng nằm trong một không gian toán học khác: tập vô hướng 𝔽n, trong đó n là bậc của đường cong.
+
+```
+Private key ∈ [1, n-1]
+Public key = private_key × G (scalar multiplication)
+```
+
+Sự phân biệt này rất quan trọng vì:
+- Khóa riêng là số vô hướng (số nguyên `mod n`)
+- Tọa độ đường cong là tập các phần tử (số nguyên `mod p`)
+- Đây là các môđun khác nhau: `n ≠ p`
+
+Khi tạo khóa riêng, chúng tôi lấy mẫu thống nhất từ ​​`[1, n-1]`, chứ không phải từ `[1, p-1]`. Điều này đảm bảo rằng mọi khóa riêng đều tương ứng với một phép nhân vô hướng hợp lệ và ngăn chặn các cuộc tấn công toán học.
+
+<ArticleSection name="Tại sao Secp256r1 thống trị" id="why-secp256r1-dominates" level="h2" />
+
+Mặc dù sự tồn tại của các đường cong tiềm năng vượt trội như Curve25519, secp256r1 đã đạt được sự chấp nhận toàn cầu thông qua sự kết hợp của sự tiêu chuẩn hóa sớm, được phê duyệt theo quy định và tối ưu hóa phần cứng rộng rãi.
 
 Không giống như các đường cong mới hơn có thể vượt trội về mặt toán học, secp256r1 đại diện cho sự cân bằng tối ưu giữa độ mạnh mật mã, hiệu quả triển khai, và khả năng tương thích hệ sinh thái mà các hệ thống thực tế yêu cầu.
 
-Ngoài ra, cấu trúc toán học cụ thể của nó cho phép các triển khai được tối ưu hóa cao, hoạt động hiệu quả trên mọi thứ từ các phần tử bảo mật của điện thoại thông minh cho đến các máy chủ hiệu suất cao.
+Khi các nhà sản xuất phần cứng, hệ điều hành và tiêu chuẩn bảo mật đều hội tụ vào secp256r1, chi phí chuyển đổi trở nên quá cao.
 
-<ArticleSection name="Nó hoạt động như thế nào?" id="how-does-it-work" level="h2" />
+Các thuộc tính toán học cụ thể mà chúng tôi đã khám phá (số nguyên tố giả Mersenne, tối ưu hóa a = -3 và tạo tham số có thể xác minh), đã cho phép các triển khai tối ưu hóa cao trên mọi thứ, từ các thành phần bảo mật trên điện thoại thông minh đến các máy chủ hiệu suất cao.
 
-Secp256r1 định nghĩa một đường cong toán học trông giống như <code>y<sup>2</sup> = x<sup>3</sup> - 3x + b</code>. Điều này tạo ra một hình dạng giống hình oval với các tính chất toán học đặc biệt. Có chính xác <code>2<sup>256</sup></code> điểm hợp lệ trên đường cong này; một con số lớn đến mức thiên văn.
-
-Mỗi điểm trên đường cong này được định nghĩa bởi hai tọa độ (x, y), và cấu trúc toán học của đường cong đảm bảo rằng một số thao tác có thể được thực hiện hiệu quả trong khi những thao tác khác vẫn không thể tính toán được.
-
-### Tạo Khóa
-
-Quá trình bắt đầu bằng việc chọn một số mật mã  ngẫu nhiên an toàn giữa 1 và 2<sup>256</sup>, số này trở thành khóa riêng của bạn.
-
-Hệ thống sau đó lấy một điểm bắt đầu được xác định trước trên đường cong gọi là điểm generator, điểm này phục vụ như một tham chiếu chung mà mọi người đều đồng ý.
-
-Sử dụng một thao tác toán học đặc biệt gọi là scalar multiplication, số khóa riêng của bạn được sử dụng để "điều hướng" từ điểm generator này đến một vị trí mới, duy nhất trên đường cong.
-
-Điểm đích này trở thành khóa công khai của bạn, có thể được chia sẻ an toàn với bất kỳ ai cần xác minh chữ ký số của bạn.
-
-> Điều này đảm bảo an toàn vì bản chất bất đối xứng của thao tác. Trong khi việc di chuyển từ điểm generator đến khóa công khai của bạn bằng cách sử dụng khóa riêng như hướng dẫn là đơn giản về mặt tính toán, hành trình ngược lại thực tế là không thể.
-
-### Ký
-
-Khi bạn muốn tạo một chữ ký số, quá trình bắt đầu bằng việc lấy thông điệp của bạn và truyền nó qua một hàm hash mật mã, thường là SHA-256, tạo ra một biểu diễn số có kích thước cố định cho nội dung thông điệp. Mã hash này phục vụ như một dấu vân tay duy nhất của thông điệp bạn.
-
-Thuật toán ký sau đó kết hợp mã hash thông điệp này với khóa riêng của bạn và một số được tạo ngẫu nhiên gọi là nonce để tạo ra hai giá trị toán học, thường được gắn nhãn `r` và `s`. Những giá trị này được liên kết nội tại với cả khóa riêng của bạn và nội dung thông điệp cụ thể, tạo ra một bằng chứng mật mã mà chỉ bạn mới có thể tạo ra.
-
-> Số nonce ngẫu nhiên đóng vai trò bảo mật quan trọng trong quá trình này. Nó đảm bảo rằng ngay cả việc ký cùng một thông điệp hai lần cũng sẽ tạo ra các giá trị chữ ký khác nhau, ngăn chặn các cuộc tấn công mật mã khác nhau. Tuy nhiên, tính ngẫu nhiên này phải thực sự không thể dự đoán và không bao giờ được tái sử dụng, vì bất kỳ sự thỏa hiệp nào của nonce có thể dẫn đến việc khôi phục khóa riêng bởi kẻ tấn công.
-
-### Xác minh
-
-Quá trình xác minh thể hiện sự bất đối xứng rõ ràng của mật mã đường cong elliptic. Bất kỳ ai cũng có thể lấy khóa công khai của bạn, thông điệp gốc, cùng với các giá trị chữ ký (r, s) và thực hiện một loạt các thao tác toán học sẽ chỉ tạo ra kết quả hợp lệ nếu chữ ký được tạo bởi ai đó sở hữu khóa riêng tương ứng.
-
-Người xác minh tính toán một số giá trị trung gian và thực hiện các thao tác scalar multiplication bổ sung trên đường cong, cuối cùng đến một điểm khớp với các thuộc tính cụ thể của chữ ký nếu nó xác thực đúng.
-
-Quá trình xác minh này không bao giờ yêu cầu việc biết về khóa riêng, nhưng nó cung cấp sự chắc chắn về mặt toán học cho tính xác thực của chữ ký.
+Tác động của hệ sinh thái phần cứng này đã tạo ra một chu trình tự củng cố của việc áp dụng.
 
 <ArticleSection name="Secp256r1 trên Solana" id="secp256r1-on-solana" level="h2" />
 
-Solana cung cấp hỗ trợ native cho xác minh chữ ký Secp256r1 thông qua precompile tích hợp được giới thiệu với [SIMD-0075](https://github.com/solana-foundation/solana-improvement-documents/pull/75) bởi [Orion](https://x.com/BasedOrion_).
+Solana cung cấp hỗ trợ native cho việc xác minh chữ ký secp256r1 thông qua trình tiền biên dịch tích hợp sẵn của nó được giới thiệu trong [SIMD-0075](https://github.com/solana-foundation/solana-improvement-documents/pull/75) bởi [Orion](https://x.com/BasedOrion_).
 
-Đây là một bước quan trọng hướng tới việc kích hoạt các phương pháp xác thực hiện đại như passkey trên Solana, vì Secp256r1 là cùng đường cong elliptic được sử dụng bởi WebAuthn và các triển khai passkey. Với sự hỗ trợ này, cuối cùng chúng ta có thể sử dụng sự kết hợp của các phương pháp xác thực hiện đại và PDA để quản lý các hành động của người dùng.
+Trình tiền biên dịch này cho phép các phương pháp xác thực hiện đại như passkeys trên Solana, vì secp256r1 là đường cong elliptic giống như được sử dụng bởi WebAuthn và các triển khai passkey.
 
-### Thách thức với việc xác thực Web3
+Các thuộc tính toán học mà chúng tôi đã làm rõ một cách chi tiết, đặc biệt là phép toán trên tập được tối ưu hóa và các tham số tiêu chuẩn hóa, là những gì làm cho secp256r1 trở thành lựa chọn phổ quát cho các mô-đun bảo mật phần cứng và là vùng an toàn cung cấp sức mạnh cho các hệ thống xác thực này.
 
-Sự phụ thuộc của Web3 vào seed phrase tạo ra một rào cản cơ bản cho việc tiếp cận. Việc sử dụng ví truyền thống cho thấy tỷ lệ người dùng bỏ cuộc vì điều này là 60-80%.
+### Kết nối xác thực Web2 và Web3
 
-Vấn đề là Seed phrase đòi hỏi bảo mật hoàn hảo từ những con người không hoàn hảo. Người dùng phải ghi nhớ 12-24 từ ngẫu nhiên, lưu trữ chúng an toàn mãi mãi, và không bao giờ được trở thành nạn nhân của phishing; một tiêu chuẩn không thể cho việc áp dụng chính thống.
+Quá trình hướng dẫn người dùng từ ví truyền thống chứng kiến tỷ lệ người dùng rời bỏ từ 60-80% vì cụm từ hạt giống yêu cầu bảo mật hoàn hảo từ con người không hoàn hảo. Người dùng phải ghi nhớ 12-24 từ ngẫu nhiên, lưu trữ chúng một cách an toàn mãi mãi và không bao giờ trở thành nạn nhân của lừa đảo—một tiêu chuẩn không thể đạt được cho việc áp dụng chính thống.
 
-Giải pháp có thể là các phương pháp xác thực hiện đại như passkey, loại bỏ lỗi con người bằng cách chuyển khóa riêng vào phần cứng bảo mật chuyên dụng. Tuy nhiên, để hỗ trợ những điều này trên Solana, chúng ta cần các mật mã nguyên thủy phù hợp.
+Các phương pháp xác thực hiện đại như passkeys loại bỏ lỗi do con người bằng cách chuyển các khóa riêng vào phần cứng bảo mật chuyên dụng.
+
+Tuy nhiên, các hệ thống này đã được chuẩn hóa trên secp256r1 vì những lợi thế toán học và triển khai cụ thể mà chúng ta đã khám phá:
+- **Khả năng tương thích phần cứng:** Số nguyên tố giả Mersenne cho phép triển khai hiệu quả trong các môi trường phần tử bảo mật hạn chế
+- **Tuân thủ quy định:** Tiêu chuẩn hóa NIST cho phép sử dụng trong các yêu cầu bảo mật của chính phủ và doanh nghiệp
+- **Tính nhất quán đa nền tảng:** Các tham số ngẫu nhiên có thể xác minh đảm bảo rằng cùng một đường cong hoạt động giống hệt nhau ở tất cả các nhà sản xuất phần cứng
+
+Với hỗ trợ secp256r1 native, các nhà phát triển Solana giờ đây có thể xây dựng các ứng dụng tận dụng cơ sở hạ tầng phần cứng bảo mật hiện có, cho phép quá trình sử dụng của người dùng liền mạch thông qua các phương pháp xác thực quen thuộc trong khi vẫn duy trì các yêu cầu bảo mật mà các thuộc tính toán học cụ thể của đường cong này mang lại.

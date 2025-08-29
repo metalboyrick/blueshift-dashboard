@@ -1,0 +1,138 @@
+# Đóng Vault
+
+Instruction `close` thực hiện việc rút toàn bộ từ các vault kháng lượng tử, chuyển tất cả lamports đến một tài khoản người nhận duy nhất.
+
+Khác với instruction `split`, việc này cung cấp một cơ chế rút tiền đơn giản hơn khi không cần phân phối quỹ.
+
+<ArticleSection name="Các account cần thiết" id="required-accounts" level="h2" />
+
+Instruction yêu cầu 2 account:
+
+- `vault`: Vault nguồn để chứa tất cả lamports (phải là mutable)
+- `refund`: Account nhận số dư lamports của vault (phải là mutable)
+
+Mã sẽ trông như thế này:
+
+<Codeblock lang="rust">
+```rust
+pub struct CloseVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, refund })
+    }
+}
+
+```
+</Codeblock>
+
+> Việc xác minh account được xử lý bởi runtime. Nếu các account không đáp ứng yêu cầu (khả năng có thể sửa đổi), instruction sẽ tự động thất bại.
+
+<ArticleSection name="Dữ liệu cho instruction" id="instruction-data" level="h2" />
+
+Hai phần dữ liệu là cần thiết:
+- `signature`: chữ Winternitz chứng minh quyền sở hữu cặp khóa của vault
+- `bump`: số bump để dẫn xuất ra PDA nhằm tối ưu hóa (1 byte)
+
+Mã sẽ trông như thế này:
+
+<Codeblock lang="rust">
+```rust
+pub struct CloseVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<CloseVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+</Codeblock>
+
+<ArticleSection name="Logic của instruction" id="instruction-logic" level="h2" />
+
+Quá trình xác minh tuân theo các bước sau:
+
+1. Đóng gói thông điệp: Một thông điệp 32 byte được xây dựng chứa khóa công khai của tài khoản `refund`
+
+2. Xác minh chữ ký: Chữ ký Winternitz được sử dụng để khôi phục lại mã băm khóa công khai gốc, sau đó được so sánh với các hạt giống dẫn xuất PDA của vault.
+
+3. Xác thực PDA: Một kiểm tra tương đương nhanh đảm bảo rằng băm đã khôi phục khớp với PDA của vault, chứng minh rằng người ký sở hữu vault.
+
+4. Phân phối quỹ nếu xác minh thành công: toàn bộ số dư được chuyển đến tài khoản `refund` và tài khoản `vault` được đóng.
+
+> Vì chương trình sở hữu tài khoản `vault`, bạn có thể chuyển lamports trực tiếp mà không cần gọi Cross-Program Invocation (CPI).
+
+Mã sẽ trông như thế này:
+
+<Codeblock lang="rust">
+```rust
+pub struct CloseVault<'a> {
+    pub accounts: CloseVaultAccounts<'a>,
+    pub instruction_data: CloseVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for CloseVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = CloseVaultInstructionData::try_from(data)?;
+        let accounts = CloseVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> CloseVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+ 
+    pub fn process(&self) -> ProgramResult {
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(self.accounts.refund.key()).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault and refund balance to Refund account
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports();
+        self.accounts.vault.close()
+    }
+}
+```
+</Codeblock>
+
+> Việc tái tạo thông điệp ngăn chặn các cuộc tấn công phát lại chữ ký, nơi các tác nhân độc hại thay thế các tài khoản người nhận khác nhau trong khi MEV-ing các chữ ký hợp lệ được ghi lại từ mempool.
