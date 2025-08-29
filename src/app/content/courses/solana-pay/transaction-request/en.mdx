@@ -14,7 +14,7 @@ This approach transforms Solana Pay from a simple payment system into a complete
 Transaction requests follow a simple URL format that points to your server endpoint:
 
 ```
-solana:<recipient>?<optional-query-params>
+solana:<link>
 ```
 
 The `link` value should be a URL to your API endpoint that handles both `GET` and `POST` requests. When a user scans a transaction request QR code, their wallet initiates a four-step process:

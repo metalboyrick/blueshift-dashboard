@@ -62,8 +62,6 @@ References are one of the most important parts of the Solana Pay stack. Since yo
 A `reference` is a unique public key included as a non-signer, non-writable account in transactions. It doesn't affect transaction behavior but serves as a tracking identifier.
 
 Here's the flow:
-
-How it Works:
 1. Generate a unique reference (publickey) for each payment request
 2. Include it in your transaction request URLs as a parameter
 3. Add it to your transaction instructions as a non-signer account
