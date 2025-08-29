@@ -52,14 +52,14 @@ Here's how registers and memory work together in practice:
 ```sbpf
 .globl entrypoint
 entrypoint:
-    # On entry: r1 points to input data at 0x400000000
+    // On entry: r1 points to input data at 0x400000000
     
-    ldxdw r0, [r1 + 0]      # Load first 8 bytes from input into r0
-    mov64 r2, 42            # Put 42 in register r2
-    add64 r0, r2            # Add them: r0 = r0 + r2
+    ldxdw r0, [r1 + 0]      // Load first 8 bytes from input into r0
+    mov64 r2, 42            // Put 42 in register r2
+    add64 r0, r2            // Add them: r0 = r0 + r2
     
-    stxdw [r10 - 8], r0     # Store result on stack
-    mov64 r0, 0             # Return success
+    stxdw [r10 - 8], r0     // Store result on stack
+    mov64 r0, 0             // Return success
     exit
 ```
 
@@ -76,11 +76,11 @@ The workflow follows a consistent pattern: load data from memory into registers,
 The stack operates with `r10` as the frame pointer, pointing to the base of your current stack frame (the highest address). Local variables use negative offsets:
 
 ```sbpf
-# Store a value on the stack
+// Store a value on the stack
 mov64 r0, 42
 stxdw [r10 - 8], r0         // Store at first stack slot
 
-# Load it back
+// Load it back
 ldxdw r1, [r10 - 8]         // Load from first stack slot
 ```
 
@@ -93,15 +93,15 @@ Your program begins execution at the symbol marked with `.globl` (typically entr
 ```sbpf
 .globl entrypoint
 entrypoint:
-    # On entry:
-    # r1 = 0x400000000 (input buffer pointer)
-    # r10 = 0x200001000 (0x200000000 stack start + 0x1000 4KiB frame size)
-    # r0, r2-r9 = 0 (all other registers zeroed)
+    // On entry:
+    // r1 = 0x400000000 (input buffer pointer)
+    // r10 = 0x200001000 (0x200000000 stack start + 0x1000 4KiB frame size)
+    // r0, r2-r9 = 0 (all other registers zeroed)
 
-    # Your program logic here
+    // Your program logic here
 
-    mov64 r0, 0     # Success code (0 = SUCCESS)
-    exit            # Return to runtime
+    mov64 r0, 0     // Success code (0 = SUCCESS)
+    exit            // Return to runtime
 ```
 
 Exit behavior depends on call depth:
