@@ -216,6 +216,14 @@
         "rust": "LiteSVM with Rust",
         "conclusion": "Conclusion"
       }
+    },
+    "testing-with-surfpool": {
+      "title": "Testing with Surfpool",
+      "lessons": {
+        "surfpool-101": "Surfpool 101",
+        "advanced-functionalities": "Advanced Functionalities",
+        "conclusion": "Conclusion"
+      }
     }
   }
 }

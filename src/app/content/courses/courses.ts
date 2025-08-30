@@ -294,6 +294,18 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "conclusion" },
     ],
   },
+  {
+    slug: "testing-with-surfpool",
+    language: "General",
+    color: "0,255,255",
+    difficulty: 1,
+    isFeatured: true,
+    lessons: [
+      { slug: "surfpool-101" },
+      { slug: "advanced-functionalities" },
+      { slug: "conclusion" },
+    ],
+  },
 ]);
 
 const releasedCoursesSetting = process.env.NEXT_PUBLIC_RELEASED_COURSES?.trim();

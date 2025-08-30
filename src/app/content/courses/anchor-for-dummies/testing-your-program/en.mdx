@@ -82,8 +82,9 @@ npm install git:https://github.com/LiteSVM/anchor-litesvm
 ```
 </Codeblock>
 
-Then change the default Anchor provider to `LiteSVMProvider` like this
+Then change the default Anchor provider to `LiteSVMProvider` like this:
 
+<Codeblock lang="ts">
 ```ts
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 
@@ -94,6 +95,8 @@ test("anchor", async () => {
 
     // program.methods..
 })
+```
+</Codeblock>
 
 <ArticleSection name="Running a Local Validator" id="running-a-local-validator" level="h2" />
 
@@ -140,4 +143,30 @@ address = "Ev8WSPQsGb4wfjybqff5eZNcS3n6HaMsBkMk9suAiuM"
 filename = "some_account.json"
 ```
 
-This approach works well for testing with pre-configured account states or specific configurations that don't exist on mainnet.RetryClaude can make mistakes. Please double-check responses.
+This approach works well for testing with pre-configured account states or specific configurations that don't exist on mainnet.
+
+<ArticleSection name="Running Surfnet" id="running-surfnet" level="h2" />
+
+Testing Solana programs that rely on Cross-Program Invocations (CPIs) traditionally requires developers to dump accounts and programs from mainnet, like we saw in the Local Validator section. 
+
+This process works for a few accounts, but becomes completely unfeasible when testing CPIs into complex programs like Jupiter, which can depend on 40+ accounts and 8+ programs.
+
+Surfnet serves as a drop-in replacement for solana-test-validator that enables developers to simulate programs locally using mainnet accounts fetched on-demand
+
+To use it, just install surfpool using the official [Installation Page](https://docs.surfpool.run/install) and then run:
+
+<Codeblock lang="terminal">
+```bash
+surfpool start
+```
+</Codeblock>
+
+You can now connect to Surfnet by targeting the local validator:
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```
+
+We covered Surfnet setup and usage thoroughly [here](/en/courses/testing-with-surfpool).
