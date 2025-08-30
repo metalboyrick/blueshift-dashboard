@@ -1,0 +1,122 @@
+name: Content Translation
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+    paths:
+      - 'messages/en/*.json'
+      - 'src/app/content/challenges/*/en/*.mdx'
+      - 'src/app/content/challenges/*/en/pages/*.mdx'
+      - 'src/app/content/courses/*/*/en.mdx'
+
+jobs:
+  create_translation_issues:
+    if: github.event.pull_request.merged == true
+    permissions:
+      issues: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get changed files in triggering paths
+        id: changed-files
+        run: |
+          set -euxo pipefail
+          
+          # Get all changed files. To be prudent, only new and modified files are considered right now.
+          ALL_CHANGED=$(git diff --diff-filter=AM --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          
+          # Filter to only include files in the triggering paths
+          FILTERED_FILES=""
+          for file in $ALL_CHANGED; do
+            case "$file" in
+              messages/en/*.json|\
+              src/app/content/challenges/*/en/*.mdx|\
+              src/app/content/challenges/*/en/pages/*.mdx|\
+              src/app/content/courses/*/*/en.mdx)
+                FILTERED_FILES="$FILTERED_FILES $file"
+                ;;
+            esac
+          done
+          
+          echo "files=$(echo $FILTERED_FILES | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Create issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGED_FILES: ${{ steps.changed-files.outputs.files }}
+          PR_TITLE: "${{ github.event.pull_request.title }}"
+          PR_BRANCH: "${{ github.event.pull_request.head.ref }}"
+          MERGE_COMMIT_SHA: "${{ github.event.pull_request.merge_commit_sha }}"
+          PR_NUMBER: "${{ github.event.pull_request.number }}"
+        run: |
+          set -euxo pipefail
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No files to translate."
+            exit 0
+          fi
+
+          TARGET_LANGS=$(node -e "console.log(require('./i18n.json').locale.targets.join(' '))")
+
+          # Add "translation" label
+          if ! gh label list | grep -q "translation"; then
+            gh label create "translation"
+          fi
+          
+          # Add "help wanted" label
+          if ! gh label list | grep -q "help wanted"; then
+            gh label create "help wanted"
+          fi
+
+          for lang in $TARGET_LANGS; do
+            LANG_NAME=$(node .github/scripts/get-lang-name.js "$lang")
+            NEW_BRANCH_NAME="translate-$PR_BRANCH-$lang"
+          
+            # First create the issue with empty body
+            ISSUE_URL=$(gh issue create \
+              --title "$LANG_NAME Translation for: $PR_TITLE" \
+              --body "" \
+              --label "translation" \
+              --label "help wanted")
+            
+            ISSUE_NUMBER=$(echo $ISSUE_URL | sed 's|.*/issues/||')
+
+            # Now update the issue with the complete body including the correct issue reference
+            gh issue edit $ISSUE_NUMBER --body "Please translate the content changed in PR #${PR_NUMBER} to **$LANG_NAME**.
+
+          **Instructions:**
+
+          1. **Checkout a new branch from the merge commit:**
+             \`\`\`bash
+             git fetch origin
+             git checkout -b $NEW_BRANCH_NAME $MERGE_COMMIT_SHA
+             \`\`\`
+
+          2. **Run AI translation:** 
+             This command will use lingo.dev to translate the content. If you haven't, go to https://lingo.dev/en to
+             create your own account.
+             \`\`\`bash
+             npm run i18n:translate -- --locale $lang --file $CHANGED_FILES
+             \`\`\`
+
+          3. **Review and update the translated content:**
+             Please carefully review the AI-translated files and make any necessary corrections for accuracy and context.
+
+          4. **Create a new pull request:**
+             Once you are satisfied with the translations, create a new pull request.
+             \`\`\`bash
+             git add .
+             git commit -m \"feat(i18n): add $LANG_NAME translation for '$PR_TITLE'\"
+             git push -u origin $NEW_BRANCH_NAME
+             gh pr create --title \"$LANG_NAME Translation for $PR_TITLE\" --body \"Closes #${ISSUE_NUMBER}\" --base master
+             \`\`\`"
+             
+            echo "Created issue: $ISSUE_URL"
+          done
