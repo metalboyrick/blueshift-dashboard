@@ -30,7 +30,20 @@ jobs:
           set -euxo pipefail
           
           # Get all changed files. To be prudent, only new and modified files are considered right now.
-          ALL_CHANGED=$(git diff --diff-filter=AM --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          
+          # Validate that the SHAs are 40-character hexadecimal strings
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Error: BASE_SHA is not a valid commit SHA"
+            exit 1
+          fi
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Error: HEAD_SHA is not a valid commit SHA"
+            exit 1
+          fi
+          
+          ALL_CHANGED=$(git diff --diff-filter=AM --name-only "$BASE_SHA" "$HEAD_SHA")
           
           # Filter to only include files in the triggering paths
           FILTERED_FILES=""
