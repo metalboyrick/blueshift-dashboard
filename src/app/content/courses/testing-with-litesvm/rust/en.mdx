@@ -78,9 +78,9 @@ Here's how to create a `payer` account in LiteSVM:
 
 ```rust
 use litesvm::LiteSVM;
+use solana_account::Account;
 use solana_keypair::Keypair;
 use solana_pubkey::{pubkey, Pubkey};
-
 
 #[test]
 fn test() {
@@ -108,10 +108,12 @@ fn test() {
 
 ### Program Accounts
 
-For program accounts that contain custom data structures, you can use a similar approach:
+For program accounts that contain custom data structures, you can use a similar approach.
+You will also need to serialize the account data into a byte array, which can be done either manually or by using a library such as `borsh`, `bincode`, or `solana_program_pack`.
 
 ```rust
 use litesvm::LiteSVM;
+use solana_account::Account;
 use solana_keypair::Keypair;
 use solana_pubkey::{pubkey, Pubkey};
 
@@ -124,9 +126,9 @@ fn test() {
     let account = Keypair::new();
 
     let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
-    account_data = STATE_STRUCT {
-        ..default()
-    }.as_bytes();
+
+    // Serialize the account data into the byte array defined above
+    // ...
 
     let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
 
@@ -148,7 +150,7 @@ fn test() {
 
 ### Token Accounts
 
-There are no specific helpers for SPL Token accounts, so we use the same approach as program accounts:
+To serialize data for SPL Token accounts, you can use `spl_token::Mint` and `spl_token::Account`, which implement `solana_program_pack::Pack`.
 
 ```rust
 use litesvm::LiteSVM;
@@ -156,7 +158,7 @@ use solana_keypair::Keypair;
 use solana_pubkey::{pubkey, Pubkey};
 use solana_account::Account;
 use spl_token::{ID as TOKEN_PROGRAM_ID, state::{Mint, Account as TokenAccount}};
-use solana_program::program_pack::Pack;
+use solana_program_pack::Pack;
 
 #[test]
 fn test() {
@@ -166,7 +168,7 @@ fn test() {
     // Create a new Mint Account
     let mint = Keypair::new();
 
-    // Populate the data of the Mint
+    // Populate the data of the Mint Account
     let mint_data = Mint {
         mint_authority: None.into(),
         supply: 0,
