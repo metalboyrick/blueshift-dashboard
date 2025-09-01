@@ -105,7 +105,7 @@ For program accounts that contain custom data structures, you can use a similar 
 
 ```ts
 import { LiteSVM } from "litesvm";
-import { Keypair, AccountLayout } from "@solana/web3.js";
+import { Keypair } from "@solana/web3.js";
 
 describe("test", () => {
     // Create a new instance of LiteSVM
@@ -116,12 +116,7 @@ describe("test", () => {
 
     // Populate the data of the Account
     const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
-    AccountLayout.encode(
-        STATE_STRUCT {
-            ..default()
-        },
-        accountData
-    )
+    // Encode your data structure into the buffer here
 
     // Grab the minimum amount of lamports to make it rent exempt
     const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
