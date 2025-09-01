@@ -265,15 +265,15 @@ const computeBudget = new ComputeBudget();
 computeBudget.computeUnitLimit = 2_000_000n;
 svm.withComputeBudget(computeBudget);
 
-// Sets Sigverify as active or not
+// Sets Sigverify as active or 
 svm.withSigverify(true);
 
-// Sets the Blockhash check as active or not
+// Sets the Blockhash check as active or 
 svm.withBlockhashCheck(true);
 
 // Sets the default Sysvars
 svm.withSysvars();
 
-// Set the FeautureSet to use
+// Set the FeatureSet to use
 svm.withFeatureSet(new FeatureSet(...))
 ```

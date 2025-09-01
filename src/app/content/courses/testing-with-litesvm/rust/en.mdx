@@ -286,15 +286,15 @@ let compute_budget = ComputeBudget::default();
 compute_budget.compute_unit_limit = 2_000_000;
 svm.with_compute_budget(compute_budget);
 
-// Sets Sigverify as active or not
+// Sets Sigverify as active
 svm.with_sigverify(true);
 
-// Sets the Blockhash check as active or not
+// Sets the Blockhash check as active
 svm.with_blockhash_check(true);
 
 // Sets the default Sysvars
 svm.with_sysvars();
 
-// Set the FeautureSet to use
+// Set the FeatureSet to use
 svm.with_feature_set(FeatureSet::default())
 ```
