@@ -282,7 +282,9 @@ Or configure how the runtime behaves:
 
 ```rust
 // Sets the compute budget
-svm.with_compute_budget(2_000_000);
+let compute_budget = ComputeBudget::default();
+compute_budget.compute_unit_limit = 2_000_000;
+svm.with_compute_budget(compute_budget);
 
 // Sets Sigverify as active or not
 svm.with_sigverify(true);

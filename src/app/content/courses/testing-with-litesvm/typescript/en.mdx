@@ -261,7 +261,9 @@ Or configure how the runtime behaves:
 
 ```ts
 // Sets the compute budget
-svm.withComputeBudget(2_000_000);
+const computeBudget = new ComputeBudget();
+computeBudget.computeUnitLimit = 2_000_000n;
+svm.withComputeBudget(computeBudget);
 
 // Sets Sigverify as active or not
 svm.withSigverify(true);
