@@ -144,8 +144,8 @@ There are no specific helpers for SPL Token accounts, so we use the same approac
 
 ```ts
 import { LiteSVM } from "litesvm";
-import { Keypair, AccountLayout } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, Account, Mint, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, RawAccount, RawMint, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
 
 describe("test", () => {
     // Create a new instance of LiteSVM
@@ -155,17 +155,17 @@ describe("test", () => {
     const mint = Keypair.generate();
 
     // Populate the data of the Account
-    let mintData: Mint = {
-        address: mint.publicKey,
+    let mintData: RawMint = {
         mintAuthority: null,
+        mintAuthorityOption: 0,
         supply: BigInt(0),
         decimals: 6,
         isInitialized: true,
         freezeAuthority: null,
-        tlvData: Buffer.from([]),
+        freezeAuthorityOption: 0,
     }
     const accountData = Buffer.alloc(MINT_SIZE);
-    AccountLayout.encode(mintData, accountData);
+    MintLayout.encode(mintData, accountData);
 
     // Grab the minimum amount of lamports to make it rent exempt
     const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
@@ -182,19 +182,18 @@ describe("test", () => {
     const tokenAccount = Keypair.generate();
 
     // Populate the data of the Account
-    let tokenAccountData: Account = {
-        address: tokenAccount.publicKey,
+    let tokenAccountData: RawAccount = {
         mint: mint.publicKey,
         owner: Keypair.generate().publicKey,
         amount: BigInt(0),
         delegate: null,
+        delegateOption: 0,
         delegatedAmount: BigInt(0),
-        isInitialized: true,
-        isFrozen: false,
-        isNative: false,
-        rentExemptReserve: null,
+        state: 1,
+        isNative: 0n,
+        isNativeOption: 0,
         closeAuthority: null,
-        tlvData: Buffer.from([]),
+        closeAuthorityOption: 0,
     }
     const accountData = Buffer.alloc(ACCOUNT_SIZE);
     AccountLayout.encode(tokenAccountData, accountData);
