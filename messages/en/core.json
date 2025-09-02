@@ -63,6 +63,7 @@
     "locked_description": "Connect wallet to mint your NFT",
     "claimed_description": "NFT Is Available in your Wallet",
     "view_nft": "View NFT",
+    "complete_to_share": "Complete the challenge to share",
     "filter__label": "All Statuses",
     "filter__all_statuses": "All",
     "filter__selected_statuses": "Statuses"
@@ -141,6 +142,8 @@
     "mint_modal_skip": "Skip for now",
     "mint_modal_skip_description": "You can see your unlocks on the Challenges page.",
     "mint_modal_tweet": "Share on X",
+    "share_on_x": "Share on X",
+    "challenge_share_tweet": "I just completed the {challengeTitle} challenge from @blueshift_gg.\n\nTry it out here: {challengeUrl}\n\nMake the shift. Build on @solana.",
     "assistance_prompt": {
       "title": "Need some help?",
       "body": "It looks like you're having some trouble. If you're stuck, feel free to ask for help in our Discord community.",

@@ -63,6 +63,7 @@
     "locked_description": "Sambungkan dompet untuk mencetak NFT Anda",
     "claimed_description": "NFT tersedia di dompet Anda",
     "view_nft": "Lihat NFT",
+    "complete_to_share": "Selesaikan tantangan untuk berbagi",
     "filter__label": "Semua Status",
     "filter__all_statuses": "Semua",
     "filter__selected_statuses": "Status"
@@ -140,6 +141,8 @@
     "mint_modal_skip": "Lewati untuk Sekarang",
     "mint_modal_skip_description": "Anda dapat melihat semua hadiah Anda di halaman Tantangan.",
     "mint_modal_tweet": "Bagikan di X",
+    "share_on_x": "Bagikan di X",
+    "challenge_share_tweet": "I just completed the {challengeTitle} challenge from @blueshift_gg.\n\nTry it out here: {challengeUrl}\n\nMake the shift. Build on @solana.",
     "assistance_prompt": {
       "title": "Butuh Bantuan?",
       "body": "Tantangan ini cukup sulit! Jika Anda mengalami kesulitan, jangan ragu untuk bertanya kepada komunitas Discord kami.",
