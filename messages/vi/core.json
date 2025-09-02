@@ -63,6 +63,7 @@
     "locked_description": "Kết nối ví để mint NFT của bạn",
     "claimed_description": "NFT có sẵn trong ví của bạn",
     "view_nft": "Xem NFT",
+    "complete_to_share": "Hoàn thành thử thách để chia sẻ",
     "filter__label": "Tất cả trạng thái",
     "filter__all_statuses": "Tất cả",
     "filter__selected_statuses": "Trạng thái"
@@ -141,6 +142,7 @@
     "mint_modal_skip": "Bỏ qua lúc này",
     "mint_modal_skip_description": "Bạn có thể xem các mở khóa trên trang Thử thách.",
     "mint_modal_tweet": "Chia sẻ trên X",
+    "share_on_x": "Chia sẻ trên X",
     "assistance_prompt": {
       "title": "Cần trợ giúp?",
       "body": "Có vẻ như bạn đang gặp khó khăn. Nếu bạn bị kẹt, hãy thoải mái yêu cầu trợ giúp trong cộng đồng Discord của chúng tôi.",

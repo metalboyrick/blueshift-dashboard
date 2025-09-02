@@ -68,6 +68,7 @@
     "locked_description": "连接钱包以铸造你的 NFT",
     "claimed_description": "NFT 已在你的钱包中",
     "view_nft": "查看 NFT",
+    "complete_to_share": "完成挑战后再分享吧",
     "filter__label": "所有状态",
     "filter__all_statuses": "全部",
     "filter__selected_statuses": "状态"
@@ -145,6 +146,7 @@
     "mint_modal_skip": "暂时跳过",
     "mint_modal_skip_description": "你可以在挑战页面看到你的解锁内容。",
     "mint_modal_tweet": "在 X 上分享",
+    "share_on_x": "在 X 上分享",
     "assistance_prompt": {
       "title": "需要帮助吗？",
       "body": "看起来你遇到了一些困难。如果你卡住了，请随时在我们的 Discord 社区寻求帮助。",

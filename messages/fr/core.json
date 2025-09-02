@@ -63,6 +63,7 @@
     "locked_description": "Connectez votre portefeuille pour mint votre NFT",
     "claimed_description": "Le NFT est disponible dans votre portefeuille",
     "view_nft": "Voir NFT",
+    "complete_to_share": "Complétez le challenge pour partager",
     "filter__label": "Tous les Statuts",
     "filter__all_statuses": "Tous",
     "filter__selected_statuses": "Statuts"
@@ -140,6 +141,7 @@
     "mint_modal_skip": "Sauter pour le moment",
     "mint_modal_skip_description": "Vous pouvez voir vos déblocages sur la page des Challenges.",
     "mint_modal_tweet": "Partager sur X",
+    "share_on_x": "Partager sur X",
     "assistance_prompt": {
       "title": "Besoin d'aide ?",
       "body": "On dirait que vous rencontrez des difficultés. Si vous êtes bloqué, n'hésitez pas à demander de l'aide à notre communauté Discord.",
