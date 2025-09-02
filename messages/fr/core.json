@@ -142,6 +142,7 @@
     "mint_modal_skip_description": "Vous pouvez voir vos déblocages sur la page des Challenges.",
     "mint_modal_tweet": "Partager sur X",
     "share_on_x": "Partager sur X",
+    "challenge_share_tweet": "I just completed the {challengeTitle} challenge from @blueshift_gg.\n\nTry it out here: {challengeUrl}\n\nMake the shift. Build on @solana.",
     "assistance_prompt": {
       "title": "Besoin d'aide ?",
       "body": "On dirait que vous rencontrez des difficultés. Si vous êtes bloqué, n'hésitez pas à demander de l'aide à notre communauté Discord.",

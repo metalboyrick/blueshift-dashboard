@@ -11,26 +11,25 @@ import useMintNFT from "@/hooks/useMintNFT";
 import { usePersistentStore } from "@/stores/store";
 import { Link } from "@/i18n/navigation";
 import { ChallengeMetadata } from "@/app/utils/challenges";
+import { useShareChallengeOnX } from "@/hooks/useShareChallengeOnX";
 
 interface ChallengeCompletedProps {
   isOpen: boolean;
   onClose: () => void;
   challenge: ChallengeMetadata;
-  locale?: string;
 }
 
 export default function ChallengeCompleted({
   isOpen,
   onClose,
   challenge,
-  locale = "en",
 }: ChallengeCompletedProps) {
   const t = useTranslations();
   const [isAnimating, setIsAnimating] = useState(false);
   const { mint, isLoading } = useMintNFT();
   const { challengeStatuses } = usePersistentStore();
   const currentCourseStatus = challengeStatuses[challenge.slug];
-  const challengeTitle = t(`challenges.${challenge.slug}.title`);
+  const challengeShareUrl = useShareChallengeOnX(challenge);
 
   useEffect(() => {
     setTimeout(() => {
@@ -119,7 +118,7 @@ export default function ChallengeCompleted({
           ) : (
             <>
               <Link
-                href={`https://x.com/intent/tweet?text=${encodeURIComponent(`I just completed the ${challengeTitle} challenge from @blueshift_gg.\n\nTry it out here: https://learn.blueshift.gg/${locale}/challenges/${challenge.slug}\n\nMake the shift. Build on @solana.`)}`}
+                href={challengeShareUrl}
                 target="_blank"
               >
                 <Button

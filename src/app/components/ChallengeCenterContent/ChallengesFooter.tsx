@@ -1,9 +1,10 @@
 import Button, { ButtonVariant } from "../Button/Button";
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import classNames from "classnames";
 import { usePersistentStore } from "@/stores/store";
 import useMintNFT from "@/hooks/useMintNFT";
 import { ChallengeMetadata } from "@/app/utils/challenges";
+import { useShareChallengeOnX } from "@/hooks/useShareChallengeOnX";
 import { Link } from "@/i18n/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import Icon from "../Icon/Icon";
@@ -22,14 +23,13 @@ export default function ChallengesFooter({
   setSelectedChallenge,
 }: ChallengesFooterProps) {
   const t = useTranslations();
-  const challengeTitle = t(`challenges.${challenge.slug}.title`);
-  const locale = useLocale();
   const { challengeStatuses } = usePersistentStore();
   const status = challengeStatuses[challenge.slug];
   const { view } = usePersistentStore();
   const { mint, isLoading } = useMintNFT();
   const auth = useAuth();
   const [isHovered, setIsHovered] = useState(false);
+  const challengeShareUrl = useShareChallengeOnX(challenge);
 
   const handleMint = async () => {
     mint(challenge).catch((error) => {
@@ -123,7 +123,7 @@ export default function ChallengesFooter({
             }}
           />
           <Link
-            href={`https://x.com/intent/tweet?text=${encodeURIComponent(`I just completed the ${challengeTitle} challenge from @blueshift_gg.\n\nYou should try it out!\n\nMake the shift. Build on @solana.\n\nhttps://learn.blueshift.gg/${locale}/challenges/${challenge.slug}`)}`}
+            href={challengeShareUrl}
             target="_blank"
             className="w-full"
           >
