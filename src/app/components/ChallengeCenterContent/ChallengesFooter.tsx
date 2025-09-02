@@ -122,7 +122,7 @@ export default function ChallengesFooter({
             }}
           />
           <Link
-            href={`https://x.com/intent/tweet?text=${encodeURIComponent(`I just completed the ${challengeTitle} challenge from @blueshift_gg.\n\nYou should try it out!\n\nnMake the shift. Build on @solana.\n\nhttps://learn.blueshift.gg/${locale}/challenges/${challenge.slug}`)}`}
+            href={`https://x.com/intent/tweet?text=${encodeURIComponent(`I just completed the ${challengeTitle} challenge from @blueshift_gg.\n\nYou should try it out!\n\nMake the shift. Build on @solana.\n\nhttps://learn.blueshift.gg/${locale}/challenges/${challenge.slug}`)}`}
             target="_blank"
             className="w-full"
           >
