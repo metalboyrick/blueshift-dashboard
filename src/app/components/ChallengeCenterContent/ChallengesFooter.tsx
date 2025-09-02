@@ -1,5 +1,5 @@
 import Button, { ButtonVariant } from "../Button/Button";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import classNames from "classnames";
 import { usePersistentStore } from "@/stores/store";
 import useMintNFT from "@/hooks/useMintNFT";
@@ -7,7 +7,6 @@ import { ChallengeMetadata } from "@/app/utils/challenges";
 import { Link } from "@/i18n/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import Icon from "../Icon/Icon";
-import { useParams } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -24,7 +23,7 @@ export default function ChallengesFooter({
 }: ChallengesFooterProps) {
   const t = useTranslations();
   const challengeTitle = t(`challenges.${challenge.slug}.title`);
-  const {locale} = useParams(); 
+  const locale = useLocale();
   const { challengeStatuses } = usePersistentStore();
   const status = challengeStatuses[challenge.slug];
   const { view } = usePersistentStore();
@@ -79,7 +78,9 @@ export default function ChallengesFooter({
                 >
                   <Icon name={isHovered ? "Locked" : "X"} size={12} />
                   <span>
-                    {isHovered ? t("ChallengeCenter.complete_to_share") : t("ChallengePage.share_on_x")}
+                    {isHovered
+                      ? t("ChallengeCenter.complete_to_share")
+                      : t("ChallengePage.share_on_x")}
                   </span>
                 </motion.div>
               </AnimatePresence>
