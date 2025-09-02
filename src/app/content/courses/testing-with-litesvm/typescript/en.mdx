@@ -101,7 +101,8 @@ describe("test", () => {
 
 ### Program Accounts
 
-For program accounts that contain custom data structures, you can use a similar approach:
+For program accounts that contain custom data structures, you can use a similar approach.
+You will also need to serialize the account data into a buffer, which can be done either manually or using a library such as `@coral-xyz/borsh` (see example [here](https://solana.com/developers/courses/native-onchain-development/serialize-instruction-data-frontend)).
 
 ```ts
 import { LiteSVM } from "litesvm";
@@ -116,7 +117,9 @@ describe("test", () => {
 
     // Populate the data of the Account
     const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
-    // Encode your data structure into the buffer here
+
+    // Serialize the account data into the byte buffer defined above
+    // ...
 
     // Grab the minimum amount of lamports to make it rent exempt
     const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
@@ -127,7 +130,7 @@ describe("test", () => {
         data: accountData,
         owner: PROGRAM_ID,
         executable: false,
-    }); 
+    });
 })
 ```
 
@@ -135,32 +138,36 @@ describe("test", () => {
 
 ### Token Accounts
 
-There are no specific helpers for SPL Token accounts, so we use the same approach as program accounts:
+To serialize data for SPL Token accounts, you can use `AccountLayout` and `MintLayout` from `@solana/spl-token`.
 
 ```ts
 import { LiteSVM } from "litesvm";
 import { Keypair } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, RawAccount, RawMint, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
 
 describe("test", () => {
     // Create a new instance of LiteSVM
     const svm = new LiteSVM();
 
-    // Create a new Account
+    const owner = Keypair.generate();
+
+    // Create a new Mint Account
     const mint = Keypair.generate();
 
-    // Populate the data of the Account
-    let mintData: RawMint = {
-        mintAuthority: null,
-        mintAuthorityOption: 0,
-        supply: BigInt(0),
-        decimals: 6,
-        isInitialized: true,
-        freezeAuthority: null,
-        freezeAuthorityOption: 0,
-    }
-    const accountData = Buffer.alloc(MINT_SIZE);
-    MintLayout.encode(mintData, accountData);
+    // Populate the data of the Mint Account
+    let mintData = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+        {
+          mintAuthorityOption: 1,
+          mintAuthority: owner.publicKey,
+          supply: BigInt(0),
+          decimals: 0,
+          isInitialized: true,
+          freezeAuthorityOption: 0,
+          freezeAuthority: PublicKey.default,
+        },
+        mintData
+    )
 
     // Grab the minimum amount of lamports to make it rent exempt
     const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
@@ -168,30 +175,32 @@ describe("test", () => {
     // Add the Account with the modified data
     svm.setAccount(mint.publicKey, {
         lamports,
-        data: accountData,
+        data: mintData,
         owner: TOKEN_PROGRAM_ID,
         executable: false,
-    }); 
+    });
 
-    // Create a new Account
+    // Create a new Token Account
     const tokenAccount = Keypair.generate();
 
-    // Populate the data of the Account
-    let tokenAccountData: RawAccount = {
-        mint: mint.publicKey,
-        owner: Keypair.generate().publicKey,
-        amount: BigInt(0),
-        delegate: null,
-        delegateOption: 0,
-        delegatedAmount: BigInt(0),
-        state: 1,
-        isNative: 0n,
-        isNativeOption: 0,
-        closeAuthority: null,
-        closeAuthorityOption: 0,
-    }
-    const accountData = Buffer.alloc(ACCOUNT_SIZE);
-    AccountLayout.encode(tokenAccountData, accountData);
+    // Populate the data of the Token Account
+    const tokenAccountData = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(
+        {
+            mint: mint.publicKey,
+            owner: owner.publicKey,
+            amount: BigInt(100),
+            delegateOption: 0,
+            delegate: PublicKey.default,
+            delegatedAmount: BigInt(0),
+            state: 1,
+            isNativeOption: 0,
+            isNative: BigInt(0),
+            closeAuthorityOption: 0,
+            closeAuthority: PublicKey.default,
+        },
+        tokenAccountData,
+    );
 
     // Grab the minimum amount of lamports to make it rent exempt
     const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
@@ -199,10 +208,10 @@ describe("test", () => {
     // Add the Account with the modified data
     svm.setAccount(tokenAccount.publicKey, {
         lamports,
-        data: accountData,
+        data: tokenAccountData,
         owner: TOKEN_PROGRAM_ID,
         executable: false,
-    }); 
+    });
 })
 ```
 
