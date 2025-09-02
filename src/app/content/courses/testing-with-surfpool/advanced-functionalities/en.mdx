@@ -121,6 +121,8 @@ Requires both `destinationProgramId` and `sourceProgramId`:
 
 ### Update Account Data
 
+> Updating an already existing account with the following methods will overwrite the account states
+
 Modify any account's properties including lamports, data, owner, and executable status using `surfnet_setAccount`. 
 
 The method requires a `pubkey` and accepts optional fields for `data`, `executable`, `lamports`, `owner`, and `rentEpoch`:
