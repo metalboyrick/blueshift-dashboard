@@ -15,7 +15,6 @@ Lệnh `loan` (vay) là nửa đầu của hệ thống flash loan. Nó thực h
 
 Đây là cách triển khai:
 
-<Codeblock lang="rust">
 ```rust
 pub struct LoanAccounts<'a> {
     pub borrower: &'a AccountInfo,
@@ -56,7 +55,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Vì `token_accounts` là một mảng động các tài khoản, chúng ta truyền chúng vào tương tự như `remaining_accounts`.
 
@@ -71,7 +69,6 @@ Chương trình flash loan của chúng ta cần xử lý lượng dữ liệu t
 
 Đây là cách triển khai:
 
-<Codeblock lang="rust">
 ```rust
 pub struct LoanInstructionData<'a> {
     pub bump: [u8; 1],
@@ -106,7 +103,6 @@ impl<'a> TryFrom<&'a [u8]> for LoanInstructionData<'a> {
     }
 }
 ```
-</Codeblock>
 
 Chúng ta sử dụng các hàm `split_first` và `split_at_checked` để tuần tự trích xuất `bump` và `fee` từ dữ liệu lệnh, cho phép chúng ta xử lý các byte còn lại và chuyển đổi chúng trực tiếp thành một slice `u64` bằng cách sử dụng hàm `core::slice::from_raw_parts()` để phân tích cú pháp hiệu quả.
 
@@ -116,7 +112,6 @@ Chúng ta sử dụng các hàm `split_first` và `split_at_checked` để tuầ
 
 Sau khi giải tuần tự hóa `instruction_data` và `accounts`, chúng ta kiểm tra rằng số lượng `amounts` bằng số lượng `token_accounts` chia cho hai. Điều này đảm bảo chúng ta có đúng số lượng tài khoản cho các khoản vay được yêu cầu.
 
-<Codeblock lang="rust">
 ```rust
 pub struct Loan<'a> {
     pub accounts: LoanAccounts<'a>,
@@ -142,13 +137,11 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
     }
 }
 ```
-</Codeblock>
 
 Tiếp theo, chúng ta tạo `signer_seeds` cần thiết để chuyển token cho người vay và tạo tài khoản `loan`. Kích thước
 của tài khoản này được tính bằng `size_of::<LoanData>() * self.instruction_data.amounts.len()` để đảm bảo nó có thể
 chứa tất cả dữ liệu khoản vay cho giao dịch.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Loan<'a> {
     pub const DISCRIMINATOR: &'a u8 = &0;
@@ -181,11 +174,9 @@ impl<'a> Loan<'a> {
     }
 }
 ```
-</Codeblock>
 
 Sau đó chúng ta tạo một slice có thể thay đổi từ dữ liệu của tài khoản `loan`. Chúng ta sẽ điền vào slice này trong một vòng lặp `for` khi xử lý từng khoản vay và việc chuyển tiền tương ứng:
 
-<Codeblock lang="rust">
 ```rust
 let mut loan_data = self.accounts.loan.try_borrow_mut_data()?;
 let loan_entries = unsafe {
@@ -195,11 +186,9 @@ let loan_entries = unsafe {
     )
 };
 ```
-</Codeblock>
 
 Cuối cùng, chúng ta lặp qua tất cả các khoản vay. Trong mỗi lần lặp, chúng ta lấy `protocol_token_account` và `borrower_token_account`, tính toán số dư mà giao thức cần có, lưu dữ liệu này trong tài khoản `loan`, và chuyển token.
 
-<Codeblock lang="rust">
 ```rust
 for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
     let protocol_token_account = &self.accounts.token_accounts[i * 2];
@@ -228,11 +217,9 @@ for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
     }.invoke_signed(&signer_seeds)?;
 }
 ```
-</Codeblock>
 
 Chúng ta kết thúc bằng cách sử dụng instruction introspection để thực hiện các kiểm tra cần thiết. Chúng ta xác minh rằng lệnh cuối cùng trong giao dịch là một lệnh `repay` và nó sử dụng cùng tài khoản `loan` như lệnh `loan` hiện tại của chúng ta.
 
-<Codeblock lang="rust">
 ```rust
 // Introspecting lệnh Repay
 let instruction_sysvar = unsafe { Instructions::new_unchecked(self.accounts.instruction_sysvar.try_borrow_data()?) };
@@ -251,6 +238,5 @@ if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts
     return Err(ProgramError::InvalidInstructionData);
 }
 ```
-</Codeblock>
 
 > Việc sử dụng tài khoản `loan` và cấu trúc instruction introspection theo cách này đảm bảo rằng chúng ta thực sự không cần phải thực hiện bất kỳ introspection nào trong lệnh `repay` vì tất cả các kiểm tra hoàn trả sẽ được xử lý bởi tài khoản `loan`.

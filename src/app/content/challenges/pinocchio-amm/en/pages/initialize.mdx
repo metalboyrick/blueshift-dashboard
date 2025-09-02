@@ -18,7 +18,6 @@ Below are the accounts required for this context:
 
 Since there aren’t many changes from the usual struct we create, I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct InitializeAccounts<'a> {
     pub initializer: &'a AccountInfo,
@@ -34,7 +33,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 > You’ll need to pass in all the accounts discussed above, but not all of them need to be included in the `InitializeAccounts` struct, since you may not need to reference every account directly in the implementation.
 
@@ -53,7 +51,6 @@ Here's the instruction data we need to pass in:
 
 In this implementation, we’re handling instruction data parsing in a more flexible and low-level way than usual. For this reason we'll explain why we're making the following decisions:
 
-<Codeblock lang="rust">
 ```rust
 #[repr(C, packed)]
 pub struct InitializeInstructionData {
@@ -96,7 +93,6 @@ impl TryFrom<&[u8]> for InitializeInstructionData {
     }
 }
 ```
-</Codeblock>
 
 The authority field in `InitializeInstructionData` is optional and can be omitted to create an immutable pool.
 
@@ -108,7 +104,6 @@ We begin by deserializing both the `instruction_data` and the `accounts`.
 
 We then need to:
 - Create the `Config` account using the `CreateAccount` instruction from the system program and the following seeds:
-<Codeblock lang="rust">
 ```rust
 let seed_binding = self.instruction_data.seed.to_le_bytes();
 let config_seeds = [
@@ -119,10 +114,8 @@ let config_seeds = [
     Seed::from(&self.instruction_data.config_bump),
 ];
 ```
-</Codeblock>
 - Populate the `Config` account loading it using the `Config::load_mut_unchecked()` helper and then populating it with all the data needed using the `config.set_inner()` helper.
 - Create the `Mint` account for the lp using the `CreateAccount` and `InitializeMint2` instruction and the following seeds:
-<Codeblock lang="rust">
 ```rust
 let mint_lp_seeds = [
     Seed::from(b"mint_lp"),
@@ -130,13 +123,11 @@ let mint_lp_seeds = [
     Seed::from(&self.instruction_data.lp_bump),
 ];
 ```
-</Codeblock>
 
 > The `mint_authority` of the `mint_lp` is the `config` account
 
 You should be proficient enough to this on your own, so I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Initialize<'a> {
     pub accounts: InitializeAccounts<'a>,
@@ -167,7 +158,6 @@ impl<'a> Initialize<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Security" id="security" level="h2" />
 

@@ -10,7 +10,6 @@ The `repay` instruction is the second half of our flash loan system. Thanks to t
 
 Here's the implementation:
 
-<Codeblock lang="rust">
 ```rust
 pub struct RepayAccounts<'a> {
     pub borrower: &'a AccountInfo,
@@ -34,7 +33,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 The `token_accounts` field is a dynamic array of accounts representing the protocol token accounts associated with the borrower's loan.
 
@@ -46,7 +44,6 @@ No instruction data is needed because we use the `balance` field in the `loan` a
 
 We begin by parsing the accounts into the `RepayAccounts` struct.
 
-<Codeblock lang="rust">
 ```rust
 pub struct Repay<'a> {
     pub accounts: RepayAccounts<'a>,
@@ -63,11 +60,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
 }
 
 ```
-</Codeblock>
 
 Next, we check if all loans have been repaid. We do this by retrieving the number of loans from the `loan` account and iterating through them. For each loan, we verify that the `protocol_token_account` is correct and that its balance is greater than or equal to the amount loaned.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Repay<'a> {
     pub const DISCRIMINATOR: &'a u8 = &1;
@@ -102,11 +97,9 @@ impl<'a> Repay<'a> {
     }
 }
 ```
-</Codeblock>
 
 We can then proceed to close the `loan` account and reclaim the rent, as it's no longer needed:
 
-<Codeblock lang="rust">
 ```rust
 drop(loan_data);
 // Close the loan account and give back the lamports to the borrower
@@ -116,6 +109,5 @@ unsafe {
     self.accounts.loan.close_unchecked();
 }
 ```
-</Codeblock>
 
 > As you can see, for optimization purposes and by design, the repayment doesn't happen in this instruction. This is because the `borrower` can choose to repay the token account in another instruction, such as when performing a swap or executing a series of CPIs from their arbitrage program.

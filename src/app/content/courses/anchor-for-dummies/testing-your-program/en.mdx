@@ -22,11 +22,9 @@ TypeScript tests offer key advantages:
 
 Run tests with:
 
-<Codeblock lang="terminal">
 ```bash
 anchor test
 ```
-</Codeblock>
 
 > Run on localnet by setting the cluster to localnet in your configuration. This spins up a local validator and adds 1,000 SOL to the provider wallet. If you need additional accounts with data inside of them, look at running a [Local Validator](/en/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)
 
@@ -44,19 +42,15 @@ We covered Mollusk testing thoroughly [here](/en/courses/testing-with-mollusk).
 
 Create a new Anchor program with Mollusk:
 
-<Codeblock lang="terminal">
 ```bash
 anchor init <name-of-the-project> --test-template mollusk
 ```
-</Codeblock>
 
 Run tests using:
 
-<Codeblock lang="terminal">
 ```bash
 anchor test
 ```
-</Codeblock>
 
 <ArticleSection name="LiteSVM Tests" id="litesvm-tests" level="h2" />
 
@@ -76,15 +70,12 @@ You can set up your Anchor provider and use the client-side setup we saw [previo
 
 Installe the `anchor-litesvm` package.
 
-<Codeblock lang="terminal">
 ```bash
 npm install git:https://github.com/LiteSVM/anchor-litesvm
 ```
-</Codeblock>
 
 Then change the default Anchor provider to `LiteSVMProvider` like this:
 
-<Codeblock lang="ts">
 ```ts
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 
@@ -96,7 +87,6 @@ test("anchor", async () => {
     // program.methods..
 })
 ```
-</Codeblock>
 
 <ArticleSection name="Running a Local Validator" id="running-a-local-validator" level="h2" />
 
@@ -155,11 +145,9 @@ Surfnet serves as a drop-in replacement for solana-test-validator that enables d
 
 To use it, just install surfpool using the official [Installation Page](https://docs.surfpool.run/install) and then run:
 
-<Codeblock lang="terminal">
 ```bash
 surfpool start
 ```
-</Codeblock>
 
 You can now connect to Surfnet by targeting the local validator:
 

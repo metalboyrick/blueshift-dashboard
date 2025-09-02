@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
 
@@ -22,21 +21,17 @@ In this challenge, we're going to implement this concept through three simple bu
 
 Let's start by creating a fresh Anchor workspace:
 
-<Codeblock lang="terminal">
 ```bash
 anchor init blueshift_anchor_escrow
 cd blueshift_anchor_escrow
 ```
-</Codeblock>
 
 We then continue by enabling `init-if-needed` on the `anchor-lang` crate and by adding the `anchor-spl` crate as well:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add anchor-lang --features init-if-needed
 cargo add anchor-spl
 ```
-</Codeblock>
 
 Since we're using `anchor-spl`, we also need to update the `programs/blueshift_anchor_escrow/Cargo.toml` file to include `anchor-spl/idl-build` in the `idl-build` feature. 
 
@@ -74,7 +69,6 @@ src
 
 Which the `lib.rs` will look roughly like this:
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -105,7 +99,6 @@ pub mod blueshift_anchor_escrow {
     }
 }
 ```
-</Codeblock>
 
 As you see, we implemented custom discriminator for the instructions. So make sure to use an anchor version 0.31.0 or newer.
 
@@ -113,7 +106,6 @@ As you see, we implemented custom discriminator for the instructions. So make su
 
 We're going to move into the `state.rs` where all the data for our `Escrow` lives. To do so we're going to give it a custom discriminator and wrap the struct into the `#[account]` macro like this:
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -128,7 +120,6 @@ pub struct Escrow {
     pub bump: u8,
 }
   ```
-</Codeblock>
 
 What each field does:
 - **seed**: Random number used during seed derivation so one maker can open multiple escrows with the same token pair; stored on-chain so we can always re-derive the PDA.
@@ -145,7 +136,6 @@ We finish by adding the `#[derive(InitSpace)]` macro so we don't have to manuall
 
 We can now move to the `errors.rs` file where we're going to add some errors that we're going to use later like this: 
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -161,6 +151,5 @@ pub enum EscrowError {
     InvalidMintB,
 }
 ```
-</Codeblock>
 
 Each enum maps to a clear, human-readable message that Anchor will surface whenever a constraint or `require!()` fails.

@@ -18,7 +18,6 @@ Dưới đây là các tài khoản cần thiết cho context này:
 
 Bởi vì không có nhiều thay đổi so với cấu trúc tài khoản thông thường, tôi sẽ để bạn tự thực hiện:
 
-<Codeblock lang="rust">
 ```rust
 pub struct InitializeAccounts<'a> {
     pub initializer: &'a AccountInfo,
@@ -34,7 +33,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 > Bạn sẽ cần truyền tất cả các tài khoản được thảo luận ở trên, nhưng không phải tất cả chúng đều cần phải được bao gồm trong cấu trúc `InitializeAccounts`, vì bạn có thể không cần tham chiếu trực tiếp đến mỗi tài khoản trong việc triển khai.
 
@@ -53,7 +51,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
 
 Trong khi triển khai, chúng ta sẽ xử lý việc phân tích dữ liệu instruction một cách linh hoạt và cấp thấp hơn thông thường. Do đó, chúng ta sẽ giải thích lý do chúng ta đang đưa ra các quyết định sau:
 
-<Codeblock lang="rust">
 ```rust
 #[repr(C, packed)]
 pub struct InitializeInstructionData {
@@ -96,7 +93,6 @@ impl TryFrom<&[u8]> for InitializeInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Trường authority trong `InitializeInstructionData` là tùy chọn và có thể được bỏ qua để tạo một pool bất biến.
 
@@ -108,7 +104,6 @@ Chúng ta bắt đầu bằng cách deserialize cả `instruction_data` và `acc
 
 Sau đó chúng ta cần:
 - Tạo tài khoản `Config` bằng cách sử dụng instruction `CreateAccount` từ system program và các seed sau:
-<Codeblock lang="rust">
 ```rust
 let seed_binding = self.instruction_data.seed.to_le_bytes();
 let config_seeds = [
@@ -119,10 +114,8 @@ let config_seeds = [
     Seed::from(&self.instruction_data.config_bump),
 ];
 ```
-</Codeblock>
 - Điền thông tin vào tài khoản `Config` bằng cách tải nó sử dụng hàm hỗ trợ `Config::load_mut_unchecked()` và sau đó điền tất cả dữ liệu cần thiết bằng hàm hỗ trợ `config.set_inner()`.
 - Tạo tài khoản `Mint` cho lp bằng cách sử dụng instruction `CreateAccount` và `InitializeMint2` và các seed sau:
-<Codeblock lang="rust">
 ```rust
 let mint_lp_seeds = [
     Seed::from(b"mint_lp"),
@@ -130,13 +123,11 @@ let mint_lp_seeds = [
     Seed::from(&self.instruction_data.lp_bump),
 ];
 ```
-</Codeblock>
 
 > `mint_authority` của `mint_lp` là tài khoản `config`
 
 Bạn đã có đủ trình độ để làm điều này một mình, vì vậy tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Initialize<'a> {
     pub accounts: InitializeAccounts<'a>,
@@ -167,7 +158,6 @@ impl<'a> Initialize<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Bảo mật" id="security" level="h2" />
 

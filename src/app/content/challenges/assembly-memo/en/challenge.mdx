@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Assembly Memo Challenge](/graphics/challenge-banners/assembly-memo.png)
 
@@ -15,7 +14,6 @@ If you're unfamiliar with assembly programming, follow the [introduction to Asse
 
 Our program will simply put the right memory location into the right register and then perform the `sol_log_` syscall. It will look like this:
 
-<Codeblock lang="assembly">
 ```sbpf
 .equ NUM_ACCOUNTS, 0x00
 .equ DATA_LEN, 0x08
@@ -28,19 +26,16 @@ entrypoint:
   call sol_log_
   exit
 ```
-</Codeblock>
 
 <ArticleSection name="Memory Offsets" id="memory-offsets" level="h2" />
 
 The program begins by declaring three `.equ` constants that define the memory layout of our instruction data:
 
-<Codeblock lang="assembly">
 ```sbpf
 .equ NUM_ACCOUNTS, 0x00  ; Offset for number of accounts
 .equ DATA_LEN, 0x08      ; Offset for data length
 .equ DATA, 0x10          ; Offset for actual data
 ```
-</Codeblock>
 
 These constants mark the byte-offsets relative to the entry-buffer pointer in `r1`:
 - `NUM_ACCOUNTS` (0x0000): Points to the account count in the instruction data header for validation
@@ -51,13 +46,11 @@ Unlike high-level languages that abstract memory layout, assembly requires knowi
 
 <ArticleSection name="Entrypoint and Initial Validation" id="entrypoint-and-validations" level="h2" />
 
-<Codeblock lang="assembly">
 ```sbpf
 .globl entrypoint
 entrypoint:
   ldxdw r0, [r1+NUM_ACCOUNTS]   ; Load number of accounts into r0
 ```
-</Codeblock>
 
 Every sBPF program starts at a global `.entrypoint` symbol. The Solana runtime provides account and instruction data through register `r1`.
 
@@ -69,12 +62,10 @@ This first instruction then loads the number of accounts into `r0`. Since `r0` i
 
 Next, we prepare the arguments for the `sol_log_` syscall:
 
-<Codeblock lang="assembly">
 ```sbpf
 ldxdw r2, [r1+DATA_LEN]   ; Load length of memo into r2
 add64  r1, DATA           ; Adjust r1 to point to memo bytes
 ```
-</Codeblock>
 
 These instructions set up the arguments for `sol_log_`:
 - `r2` receives the length of the memo data
@@ -82,12 +73,10 @@ These instructions set up the arguments for `sol_log_`:
 
 And after that, we call `sol_log_` and exit:
 
-<Codeblock lang="assembly">
 ```sbpf
 call 16   ; Call sol_log_ (helper ID 16)
 exit      ; Return using r0 value
 ```
-</Codeblock>
 
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
 

@@ -22,7 +22,6 @@ Voici les comptes dont le contexte a besoin :
 
 Cela se présente donc ainsi :
 
-<Codeblock lang="rust">
 ```rust
 pub struct MakeAccounts<'a> {
   pub maker: &'a AccountInfo,
@@ -63,7 +62,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for MakeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
 
@@ -76,7 +74,6 @@ Nous vérifierons que l'`amount` n'est pas nul puisque cela n'aurait pas de sens
 
 Voilà ce que cela donne :
 
-<Codeblock lang="rust">
 ```rust
 pub struct MakeInstructionData {
   pub seed: u64,
@@ -109,7 +106,6 @@ impl<'a> TryFrom<&'a [u8]> for MakeInstructionData {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Logique d'Instruction" id="instruction-logic" level="h2" />
 
@@ -117,7 +113,6 @@ Tout d'abord, après avoir désérialisé les `instruction_data` et les `account
 
 Pour cette étape, nous créons le compte `Escrow` en utilisant le trait `ProgramAccount::init::<Escrow>` des fonctions d'aide introduites dans l'[Introduction à Pinocchio](/en/courses/introduction-to-pinocchio/pinocchio-accounts). De même, nous initialisons le compte du Vault :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Make<'a> {
   pub accounts: MakeAccounts<'a>,
@@ -169,11 +164,9 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Make<'a> {
   }
 }
 ```
-</Codeblock>
 
 Nous pouvons maintenant nous concentrer sur la logique elle-même. Celle-ci consiste à remplir le compte d'escrow à transférer les jetons vers le vault.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Make<'a> {
   pub const DISCRIMINATOR: &'a u8 = &0;
@@ -204,4 +197,3 @@ impl<'a> Make<'a> {
   }
 }
 ```
-</Codeblock>

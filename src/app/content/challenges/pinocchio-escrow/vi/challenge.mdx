@@ -21,30 +21,24 @@ Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qu
 
 Hãy bắt đầu bằng cách tạo một môi trường Rust mới:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_escrow --lib --edition 2021
 cd blueshift_escrow
 ```
-</Codeblock>
 
 Thêm pinocchio, pinocchio-system, pinocchio-token và pinocchio-associated-token:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
 ```
-</Codeblock>
 
 Khai báo các loại crate trong `Cargo.toml` để tạo ra các artifact triển khai trong `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 Bây giờ bạn đã sẵn sàng để viết chương trình escrow của mình.
 
@@ -67,7 +61,6 @@ src
 
 Điểm vào (entrypoint) nằm trong `lib.rs` trông rất giống với những gì chúng ta đã làm trong các bài học trước, vì vậy chúng ta sẽ xem qua nó một cách nhanh chóng:
 
-<Codeblock lang="rust">
 ```rust
 use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
 entrypoint!(process_instruction);
@@ -99,7 +92,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="State" id="state" level="h2" />
 
@@ -107,7 +99,6 @@ Chúng ta sẽ chuyển sang `state.rs` nơi chứa tất cả dữ liệu cho `
 
 Đầu tiên, hãy xem định nghĩa struct:
 
-<Codeblock lang="rust">
 ```rust
 use pinocchio::{program_error::ProgramError, pubkey::Pubkey};
 use core::mem::size_of;
@@ -122,7 +113,6 @@ pub struct Escrow {
     pub bump: [u8;1]      // PDA bump seed
 }
 ```
-</Codeblock>
 
 Thuộc tính `#[repr(C)]` đảm bảo struct của chúng ta có bố cục bộ nhớ có thể dự đoán được, điều này rất quan trọng đối với dữ liệu on-chain. Mỗi trường phục vụ một mục đích cụ thể:
 - **seed**: Một số ngẫu nhiên cho phép một maker tạo nhiều escrow với cùng một cặp token
@@ -134,7 +124,6 @@ Thuộc tính `#[repr(C)]` đảm bảo struct của chúng ta có bố cục b�
 
 Bây giờ, hãy xem việc triển khai với tất cả các phương thức hỗ trợ:
 
-<Codeblock lang="rust">
 ```rust
 impl Escrow {
     pub const LEN: usize = size_of::<u64>() 
@@ -201,7 +190,6 @@ impl Escrow {
     }
 }
 ```
-</Codeblock>
 
 Việc triển khai cung cấp một số tính năng chính:
 1. **Tính toán kích thước chính xác**: `LEN` tính toán chính xác kích thước tài khoản bằng cách cộng kích thước của từng trường

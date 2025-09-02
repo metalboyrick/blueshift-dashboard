@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Prêt Flash avec Anchor
 
@@ -24,21 +23,17 @@ Si vous êtes novice en matière d'introspection des instructions, nous vous rec
 
 Avant de commencer, assurez-vous que Rust et Anchor sont installés. Si vous avez besoin d'instructions d'installation, consultez la [documentation officielle d'Anchor](https://www.anchor-lang.com/docs/installation). Ensuite, exécutez dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 anchor init blueshift_anchor_flash_loan
 ```
-</Codeblock>
 
 Ajouter les dépendances nécessaires :
 - `anchor-spl`: Fournit des utilitaires pour travailler avec les jetons SPL (la norme de jetons de Solana)
 
-<Codeblock lang="terminal">
 ```bash
 cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
-</Codeblock>
 
 Vous êtes maintenant prêt à vous lancer dans la création de votre programme de prêts flash !
 
@@ -48,7 +43,6 @@ Posons les bases de notre programme de prêt flash en mettant en place la struct
 
 Nous allons tout implémenter dans `lib.rs` puisque nous n'avons que deux instructions qui partagent la même structure de compte. Voici notre modèle de départ avec tous les composants essentiels :
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -92,7 +86,6 @@ pub enum ProtocolError {
   // error enum..
 }
 ```
-</Codeblock>
 
 **Remarque** : n'oubliez pas de changer l'ID du programme en `22222222222222222222222222222222222222222222` puisque nous l'utilisons pour tester votre programme.
 
@@ -111,7 +104,6 @@ Notre structure de compte `Loan` a besoin de ces composants :
 
 Voici comment nous définissons la structure de compte :
 
-<Codeblock lang="rust">
 ```rust
 #[derive(Accounts)]
 pub struct Loan<'info> {
@@ -146,7 +138,6 @@ pub struct Loan<'info> {
   pub system_program: Program<'info, System>
 }
 ```
-</Codeblock>
 
 Comme vous pouvez le constater, les comptes nécessaires à cette instruction et leur contrainte sont assez simples :
 - `protocol`: utilise `seeds = [b"protocol".as_ref()]` pour créer une adresse déterministe qui possède toutes les liquidités du protocole. Cela garantit que seul notre programme peut contrôler ces fonds.
@@ -158,7 +149,6 @@ Comme vous pouvez le constater, les comptes nécessaires à cette instruction et
 
 Les prêts flash nécessitent une validation rigoureuse à plusieurs étapes, d'où la nécessité d'une bonne gestion des erreurs. Voici notre liste complète d'erreurs :
 
-<Codeblock lang="rust">
 ```rust
 #[error_code]
 pub enum ProtocolError {
@@ -186,7 +176,6 @@ pub enum ProtocolError {
     Overflow,
 }
 ```
-</Codeblock>
 
 Ces bases étant posées, nous sommes prêts à implémenter la logique de base de nos instructions. La structure de compte garantit une bonne gestion des jetons, tandis que le système d'erreur fournit un retour d'information clair pour le débogage et la validation de la sécurité.
 

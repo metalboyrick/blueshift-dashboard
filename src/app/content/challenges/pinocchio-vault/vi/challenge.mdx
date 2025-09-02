@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Vault
 
@@ -13,36 +12,29 @@ Trong thử thách này, chúng ta sẽ xây dựng một vault lamport đơn gi
 
 Trước khi bắt đầu, hãy đảm bảo Rust và Pinocchio đã được cài đặt. Sau đó trong terminal của bạn chạy:
 
-<Codeblock lang="terminal">
 ```bash
 # tạo workspace
 cargo new blueshift_vault --lib --edition 2021
 cd blueshift_vault
 ```
-</Codeblock>
 
 Thêm Pinocchio:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system
 ```
-</Codeblock>
 
 Khai báo các loại crate trong `Cargo.toml` để tạo ra các artifact triển khai trong `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 <ArticleSection name="Template" id="template" level="h2" />
 
 Hãy bắt đầu với cấu trúc chương trình cơ bản. Chúng ta sẽ triển khai mọi thứ trong `lib.rs` vì đây là một chương trình đơn giản. Đây là template ban đầu với các thành phần cốt lõi mà chúng ta sẽ cần:
 
-<Codeblock lang="rust">
 ```rust
 #![no_std]
 
@@ -74,7 +66,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
@@ -86,7 +77,6 @@ Instruction deposit thực hiện các bước sau:
 
 Đầu tiên, hãy định nghĩa struct tài khoản cho deposit:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub owner: &'a AccountInfo,
@@ -124,7 +114,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Hãy phân tích từng kiểm tra tài khoản:
 1. `owner`: Phải là signer vì họ cần ủy quyền cho giao dịch
@@ -136,7 +125,6 @@ Hãy phân tích từng kiểm tra tài khoản:
 
 Bây giờ hãy triển khai struct dữ liệu instruction:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositInstructionData {
     pub amount: u64,
@@ -161,13 +149,11 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Ở đây chúng ta chỉ kiểm tra rằng số tiền khác zero.
 
 Cuối cùng, hãy triển khai instruction deposit:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -203,7 +189,6 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Withdraw" id="withdraw" level="h2" />
 
@@ -214,7 +199,6 @@ Instruction withdraw thực hiện các bước sau:
 
 Đầu tiên, hãy định nghĩa struct tài khoản cho withdraw:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub owner: &'a AccountInfo,
@@ -252,7 +236,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Hãy phân tích từng kiểm tra tài khoản:
 1. `owner`: Phải là signer vì họ cần ủy quyền cho giao dịch
@@ -264,7 +247,6 @@ Hãy phân tích từng kiểm tra tài khoản:
 
 Bây giờ hãy triển khai instruction withdraw:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -304,7 +286,6 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>
 
 Tính bảo mật của việc rút tiền này được đảm bảo bởi hai yếu tố:
 1. PDA của vault được tạo bằng cách sử dụng public key của owner, đảm bảo chỉ người gửi tiền ban đầu mới có thể rút
@@ -316,11 +297,9 @@ Bây giờ bạn có thể kiểm tra chương trình của mình với các uni
 
 Bắt đầu bằng cách build chương trình của bạn bằng lệnh sau trong terminal:
 
-<Codeblock lang="terminal">
 ```bash
 cargo build-sbf
 ```
-</Codeblock>
 
 Điều này tạo ra một file `.so` trực tiếp trong thư mục `target/deploy` của bạn.
 

@@ -6,15 +6,16 @@ import { motion } from "motion/react";
 import classNames from "classnames";
 import { anticipate } from "motion";
 
-export function Codeblock({
-  children,
-  lang,
-}: {
+interface CodeblockProps {
   children: React.ReactNode;
-  lang: string;
-}) {
+  'data-language'?: string;
+}
+
+export function Codeblock(props: CodeblockProps) {
   const preRef = useRef<HTMLDivElement>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const children = props.children;
+  const lang = props['data-language'];
 
   const handleClickCopy = async () => {
     const code = preRef.current?.textContent;
@@ -32,7 +33,7 @@ export function Codeblock({
   return (
     <div className="flex flex-col w-full border border-border rounded-xl overflow-hidden !my-8">
       <div className="text-sm font-medium text-brand-secondary flex items-center justify-between px-6 py-3 border-b-border bg-background-card-foreground rounded-t-xl">
-        {lang}
+        {lang || "\u00A0"}
         {children && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -59,7 +60,9 @@ export function Codeblock({
         )}
       </div>
       <div className="bg-background-card" ref={preRef}>
-        {children}
+        <pre className="m-0!">
+          {children}
+        </pre>
       </div>
     </div>
   );

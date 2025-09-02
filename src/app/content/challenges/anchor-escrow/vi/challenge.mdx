@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
 
@@ -23,21 +22,17 @@ Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qu
 
 Hãy bắt đầu bằng cách tạo một workspace Anchor mới:
 
-<Codeblock lang='terminal'>
   ```bash 
   anchor init blueshift_anchor_escrow 
   cd blueshift_anchor_escrow 
   ```
-</Codeblock>
 
 Sau đó chúng ta tiếp tục bằng cách kích hoạt `init-if-needed` trên crate `anchor-lang` và thêm crate `anchor-spl`:
 
-<Codeblock lang='terminal'>
   ```bash 
   cargo add anchor-lang --features init-if-needed 
   cargo add anchor-spl
   ```
-</Codeblock>
 
 Vì chúng ta đang sử dụng `anchor-spl`, chúng ta cũng cần cập nhật file `programs/blueshift_anchor_escrow/Cargo.toml` để bao gồm `anchor-spl/idl-build` trong tính năng `idl-build`.
 
@@ -75,7 +70,6 @@ src
 
 Trong đó `lib.rs` sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -108,7 +102,6 @@ use super::*;
 }
 
 ```
-</Codeblock>
 
 Như bạn thấy, chúng ta đã triển khai discriminator tùy chỉnh cho các lệnh. Vì vậy hãy đảm bảo sử dụng phiên bản anchor 0.31.0 hoặc mới hơn.
 
@@ -116,7 +109,6 @@ Như bạn thấy, chúng ta đã triển khai discriminator tùy chỉnh cho c�
 
 Chúng ta sẽ chuyển đến `state.rs` nơi tất cả dữ liệu cho `Escrow` của chúng ta tồn tại. Để làm điều này, chúng ta sẽ cung cấp cho nó một discriminator tùy chỉnh và bao bọc struct vào macro `#[account]` như thế này:
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -132,7 +124,6 @@ pub struct Escrow {
 }
 ```
 
-</Codeblock>
 
 Ý nghĩa của từng trường:
 
@@ -150,7 +141,6 @@ Chúng ta kết thúc bằng cách thêm macro `#[derive(InitSpace)]` để khô
 
 Bây giờ chúng ta có thể chuyển đến file `errors.rs` nơi chúng ta sẽ thêm một số thông báo lỗi mà chúng ta sẽ sử dụng sau đó như thế này:
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -166,6 +156,5 @@ pub enum EscrowError {
     InvalidMintB,
 }
 ```
-</Codeblock>
 
 Mỗi enum ánh xạ đến một thông báo rõ ràng, dễ đọc mà Anchor sẽ hiển thị bất cứ khi nào một ràng buộc hoặc `require!()` không được đáp ứng.

@@ -16,7 +16,6 @@ Instruction yêu cầu các tài khoản sau:
 
 Trong mã, nó sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct OpenVaultAccounts<'a> {
     pub payer: &'a AccountInfo,
@@ -35,7 +34,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for OpenVaultAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Việc xác minh account được xử lý bởi CPI `CreateAccount`. Nếu các account không đáp ứng yêu cầu (signer, mutability, executability), instruction sẽ tự động thất bại.
 
@@ -49,7 +47,6 @@ Hai phần dữ liệu là cần thiết:
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct OpenVaultInstructionData {
     pub hash: [u8; 32],
@@ -71,7 +68,6 @@ impl<'a> TryFrom<&'a [u8]> for OpenVaultInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Ở đây một lần nữa, các tham số không hợp lệ sẽ tự động sửa chữa: việc truyền một mã băm sai sẽ làm hỏng vault, việc truyền một bump sai sẽ làm thất bại việc dẫn xuất PDA.
 
@@ -83,7 +79,6 @@ Instruction này tạo ra một PDA trống được gán cho chương trình c�
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct OpenVault<'a> {
     pub accounts: OpenVaultAccounts<'a>,
@@ -120,6 +115,5 @@ impl<'a> OpenVault<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Instruction này chỉ tạo cấu trúc của vault. Các khoản tiền gửi được xử lý riêng biệt thông qua các lệnh chuyển khoản lamport đơn giản đến account vault.

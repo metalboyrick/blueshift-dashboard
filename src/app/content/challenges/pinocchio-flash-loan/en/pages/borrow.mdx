@@ -15,7 +15,6 @@ The `loan` instruction is the first half of our flash loan system. It performs f
 
 Here's the implementation:
 
-<Codeblock lang="rust">
 ```rust
 pub struct LoanAccounts<'a> {
     pub borrower: &'a AccountInfo,
@@ -56,7 +55,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Since `token_accounts` is a dynamic array of accounts, we pass them in similarly to `remaining_accounts`.
 
@@ -71,7 +69,6 @@ Our flash loan program needs to handle variable amounts of data depending on how
 
 Here's the implementation:
 
-<Codeblock lang="rust">
 ```rust
 pub struct LoanInstructionData<'a> {
     pub bump: [u8; 1],
@@ -106,7 +103,6 @@ impl<'a> TryFrom<&'a [u8]> for LoanInstructionData<'a> {
     }
 }
 ```
-</Codeblock>
 
 We use the `split_first` and `split_at_checked` functions to sequentially extract the `bump` and `fee` from the instruction data, allowing us to process the remaining bytes and cast them directly into a `u64` slice using the `core::slice::from_raw_parts()` function for efficient parsing.
 
@@ -116,7 +112,6 @@ We use the `split_first` and `split_at_checked` functions to sequentially extrac
 
 After deserializing `instruction_data` and `accounts`, we check that the number of `amounts` equals the number of `token_accounts` divided by two. This ensures we have the correct number of accounts for the requested loans.
 
-<Codeblock lang="rust">
 ```rust
 pub struct Loan<'a> {
     pub accounts: LoanAccounts<'a>,
@@ -142,13 +137,11 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
     }
 }
 ```
-</Codeblock>
 
 Next, we create the `signer_seeds` needed to transfer tokens to the borrower and create a `loan` account. The size
 of this account is calculated using `size_of::<LoanData>() * self.instruction_data.amounts.len()` to ensure it can
 hold all the loan data for the transaction.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Loan<'a> {
     pub const DISCRIMINATOR: &'a u8 = &0;
@@ -181,11 +174,9 @@ impl<'a> Loan<'a> {
     }
 }
 ```
-</Codeblock>
 
 We then create a mutable slice from the `loan` account's data. We will populate this slice in a `for` loop as we process each loan and its corresponding transfer:
 
-<Codeblock lang="rust">
 ```rust
 let mut loan_data = self.accounts.loan.try_borrow_mut_data()?;
 let loan_entries = unsafe {
@@ -195,11 +186,9 @@ let loan_entries = unsafe {
     )
 };
 ```
-</Codeblock>
 
 Finally, we loop through all the loans. In each iteration, we get the `protocol_token_account` and `borrower_token_account`, calculate the balance due to the protocol, save this data in the `loan` account, and transfer the tokens.
 
-<Codeblock lang="rust">
 ```rust
 for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
     let protocol_token_account = &self.accounts.token_accounts[i * 2];
@@ -228,11 +217,9 @@ for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
     }.invoke_signed(&signer_seeds)?;
 }
 ```
-</Codeblock>
 
 We finish by using instruction introspection to perform the necessary checks. We verify that the last instruction in the transaction is a `repay` instruction and that it uses the same `loan` account as our current `loan` instruction.
 
-<Codeblock lang="rust">
 ```rust
 // Introspecting the Repay instruction
 let instruction_sysvar = unsafe { Instructions::new_unchecked(self.accounts.instruction_sysvar.try_borrow_data()?) };
@@ -251,6 +238,5 @@ if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts
     return Err(ProgramError::InvalidInstructionData);
 }
 ```
-</Codeblock>
 
 > Using a `loan` account and structuring the instruction introspection this way ensures that we don't actually need to do any introspection in the `repay` instruction since all repayment checks will be handled by the `loan` account.

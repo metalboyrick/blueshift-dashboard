@@ -10,7 +10,6 @@ Lệnh `repay` (hoàn trả) là nửa thứ hai của hệ thống flash loan. 
 
 Đây là cách triển khai:
 
-<Codeblock lang="rust">
 ```rust
 pub struct RepayAccounts<'a> {
     pub borrower: &'a AccountInfo,
@@ -34,7 +33,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Trường `token_accounts` là một mảng động các tài khoản đại diện cho các tài khoản token giao thức liên quan đến khoản vay của người vay.
 
@@ -46,7 +44,6 @@ Không cần dữ liệu cho Instruction nào vì chúng ta sử dụng trườn
 
 Chúng ta bắt đầu bằng cách phân tích các tài khoản thành struct `RepayAccounts`.
 
-<Codeblock lang="rust">
 ```rust
 pub struct Repay<'a> {
     pub accounts: RepayAccounts<'a>,
@@ -63,11 +60,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
 }
 
 ```
-</Codeblock>
 
 Tiếp theo, chúng ta kiểm tra xem tất cả các khoản vay đã được hoàn trả hay chưa. Chúng ta thực hiện điều này bằng cách lấy số lượng khoản vay từ tài khoản `loan` và lặp qua chúng. Đối với mỗi khoản vay, chúng ta xác minh rằng `protocol_token_account` là đúng và số dư của nó lớn hơn hoặc bằng số tiền đã vay.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Repay<'a> {
     pub const DISCRIMINATOR: &'a u8 = &1;
@@ -102,11 +97,9 @@ impl<'a> Repay<'a> {
     }
 }
 ```
-</Codeblock>
 
 Sau đó chúng ta có thể tiến hành đóng tài khoản `loan` và thu hồi tiền thuê, vì nó không còn cần thiết nữa:
 
-<Codeblock lang="rust">
 ```rust
 drop(loan_data);
 // Close the loan account and give back the lamports to the borrower
@@ -116,6 +109,5 @@ unsafe {
     self.accounts.loan.close_unchecked();
 }
 ```
-</Codeblock>
 
 > Như bạn có thể thấy, vì mục đích tối ưu hóa và theo thiết kế, việc hoàn trả không xảy ra trong lệnh này. Điều này là do `borrower` có thể chọn hoàn trả tài khoản token trong một lệnh khác, chẳng hạn như khi thực hiện swap hoặc thực thi một loạt CPI từ chương trình arbitrage của họ.

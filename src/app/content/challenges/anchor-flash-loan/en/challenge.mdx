@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Anchor Flash Loan
 
@@ -26,21 +25,17 @@ If you're new to instruction introspection, we recommend starting with the[ Inst
 
 Before you begin, ensure you have Rust and Anchor installed. If you need setup instructions, refer to the [official anchor documentation](https://www.anchor-lang.com/docs/installation). Then in your terminal run:
 
-<Codeblock lang="terminal">
 ```bash
 anchor init blueshift_anchor_flash_loan
 ```
-</Codeblock>
 
 Add the required dependencies:
 - `anchor-spl`: Provides utilities for working with SPL tokens (Solana's token standard)
 
-<Codeblock lang="terminal">
 ```bash
 cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
-</Codeblock>
 
 Now you're ready to dive into building your flash loan program!
 
@@ -50,7 +45,6 @@ Let's build the foundation of our flash loan program by setting up the basic str
 
 We'll implement everything in `lib.rs` since we only have two instructions that share the same account structure. Here's our starting template with all the essential components:
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -94,7 +88,6 @@ pub enum ProtocolError {
   // error enum..
 }
 ```
-</Codeblock>
 
 **Note**: remember to change the program ID to `22222222222222222222222222222222222222222222` since we use this under the hood to test your program.
 
@@ -113,7 +106,6 @@ Our `Loan` account struct needs these components:
 
 Here's how we define the account struct:
 
-<Codeblock lang="rust">
 ```rust
 #[derive(Accounts)]
 pub struct Loan<'info> {
@@ -148,7 +140,6 @@ pub struct Loan<'info> {
   pub system_program: Program<'info, System>
 }
 ```
-</Codeblock>
 
 As you can see, the accounts needed for this instruction and their constraint are quite straightforward:
 - `protocol`: uses `seeds = [b"protocol".as_ref()]` to create a deterministic address that owns all protocol liquidity. This ensures only our program can control these funds.
@@ -160,7 +151,6 @@ As you can see, the accounts needed for this instruction and their constraint ar
 
 Flash loans require precise validation at multiple steps, so we need comprehensive error handling. Here's our complete error enum:
 
-<Codeblock lang="rust">
 ```rust
 #[error_code]
 pub enum ProtocolError {
@@ -188,7 +178,6 @@ pub enum ProtocolError {
     Overflow,
 }
 ```
-</Codeblock>
 
 With this foundation in place, we're ready to implement the core logic for our flash loan instructions. The account structure ensures proper token handling, while the error system provides clear feedback for debugging and security validation.
 

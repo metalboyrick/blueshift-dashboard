@@ -8,7 +8,6 @@ Instruction borrow là nửa đầu của hệ thống flash loan. Nó thực hi
 
 Đầu tiên, chúng ta triển khai việc chuyển tiền thực tế với validation phù hợp:
 
-<Codeblock lang="rust">
 ```rust
 // Make sure we're not sending in an invalid amount that can crash our Protocol
 require!(borrow_amount > 0, ProtocolError::InvalidAmount);
@@ -34,7 +33,6 @@ transfer(
     borrow_amount
 )?;
 ```
-</Codeblock>
 
 Mã này đảm bảo chúng ta đang chuyển một số tiền hợp lệ và sử dụng Program Derived Address (PDA) của protocol để ủy quyền chuyển tiền.
 
@@ -45,7 +43,6 @@ Bây giờ đến phần quan trọng về bảo mật: sử dụng instruction 
 Chúng ta bắt đầu bằng cách truy cập `instructions` sysvar, chứa thông tin về tất cả instruction trong transaction hiện tại:
 
 
-<Codeblock lang="rust">
 ```rust
 /*
     Instruction Introspection
@@ -56,14 +53,12 @@ Chúng ta bắt đầu bằng cách truy cập `instructions` sysvar, chứa th�
 
 let ixs = ctx.accounts.instructions.to_account_info();
 ```
-</Codeblock>
 
 Cuối cùng, chúng ta thực hiện kiểm tra quan trọng nhất: đảm bảo rằng instruction cuối cùng trong transaction là một instruction trả nợ hợp lệ:
 - Chúng ta bắt đầu bằng cách kiểm tra số lượng instruction và đảm bảo rằng chúng ta đang load instruction cuối cùng của transaction
 - Sau đó chúng ta xác minh rằng đó là instruction repay bằng cách kiểm tra program ID và discriminator của instruction
 - Chúng ta kết thúc bằng cách xác minh rằng các ATA được truyền trong instruction repay giống với những gì chúng ta đang truyền trong instruction `Borrow`
 
-<Codeblock lang="rust">
 ```rust
 /*
     Repay Instruction Check
@@ -90,4 +85,3 @@ if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
     return Err(ProtocolError::MissingRepayIx.into());
 }
 ```
-</Codeblock>

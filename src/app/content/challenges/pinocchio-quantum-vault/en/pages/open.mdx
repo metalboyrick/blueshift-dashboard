@@ -16,7 +16,6 @@ The instruction requires these accounts:
 
 In code, this looks like:
 
-<Codeblock lang="rust">
 ```rust
 pub struct OpenVaultAccounts<'a> {
     pub payer: &'a AccountInfo,
@@ -35,7 +34,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for OpenVaultAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Account validation is handled by the `CreateAccount` CPI. If accounts don't meet requirements (signer, mutability, executability), the instruction will fail automatically.
 
@@ -49,7 +47,6 @@ Two pieces of data are required:
 
 Here's how it looks in code:
 
-<Codeblock lang="rust">
 ```rust
 pub struct OpenVaultInstructionData {
     pub hash: [u8; 32],
@@ -71,7 +68,6 @@ impl<'a> TryFrom<&'a [u8]> for OpenVaultInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Here again, invalid parameters are self-correcting: passing a wrong hashes brick the vault, passing a wrong bumps fail PDA derivation.
 
@@ -83,7 +79,6 @@ The instruction creates an empty PDA assigned to our program. While the account 
 
 Here's how it looks in code:
 
-<Codeblock lang="rust">
 ```rust
 pub struct OpenVault<'a> {
     pub accounts: OpenVaultAccounts<'a>,
@@ -120,6 +115,5 @@ impl<'a> OpenVault<'a> {
     }
 }
 ```
-</Codeblock>
 
 > This instruction only creates the vault structure. Deposits are handled separately through simple lamport transfers to the vault account.

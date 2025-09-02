@@ -19,7 +19,6 @@ Voici les comptes nécessaires pour ce contexte :
 
 Ici encore, je vous laisse le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct SwapAccounts<'a> {
     pub user: &'a AccountInfo,
@@ -39,7 +38,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for SwapAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
 
@@ -51,7 +49,6 @@ Voici les données d'instruction que nous devons transmettre :
 
 Nous allons gérer l'implémentation de `SwapInstructionData` de la même manière que l'initialisation. Je vous laisse donc le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct SwapInstructionData {
     pub is_x: bool,
@@ -68,7 +65,6 @@ impl<'a> TryFrom<&'a [u8]> for SwapInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Assurez-vous que tous les montants, telles que `amount` et `min`, sont supérieurs à zéro et que l'ordre n'a pas encore expiré à l'aide de la sysvar `Clock`.
 
@@ -82,7 +78,6 @@ Nous devons ensuite :
 - Vérifiez que la dérivation de `vault_x` et `vault_y` correspond bien à des Comptes de Jetons Associés.
 - Désérialisez tous les comptes de jetons impliqués et utilisez les données qu'ils contiennent pour calculer le montant des dépôts à l'aide du crate `constant-product-curve` et vérifiez le slippage comme ceci :
 
-<Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
 let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
@@ -112,11 +107,9 @@ if swap_result.deposit == 0 || swap_result.withdraw == 0 {
     return Err(ProgramError::InvalidArgument);
 }
 ```
-</Codeblock>
 
 - Créez la logique de transfert en vérifiant la valeur `is_x` et transférez les montants `from` vers les vaults et les montants `to` vers les comptes de jetons de l'utilisateur comme ceci :
 
-<Codeblock lang="rust">
 ```rust
 if self.instruction_data.is_x {
     Transfer {
@@ -141,11 +134,9 @@ if self.instruction_data.is_x {
     .invoke_signed(&signer_seeds)?;
 }
 ```
-</Codeblock>
 
 Vous devriez être suffisamment compétent pour le faire vous-même, je vous laisse donc le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Swap<'a> {
     pub accounts: SwapAccounts<'a>,
@@ -176,4 +167,3 @@ impl<'a> Swap<'a> {
     }
 }
 ```
-</Codeblock>

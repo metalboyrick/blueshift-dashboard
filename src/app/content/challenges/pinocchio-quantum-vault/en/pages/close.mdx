@@ -13,7 +13,6 @@ The instruction requires three accounts:
 
 Here's how it looks in code:
 
-<Codeblock lang="rust">
 ```rust
 pub struct CloseVaultAccounts<'a> {
     pub vault: &'a AccountInfo,
@@ -33,7 +32,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
 }
 
 ```
-</Codeblock>
 
 > Account validation is handled by the runtime. If accounts don't meet requirements (mutability), the instruction will fail automatically.
 
@@ -45,7 +43,6 @@ Two pieces of data are required:
 
 Here's how it looks in code:
 
-<Codeblock lang="rust">
 ```rust
 pub struct CloseVaultInstructionData {
     pub signature: WinternitzSignature,
@@ -72,7 +69,6 @@ impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
@@ -90,7 +86,6 @@ The verification process follows these steps:
 
 Here's how it looks in code:
 
-<Codeblock lang="rust">
 ```rust
 pub struct CloseVault<'a> {
     pub accounts: CloseVaultAccounts<'a>,
@@ -133,6 +128,5 @@ impl<'a> CloseVault<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Reconstructing the message prevents signature replay attacks where malicious actors substitute different recipient accounts while MEV-ing valid signatures captured from the mempool.

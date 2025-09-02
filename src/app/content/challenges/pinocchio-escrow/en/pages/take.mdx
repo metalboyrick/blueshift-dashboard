@@ -23,7 +23,6 @@ Below are the accounts the context needs:
 
 And we perform these checks on it:
 
-<Codeblock lang="rust">
 ```rust
 pub struct TakeAccounts<'a> {
   pub taker: &'a AccountInfo,
@@ -72,7 +71,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
 
@@ -84,7 +82,6 @@ We begin by initializing the required accounts in the `TryFrom` implementation, 
 
 For this step, we ensure both the taker's Token A account and the maker's Token B account are initialized using the `AssociatedTokenAccount::init_if_needed` since we're not sure that they already exists
 
-<Codeblock lang="rust">
 ```rust
 pub struct Take<'a> {
   pub accounts: TakeAccounts<'a>,
@@ -121,14 +118,12 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
   }
 }
 ```
-</Codeblock>
 
 We can now focus on the logic itself that will:
 - Transfer the tokens from the `taker_ata_b` to the `maker_ata_b`.
 - Transfer the tokens from the `vault` to the `taker_ata_a`.
 - Close the now empty `vault` and withdraw the rent from the account.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Take<'a> {
   pub const DISCRIMINATOR: &'a u8 = &1;
@@ -186,4 +181,3 @@ impl<'a> Take<'a> {
   }
 }
 ```
-</Codeblock>

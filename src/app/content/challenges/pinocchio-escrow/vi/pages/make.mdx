@@ -22,7 +22,6 @@ Dưới đây là các tài khoản mà context cần:
 
 Trong code, điều này trông như sau:
 
-<Codeblock lang="rust">
 ```rust
 pub struct MakeAccounts<'a> {
   pub maker: &'a AccountInfo,
@@ -63,7 +62,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for MakeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
@@ -76,7 +74,6 @@ Chúng ta sẽ kiểm tra để đảm bảo `amount` không phải là zero, v�
 
 Đây là cách nó trông trong code:
 
-<Codeblock lang="rust">
 ```rust
 pub struct MakeInstructionData {
   pub seed: u64,
@@ -109,7 +106,6 @@ impl<'a> TryFrom<&'a [u8]> for MakeInstructionData {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
 
@@ -117,7 +113,6 @@ Chúng ta bắt đầu bằng cách khởi tạo các tài khoản cần thiết
 
 Đối với bước này, chúng ta tạo tài khoản `Escrow` bằng cách sử dụng trait `ProgramAccount::init::<Escrow>` từ các hàm hỗ trợ được giới thiệu trong [Giới thiệu về Pinocchio](/vi/courses/introduction-to-pinocchio/pinocchio-accounts). Tương tự, chúng ta khởi tạo tài khoản Vault vì nó cần được tạo mới:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Make<'a> {
   pub accounts: MakeAccounts<'a>,
@@ -169,11 +164,9 @@ impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Make<'a> {
   }
 }
 ```
-</Codeblock>
 
 Bây giờ chúng ta có thể tập trung vào logic chính, đó là điền thông tin vào tài khoản escrow và sau đó chuyển token vào vault.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Make<'a> {
   pub const DISCRIMINATOR: &'a u8 = &0;
@@ -204,4 +197,3 @@ impl<'a> Make<'a> {
   }
 }
 ```
-</Codeblock>

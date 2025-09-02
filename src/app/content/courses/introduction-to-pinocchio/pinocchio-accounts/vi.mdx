@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Các Account
 
@@ -89,7 +88,6 @@ Bây giờ hãy xem cách chúng ta áp dụng điều này vào các kiểm tra
 
 Như chúng ta đã thấy trong các ví dụ trước, kiểm tra `SystemAccount` và `SignerAccount` rất đơn giản và không yêu cầu bất kỳ xác thực bổ sung nào, vì vậy chúng ta sẽ thêm những điều sau vào `helper.rs` của chúng ta:
 
-<Codeblock lang="rust">
 ```rust
 pub trait AccountCheck {
     fn check(account: &AccountInfo) -> Result<(), ProgramError>;
@@ -118,7 +116,6 @@ impl AccountCheck for SystemAccount {
     }
 }
 ```
-</Codeblock>
 
 Ở đây chúng ta chỉ đơn giản kiểm tra xem account có phải là signer hay nó có được sở hữu bởi system program không. Chú ý cách cả hai struct đều cung cấp cùng một phương thức check, mang lại cho chúng ta common interface mà chúng ta đã nói đến.
 
@@ -126,7 +123,6 @@ impl AccountCheck for SystemAccount {
 
 Bây giờ mọi thứ trở nên thú vị hơn. Chúng ta bắt đầu với trait `AccountCheck` thông thường, nhưng chúng ta cũng thêm các trait cụ thể khác để cung cấp các helper bổ sung giống với các macro Anchor như `init` và `init_if_needed`.
 
-<Codeblock lang="rust">
 ```rust
 pub struct MintAccount;
 
@@ -144,11 +140,9 @@ impl AccountCheck for MintAccount {
     }
 }
 ```
-</Codeblock>
 
 Đối với chức năng `init` và `init_if_needed`, chúng ta tạo một trait khác gọi là `MintInit` mà chúng ta sử dụng cụ thể cho mục đích này vì các trường duy nhất được yêu cầu. Sau đó chúng ta sử dụng CPI `CreateAccount` và `InitializeMint2` để khởi tạo account `Mint`:
 
-<Codeblock lang="rust">
 ```rust
 pub trait MintInit {
     fn init(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult;
@@ -185,12 +179,10 @@ impl MintInit for MintAccount {
     }
 }
 ```
-</Codeblock>
 
 
 Sau đó chúng ta làm chính xác như vậy cho `TokenAccount`:
 
-<Codeblock lang="rust">
 ```rust
 pub struct TokenAccount;
 
@@ -243,7 +235,6 @@ impl AccountInit for TokenAccount {
     }
 }
 ```
-</Codeblock>
 
 ### Token2022
 
@@ -257,7 +248,6 @@ Bạn có thể đã nhận thấy rằng đối với Legacy SPL Token Program,
 
 Điều này dẫn đến các kiểm tra xác thực được sửa đổi:
 
-<Codeblock lang="rust">
 ```rust
 // TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
 pub const TOKEN_2022_PROGRAM_ID: [u8; 32] = [
@@ -373,13 +363,11 @@ impl AccountInit for TokenAccount2022Account {
     }
 }
 ```
-</Codeblock>
 
 ### Token Interface
 
 Vì chúng ta muốn khiến cho việc làm việc với cả Token2022 và Legacy Token Program trở nên dễ dàng mà không cần phân biệt giữa chúng, chúng ta đã tạo một helper tuân theo cùng nguyên tắc cơ bản:
 
-<Codeblock lang="rust">
 ```rust
 pub struct MintInterface;
 
@@ -441,13 +429,11 @@ impl AccountCheck for TokenAccountInterface {
     }
 }
 ```
-</Codeblock>
 
 ### Associated Token Account
 
 Chúng ta có thể tạo một số kiểm tra cho Associated Token Program. Chúng rất giống với các kiểm tra Token Program thông thường, nhưng chúng bao gồm một kiểm tra derivation bổ sung để đảm bảo account được derive một cách chính xác.
 
-<Codeblock lang="rust">
 ```rust
 pub struct AssociatedTokenAccount;
 
@@ -494,7 +480,6 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Các tài khoản của chương trình" id="program-accounts" level="h2" />
 
@@ -504,7 +489,6 @@ Bạn có thể nhận thấy điều gì đó thú vị trong triển khai `clo
 
 Một cuộc tấn công tái khởi tạo xảy ra khi kẻ tấn công cố gắng tái sử dụng một account đã đóng bằng cách khởi tạo lại nó với dữ liệu độc hại. Bằng cách đặt byte đầu tiên thành 255 và thu nhỏ account xuống gần như kích thước bằng không, chúng ta làm cho account không thể bị nhầm lẫn với bất kỳ kiểu account hợp lệ nào trong tương lai. Đây là một pattern bảo mật phổ biến trong các chương trình Solana.
 
-<Codeblock lang="rust">
   ```rust
   pub struct ProgramAccount;
 
@@ -575,7 +559,6 @@ Một cuộc tấn công tái khởi tạo xảy ra khi kẻ tấn công cố g�
       }
   }
   ```
-</Codeblock>
 
 ### Tối ưu hóa việc truy cập dữ liệu của Account
 

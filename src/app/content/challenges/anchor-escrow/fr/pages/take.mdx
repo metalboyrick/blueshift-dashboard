@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
 
 <ArticleSection name="Accepter" id="take" level="h2" />
 
@@ -26,7 +25,6 @@ Les comptes nécessaires dans ce contexte sont :
 
 Et avec toutes les contraintes, cela ressemblera à quelque chose comme ceci :
 
-<Codeblock lang="rust">
   ```rust
 #[derive(Accounts)]
 pub struct Take<'info> {
@@ -85,13 +83,11 @@ pub struct Take<'info> {
     pub system_program: Program<'info, System>,
 }
   ```
-</Codeblock>
 
 ### Logique
 
 Dans la logique, nous commençons par transférer les jetons de `taker_ata_b` à `maker_ata_b`. Nous transférons ensuite les jetons du `vault` vers le `taker_ata_a` avant de fermer le vault désormais vide :
 
-<Codeblock lang="rust">
 ```rust
 impl<'info> Take<'info> {
     fn transfer_to_maker(&mut self) -> Result<()> {
@@ -152,11 +148,9 @@ impl<'info> Take<'info> {
     }
 }
 ```
-</Codeblock>
 
 Nous créons maintenant la fonction `handler`. Cette fois, nous n'avons pas besoin d'effectuer de vérifications supplémentaires :
 
-<Codeblock lang="rust">
 ```rust
 pub fn handler(ctx: Context<Take>) -> Result<()> {
     // Transfer Token B to Maker
@@ -168,4 +162,3 @@ pub fn handler(ctx: Context<Take>) -> Result<()> {
     Ok(())
 }
 ```
-</Codeblock>

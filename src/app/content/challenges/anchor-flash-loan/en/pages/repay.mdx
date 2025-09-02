@@ -8,7 +8,6 @@ The repay instruction completes our flash loan cycle by ensuring the borrowed fu
 
 First, we need to examine the first instruction in the transaction to extract the original loan amount:
 
-<Codeblock lang="rust">
 ```rust
 let ixs = ctx.accounts.instructions.to_account_info();
 
@@ -24,7 +23,6 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
     return Err(ProtocolError::MissingBorrowIx.into());
 }
 ```
-</Codeblock>
 
 > We're not checking that this is the actual `borrow_ix` using the program ID and discriminator because it doesn't matter if they actually construct a "fake" instruction; it's safe for the protocol since it's just getting paid. At the same time, if we loaned the money we know that it's going to be the first instruction and that the `amount_borrowed` will be there.
 
@@ -32,7 +30,6 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
 
 Next, we calculate the protocol fee and transfer the total amount back:
 
-<Codeblock lang="rust">
 ```rust
 // Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
 let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
@@ -48,6 +45,5 @@ transfer(
     amount_borrowed
 )?;
 ```
-</Codeblock>
 
 Our fee is hard coded to 500 basis point, and we perform "checked" math to make sure that the amount doesn't overflow which could be exploited with very large numbers. Additionally, we convert the amount to `u128` for the multiplication to prevent intermediate overflow, then we safely cast back to `u64`
