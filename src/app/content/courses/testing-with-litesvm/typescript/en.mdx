@@ -117,6 +117,7 @@ describe("test", () => {
 
     // Populate the data of the Account
     const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
+
     // Serialize the account data into the byte buffer defined above
     // ...
 
@@ -152,7 +153,6 @@ describe("test", () => {
 
     // Create a new Mint Account
     const mint = Keypair.generate();
-
 
     // Populate the data of the Mint Account
     let mintData = Buffer.alloc(MINT_SIZE);
@@ -261,26 +261,25 @@ svm.getAccount(account.publicKey);
 
 // Get the lamport balance of an account
 svm.getBalance(account.publicKey);
-
-// Get the number of Compute Units used so far
-svm.getComputeBudget();
 ```
 
 Or configure how the runtime behaves:
 
 ```ts
 // Sets the compute budget
-svm.withComputeBudget(2_000_000);
+const computeBudget = new ComputeBudget();
+computeBudget.computeUnitLimit = 2_000_000n;
+svm.withComputeBudget(computeBudget);
 
-// Sets Sigverify as active or not
+// Sets Sigverify as active or 
 svm.withSigverify(true);
 
-// Sets the Blockhash check as active or not
+// Sets the Blockhash check as active or 
 svm.withBlockhashCheck(true);
 
 // Sets the default Sysvars
 svm.withSysvars();
 
-// Set the FeautureSet to use
+// Set the FeatureSet to use
 svm.withFeatureSet(new FeatureSet(...))
 ```
