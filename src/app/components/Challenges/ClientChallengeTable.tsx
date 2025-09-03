@@ -143,7 +143,7 @@ export default function ChallengeTable({
                 <div className="px-2 w-full">
                   <Divider />
                 </div>
-                <div className="max-w-full sm:max-w-[450px] overflow-x-scroll flex flex-col gap-y-1 items-start px-3 pr-5 pb-2 w-max max-h-80 custom-scrollbar font-geist-mono text-xs">
+                <div className="max-w-full sm:max-w-[450px] overflow-x-scroll flex flex-col gap-y-1 items-start px-3 pr-5 pb-2 w-max max-h-80 custom-scrollbar font-fira-code text-xs">
                   {runnerLogs.map((log, index) => (
                     <motion.div
                       key={index}
@@ -325,7 +325,7 @@ export default function ChallengeTable({
                                     ease: anticipate,
                                     delay: 0.8,
                                   }}
-                                  className="text-start w-full font-geist-mono font-medium text-nowrap text-[#FF5555]"
+                                  className="text-start w-full font-fira-code font-medium text-nowrap text-[#FF5555]"
                                 >
                                   {
                                     verificationData.results.find(
@@ -353,7 +353,7 @@ export default function ChallengeTable({
                                       delay: 1 + index * 0.1,
                                     }}
                                     key={index}
-                                    className="text-start font-geist-mono font-medium text-nowrap text-secondary"
+                                    className="text-start font-fira-code font-medium text-nowrap text-secondary"
                                   >
                                     {log.slice(7, log.length)}
                                   </motion.span>
