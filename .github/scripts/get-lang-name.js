@@ -6,6 +6,8 @@ const langMap = {
   'zh-CN': 'Simplified Chinese',
   'zh-HK': 'Traditional Chinese',
   id: 'Indonesian',
+  uk: 'Ukrainian',
+  de: 'German',
 };
 
 console.log(langMap[langCode] || langCode);
