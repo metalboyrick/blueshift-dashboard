@@ -17,7 +17,6 @@ Voici les comptes nécessaires pour ce contexte :
 > Avec l'expérience, vous remarquerez que bon nombre de ces vérifications peuvent être omises en vous appuyant plutôt sur les contraintes imposées par les CPI eux-mêmes. Par exemple, pour cette structure de compte, aucun contrôle explicite n'est nécessaire. En effet, si les contraintes ne sont pas respectées, le programme échouera par défaut. Je soulignerai ces nuances au fur et à mesure que nous avancerons dans la logique.
 Comme il n'y a pas beaucoup de changements par rapport à la structure habituelle que nous créons, je vous laisse le soin de l'implémentation :
 
-<Codeblock lang="rust">
 ```rust
 pub struct InitializeAccounts<'a> {
     pub initializer: &'a AccountInfo,
@@ -33,7 +32,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 > Vous devrez passer tous les comptes mentionnés ci-dessus mais tous ne doivent pas nécessairement être inclus dans la structure `InitializeAccounts` car vous n'aurez peut-être pas besoin de référencer directement chaque compte dans l'implémentation
 
@@ -51,7 +49,6 @@ Voici les données d'instruction que nous devons transmettre :
 > Comme vous pouvez le constater, plusieurs de ces champs pourraient être dérivés différemment. Par exemple, nous pourrions obtenir le `mint_x` en passant le compte de `Mint` et en le lisant directement ou générer la valeur `bump` dans le programme. Cependant, en les passant explicitement, nous visons à créer le programme le plus optimisé et le plus efficace possible.
 Dans cette implémentation, nous traitons le parsing des données d'instruction de manière plus flexible et à un niveau plus bas que d'habitude. C'est pourquoi nous allons expliquer les raisons qui nous poussent à prendre les décisions suivantes :
 
-<Codeblock lang="rust">
 ```rust
 #[repr(C, packed)]
 pub struct InitializeInstructionData {
@@ -94,7 +91,6 @@ impl TryFrom<&[u8]> for InitializeInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Le champ `authority` dans `InitializeInstructionData` est facultatif et peut être omis pour créer une *pool* immuable.
 
@@ -106,7 +102,6 @@ Nous commençons par désérialiser les `instruction_data` et les `accounts`.
 
 Nous devons ensuite :
 - Créez le compte `Config` à l'aide de l'instruction `CreateAccount` du Programme Système et des *seeds* suivantes :
-<Codeblock lang="rust">
 ```rust
 let seed_binding = self.instruction_data.seed.to_le_bytes();
 let config_seeds = [
@@ -117,10 +112,8 @@ let config_seeds = [
     Seed::from(&self.instruction_data.config_bump),
 ];
 ```
-</Codeblock>
 - Remplissez le compte `Config` en le chargeant à l'aide de `Config::load_mut_unchecked()` puis en le remplissant avec toutes les données nécessaires à l'aide de l'aide `config.set_inner()`.
 - Créez le compte de `Mint` pour la LP à l'aide des instructions `CreateAccount` et `InitializeMint2` et des *seeds* suivantes : 
-<Codeblock lang="rust">
 ```rust
 let mint_lp_seeds = [
     Seed::from(b"mint_lp"),
@@ -128,12 +121,10 @@ let mint_lp_seeds = [
     Seed::from(&self.instruction_data.lp_bump),
 ];
 ```
-</Codeblock>
 
 > La `mint_authority` de `mint_lp` est le compte `config`
 Vous devriez être suffisamment compétent pour le faire vous-même, je vous laisse donc le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Initialize<'a> {
     pub accounts: InitializeAccounts<'a>,
@@ -164,7 +155,6 @@ impl<'a> Initialize<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Sécurité" id="security" level="h2" />
 

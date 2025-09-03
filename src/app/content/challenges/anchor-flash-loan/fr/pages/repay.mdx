@@ -8,7 +8,6 @@ L'instruction `repay` termine notre cycle de prêt flash en garantissant que les
 
 Tout d'abord, nous devons examiner la première instruction de la transaction afin d'extraire le montant initial du prêt :
 
-<Codeblock lang="rust">
 ```rust
 let ixs = ctx.accounts.instructions.to_account_info();
 
@@ -24,7 +23,6 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
     return Err(ProtocolError::MissingBorrowIx.into());
 }
 ```
-</Codeblock>
 
 > Nous ne vérifions pas qu'il s'agit bien de la vraie `borrow_ix` en utilisant l'ID du programme et le discriminateur car cela n'a pas d'importance si une personne construit une "fausse" instruction. C'est sans danger pour le protocole puisqu'il est juste payé. Par ailleurs, si nous avons prêté l'argent, nous savons qu'il s'agira de la première instruction et que le `amount_borrowed` y figurera.
 
@@ -32,7 +30,6 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
 
 Ensuite, nous calculons les frais de protocole et transférons le montant total :
 
-<Codeblock lang="rust">
 ```rust
 // Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
 let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
@@ -48,6 +45,5 @@ transfer(
     amount_borrowed
 )?;
 ```
-</Codeblock>
 
 Notre commission est codée en dur à 500 points de base et nous effectuons des calculs "vérifiés" pour nous assurer que le montant ne dépasse pas, ce qui pourrait être exploité avec de très grands nombres. De plus, nous convertissons le montant en `u128` pour la multiplication afin d'éviter un dépassement intermédiaire, puis nous repassons en toute sécurité en `u64`.

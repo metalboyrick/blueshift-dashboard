@@ -18,7 +18,6 @@ Account `refund` thường là một vault kháng lượng tử mới với cặ
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct SplitVaultAccounts<'a> {
     pub vault: &'a AccountInfo,
@@ -38,7 +37,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for SplitVaultAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Việc xác minh account được xử lý bởi runtime. Nếu các account không đáp ứng yêu cầu (khả năng có thể sửa đổi), instruction sẽ tự động thất bại.
 
@@ -51,7 +49,6 @@ Ba phần dữ liệu là cần thiết:
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct SplitVaultInstructionData {
     pub signature: WinternitzSignature,
@@ -80,7 +77,6 @@ impl<'a> TryFrom<&'a [u8]> for SplitVaultInstructionData {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Logic của instruction" id="instruction-logic" level="h2" />
 
@@ -98,7 +94,6 @@ Quá trình xác minh tuân theo các bước sau:
 
 Mã trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct SplitVault<'a> {
     pub accounts: SplitVaultAccounts<'a>,
@@ -149,6 +144,5 @@ impl<'a> SplitVault<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Việc tái tạo thông điệp ngăn chặn các cuộc tấn công phát lại chữ ký, nơi các tác nhân độc hại thay thế các tài khoản người nhận khác nhau trong khi MEV-ing các chữ ký hợp lệ được ghi lại từ mempool.

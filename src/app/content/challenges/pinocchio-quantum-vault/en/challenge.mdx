@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # The Quantum Vault
 
@@ -17,30 +16,24 @@ In this challenge, we'll update the simple lamport vault that we built in the [P
 
 Before you begin, make sure Rust and Pinocchio are installed. Then, run the following in your terminal:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift-pinocchio-quantum-vault --lib --edition 2021
 cd blueshift-pinocchio-quantum-vault
 ```
-</Codeblock>
 
 Add `pinocchio`, `pinocchio-system`, and `solana-nostd-sha256` and `solana-winternitz`:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system solana-nostd-sha256 solana-winternitz
 ```
-</Codeblock>
 
 Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 You're now ready to write your quantum vault program.
 
@@ -62,7 +55,6 @@ src
 
 The entrypoint in `lib.rs` is very similar to what we covered in the [Introduction to Pinocchio Course](/en/courses/introduction-to-pinocchio).
 
-<Codeblock lang="rust">
 ```rust
 pub mod instructions;
 use instructions::*;
@@ -95,6 +87,5 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 We don't need any state setup for this, so we're just going to move into creating our instructions.

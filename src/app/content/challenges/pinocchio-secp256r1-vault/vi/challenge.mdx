@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Secp256r1 Vault
 
@@ -17,35 +16,28 @@ Trong thử thách này, chúng ta sẽ cập nhật vault lamport đơn giản 
 
 Trước khi bắt đầu, hãy đảm bảo Rust và Pinocchio đã được cài đặt. Sau đó trong terminal của bạn chạy:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_secp256r1_vault --lib --edition 2021
 cd blueshift_secp256r1_vault
 ```
-</Codeblock>
 
 Thêm crate Pinocchio và Pinocchio-compatible `Secp256r1`
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
 ```
-</Codeblock>
 
 Khai báo các loại crate trong `Cargo.toml` để tạo ra các artifact triển khai trong `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 <ArticleSection name="Template" id="template" level="h2" />
 
 Hãy bắt đầu với cấu trúc chương trình cơ bản. Chúng ta sẽ triển khai mọi thứ trong `lib.rs` vì đây là một chương trình đơn giản. Đây là template ban đầu với các thành phần cốt lõi mà chúng ta sẽ cần:
 
-<Codeblock lang="rust">
 ```rust
 #![no_std]
 
@@ -77,7 +69,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
@@ -93,7 +84,6 @@ Bởi vì với chữ ký Secp256r1, chủ sở hữu của ví thực tế khô
 
 Nên cấu trúc của tài khoản `deposit` sẽ trông như thế này: 
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub payer: &'a AccountInfo,
@@ -126,7 +116,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Hãy phân tích từng mã kiểm tra tài khoản:
 1. `payer`: phải là signer vì họ cần ủy quyền cho chuyển tiền lamport.
@@ -141,7 +130,6 @@ Bởi vì phần seed nằm trong `instruction_data`, chúng ta sẽ không truy
 
 Bây giờ hãy triển khai struct dữ liệu cho instruction: 
 
-<Codeblock lang="rust">
 ```rust
 #[repr(C, packed)]
 pub struct DepositInstructionData {
@@ -166,7 +154,6 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Chúng ta giải tuần tự hóa dữ liệu instruction vào một struct `DepositInstructionData` bao gồm:
 - `pubkey`: public key Secp256r1 của người dùng thực hiện deposit
@@ -176,7 +163,6 @@ Thông thường, unwrap không được khuyến khích sử dụng trong mã p
 
 Cuối cùng, hãy triển khai instruction deposit:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -223,7 +209,6 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>
 
 Như đã nhắc đến trước đó, chúng ta cần xác minh rằng PDA của vault được derive từ các seed chính xác. Trong vault dựa trên Secp256r1 này, chúng ta sử dụng `Secp256r1Pubkey` làm một phần của các seed thay vì public key của chủ sở hữu truyền thống. Đây là một biện pháp bảo mật quan trọng đảm bảo chỉ người nắm giữ khóa Secp256r1 tương ứng mới có thể truy cập vào vault.
 
@@ -246,7 +231,6 @@ Widthdraw instruction thực hiện các bước sau:
 
 Đầu tiên, hãy định nghĩa struct tài khoản cho withdraw:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub payer: &'a AccountInfo,
@@ -278,11 +262,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Bây giờ hãy triển khai struct dữ liệu cho instruction: 
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawInstructionData {
     pub bump: [u8;1]
@@ -298,13 +280,11 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Như bạn thấy, để tối ưu hóa chúng ta đã truyền bump vào trong dữ liệu instruction để không phải derive nó trong `process()` việc này khá "nặng" vì chúng ta phải kiểm tra nhiều thứ khác.
 
 Cuối cùng, hãy triển khai instruction `withdraw`:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -382,7 +362,6 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>
 
 Quá trình withdraw đòi hỏi một vài bước kiểm tra bảo mật để đảm bảo rằng giao dịch là hợp lệ. Hãy xem chúng ta làm thế nào để xác minh chữ ký Secp256r1 và bảo vệ trước các cuộc tấn công tiềm năng:
 
@@ -445,11 +424,9 @@ Bạn có thể kiểm tra chương trình của mình với các bài kiểm tr
 
 Bắt đầu bằng cách build chương trình của bạn bằng lệnh sau trong terminal:
 
-<Codeblock lang="terminal">
 ```bash
 cargo build-sbf
 ```
-</Codeblock>
 
 Điều này tạo ra một file `.so` trực tiếp trong thư mục `target/deploy` của bạn.
 

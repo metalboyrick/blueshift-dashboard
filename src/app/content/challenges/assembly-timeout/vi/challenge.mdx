@@ -1,5 +1,4 @@
 import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Assembly Timeout
 
@@ -35,13 +34,11 @@ Vì chương trình của chúng ta không nhận bất kỳ tài khoản nào, 
 
 Các hằng số định nghĩa bố cục bộ nhớ của chúng ta như sau: 
 
-<Codeblock lang="sbpf">
 ```sbpf
 .equ NUM_ACCOUNTS, 0x0000
 .equ MAX_SLOT_HEIGHT, 0x0010
 .equ CURRENT_SLOT_HEIGHT, -0x0028
 ```
-</Codeblock>
 
 - `NUM_ACCOUNTS` (0x0000): Trỏ đến số lượng tài khoản trong header của dữ liệu instruction để xác thực.
 - `MAX_SLOT_HEIGHT` (0x0010): Xác định vị trí của 8-byte slot-height tối đa trong dữ liệu của instruction.
@@ -51,14 +48,12 @@ Không giống như những ngôn ngữ bậc cao khác trừu tượng hóa b�
 
 <ArticleSection name="Điểm đầu vào và Xác thực ban đầu" id="entrypoint-and-validations" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 .globl entrypoint
 entrypoint:
   ldxdw r0, [r1+NUM_ACCOUNTS]       // Veto if any accounts are included
   ldxdw r2, [r1+MAX_SLOT_HEIGHT]    // Store target slot height
 ```
-</Codeblock>
 
 Mỗi chương trình sBPF bắt đầu bởi một ký hiệu toàn cục `.entrypoint`. Runtime Solana cung cấp các tài khoản và dữ liệu instruction thông qua thanh ghi `r1`.
 
@@ -70,14 +65,12 @@ Cả 2 hành động đều là zero-copy: chúng ta đang đọc trực tiếp 
 
 <ArticleSection name="Clock Sysvar" id="the-clock-sysvar" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 mov64 r1, r10
 add64 r1, CURRENT_SLOT_HEIGHT
 call sol_get_clock_sysvar
 ldxdw r1, [r1+0x0000]
 ```
-</Codeblock>
 
 Việc gọi `sol_get_clock_sysvar` syscall sẽ ghi dữ liệu `Clock` hiện tại vào `r1`.
 
@@ -91,12 +84,10 @@ Sau khi gọi hàm `sol_get_clock_sysvar`, thanh ghi `r1` chứa địa chỉ b�
 
 <ArticleSection name="Logic so sánh thời gian" id="temporal-comparison-logic" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 jle r1, r2, end    // If current slot <= max slot, success
 lddw r0, 1         // Otherwise, set error code
 ```
-</Codeblock>
 
 Logic chính của chúng ta là một lệnh nhảy:
 - Temporal validation: lệnh `jle` (jump if less or equal) (nhảy nếu nhỏ hơn hoặc bằng) so sánh slot hiện tại ở thanh ghi (`r1`) với deadline của chúng ta ở thanh ghi (`r2`). Nếu chúng ta còn trong cửa sổ thời gian, chúng ta nhảy đến nhãn `end`.

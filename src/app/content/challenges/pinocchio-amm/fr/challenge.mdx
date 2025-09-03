@@ -20,31 +20,25 @@ Dans ce challenge, vous allez implémenter un AMM simple à l'aide de quatre ins
 
 Commençons par créer un nouvel environnement Rust :
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_native_amm --lib --edition 2021
 cd blueshift_native_amm
 ```
-</Codeblock>
 
 Ajoutez `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` et `constant-product-curve` créé par [Dean](https://x.com/deanmlittle) pour gérer tous les calculs pour notre Amm :
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
 cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
 ```
-</Codeblock>
 
 Déclarez les types de crate dans `Cargo.toml` pour générer les artefacts de déploiement dans `target/deploy` :
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 Vous êtes maintenant prêt à écrire votre programme amm.
 
@@ -101,7 +95,6 @@ src
 
 Le point d'entrée, qui se trouve dans le fichier `lib.rs`, est toujours identique :
 
-<Codeblock lang="rust">
 ```rust
 use pinocchio::{
     account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
@@ -137,7 +130,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="État (State)" id="state" level="h2" />
 
@@ -147,7 +139,6 @@ Décomposons cela en trois parties : la définition de la structure, les fonctio
 
 Commençons par examiner la définition de la structure :
 
-<Codeblock lang="rust">
 ```rust
 use core::mem::size_of;
 use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
@@ -177,7 +168,6 @@ impl Config {
     //...
 }
 ```
-</Codeblock>
 
 L'attribut `#[repr(C)]` garantit que notre structure dispose d'une disposition mémoire prédictible et compatible avec le langage C, qui reste cohérente sur différentes plateformes et versions du compilateur Rust. Ceci est crucial pour les programmes on-chain où les données doivent être sérialisées et désérialisées de manière fiable.
 
@@ -198,7 +188,6 @@ L'enum `AmmState` définit les états possibles pour l'AMM, ce qui facilite la g
 
 Les fonctions d'aide pour la lecture fournit un accès sûr et efficace aux données de `Config` avec une validation et des emprunts appropriés :
 
-<Codeblock lang="rust">
 ```rust
 impl Config {
     //...
@@ -275,7 +264,6 @@ impl Config {
     pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
 }
 ```
-</Codeblock>
 
 Principales caractéristiques des fonctions d'aide pour la lecture :
 - Emprunt Sûr : La méthode `load` renvoie un `Ref<Self>` qui gère en toute sécurité l'emprunt des données du compte, empêchant ainsi les conflits d'accès aux données et garantissant la sécurité de la mémoire.
@@ -287,7 +275,6 @@ Principales caractéristiques des fonctions d'aide pour la lecture :
 
 Les fonctions d'aide pour l'écriture fournit des méthodes sûres et validées pour modifier les données de `Config` :
 
-<Codeblock lang="rust">
 ```rust
 impl Config {
     //...
@@ -355,7 +342,6 @@ impl Config {
     }
 }
 ```
-</Codeblock>
 
 Principales caractéristiques des fonctions d'aide pour l'écriture :
 - Emprunt Mutable: La méthode `load_mut` renvoie un `RefMut<Self>` qui gère en toute sécurité l'emprunt mutable à partir des données du compte.

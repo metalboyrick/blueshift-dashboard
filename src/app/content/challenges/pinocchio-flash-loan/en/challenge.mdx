@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Pinocchio Flash Loan
 
@@ -26,30 +25,24 @@ If you're new to instruction introspection, we recommend starting with the [Inst
 
 Before you begin, make sure Rust and Pinocchio are installed. Then, run the following in your terminal:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_pinocchio_flash_loan --lib --edition 2021
 cd blueshift_pinocchio_flash_loan
 ```
-</Codeblock>
 
 Add `pinocchio`, `pinocchio-system`, and `pinocchio-token`:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-token
 ```
-</Codeblock>
 
 Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 You're now ready to write your flash loan program.
 
@@ -71,7 +64,6 @@ src
 
 The entrypoint in `lib.rs` is very similar to what we covered in the [Introduction to Pinocchio Course](/en/courses/introduction-to-pinocchio).
 
-<Codeblock lang="rust">
 ```rust
 use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
 entrypoint!(process_instruction);
@@ -99,13 +91,11 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Helpers" id="helpers" level="h2" />
 
 Before diving into the `loan` and `repay` instructions, let's examine `helpers.rs`:
 
-<Codeblock lang="rust">
 ```rust
 #[repr(C, packed)]
 pub struct LoanData {
@@ -125,6 +115,5 @@ pub fn get_token_amount(data: &[u8]) -> u64 {
     u64::from_le_bytes(data[64..72].try_into().unwrap())
 }
 ```
-</Codeblock>
 
 This file is straightforward. It contains a `LoanData` struct, which we'll use to temporarily store loan data in an account before the loan is repaid. It also provides a `get_token_amount()` helper function to read the token amount from an account.

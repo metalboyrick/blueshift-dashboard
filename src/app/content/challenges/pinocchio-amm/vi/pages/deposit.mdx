@@ -21,7 +21,6 @@ Bên dưới là các tài khoản cần thiết cho ngữ cảnh này:
 
 Ở đây, tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub user: &'a AccountInfo,
@@ -43,7 +42,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
@@ -55,7 +53,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
 
 Chúng ta sẽ xử lý việc triển khai cho `DepositInstructionData` như khi khởi tạo. Vì vậy, tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositInstructionData {
     pub amount: u64,
@@ -72,7 +69,6 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Đảm bảo rằng bất kỳ số lượng nào, như `amount`, `max_y` và `max_x` đều lớn hơn zero và lệnh này chưa hết hạn bằng cách sử dụng `Clock` sysvar.
 
@@ -84,7 +80,6 @@ Chúng ta cần phải:
 - Load tài khoản `Config` để lấy tất cả dữ liệu bên trong nó. Chúng ta có thể làm điều này bằng cách sử dụng hàm hỗ trợ `Config::load()`.
 - Xác định rằng trạng thái của AMM là hợp lệ (nghĩa là nó phải bằng `AmmState::Initialized`).
 - Kiểm tra tài khoản `vault_x` và `vault_y` là các tài khoản token liên kết hợp lệ như thế này:
-<Codeblock lang="rust">
 ```rust
 // Check if the vault_x is valid
 let (vault_x, _) = find_program_address(
@@ -100,9 +95,7 @@ if vault_x.ne(self.accounts.vault_x.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```
-</Codeblock>
 - Deserialize các tài khoản liên quan đến token và sử dụng dữ liệu bên trong chúng để tính toán số lượng token cần deposit sử dụng crate `constant-product-curve` và kiểm tra slippage như thế này: 
-<Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
@@ -131,7 +124,6 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
-</Codeblock>
 
 > Nếu đó là lần đầu thực hiện deposit, chúng ta có thể bỏ qua việc tính toán số lượng LP token và số lượng deposit và chỉ sử dụng giá trị mà người dùng đề xuất
 
@@ -139,7 +131,6 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
 
 Bạn đủ khả năng triển khai logic này, vì vậy tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -171,4 +162,3 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>

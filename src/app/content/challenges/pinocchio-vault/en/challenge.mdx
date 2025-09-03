@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # The Vault
 
@@ -13,36 +12,29 @@ In this challenge, we'll build a simple lamport vault that demonstrates how to w
 
 Before you begin, be sure Rust and Pinocchio are installed. Then in your terminal run:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_vault --lib --edition 2021
 cd blueshift_vault
 ```
-</Codeblock>
 
 Add Pinocchio:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system
 ```
-</Codeblock>
 
 Declare the crate types in `Cargo.toml` to generate deployment artifacts in `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 <ArticleSection name="Template" id="template" level="h2" />
 
 Let's start with the basic program structure. We'll implement everything in `lib.rs` since this is a straightforward program. Here's the initial template with the core components we'll need:
 
-<Codeblock lang="rust">
 ```rust
 #![no_std]
 
@@ -74,7 +66,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
@@ -86,7 +77,6 @@ The deposit instruction performs the following steps:
 
 First, let's define the account struct for deposit:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub owner: &'a AccountInfo,
@@ -124,7 +114,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Let's break down each account check:
 1. `owner`: Must be a signer since they need to authorize the transaction
@@ -136,7 +125,6 @@ Let's break down each account check:
 
 Now let's implement the instruction data struct:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositInstructionData {
     pub amount: u64,
@@ -161,13 +149,11 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Here we just check that the amount is different from zero.
 
 Finally, let's implement the deposit instruction:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -203,7 +189,6 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Withdraw" id="withdraw" level="h2" />
 
@@ -214,7 +199,6 @@ The withdraw instruction performs the following steps:
 
 First, let's define the account struct for withdraw:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub owner: &'a AccountInfo,
@@ -252,7 +236,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Let's break down each account check:
 1. `owner`: Must be a signer since they need to authorize the transaction
@@ -264,7 +247,6 @@ Let's break down each account check:
 
 Now let's implement the withdraw instruction:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -304,7 +286,6 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>
 
 The security of this withdrawal is guaranteed by two factors:
 1. The vault's PDA is derived using the owner's public key, ensuring only the original depositor can withdraw
@@ -316,11 +297,9 @@ You can now test your program against our unit tests and claim your NFTs!
 
 Start by building your program using the following command in your terminal:
 
-<Codeblock lang="terminal">
 ```bash
 cargo build-sbf
 ```
-</Codeblock>
 
 This generated a `.so` file directly in your `target/deploy` folder. 
 

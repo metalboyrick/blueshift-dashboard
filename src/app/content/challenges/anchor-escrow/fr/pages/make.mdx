@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
 
 <ArticleSection name="Créer" id="make" level="h2" />
 
@@ -23,7 +22,6 @@ Les comptes nécessaires dans ce contexte sont :
 
 Et avec toutes les contraintes, cela ressemblera à quelque chose comme ceci :
 
-<Codeblock lang="rust">
 ```rust
 #[instruction(seed: u64)]
 pub struct Make<'info> {
@@ -69,7 +67,6 @@ pub struct Make<'info> {
     pub system_program: Program<'info, System>,
 }
 ```
-</Codeblock>
 
 **Remarque** : Puisque nous ne fournissons qu'un seul `token_program`, pour s'assurer que le CPI n'échoue pas dans l'instruction `take` (dans laquelle nous effectuons un transfert avec les deux mints) nous devons vérifier que les deux mints sont la propriété du même programme.
 
@@ -79,7 +76,6 @@ Après avoir initialisé les Comptes, nous pouvons enfin gérer la logique en cr
 
 Nous commençons par remplir l'`Escrow` en utilisant l'aide `set_inner()`, puis nous déposons les tokens via le CPI `transfer` :
 
-<Codeblock lang="rust">
 ```rust
 impl<'info> Make<'info> {
     /// # Create the Escrow
@@ -116,7 +112,6 @@ impl<'info> Make<'info> {
     }
 }
 ```
-</Codeblock>
 
 Nous pouvons constater qu'Anchor nous aide de multiples façons :
 - `set_inner()`: garantit que tous les champs sont remplis.
@@ -124,7 +119,6 @@ Nous pouvons constater qu'Anchor nous aide de multiples façons :
 
 Et maintenant, nous pouvons créer une fonction `handler` où nous effectuons quelques vérifications avant d'utiliser les fonctions d'aide :
 
-<Codeblock lang="rust">
 ```rust
 pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
     // Validate the amount
@@ -140,7 +134,6 @@ pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Resu
     Ok(())
 }
   ```
-</Codeblock>
 
 Ici, nous ajoutons deux contrôles de validation. Un sur l'argument `amount` et un sur l'argument `receive` pour s'assurer que nous ne passons pas une valeur nulle pour l'un ou l'autre.
 

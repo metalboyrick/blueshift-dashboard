@@ -1,5 +1,4 @@
 import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Thử thách Assembly Slippage](/graphics/challenge-banners/assembly-slippage.png)
 
@@ -32,12 +31,10 @@ Chương trình của chúng ta sẽ cần:
 
 Chương trình sBPF nhận dữ liệu tài khoản dưới dạng các vùng nhớ liên tục. Các hằng số này xác định các độ lệch byte. Bằng cách giả định rằng chương trình của chúng ta chỉ nhận một tài khoản, và đó là một tài khoản token SPL, chúng ta có thể gán tĩnh các độ lệch này như sau:
 
-<Codeblock lang="sbpf">
 ```sbpf
 .equ TOKEN_ACCOUNT_BALANCE, 0x00a0
 .equ MINIMUM_BALANCE, 0x2918
 ```
-</Codeblock>
 
 - `TOKEN_ACCOUNT_BALANCE (0x00a0)`: trỏ đến trường số dư trong dữ liệu của SPL Token account. Các token account tuân theo một bố cụng chuẩn mà số dư (8 bytes, little-endian) nằm ở offset 160.
 
@@ -49,14 +46,12 @@ Không giống như những ngôn ngữ bậc cao khác trừu tượng hóa b�
 
 <ArticleSection name="Điểm đầu vào và Xác thực ban đầu" id="entrypoint-and-validations" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 .globl entrypoint
 entrypoint:
     ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
     ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
 ```
-</Codeblock>
 
 Mỗi chương trình sBPF bắt đầu bởi một ký hiệu toàn cục `.entrypoint`. Runtime Solana cung cấp các tài khoản và dữ liệu instruction thông qua thanh ghi `r1`.
 
@@ -68,11 +63,9 @@ Cả 2 hành động đều là zero-copy: chúng ta đang đọc trực tiếp 
 
 <ArticleSection name="Logic điều kiện và phân nhánh" id="conditional-logic-and-branching" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 jge r3, r4, end         // Skip to exit if balance is valid
 ```
-</Codeblock>
 
 
 Instruction `jge` (jump if greater or equal) (thoát ra nếu lớn hơn hoặc bằng)  compares `r3` (số lượng được yêu cầu) với `r4` (số dư trong tài khoản token). nếu `r3 >= r4`, chúng ta nhảy đến nhãn `end`; giống như một lệnh thoát sớm.
@@ -81,14 +74,12 @@ Nếu điều kiện không thỉa, thực thi tiếp tục đến đường d�
 
 <ArticleSection name="Xử lý lỗi và ghi log" id="error-handling-and-logging" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 lddw r1, e              // Load error message address
 lddw r2, 17             // Load length of error message  
 call sol_log_           // Log out error message
 lddw r0, 1              // Return error code 1
 ```
-</Codeblock>
 
 Khi kiểm tra thất bại, chúng ta ghi log một thông báo lỗi có thể đọc được trước khi kết thúc chương trình:
 - `lddw` tải vào các giá trị ngay lập tức, trong trường hợp này là địa chỉ của chuỗi thông báo lỗi của chúng ta, nằm trong phần `.rodata`, và độ dài của chuỗi thông báo lỗi (17 byte cho "Slippage exceeded").
@@ -97,12 +88,10 @@ Khi kiểm tra thất bại, chúng ta ghi log một thông báo lỗi có thể
 
 <ArticleSection name="Kết thúc chương trình" id="program-termination" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 end:
     exit
 ```
-</Codeblock>
 
 Instruction `exit` ngắt thực thi chương trình và trả quyền kiểm soát cho runtime Solana. Giá trị trong `r0` trở thành mã thoát của chương trình (0 nếu thành công, giá trị khác 0 nếu lỗi).
 
@@ -110,12 +99,10 @@ Không giống như những ngôn ngữ bậc cao khác có xử lý dọn dẹp
 
 ## Dữ liệu chỉ đọc
 
-<Codeblock lang="sbpf">
 ```sbpf
 .rodata
     e: .ascii "Slippage exceeded"
 ```
-</Codeblock>
 
 Phần `.rodata` (read-only data) (dữ liệu chỉ đọc) bao gồm chuỗi thông báo lỗi của chúng ta.
 

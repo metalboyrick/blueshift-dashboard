@@ -8,7 +8,6 @@ Instruction repay hoàn thành chu kỳ flash loan bằng cách đảm bảo cá
 
 Đầu tiên, chúng ta cần kiểm tra instruction đầu tiên trong transaction để trích xuất số tiền vay gốc:
 
-<Codeblock lang="rust">
 ```rust
 let ixs = ctx.accounts.instructions.to_account_info();
 
@@ -24,7 +23,6 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
     return Err(ProtocolError::MissingBorrowIx.into());
 }
 ```
-</Codeblock>
 
 > Chúng ta không kiểm tra rằng đây là `borrow_ix` thực tế bằng cách sử dụng program ID và discriminator vì không quan trọng nếu họ thực sự tạo một instruction "giả"; điều này an toàn cho protocol vì nó chỉ được trả tiền. Đồng thời, nếu chúng ta đã cho vay tiền, chúng ta biết rằng nó sẽ là instruction đầu tiên và `amount_borrowed` sẽ ở đó.
 
@@ -32,7 +30,6 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
 
 Tiếp theo, chúng ta tính phí protocol và chuyển tổng số tiền trở lại:
 
-<Codeblock lang="rust">
 ```rust
 // Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
 let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
@@ -48,6 +45,5 @@ transfer(
     amount_borrowed
 )?;
 ```
-</Codeblock>
 
 Phí của chúng ta được hardcode thành 500 basis point, và chúng ta thực hiện phép toán "checked" để đảm bảo rằng số tiền không bị overflow có thể bị khai thác với các số rất lớn. Ngoài ra, chúng ta chuyển đổi số tiền thành kiểu `u128` cho phép nhân để ngăn overflow trung gian, sau đó chúng ta safely cast trở lại kiểu `u64`

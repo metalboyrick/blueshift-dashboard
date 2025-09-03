@@ -10,7 +10,6 @@ L'instruction `repay` est la seconde partie de notre système de prêt flash. Gr
 
 Voici l'implémentation:
 
-<Codeblock lang="rust">
 ```rust
 pub struct RepayAccounts<'a> {
     pub borrower: &'a AccountInfo,
@@ -34,7 +33,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Le champ `token_accounts` est un tableau dynamique de comptes représentant les comptes de jetons du protocole associés au prêt de l'emprunteur.
 
@@ -46,7 +44,6 @@ Aucune donnée d'instruction n'est nécessaire puisque nous utilisons le champ `
 
 Nous commençons par *parser* les comptes dans la structure `RepayAccounts`.
 
-<Codeblock lang="rust">
 ```rust
 pub struct Repay<'a> {
     pub accounts: RepayAccounts<'a>,
@@ -63,11 +60,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
 }
 
 ```
-</Codeblock>
 
 Ensuite, nous vérifions si tous les prêts ont été remboursés. Pour ce faire, nous récupérons le nombre de prêts à partir du compte `loan` et les parcourons un par un. Pour chaque prêt, nous vérifions que `protocol_token_account` est correct et que son solde est supérieur ou égal au montant prêté.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Repay<'a> {
     pub const DISCRIMINATOR: &'a u8 = &1;
@@ -102,11 +97,9 @@ impl<'a> Repay<'a> {
     }
 }
 ```
-</Codeblock>
 
 Nous pouvons alors procéder à la clôture du compte `loan` et récupérer la rente puisqu'il n'est plus nécessaire :
 
-<Codeblock lang="rust">
 ```rust
 drop(loan_data);
 // Close the loan account and give back the lamports to the borrower
@@ -116,6 +109,5 @@ unsafe {
     self.accounts.loan.close_unchecked();
 }
 ```
-</Codeblock>
 
 > Comme vous pouvez le constater, à des fins d'optimisation et de conception, le remboursement n'est pas effectué dans cette instruction. Cela s'explique par le fait que le `borrower` peut choisir de rembourser le compte de jetons dans une autre instruction. Par exemple, lorsqu'il effectue un échange ou exécute une série de CPIs depuis son programme d'arbitrage.

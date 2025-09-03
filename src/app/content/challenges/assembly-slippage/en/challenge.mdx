@@ -1,5 +1,4 @@
 import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Assembly Slippage Challenge](/graphics/challenge-banners/assembly-slippage.png)
 
@@ -28,12 +27,10 @@ The program expects:
 
 sBPF programs receive account data as contiguous memory regions. These constants define byte offsets. By assuming that our program will only take in a single account, and it will be an SPL Token Account, it is possible to statically derive these offsets as:
 
-<Codeblock lang="sbpf">
 ```sbpf
 .equ TOKEN_ACCOUNT_BALANCE, 0x00a0
 .equ MINIMUM_BALANCE, 0x2918
 ```
-</Codeblock>
 
 - `TOKEN_ACCOUNT_BALANCE (0x00a0)`: points to the balance field in SPL Token account data. Token accounts follow a standard layout where the balance (8 bytes, little-endian) sits at offset 160.
 
@@ -45,14 +42,12 @@ Unlike high-level languages that abstract memory layout, assembly requires you t
 
 <ArticleSection name="Entrypoint and Initial Validation" id="entrypoint-and-validations" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 .globl entrypoint
 entrypoint:
     ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
     ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
 ```
-</Codeblock>
 
 Every sBPF program starts at a global `.entrypoint` symbol. The Solana runtime provides account and instruction data through register `r1`.
 
@@ -64,11 +59,9 @@ Both operations are zero-copy: we're reading directly from the account data with
 
 <ArticleSection name="Conditional Logic and Branching" id="conditional-logic-and-branching" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 jge r3, r4, end         // Skip to exit if balance is valid
 ```
-</Codeblock>
 
 
 The `jge` (jump if greater or equal) instruction compares `r3` (required amount) against `r4` (available balance). If `r3 >= r4`, we jump to the `end` label; just like an early return.
@@ -77,14 +70,12 @@ If the condition fails, execution continues to the error handling path. This bra
 
 <ArticleSection name="Error Handling and Logging" id="error-handling-and-logging" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 lddw r1, e              // Load error message address
 lddw r2, 17             // Load length of error message  
 call sol_log_           // Log out error message
 lddw r0, 1              // Return error code 1
 ```
-</Codeblock>
 
 When validation fails, we log a human-readable error before terminating:
 - `lddw` loads immediate values, in this case the address of our error string, that lives in the `.rodata` section, and its length (17 bytes for "Slippage exceeded").
@@ -93,12 +84,10 @@ When validation fails, we log a human-readable error before terminating:
 
 <ArticleSection name="Program Termination" id="program-termination" level="h2" />
 
-<Codeblock lang="sbpf">
 ```sbpf
 end:
     exit
 ```
-</Codeblock>
 
 The `exit` instruction terminates program execution and returns control to the Solana runtime. The value in `r0` becomes the program's exit code (0 for success, non-zero for errors).
 
@@ -106,12 +95,10 @@ Unlike high-level languages with automatic cleanup, assembly programs must expli
 
 ## Read-only Data
 
-<Codeblock lang="sbpf">
 ```sbpf
 .rodata
     e: .ascii "Slippage exceeded"
 ```
-</Codeblock>
 
 The `.rodata` (read-only data) section contains our error message string.
 

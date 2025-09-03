@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Vault lượng tử
 
@@ -17,30 +16,24 @@ Trong thử thách này, chúng ta sẽ cập nhật vault lamport đơn giản 
 
 Trước khi bắt đầu, hãy đảm bảo rằng Rust và Pinocchio đã được cài đặt. Sau đó, chạy lệnh sau trong terminal của bạn:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift-pinocchio-quantum-vault --lib --edition 2021
 cd blueshift-pinocchio-quantum-vault
 ```
-</Codeblock>
 
 Thêm `pinocchio`, `pinocchio-system`, và `solana-nostd-sha256` và `solana-winternitz`:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system solana-nostd-sha256 solana-winternitz
 ```
-</Codeblock>
 
 Khai báo crate types trong `Cargo.toml` để sinh ra các tập tin triển khai trong `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 Bạn đã sẵn sàng để viết chương trình vault lượng tử của mình.
 
@@ -62,7 +55,6 @@ src
 
 Entrypoint trong tệp `lib.rs` rất giống với những gì chúng tôi đã đề cập trong [Khóa học Giới thiệu về Pinocchio](/vi/courses/introduction-to-pinocchio).
 
-<Codeblock lang="rust">
 ```rust
 pub mod instructions;
 use instructions::*;
@@ -95,6 +87,5 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 Chúng tôi không cần bất kỳ thiết lập trạng thái nào ở đây, vì vậy chúng tôi chỉ cần chuyển sang việc tạo các instruction của mình.

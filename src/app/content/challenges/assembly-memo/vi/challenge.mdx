@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Thử thách Assembly Memo](/graphics/challenge-banners/assembly-memo.png)
 
@@ -15,7 +14,6 @@ Nếu bạn không quen thuôc với ngôn ngữ lập trình assembly, bạn n�
 
 Chương trình của chúng ta sẽ đơn giản là đặt địa chỉ bộ nhớ chính xác vào các register (thanh ghi) và sau đó gọi syscall `sol_log_`:
 
-<Codeblock lang="assembly">
 ```sbpf
 .equ NUM_ACCOUNTS, 0x00
 .equ DATA_LEN, 0x08
@@ -28,19 +26,16 @@ entrypoint:
   call sol_log_
   exit
 ```
-</Codeblock>
 
 <ArticleSection name="Độ lệch của bộ nhớ" id="memory-offsets" level="h2" />
 
 Chương trình bắt đầu với việc khai báo 3 hằng số định nghĩa bố cục bộ nhớ của dữ liệu instruction của chúng ta bằng `.equ`:
 
-<Codeblock lang="assembly">
 ```sbpf
 .equ NUM_ACCOUNTS, 0x00  ; Offset for number of accounts
 .equ DATA_LEN, 0x08      ; Offset for data length
 .equ DATA, 0x10          ; Offset for actual data
 ```
-</Codeblock>
 
 Những hằng số này đánh dấu các độ lệch byte tương ứng với con trỏ buffer vào trong thanh ghi `r1`:
 - `NUM_ACCOUNTS` (0x0000): trỏ đến số lượng tài khoản trong header của dữ liệu instruction để xác thực.
@@ -51,13 +46,11 @@ Không giống như những ngôn ngữ bậc cao khác trừu tượng hóa b�
 
 <ArticleSection name="Điểm đầu vào và Xác thực ban đầu" id="entrypoint-and-validations" level="h2" />
 
-<Codeblock lang="assembly">
 ```sbpf
 .globl entrypoint
 entrypoint:
   ldxdw r0, [r1+NUM_ACCOUNTS]   ; Load number of accounts into r0
 ```
-</Codeblock>
 
 Mỗi chương trình sBPF bắt đầu bởi một ký hiệu toàn cục `.entrypoint`. Runtime Solana cung cấp các tài khoản và dữ liệu instruction thông qua thanh ghi `r1`.
 
@@ -69,12 +62,10 @@ Instruction đầu tiên này sau đó tải số lượng accounts vào thành 
 
 Tiếp theo, chúng ta chuẩn bị các đối số cho syscall `sol_log_`:
 
-<Codeblock lang="assembly">
 ```sbpf
 ldxdw r2, [r1+DATA_LEN]   ; Load length of memo into r2
 add64  r1, DATA           ; Adjust r1 to point to memo bytes
 ```
-</Codeblock>
 
 Những instruction này đặt các đối số cho syscall `sol_log_`:
 - `r2` nhận độ dài của dữ liệu memo
@@ -82,12 +73,10 @@ Những instruction này đặt các đối số cho syscall `sol_log_`:
 
 Và sau đó chúng ta gọi syscall `sol_log_` và thoát chương trình:
 
-<Codeblock lang="assembly">
 ```sbpf
 call 16   ; Call sol_log_ (helper ID 16)
 exit      ; Return using r0 value
 ```
-</Codeblock>
 
 <ArticleSection name="Kết luận" id="conclusion" level="h2" />
 

@@ -1,5 +1,4 @@
 import { ArticleSection } from '../../../../../components/ArticleSection/ArticleSection';
-import { Codeblock } from '../../../../../components/Codeblock/Codeblock';
 
 <ArticleSection name="Take" id="take" level="h2" />
 
@@ -28,7 +27,6 @@ Các tài khoản cần thiết trong ngữ cảnh này là:
 
 Và với tất cả các ràng buộc, nó sẽ trông như thế này:
 
-<Codeblock lang="rust">
   ```rust
 #[derive(Accounts)]
 pub struct Take<'info> {
@@ -89,13 +87,11 @@ pub struct Take<'info> {
 }
 
 ```
-</Codeblock>
 
 ### Logic
 
 Trong logic, chúng ta bắt đầu bằng cách chuyển token từ `taker_ata_b` đến `maker_ata_b`; sau đó chúng ta chuyển sang chuyển token từ `vault` đến `taker_ata_a` trước khi đóng vault hiện đã trống như thế này:
 
-<Codeblock lang="rust">
 ```rust
 impl<'info> Take<'info> {
   fn transfer_to_maker(&mut self) -> Result<()> {
@@ -157,11 +153,9 @@ impl<'info> Take<'info> {
 }
 ```
 
-</Codeblock>
 
 Bây giờ chúng ta tạo hàm `handler` và lần này may mắn là chúng ta không cần thực hiện thêm kiểm tra nào nên nó sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub fn handler(ctx: Context<Take>) -> Result<()> {
     // Transfer Token B to Maker
@@ -175,4 +169,3 @@ pub fn handler(ctx: Context<Take>) -> Result<()> {
 }
 
 ```
-</Codeblock>

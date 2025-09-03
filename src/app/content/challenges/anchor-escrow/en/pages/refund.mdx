@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
 
 <ArticleSection name="Refund" id="refund" level="h2" />
 
@@ -33,7 +32,6 @@ Just know that once this executes, the offer is void, the vault is gone, and the
 
 Now that we created all the function in the different instruction, we can finally populate the `lib.rs` with all the function we created; like this:
 
-<Codeblock lang="rust">
 ```rust
 #[program]
 pub mod blueshift_anchor_escrow {
@@ -52,7 +50,6 @@ pub mod blueshift_anchor_escrow {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
 

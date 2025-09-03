@@ -22,7 +22,6 @@ Voici les comptes nécessaires pour ce contexte :
 
 Ici encore, je vous laisse le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub user: &'a AccountInfo,
@@ -44,7 +43,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
 
@@ -56,7 +54,6 @@ Voici les données d'instruction que nous devons transmettre :
 
 Nous allons gérer l'implémentation de `DepositInstructionData` de la même manière que l'initialisation. Je vous laisse donc le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositInstructionData {
     pub amount: u64,
@@ -73,7 +70,6 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Assurez-vous que tous les montants, telles que `amount`, `max_y` et `max_x`, sont supérieurs à zéro et que l'ordre n'a pas encore expiré à l'aide de la sysvar `Clock`.
 
@@ -86,7 +82,6 @@ Nous devons ensuite :
 - Vérifiez que `AmmState` est valide (donc si c'est égal à `AmmState::Initialized`)
 - Vérifiez que la dérivation de `vault_x` et `vault_y` correspond bien à des Comptes de Jetons Associés, comme ceci :
 
-<Codeblock lang="rust">
 ```rust
 // Check if the vault_x is valid
 let (vault_x, _) = find_program_address(
@@ -102,11 +97,9 @@ if vault_x.ne(self.accounts.vault_x.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```
-</Codeblock>
 
 - Désérialisez tous les comptes de jetons impliqués et utilisez les données qu'ils contiennent pour calculer le montant des dépôts à l'aide du crate `constant-product-curve` et vérifiez le slippage comme ceci :
 
-<Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
@@ -135,7 +128,6 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
-</Codeblock>
 
 > S'il s'agit du premier dépôt, nous pouvons ignorer le calcul des jetons LP et des dépôts et simplement utiliser la valeur suggérée par l'utilisateur
 
@@ -143,7 +135,6 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
 
 Vous devriez être suffisamment compétent pour le faire vous-même, je vous laisse donc le soin de l'implémenter :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -175,4 +166,3 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>

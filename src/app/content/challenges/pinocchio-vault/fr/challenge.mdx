@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Pinocchio Vault Challenge](/graphics/challenge-banners/pinocchio-vault.png)
 
@@ -13,36 +12,29 @@ Dans ce challenge, nous allons créer un vault à lamport simple qui montre comm
 
 Avant de commencer, assurez-vous que Rust et Pinocchio sont installés. Exécutez ensuite dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_vault --lib --edition 2021
 cd blueshift_vault
 ```
-</Codeblock>
 
 Ajoutez Pinocchio:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system
 ```
-</Codeblock>
 
 Déclarez les types de crate dans `Cargo.toml` pour générer les artefacts de déploiement dans `target/deploy` :
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 <ArticleSection name="Modèle" id="template" level="h2" />
 
 Commençons par la structure de base du programme. Nous allons tout implémenter dans `lib.rs` puisqu'il s'agit d'un programme simple. Voici le modèle initial avec les composants clés dont nous aurons besoin :
 
-<Codeblock lang="rust">
 ```rust
 #![no_std]
 
@@ -74,7 +66,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
@@ -86,7 +77,6 @@ L'instruction `deposit` effectue les étapes suivantes :
 
 Tout d'abord, définissons la structure de compte pour `deposit` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub owner: &'a AccountInfo,
@@ -124,7 +114,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Détaillons chaque vérification de compte :
 1. `owner`: Doit être signataire car il doit autoriser la transaction
@@ -136,7 +125,6 @@ Détaillons chaque vérification de compte :
 
 Implémentons maintenant la structure des données d'instruction :
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositInstructionData {
     pub amount: u64,
@@ -161,13 +149,11 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Ici, nous vérifions uniquement que le montant est différent de zéro.
 
 Enfin, implémentons l'instruction `deposit` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -203,7 +189,6 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Withdraw" id="withdraw" level="h2" />
 
@@ -214,7 +199,6 @@ L'instruction `withdraw` effectue les étapes suivantes :
 
 Tout d'abord, définissons la structure de compte pour `withdraw` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub owner: &'a AccountInfo,
@@ -252,7 +236,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Détaillons chaque vérification de compte :
 1. `owner`: Doit être signataire car il doit autoriser la transaction
@@ -264,7 +247,6 @@ Détaillons chaque vérification de compte :
 
 Implémentons maintenant l'instruction `withdraw` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -304,7 +286,6 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>
 
 La sécurité de ce retrait est garantie par deux mesures :
 1. Le PDA du vault est dérivé à partir de la clé publique du propriétaire, garantissant ainsi que seul le déposant initial peut effectuer des retraits
@@ -316,11 +297,9 @@ Vous pouvez maintenant tester votre programme à l'aide de nos tests unitaires e
 
 Commencez par compiler votre programme en utilisant la commande suivante dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 cargo build-sbf
 ```
-</Codeblock>
 
 Cela générera un fichier `.so` directement dans votre dossier `target/deploy`. 
 

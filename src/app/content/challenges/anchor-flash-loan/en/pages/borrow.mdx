@@ -8,7 +8,6 @@ The borrow instruction is the first half of our flash loan system. It performs t
 
 First, we implement the actual transfer of funds with proper validation:
 
-<Codeblock lang="rust">
 ```rust
 // Make sure we're not sending in an invalid amount that can crash our Protocol
 require!(borrow_amount > 0, ProtocolError::InvalidAmount);
@@ -34,7 +33,6 @@ transfer(
     borrow_amount
 )?;
 ```
-</Codeblock>
 
 This code ensures we're transferring a valid amount and uses the protocol's Program Derived Address (PDA) to authorize the transfer.
 
@@ -45,7 +43,6 @@ Now comes the security-critical part: using instruction introspection to verify 
 We start by accessing the `instructions` sysvar, which contains information about all instructions in the current transaction:
 
 
-<Codeblock lang="rust">
 ```rust
 /*
     Instruction Introspection
@@ -56,7 +53,6 @@ We start by accessing the `instructions` sysvar, which contains information abou
 
 let ixs = ctx.accounts.instructions.to_account_info();
 ```
-</Codeblock>
 
 Finally, we perform the most critical check: ensuring that the last instruction in the transaction is a valid repayment instruction:
 - We start by checking the position of the borrow instruction to make sure it's the only one
@@ -64,7 +60,6 @@ Finally, we perform the most critical check: ensuring that the last instruction 
 - Then we verify that it's the repay instruction by verifying the program ID and the discriminator of the instruction
 - We finish by verifying that the ATAs passed in the repay instruction are the same that we're passing in our `Borrow` instruction
 
-<Codeblock lang="rust">
 ```rust
 /*
     Repay Instruction Check
@@ -95,4 +90,3 @@ if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
     return Err(ProtocolError::MissingRepayIx.into());
 }
 ```
-</Codeblock>

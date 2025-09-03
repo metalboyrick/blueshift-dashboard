@@ -23,7 +23,6 @@ Voici les comptes dont le contexte a besoin :
 
 Et nous effectuons ces vérifications :
 
-<Codeblock lang="rust">
 ```rust
 pub struct TakeAccounts<'a> {
   pub taker: &'a AccountInfo,
@@ -72,7 +71,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Données d'Instruction" id="instruction-data" level="h2" />
 
@@ -84,7 +82,6 @@ Tout d'abord, après avoir désérialisé les `accounts` dans l'implémentation 
 
 Pour cette étape, nous nous assurons que le compte de Jeton A du preneur et que le compte de Jeton B du créateur sont initialisés en utilisant `AssociatedTokenAccount::init_if_needed` puisque nous ne sommes pas sûrs qu'ils existent déjà.
 
-<Codeblock lang="rust">
 ```rust
 pub struct Take<'a> {
   pub accounts: TakeAccounts<'a>,
@@ -121,14 +118,12 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
   }
 }
 ```
-</Codeblock>
 
 Nous pouvons maintenant nous concentrer sur la logique elle-même :
 - Transférer les jetons de `taker_ata_b` vers `maker_ata_b`.
 - Transférer les jetons du `vault` vers `taker_ata_a`.
 - Fermer le `vault` désormais vide et récupérer la rente du compte.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Take<'a> {
   pub const DISCRIMINATOR: &'a u8 = &1;
@@ -186,4 +181,3 @@ impl<'a> Take<'a> {
   }
 }
 ```
-</Codeblock>

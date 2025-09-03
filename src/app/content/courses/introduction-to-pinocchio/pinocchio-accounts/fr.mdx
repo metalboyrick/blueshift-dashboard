@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 # Comptes
 
@@ -89,7 +88,6 @@ Voyons maintenant comment appliquer cela à nos contrôles de sécurité des com
 
 Comme nous l'avons vu dans les exemples précédents, les vérifications `SystemAccount` et `SignerAccount` sont simples et ne nécessitent aucune validation supplémentaire. Nous allons donc ajouter ce qui suit à notre fichier `helper.rs` :
 
-<Codeblock lang="rust">
 ```rust
 pub trait AccountCheck {
     fn check(account: &AccountInfo) -> Result<(), ProgramError>;
@@ -118,7 +116,6 @@ impl AccountCheck for SystemAccount {
     }
 }
 ```
-</Codeblock>
 
 Ici, nous vérifions simplement si le compte est un signataire ou s'il appartient au Programme Système. Remarquez que les deux structures fournissent la même méthode de vérification ce qui nous donne l'interface commune dont nous avons parlé.
 
@@ -126,7 +123,6 @@ Ici, nous vérifions simplement si le compte est un signataire ou s'il appartien
 
 Les choses deviennent maintenant plus intéressantes. Nous commençons par le trait habituel `AccountCheck` mais nous ajoutons également d'autres traits spécifiques afin de fournir des fonctions d'aide supplémentaires qui ressemblent aux macros Anchor telles que `init` et `init_if_needed`.
 
-<Codeblock lang="rust">
 ```rust
 pub struct MintAccount;
 
@@ -144,11 +140,9 @@ impl AccountCheck for MintAccount {
     }
 }
 ```
-</Codeblock>
 
 Pour les fonctionnalités `init` et `init_if_needed`, nous créons un autre trait appelé `MintInit` que nous utilisons spécifiquement à cet effet en raison des champs uniques requis. Nous utilisons ensuite les CPIs `CreateAccount` et `InitializeMint2` pour initialiser le compte de `Mint` :
 
-<Codeblock lang="rust">
 ```rust
 pub trait MintInit {
     fn init(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult;
@@ -185,12 +179,10 @@ impl MintInit for MintAccount {
     }
 }
 ```
-</Codeblock>
 
 
 Nous faisons ensuite exactement la même chose pour le `TokenAccount` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct TokenAccount;
 
@@ -243,7 +235,6 @@ impl AccountInit for TokenAccount {
     }
 }
 ```
-</Codeblock>
 
 ### Token2022
 
@@ -257,7 +248,6 @@ Pour Token2022, nous pouvons distinguer un `Mint` d'un `TokenAccount` de deux ma
 
 Cela conduit à des contrôles de validation modifiés :
 
-<Codeblock lang="rust">
 ```rust
 // TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
 pub const TOKEN_2022_PROGRAM_ID: [u8; 32] = [
@@ -373,13 +363,11 @@ impl AccountInit for TokenAccount2022Account {
     }
 }
 ```
-</Codeblock>
 
 ### Interface de Jeton
 
 Comme nous voulons faciliter l'utilisation des Programmes Token2022 et Legacy Token sans avoir à faire de distinction entre eux, nous avons créé une fonction d'aide qui suit le même principe de base :
 
-<Codeblock lang="rust">
 ```rust
 pub struct MintInterface;
 
@@ -441,13 +429,11 @@ impl AccountCheck for TokenAccountInterface {
     }
 }
 ```
-</Codeblock>
 
 ### Compte de Jetons Associé
 
 Nous pouvons créer des contrôles pour le Programme de Jetons Associés. Ces vérifications sont très similaires aux vérifications du Programme de Jetons mais elles incluent une vérification de dérivation supplémentaire afin de s'assurer que le compte est correctement dérivé.
 
-<Codeblock lang="rust">
 ```rust
 pub struct AssociatedTokenAccount;
 
@@ -494,7 +480,6 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Comptes de Programme" id="program-accounts" level="h2" />
 
@@ -504,7 +489,6 @@ Vous remarquerez peut-être quelque chose d'intéressant dans notre implémentat
 
 Une attaque par réinitialisation se produit lorsqu'un attaquant tente de réutiliser un compte fermé en le réinitialisant avec des données malveillantes. En définissant le premier octet sur 255 et en réduisant le compte à une taille proche de zéro, nous rendons impossible toute confusion future entre ce compte et un type de compte valide. Il s'agit d'un pattern de sécurité courant dans les programmes Solana.
 
-<Codeblock lang="rust">
   ```rust
   pub struct ProgramAccount;
 
@@ -575,7 +559,6 @@ Une attaque par réinitialisation se produit lorsqu'un attaquant tente de réuti
       }
   }
   ```
-</Codeblock>
 
 ### Optimisation de l'Accès aux Données du Compte
 

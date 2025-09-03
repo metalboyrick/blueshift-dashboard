@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
 
@@ -22,21 +21,17 @@ Dans ce challenge, nous allons mettre en œuvre ce concept à travers trois inst
 
 Commençons par créer un nouvel espace de travail Anchor :
 
-<Codeblock lang="terminal">
 ```bash
 anchor init blueshift_anchor_escrow
 cd blueshift_anchor_escrow
 ```
-</Codeblock>
 
 Nous continuons ensuite en activant `init-if-needed` sur la crate `anchor-lang` et en ajoutant la crate `anchor-spl` :
 
-<Codeblock lang="terminal">
 ```bash
 cargo add anchor-lang --features init-if-needed
 cargo add anchor-spl
 ```
-</Codeblock>
 
 Puisque nous utilisons `anchor-spl`, nous devons aussi mettre à jour le fichier `Cargo.toml` pour inclure `anchor-spl/idl-build` dans la fonctionnalité `idl-build`.
 
@@ -74,7 +69,6 @@ src
 
 Le fichier `lib.rs` ressemblera donc à peu près à ceci :
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -105,7 +99,6 @@ pub mod blueshift_anchor_escrow {
     }
 }
 ```
-</Codeblock>
 
 Comme vous le voyez, nous avons implémenté un discriminateur personnalisé pour les instructions. Veillez donc à utiliser Anchor version 0.31.0 ou plus récente.
 
@@ -113,7 +106,6 @@ Comme vous le voyez, nous avons implémenté un discriminateur personnalisé pou
 
 Nous allons nous rendre dans le fichier `state.rs` où se trouvent toutes les données de notre `Escrow`. Pour ce faire, nous allons lui donner un discriminateur personnalisé et envelopper la structure dans la macro `#[account]` comme ceci :
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -128,7 +120,6 @@ use anchor_lang::prelude::*;
     pub bump: u8,
 }
   ```
-</Codeblock>
 
 Rôle de chaque champ :
 - **seed**: Nombre aléatoire utilisé lors du processus de dérivation des seeds pour qu'un créateur puisse ouvrir plusieurs escrows avec la même paire de jetons. Il est stocké on-chain pour que nous puissions toujours retrouver le PDA.
@@ -145,7 +136,6 @@ Nous terminons en ajoutant la macro `#[derive(InitSpace)]` afin de ne pas avoir 
 
 Nous pouvons maintenant passer au fichier `errors.rs` où nous allons ajouter quelques erreurs que nous utiliserons plus tard : 
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::prelude::*;
 
@@ -161,6 +151,5 @@ pub enum EscrowError {
     InvalidMintB,
 }
 ```
-</Codeblock>
 
 Chaque enum correspond à un message clair et lisible par l'homme qu'Anchor affichera chaque fois qu'une contrainte ou un `require !()` échouera.

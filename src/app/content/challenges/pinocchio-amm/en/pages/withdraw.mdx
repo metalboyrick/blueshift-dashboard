@@ -22,7 +22,6 @@ Below are the accounts required for this context:
 
 Here, again, I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub user: &'a AccountInfo,
@@ -44,7 +43,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
 
@@ -56,7 +54,6 @@ Here's the instruction data we need to pass in:
 
 We're going to handle the implementation for the `WithdrawInstructionData` same as initialization. So I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawInstructionData {
     pub amount: u64,
@@ -73,7 +70,6 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Make sure that any of the amount, like `amount`, `min_y` and `min_x` are greater than zero and that the order has not expired yet using the `Clock` sysvar.
 
@@ -86,7 +82,6 @@ We then need to:
 - Verify that the `AmmState` is valid (so if it's not equal to `AmmState::Disabled`).
 - Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts.
 - Deserialize all the token accounts involved and use the data inside of them to calculate the amount to withdraw using the `constant-product-curve` crate and checking for slippage like this:
-<Codeblock lang="rust">
 ```rust
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
 let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
@@ -113,14 +108,12 @@ if !(x >= self.instruction_data.min_x && y >= self.instruction_data.min_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
-</Codeblock>
 - Transfer the amounts from the vaults to the token accounts of the user and burn the appropriate amount of LP tokens from the user token account
 
 > The `authority` of `vault_x` and `vault_y` is the `config` account
 
 You should be proficient enough to do this on your own, so I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -152,4 +145,3 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>

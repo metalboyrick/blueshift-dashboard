@@ -22,7 +22,6 @@ Below are the accounts required for this context:
 
 Here, again, I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub user: &'a AccountInfo,
@@ -44,7 +43,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
 
@@ -56,7 +54,6 @@ Here's the instruction data we need to pass in:
 
 We're going to handle the implementation for the `DepositInstructionData` same as initialization. So I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositInstructionData {
     pub amount: u64,
@@ -73,7 +70,6 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Make sure that any of the amount, like `amount`, `max_y` and `max_x` are greater than zero and that the order has not expired yet using the `Clock` sysvar.
 
@@ -85,7 +81,6 @@ We then need to:
 - Load the `Config` account to grab all the data inside of it. We can do so using the `Config::load()` helper.
 - Verify that the `AmmState` is valid (so if it's equal to `AmmState::Initialized`)
 - Check the derivation of `vault_x` and `vault_y` to be Associated Token Accounts like this:
-<Codeblock lang="rust">
 ```rust
 // Check if the vault_x is valid
 let (vault_x, _) = find_program_address(
@@ -101,9 +96,7 @@ if vault_x.ne(self.accounts.vault_x.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```
-</Codeblock>
 - Deserialize all the token accounts involved and use the data inside of them to calculate the amount to deposits using the `constant-product-curve` crate and checking for slippage like this:
-<Codeblock lang="rust">
 ```rust
 // Deserialize the token accounts
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
@@ -132,7 +125,6 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
-</Codeblock>
 
 > If it's the first deposit, we can skip the calculation of LP tokens and deposits and just go with the value that the user suggest
 
@@ -140,7 +132,6 @@ if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
 
 You should be proficient enough to this on your own, so I’ll leave the implementation to you:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -172,4 +163,3 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>

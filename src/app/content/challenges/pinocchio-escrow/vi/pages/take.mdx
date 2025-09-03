@@ -23,7 +23,6 @@ Dưới đây là các tài khoản mà context cần:
 
 Và chúng ta thực hiện các kiểm tra này trên nó:
 
-<Codeblock lang="rust">
 ```rust
 pub struct TakeAccounts<'a> {
   pub taker: &'a AccountInfo,
@@ -72,7 +71,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
   }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
@@ -84,7 +82,6 @@ Chúng ta bắt đầu bằng cách khởi tạo các tài khoản cần thiết
 
 Đối với bước này, chúng ta đảm bảo cả tài khoản Token A của taker và tài khoản Token B của maker đều được khởi tạo bằng cách sử dụng `AssociatedTokenAccount::init_if_needed` vì chúng ta không chắc chắn rằng chúng đã tồn tại
 
-<Codeblock lang="rust">
 ```rust
 pub struct Take<'a> {
   pub accounts: TakeAccounts<'a>,
@@ -121,14 +118,12 @@ impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
   }
 }
 ```
-</Codeblock>
 
 Bây giờ chúng ta có thể tập trung vào logic chính sẽ:
 - Chuyển token từ `taker_ata_b` đến `maker_ata_b`.
 - Chuyển token từ `vault` đến `taker_ata_a`.
 - Đóng `vault` hiện đã trống và rút tiền thuê từ tài khoản.
 
-<Codeblock lang="rust">
 ```rust
 impl<'a> Take<'a> {
   pub const DISCRIMINATOR: &'a u8 = &1;
@@ -186,4 +181,3 @@ impl<'a> Take<'a> {
   }
 }
 ```
-</Codeblock>

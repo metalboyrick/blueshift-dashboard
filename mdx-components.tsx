@@ -12,11 +12,11 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
     ...components,
     ArticleSection,
-    Codeblock,
     IDE,
     RequirementList,
     Requirement,
     AnchorDiscriminatorCalculator,
+    pre: Codeblock,
     blockquote: ({ children }) => (
       <blockquote className="bg-background-primary rounded-xl flex items-start gap-x-2 py-4 px-6">
         <Icon

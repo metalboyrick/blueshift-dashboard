@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Pinocchio Secp256r1 Vault Challenge](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
 
@@ -17,36 +16,29 @@ In this challenge, we'll update the simple lamport vault that we built in the [P
 
 Avant de commencer, assurez-vous que Rust et Pinocchio sont installés. Exécutez ensuite dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_secp256r1_vault --lib --edition 2021
 cd blueshift_secp256r1_vault
 ```
-</Codeblock>
 
 Ajoutez Pinocchio et la crate `Secp256r1` compatible avec Pinocchio
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
 ```
-</Codeblock>
 
 Déclarez les types de crate dans `Cargo.toml` pour générer les artefacts de déploiement dans `target/deploy` :
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 <ArticleSection name="Modèle" id="template" level="h2" />
 
 Commençons par la structure de base du programme. Nous allons tout implémenter dans `lib.rs` puisqu'il s'agit d'un programme simple. Voici le modèle initial avec les composants clés dont nous aurons besoin :
 
-<Codeblock lang="rust">
 ```rust
 #![no_std]
 
@@ -78,7 +70,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
@@ -94,7 +85,6 @@ La principale différence entre un vault normal et un vault Secp256r1 réside da
 
 La structure de compte pour `deposit` ressemblera donc à ceci :
 
-<Codeblock lang="rust">
 ```rust
 pub struct DepositAccounts<'a> {
     pub payer: &'a AccountInfo,
@@ -127,7 +117,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Détaillons chaque vérification de compte :
 1. `payer`: Il doit être un signataire car il doit autoriser le transfert de lamports
@@ -142,7 +131,6 @@ Puisqu'une partie des seeds se trouve dans `instruction_data` et que nous n'y av
 
 Implémentons maintenant la structure des données d'instruction :
 
-<Codeblock lang="rust">
 ```rust
 #[repr(C, packed)]
 pub struct DepositInstructionData {
@@ -167,7 +155,6 @@ impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Nous désérialisons les données d'instruction dans une structure `DepositInstructionData` qui contient :
 - `pubkey`: La clé publique Secp256r1 de l'utilisateur effectuant le dépôt
@@ -177,7 +164,6 @@ Bien que *unwrap* soit généralement déconseillé en production, dans ce cas p
 
 Enfin, implémentons l'instruction `deposit` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Deposit<'a> {
     pub accounts: DepositAccounts<'a>,
@@ -224,7 +210,6 @@ impl<'a> Deposit<'a> {
     }
 }
 ```
-</Codeblock>
 
 Comme mentionné précédemment, nous devons vérifier que le PDA du vault est dérivé à partir des bonnes seeds. Dans ce vault basé sur Secp256r1, nous utilisons `Secp256r1Pubkey` comme seed à la place de la clé publique du propriétaire. Il s'agit d'une mesure de sécurité cruciale qui garantit que seul le détenteur de la clé Secp256r1 correspondante peut accéder au vault.
 
@@ -245,7 +230,6 @@ L'instruction `withdraw` effectue les étapes suivantes :
 
 Tout d'abord, définissons la structure de compte pour `withdraw` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub payer: &'a AccountInfo,
@@ -277,11 +261,9 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 Implémentons maintenant la structure des données d'instruction :
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawInstructionData {
     pub bump: [u8;1]
@@ -297,13 +279,11 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
     }
 }
 ```
-</Codeblock>
 
 Comme vous pouvez le constater, à des fins d'optimisation, nous avons transmis le bump en tant que données d'instruction afin de ne pas avoir à le dériver dans `process()` qui est déjà "lourd" en raison de toutes les autres vérifications nécessaires.
 
 Enfin, implémentons l'instruction `withdraw` :
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -381,7 +361,6 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>
 
 Le processus de retrait comprend plusieurs vérifications de sécurité afin de garantir la légitimité de la transaction. Voyons comment nous vérifions la signature Secp256r1 et comment nous nous protégeons contre de potentielles attaques :
 
@@ -445,11 +424,9 @@ Vous pouvez maintenant tester votre programme à l'aide de nos tests unitaires e
 
 Commencez par compiler votre programme en utilisant la commande suivante dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 cargo build-sbf
 ```
-</Codeblock>
 
 Cela générera un fichier `.so` directement dans votre dossier `target/deploy`. 
 

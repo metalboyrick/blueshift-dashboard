@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../components/Codeblock/Codeblock";
 
 ![Anchor Vault Challenge](/graphics/challenge-banners/anchor-vault.png)
 
@@ -13,11 +12,9 @@ Dans ce challenge, nous allons créer un vault à lamport simple qui montre comm
 
 Avant de commencer, assurez-vous que Rust et Anchor sont installés (voir la [documentation officielle](https://www.anchor-lang.com/docs/installation) si vous avez besoin d'un rappel). Ensuite, exécutez dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 anchor init blueshift_anchor_vault
 ```
-</Codeblock>
 
 Nous n'avons pas besoin de crate supplémentaire pour ce challenge donc vous pouvez maintenant ouvrir le dossier précédemment créé et commencer à coder !
 
@@ -25,7 +22,6 @@ Nous n'avons pas besoin de crate supplémentaire pour ce challenge donc vous pou
 
 Commençons par la structure de base du programme. Nous allons tout implémenter dans `lib.rs` puisque c'est un programme simple. Voici le modèle de départ avec les composants essentiels dont nous aurons besoin :
 
-<Codeblock lang="rust">
 ```rust
 declare_id!("22222222222222222222222222222222222222222222");
 
@@ -62,7 +58,6 @@ pub enum VaultError {
     // error enum
 }
 ```
-</Codeblock>
 
 **Remarque** : n'oubliez pas de changer l'ID du programme en `22222222222222222222222222222222222222222222` puisque nous l'utilisons pour tester votre programme.
 
@@ -77,7 +72,6 @@ La structure de compte `VaultAction` devra avoir :
 
 Voici comment nous définissons la structure du compte :
 
-<Codeblock lang="rust">
 ```rust
 #[derive(Accounts)]
 pub struct VaultAction<'info> {
@@ -92,7 +86,6 @@ pub struct VaultAction<'info> {
     pub system_program: Program<'info, System>,
 }
 ```
-</Codeblock>
 
 Détaillons les contraintes de chaque compte :
 
@@ -110,7 +103,6 @@ Nous n'avons pas besoin de beaucoup d'erreurs pour ce petit programme, nous allo
 
 Cela ressemblera à quelque chose comme ça : 
 
-<Codeblock lang="rust">
 ```rust
 #[error_code]
 pub enum VaultError {
@@ -120,7 +112,6 @@ pub enum VaultError {
     InvalidAmount,
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Dépôt" id="deposit" level="h2" />
 
@@ -131,7 +122,6 @@ L'instruction de dépôt effectue les étapes suivantes :
 
 Commençons par implémenter ces vérifications :
 
-<Codeblock lang="rust">
 ```rust
 // Check if vault is empty
 require_eq!(ctx.accounts.vault.lamports(), 0, VaultError::VaultAlreadyExists);
@@ -139,7 +129,6 @@ require_eq!(ctx.accounts.vault.lamports(), 0, VaultError::VaultAlreadyExists);
 // Ensure amount exceeds rent-exempt minimum
 require_gt!(amount, Rent::get()?.minimum_balance(0), VaultError::InvalidAmount);
 ```
-</Codeblock>
 
 Les deux macros `require` agissent comme des gardes personnalisés :
 - `require_eq!` confirme que le vault est vide (ce qui évite les doubles dépôts).
@@ -147,7 +136,6 @@ Les deux macros `require` agissent comme des gardes personnalisés :
 
 Une fois ces vérifications effectuées, la fonction d'aide Anchor du Programme Système appelle le CPI `Transfer` de la manière suivante :
 
-<Codeblock lang="rust">
 ```rust
 use anchor_lang::system_program::{transfer, Transfer};
 
@@ -162,7 +150,6 @@ transfer(
     amount,
 )?;
 ```
-</Codeblock>
 
 <ArticleSection name="Retrait" id="withdraw" level="h2" />
 
@@ -173,16 +160,13 @@ L'instruction de retrait effectue les étapes suivantes :
 
 Tout d'abord, vérifions si le vault contient des lamports à retirer :
 
-<Codeblock lang="rust">
 ```rust
 // Check if vault has any lamports
 require_neq!(ctx.accounts.vault.lamports(), 0, VaultError::InvalidAmount);
 ```
-</Codeblock>
 
 Ensuite, nous devons créer les seeds du signataire du PDA et effectuer le transfert :
 
-<Codeblock lang="rust">
 ```rust
 // Create PDA signer seeds
 let signer_key = ctx.accounts.signer.key();
@@ -201,7 +185,6 @@ transfer(
     ctx.accounts.vault.lamports()
 )?;
 ```
-</Codeblock>
 
 La sécurité de ce retrait est garantie par deux moyens :
 1. Le PDA du vault est dérivé à l'aide de la clé publique du signataire, ce qui garantit que seul le déposant initial peut effectuer un retrait
@@ -213,11 +196,9 @@ Vous pouvez maintenant tester votre programme à l'aide de nos tests unitaires e
 
 Commencez par compiler votre programme en utilisant la commande suivante dans votre terminal :
 
-<Codeblock lang="terminal">
 ```bash
 anchor build
 ```
-</Codeblock>
 
 Cela générera un fichier `.so` directement dans votre dossier `target/deploy`. 
 

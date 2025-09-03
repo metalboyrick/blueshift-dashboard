@@ -13,7 +13,6 @@ Instruction yêu cầu 2 account:
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct CloseVaultAccounts<'a> {
     pub vault: &'a AccountInfo,
@@ -33,7 +32,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
 }
 
 ```
-</Codeblock>
 
 > Việc xác minh account được xử lý bởi runtime. Nếu các account không đáp ứng yêu cầu (khả năng có thể sửa đổi), instruction sẽ tự động thất bại.
 
@@ -45,7 +43,6 @@ Hai phần dữ liệu là cần thiết:
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct CloseVaultInstructionData {
     pub signature: WinternitzSignature,
@@ -72,7 +69,6 @@ impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Logic của instruction" id="instruction-logic" level="h2" />
 
@@ -90,7 +86,6 @@ Quá trình xác minh tuân theo các bước sau:
 
 Mã sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub struct CloseVault<'a> {
     pub accounts: CloseVaultAccounts<'a>,
@@ -133,6 +128,5 @@ impl<'a> CloseVault<'a> {
     }
 }
 ```
-</Codeblock>
 
 > Việc tái tạo thông điệp ngăn chặn các cuộc tấn công phát lại chữ ký, nơi các tác nhân độc hại thay thế các tài khoản người nhận khác nhau trong khi MEV-ing các chữ ký hợp lệ được ghi lại từ mempool.

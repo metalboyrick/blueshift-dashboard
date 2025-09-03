@@ -21,7 +21,6 @@ Dưới đây là các tài khoản cần thiết cho context này:
 
 Ở đây, một lần nữa, tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawAccounts<'a> {
     pub user: &'a AccountInfo,
@@ -43,7 +42,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="Dữ liệu cho Instruction" id="instruction-data" level="h2" />
 
@@ -55,7 +53,6 @@ impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
 
 Chúng ta sẽ xử lý việc triển khai cho `WithdrawInstructionData` như khởi tạo. Vì vậy tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct WithdrawInstructionData {
     pub amount: u64,
@@ -72,7 +69,6 @@ impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
     }
 }
 ```
-</Codeblock>
 
 > Đảm bảo rằng bất kỳ số lượng nào, như `amount`, `min_y` và `min_x` đều lớn hơn zero và lệnh chưa hết hạn bằng cách sử dụng sysvar `Clock`.
 
@@ -85,7 +81,6 @@ Sau đó chúng ta cần:
 - Xác minh rằng `AmmState` hợp lệ (vì vậy nếu nó không bằng `AmmState::Disabled`).
 - Kiểm tra việc tạo `vault_x` và `vault_y` để trở thành Associated Token Accounts.
 - Deserialize tất cả các tài khoản token liên quan và sử dụng dữ liệu bên trong chúng để tính toán số lượng cần rút bằng cách sử dụng crate `constant-product-curve` và kiểm tra slippage như thế này:
-<Codeblock lang="rust">
 ```rust
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
 let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
@@ -112,14 +107,12 @@ if !(x <= self.instruction_data.min_x && y <= self.instruction_data.min_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
-</Codeblock>
 - Chuyển số lượng từ các vault đến tài khoản token của người dùng và burn số lượng LP token thích hợp từ tài khoản token của người dùng
 
 > `authority` của `vault_x` và `vault_y` là tài khoản `config`
 
 Bạn đủ khả năng triển khai logic này, vì vậy tôi sẽ để việc triển khai cho bạn:
 
-<Codeblock lang="rust">
 ```rust
 pub struct Withdraw<'a> {
     pub accounts: WithdrawAccounts<'a>,
@@ -151,4 +144,3 @@ impl<'a> Withdraw<'a> {
     }
 }
 ```
-</Codeblock>

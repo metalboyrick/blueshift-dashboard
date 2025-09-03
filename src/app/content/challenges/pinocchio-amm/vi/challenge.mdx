@@ -22,31 +22,25 @@ Trong thử thách này, bạn sẽ triển khai một AMM đơn giản với b�
 
 Hãy bắt đầu bằng cách tạo một môi trường Rust mới:
 
-<Codeblock lang="terminal">
 ```bash
 # create workspace
 cargo new blueshift_native_amm --lib --edition 2021
 cd blueshift_native_amm
 ```
-</Codeblock>
 
 Thêm `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` và `constant-product-curve` được tạo bởi [Dean](https://x.com/deanmlittle) để xử lý tất cả tính toán cho AMM của chúng ta:
 
-<Codeblock lang="terminal">
 ```bash
 cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
 cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
 ```
-</Codeblock>
 
 Khai báo các crate type trong `Cargo.toml` để tạo deployment artifact trong `target/deploy`:
 
-<Codeblock lang="toml">
 ```toml
 [lib]
 crate-type = ["lib", "cdylib"]
 ```
-</Codeblock>
 
 Bây giờ bạn đã sẵn sàng để viết chương trình AMM của mình.
 
@@ -103,7 +97,6 @@ src
 
 Entrypoint, nằm trong file `lib.rs` sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 use pinocchio::{
     account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
@@ -139,7 +132,6 @@ fn process_instruction(
     }
 }
 ```
-</Codeblock>
 
 <ArticleSection name="State" id="state" level="h2" />
 
@@ -149,7 +141,6 @@ Hãy chia điều này thành ba phần: định nghĩa struct, các hàm hỗ t
 
 Đầu tiên, hãy xem định nghĩa struct:
 
-<Codeblock lang="rust">
 ```rust
 use core::mem::size_of;
 use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
@@ -179,7 +170,6 @@ impl Config {
     //...
 }
 ```
-</Codeblock>
 
 Thuộc tính `#[repr(C)]` đảm bảo rằng cấu trúc của chúng ta có thể dự đoán được, bố cục của bộ nhớ tương thích với C duy trì tính nhất quán trên các nền tảng và các phiên bản biên dịch khác nhau của Rust. Điều này rất quan trọng đối với các chương trình on-chain vì dữ liệu phải được serialized và deserialized một cách đáng tin cậy.
 
@@ -201,7 +191,6 @@ Enum `AmmState` định nghĩa các trạng thái có thể của AMM, nó khi�
 
 Các hàm hỗ trợ đọc cung cấp một cách truy cập vào dữ liệu `Config` một cách an toàn và hiệu quả với những kiểm tra phù hợp:
 
-<Codeblock lang="rust">
 ```rust
 impl Config {
     //...
@@ -278,7 +267,6 @@ impl Config {
     pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
 }
 ```
-</Codeblock>
 
 Chức năng chính của các hàm hỗ trợ đọc:
 - Safe Borrowing: Phương thức `load` trả về một `Ref<Self>` quản lý việc vay mượn dữ liệu tài khoản một cách an toàn, ngăn chặn tình trạng chạy đua dữ liệu (data race) và đảm bảo an toàn bộ nhớ.
@@ -289,7 +277,6 @@ Chức năng chính của các hàm hỗ trợ đọc:
 
 Các hàm hỗ trợ ghi cung cấp các phương thức an toàn và được kiểm tra cho việc thay đổi dữ liệu `Config`:
 
-<Codeblock lang="rust">
 ```rust
 impl Config {
     //...
@@ -357,7 +344,6 @@ impl Config {
     }
 }
 ```
-</Codeblock>
 
 Các tính năng chính của các hàm hỗ trợ ghi:
 - Mutable Borrowing: Phương thức `load_mut` trả về `RefMut<Self>` quản lý an toàn việc mutable borrowing từ account data.

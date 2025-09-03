@@ -1,5 +1,4 @@
 import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
-import { Codeblock } from "../../../../../components/Codeblock/Codeblock";
 
 <ArticleSection name="Make" id="make" level="h2" />
 
@@ -25,7 +24,6 @@ Các tài khoản cần thiết trong ngữ cảnh này là:
 
 Và với tất cả các ràng buộc, nó sẽ trông như thế này:
 
-<Codeblock lang="rust">
 ```rust
 #[derive(Accounts)]
 #[instruction(seed: u64)]
@@ -74,7 +72,6 @@ pub struct Make<'info> {
 }
 
 ```
-</Codeblock>
 
 **Lưu ý**: instruction này chỉ truyền vào 1 token program. Bởi vì để chuyển token cho cả hai mint, chúng ta phải đảm bảo rằng cả 2 mint đều được sở hữu bởi cùng token program (SPL Token hoặc Token-2022), hoặc lời gọi CPI sẽ thất bại.
 
@@ -84,7 +81,6 @@ Sau khi khởi tạo các Tài khoản, cuối cùng chúng ta có thể xử l�
 
 Chúng ta bắt đầu bằng cách điền vào `Escrow` bằng helper `set_inner()`, và sau đó chuyển sang gửi token thông qua CPI `transfer` như thế này:
 
-<Codeblock lang="rust">
 ```rust
 impl<'info> Make<'info> {
     /// # Create the Escrow
@@ -122,7 +118,6 @@ impl<'info> Make<'info> {
 }
 ```
 
-</Codeblock>
 
 Chúng ta có thể thấy rằng Anchor giúp chúng ta bằng nhiều cách:
 
@@ -131,7 +126,6 @@ Chúng ta có thể thấy rằng Anchor giúp chúng ta bằng nhiều cách:
 
 Và bây giờ chúng ta có thể chuyển sang tạo hàm `handler` nơi chúng ta thực hiện một số kiểm tra trước khi sử dụng các hàm hỗ trợ, như thế này:
 
-<Codeblock lang="rust">
 ```rust
 pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
     // Validate the amount
@@ -149,7 +143,6 @@ pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Resu
 }
 
 ```
-</Codeblock>
 
 Ở đây chúng ta thêm hai kiểm tra xác thực cho các đối số; một cho `amount` và một cho `receive` để đảm bảo chúng ta không truyền giá trị zero cho cả hai.
 
