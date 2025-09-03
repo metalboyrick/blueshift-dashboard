@@ -87,7 +87,6 @@ pub struct MintCloseAuthority {
 
 <ArticleSection name="Default Account State Extension" id="default-account-state-extension" level="h2" />
 
-
 Phần mở rộng `DefaultAccountState` là một `Mint` extension cho phép tất cả Token Account mới được tạo cho mint cụ thể đó bị đóng băng theo mặc định. `Freeze Authority` của mint sau đó có thể thaw (bỏ đóng băng) những `Token` account này để chúng có thể trở nên có thể sử dụng được.
 
 Chức năng này cung cấp cho người tạo token khả năng kiểm soát tốt hơn việc phân phối token bằng cách giới hạn ai có thể giữ token. Nó đặc biệt hữu ích cho các kịch bản tuân thủ, yêu cầu KYC/AML, hoặc tạo phân phối token dựa trên một danh sách được cho phép nơi account phải được phê duyệt rõ ràng trước khi chúng có thể nhận hoặc chuyển token.

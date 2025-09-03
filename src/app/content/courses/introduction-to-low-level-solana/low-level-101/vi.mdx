@@ -93,13 +93,6 @@ This is really important because mismanaging memory can lead to misaligned memor
 
 When you're manually managing account data serialization, understanding padding and alignment becomes crucial for cross-program compatibility.
 
-
-
-
-
-
-
-
 #### Syscalls 
 
 A **system call**, or syscall, is the doorway through which unprivileged code requests a privileged service from its host. When a syscall is made, the CPU switches from user mode to a trusted, privileged mode; the runtime then performs the requested action, and control returns with a status code. This indirection keeps sandboxed code from touching host memory or I/O directly, preserving safety and determinism.
@@ -280,7 +273,6 @@ if *(input as *const u64) != 3 {
     return 1010; // NotEnoughAccountKeys Error
 }
 ```
-
 
 We continue by checking each account, the layout offsets we defined earlier let us sanity-check every flag without deserializing the full struct.
 

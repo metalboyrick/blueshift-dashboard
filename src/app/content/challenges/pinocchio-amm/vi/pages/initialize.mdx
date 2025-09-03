@@ -104,6 +104,7 @@ Chúng ta bắt đầu bằng cách deserialize cả `instruction_data` và `acc
 
 Sau đó chúng ta cần:
 - Tạo tài khoản `Config` bằng cách sử dụng instruction `CreateAccount` từ system program và các seed sau:
+
 ```rust
 let seed_binding = self.instruction_data.seed.to_le_bytes();
 let config_seeds = [
@@ -114,8 +115,10 @@ let config_seeds = [
     Seed::from(&self.instruction_data.config_bump),
 ];
 ```
+
 - Điền thông tin vào tài khoản `Config` bằng cách tải nó sử dụng hàm hỗ trợ `Config::load_mut_unchecked()` và sau đó điền tất cả dữ liệu cần thiết bằng hàm hỗ trợ `config.set_inner()`.
 - Tạo tài khoản `Mint` cho lp bằng cách sử dụng instruction `CreateAccount` và `InitializeMint2` và các seed sau:
+
 ```rust
 let mint_lp_seeds = [
     Seed::from(b"mint_lp"),

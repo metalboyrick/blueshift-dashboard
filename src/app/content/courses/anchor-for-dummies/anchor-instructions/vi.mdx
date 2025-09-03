@@ -89,6 +89,7 @@ pub fn initialize(ctx: Context<Transfer>, amount: u64) -> Result<()> {
     Ok(())
 }
 ```
+
 2. **Separate Module Implementation**
 
 Đối với các chương trình rất phức tạp, bạn có thể tổ chức logic trong các module riêng biệt:
@@ -194,6 +195,7 @@ pub fn custom_type_instruction(
    - Thêm tài liệu phù hợp
 
 3. **Xử Lý Lỗi**: Luôn sử dụng xử lý lỗi phù hợp và trả về các thông báo lỗi có ý nghĩa:
+
 ```rust
 #[error_code]
 pub enum TransferError {
@@ -218,6 +220,7 @@ impl<'info> Transfer<'info> {
 ```
 
 4. **Tài Liệu**: Luôn tài liệu hóa logic instruction của bạn, đặc biệt khi sử dụng context implementation:
+
 ```rust
 impl<'info> Transfer<'info> {
     /// # Transfers tokens
@@ -308,4 +311,3 @@ pub fn handle_errors(ctx: Context<HandleErrors>, value: u64) -> Result<()> {
     Ok(())
 }
 ```
-

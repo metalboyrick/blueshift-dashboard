@@ -175,7 +175,6 @@ Thuộc tính `#[repr(C)]` đảm bảo rằng cấu trúc của chúng ta có t
 
 Chúng ta lưu trữ `seed` (u64) và `fee` (u16) ở dạng một mảng byte thay vì ở dạng kiểu dữ liệu native để đảm bảo tính an toàn khi deserialization. Khi dữ liệu được đọc từ độ nhớ tài khoản, không có gì đảm bảo rằng việc căn chỉnh bộ nhớ và việc đọc `u64` từ một địa chỉ bộ nhớ không được căn chỉnh có thể gây ra hành vi không xác định. Bằng cách sử dụng mảng byte và chuyển đổi với `from_le_bytes()`, chúng ta đảm bảo dữ liệu có thể được đọc an toàn bất kể căn chỉnh, đồng thời đảm bảo thứ tự byte little-endian nhất quán trên mọi nền tảng. 
 
-
 Mỗi trường trong cấu trúc `Config` phục cho cho các mục đích sau:
 - **state**: Theo dõi trạng thái hiện tại của AMM (e.g., uninitialized, initialized, disabled, or withdraw-only). 
 - **seed**: Một giá trị duy nhất được sử dụng cho việc tạo ra PDA, cho phép nhiều AMM tồn tại với các cấu hình khác nhau.

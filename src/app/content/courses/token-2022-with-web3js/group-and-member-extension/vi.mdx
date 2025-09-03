@@ -24,7 +24,6 @@ Vì vậy hãy cài đặt package cần thiết:
 npm i @solana/spl-token-group
 ```
 
-
 Ngoài ra, phần mở rộng `Group` và `Member` là một trong những extension "duy nhất" yêu cầu bạn khởi tạo extension sau khi đã khởi tạo `Mint` account.
 
 Điều này là vì instruction khởi tạo metadata phân bổ động không gian cần thiết cho độ dài của group và member content.
@@ -32,6 +31,7 @@ Ngoài ra, phần mở rộng `Group` và `Member` là một trong những exten
 Đồng thời, điều này có nghĩa là chúng ta sẽ cần khởi tạo `Mint` account với đủ lamport để được miễn phí thuê với phần mở rộng `Group` hoặc `Member` được bao gồm, nhưng chỉ phân bổ đủ không gian cho extension `GroupPointer` hoặc `MemberPointer` vì instruction `token_group_initialize()` và `token_group_member_initialize()` thực sự tăng không gian một cách chính xác.
 
 Trong code khởi tạo `Group` trông như thế này:
+
 ```ts
 const mint = Keypair.generate();
 
@@ -88,6 +88,7 @@ console.log(`Mint created! Check out your TX here: https://explorer.solana.com/t
 ```
 
 Và sau đó, chúng ta có thể sử dụng group mà chúng ta vừa tạo để thêm member vào nó như thế này:
+
 ```ts
 const member = Keypair.generate();
 

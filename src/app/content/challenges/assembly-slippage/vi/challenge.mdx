@@ -6,21 +6,17 @@ import ArticleSection from "../../../../components/ArticleSection/ArticleSection
 
 Trong bài học này chúng ta sẽ sử dụng sBPF Assembly để tạo một instruction kiểm tra slippage cơ bản. Bằng cách bao gồm một instruction như vậy ở chỉ mục cuối cùng trong mảng instruction của chúng ta, chúng ta có thể tạo ra một lớp bảo vệ bổ sung chống lại các lỗi trong hợp đồng thông minh hoặc các hợp đồng đảo bit.
 
-
 Có một vài lý do khiến kiểm tra slippage trở thành một ứng cử viên lý tưởng cho assembly:
 
 - Các trường hợp đơn hoặc bị ràng buộc
 - Không cần thực hiện các kiểm tra signer/account
 - Chỉ cần cải thiện tính bảo mật
 
-
 Nếu bạn không quen thuộc với việc viết chương trình assembly, bạn nên bắt đầu bằng cách đọc bài [Giới thiệu về Assembly](/vi/courses/introduction-to-assembly).
-
 
 <ArticleSection name="Thiết kế chương trình" id="program-design" level="h2" />
 
 Chương trình của chúng ta sẽ thực hiện một việc đơn giản nhưng rất quan trọng: kiểm tra xem một tài khoản token có đủ số dư trước khi thực hiện một giao dịch. Mẫu này xuất hiện ở khắp mọi nơi trong DeFi - từ các giao dịch swap AMM cho đến các giao thức cho vay.
-
 
 Chương trình của chúng ta sẽ cần:
 - Một tài khoản token SPL duy nhất trong mảng tài khoản
@@ -66,7 +62,6 @@ Cả 2 hành động đều là zero-copy: chúng ta đang đọc trực tiếp 
 ```sbpf
 jge r3, r4, end         // Skip to exit if balance is valid
 ```
-
 
 Instruction `jge` (jump if greater or equal) (thoát ra nếu lớn hơn hoặc bằng)  compares `r3` (số lượng được yêu cầu) với `r4` (số dư trong tài khoản token). nếu `r3 >= r4`, chúng ta nhảy đến nhãn `end`; giống như một lệnh thoát sớm.
 

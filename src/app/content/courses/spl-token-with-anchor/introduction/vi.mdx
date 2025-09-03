@@ -12,7 +12,6 @@ Trên Solana, mọi thứ liên quan đến token đều được xử lý bởi
 
 Đối với anchor, mọi thứ liên quan đến token có thể được tìm thấy trong crate `anchor-spl`. Vì lý do này, sau khi đã khởi tạo workspace `Anchor`, chúng ta chỉ cần làm:
 
-
 ```bash
 cargo add anchor-spl
 ```
@@ -70,6 +69,7 @@ pub struct CreateToken<'info> {
 ### Associated Token Account
 
 Điều tương tự cũng áp dụng cho account `Associated Token`, tạo account `Associated Token` thông qua macro sẽ trông tương tự như tạo account `Token`, sự khác biệt duy nhất là các ràng buộc và nó sẽ trông như thế này:
+
 ```rust
 #[derive(Accounts)]
 pub struct CreateToken<'info> {
