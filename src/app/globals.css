@@ -22,7 +22,7 @@
   --color-brand-typescript: #69a2f1;
   --font-sans: var(--font-funnel-display);
   --font-mono: var(--font-montech);
-  --font-geist-mono: var(--font-geist-mono);
+  --font-fira-code: var(--font-fira-code);
   --font-content: var(--font-switzer);
   --text-3xl: 32px;
   --container-app: 1500px;
@@ -140,6 +140,7 @@ h2 code {
   scrollbar-width: thin;
   scrollbar-color: var(--color-background-card-foreground) transparent;
 }
+
 
 .rehype-pretty-copy {
   @apply opacity-0;

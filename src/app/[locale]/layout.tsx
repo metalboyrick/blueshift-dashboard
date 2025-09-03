@@ -10,15 +10,15 @@ import GlobalModals from "@/app/components/Modals/GlobalModals";
 import { AuthProvider } from "@/contexts/AuthContext";
 import WalletProvider from "@/contexts/WalletProvider";
 import TanstackProvider from "@/contexts/TanstackProvider";
-import { Geist_Mono, Funnel_Display } from "next/font/google";
+import { Fira_Code, Funnel_Display } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { headers } from "next/headers";
 import { Toaster } from "react-hot-toast";
 import Icon from "@/app/components/Icon/Icon";
 
-const GeistMono = Geist_Mono({
+const FiraCode = Fira_Code({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-fira-code",
   display: "swap",
 });
 
@@ -109,7 +109,7 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <body
-        className={`${MontechV2.variable} ${GeistMono.variable} ${FunnelDisplay.variable} ${Switzer.variable} antialiased`}
+        className={`${MontechV2.variable} ${FiraCode.variable} ${FunnelDisplay.variable} ${Switzer.variable} antialiased`}
       >
         <NextIntlClientProvider>
           <TanstackProvider>

@@ -502,7 +502,7 @@ export default function ChallengeTable({
                                       ease: anticipate,
                                       delay: 0.8,
                                     }}
-                                    className="text-start w-full font-geist-mono font-medium text-nowrap text-[#FF5555]"
+                                    className="text-start w-full font-fira-code font-medium text-nowrap text-[#FF5555]"
                                   >
                                     {
                                       verificationData.results.find(
@@ -530,7 +530,7 @@ export default function ChallengeTable({
                                       delay: 1 + index * 0.1,
                                     }}
                                     key={index}
-                                    className="text-start font-geist-mono font-medium text-nowrap text-secondary"
+                                    className="text-start font-fira-code font-medium text-nowrap text-secondary"
                                   >
                                     {log.slice(7, log.length)}
                                   </motion.span>

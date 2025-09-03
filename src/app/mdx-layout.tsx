@@ -25,7 +25,7 @@ export default function MdxLayout({ children }: { children: React.ReactNode }) {
       prose-blockquote:[font-style:normal]
       prose-blockquote:border-l-2
       prose-figure:my-0
-      prose-code:[font-family:var(--font-geist-mono)]
+      prose-code:[font-family:var(--font-fira-code)]
       prose-code:font-medium
       prose-code:text-brand-secondary
       prose-code:before:hidden
