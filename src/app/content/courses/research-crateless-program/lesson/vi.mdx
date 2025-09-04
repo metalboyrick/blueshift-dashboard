@@ -53,6 +53,7 @@ pub struct Entrypoint {
     program_id: [u8; 32],
 }
 ```
+
 - `account_len`: number of accounts sent in.
 - `account_info`: the raw account records in the instruction, one after another.
 - `instruction_len`: how many bytes of instruction data follow.
@@ -78,6 +79,7 @@ pub struct AccountRaw {
     rent_epoch: i64,
 }
 ```
+
 - `is_duplicate`: make sure to not "redeserialize" the data if the same account appears more than once in the list by skipping it. `0xFF` means "unique"; any other value is the index it copies.
 - `is_signer` / `is_writable` / `executable`: single-byte flags that the runtime uses so your program can gate logic and CPIs without extra syscalls.
 - `alignment`: A placeholder four-byte slot that keeps the whole struct 8-byte aligned. Pinocchio repurposes it to track the original data length during reallocs.
@@ -267,7 +269,6 @@ if *(input as *const u64) != 3 {
     return 1010; // NotEnoughAccountKeys Error
 }
 ```
-
 
 We continue by checking each account, the layout offsets we defined earlier let us sanity-check every flag without deserializing the full struct.
 
@@ -615,4 +616,3 @@ This knowledge isn't just academic; it's practical. When you understand the foun
 - Make informed decisions about when to use certain abstractions and when to work closer to the metal
 
 Remember, the goal of this exercise wasn't to teach you how to write programs without crates, but rather to help you understand what those crates are doing under the hood. This understanding is the first step toward writing better, more efficient Solana programs, regardless of which tools you choose to use.
-

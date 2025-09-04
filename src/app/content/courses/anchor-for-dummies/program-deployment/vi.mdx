@@ -63,15 +63,19 @@ Or to recover the account's lamports, pass it as the
 Để thu hồi tạo số dư của bạn:
 
 - **Tiếp tục triển khai** bằng cách khôi phục keypair:
+
     ```
     solana-keygen recover -o <KEYPAIR_PATH>
     ```
+
     Nhập cụm từ hạt giống 12 từ khi được nhắc, sau đó triển khai với bộ đệm:
+
     ```
     solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
     ```
 
 - **Đóng** bộ đệm để thu hồi lamports:
+
     ```
     solana program close <ADDRESS>
     ```
@@ -79,7 +83,6 @@ Or to recover the account's lamports, pass it as the
 ### Triển khai thông qua Solana CLI
 
 Bạn có thể triển khai chương trình của mình trực tiếp bằng cách sử dụng Solana CLI thay vì Anchor:
-
 
 ```
 solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json

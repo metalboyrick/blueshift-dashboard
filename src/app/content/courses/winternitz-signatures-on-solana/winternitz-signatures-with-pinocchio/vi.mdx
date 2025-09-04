@@ -48,7 +48,6 @@ let signature = privkey.sign::<WinternitzKeccak>(message);
 
 Quá trình ký sinh ra các thành phần chữ ký dựa trên thông điệp, với mỗi thành phần yêu cầu một số phép băm cụ thể được xác định bởi các bit tương ứng của thông điệp.
 
-
 ### Xác minh chữ ký
 
 ```rust
@@ -220,6 +219,3 @@ if accounts.recipient.key().as_ref().ne(intended_recipient) {
     return Err(ProgramError::InvalidAccountOwner);
 }
 ```
-
-
-

@@ -3,7 +3,6 @@ import { ArticleSection } from '../../../../../components/ArticleSection/Article
 <ArticleSection name="Take" id="take" level="h2" />
 
 Bây giờ chúng ta có thể chuyển đến lệnh `take`, nằm trong `take.rs` và sẽ thực hiện các hành động sau:
-
 - Đóng bản ghi escrow, gửi rent lamports của nó trở lại cho maker.
 - Chuyển Token A từ vault đến taker, sau đó đóng vault.
 - Chuyển số lượng Token B đã thỏa thuận từ taker đến maker.
@@ -11,7 +10,6 @@ Bây giờ chúng ta có thể chuyển đến lệnh `take`, nằm trong `take.
 ### Tài khoản
 
 Các tài khoản cần thiết trong ngữ cảnh này là:
-
 - `taker`: người dùng chấp nhận các điều khoản của `maker` và đang thực hiện trao đổi
 - `maker`: người dùng ban đầu đặt ra các điều khoản
 - `escrow`: tài khoản nơi tất cả các điều khoản của việc trao đổi này tồn tại
@@ -83,10 +81,8 @@ pub struct Take<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
-
 }
-
-```
+  ```
 
 ### Logic
 
@@ -94,65 +90,64 @@ Trong logic, chúng ta bắt đầu bằng cách chuyển token từ `taker_ata_
 
 ```rust
 impl<'info> Take<'info> {
-  fn transfer_to_maker(&mut self) -> Result<()> {
-      transfer_checked(
-          CpiContext::new(
-              self.token_program.to_account_info(),
-              TransferChecked {
-                  from: self.taker_ata_b.to_account_info(),
-                  to: self.maker_ata_b.to_account_info(),
-                  mint: self.mint_b.to_account_info(),
-                  authority: self.taker.to_account_info(),
-              },
-          ),
-          self.escrow.receive,
-          self.mint_b.decimals,
-      )?;
+    fn transfer_to_maker(&mut self) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.taker_ata_b.to_account_info(),
+                    to: self.maker_ata_b.to_account_info(),
+                    mint: self.mint_b.to_account_info(),
+                    authority: self.taker.to_account_info(),
+                },
+            ),
+            self.escrow.receive,
+            self.mint_b.decimals,
+        )?;
 
-      Ok(())
-  }
+        Ok(())
+    }
 
-  fn withdraw_and_close_vault(&mut self) -> Result<()> {
-      // Create the signer seeds for the Vault
-      let signer_seeds: [&[&[u8]]; 1] = [&[
-          b"escrow",
-          self.maker.to_account_info().key.as_ref(),
-          &self.escrow.seed.to_le_bytes()[..],
-          &[self.escrow.bump],
-      ]];
+    fn withdraw_and_close_vault(&mut self) -> Result<()> {
+        // Create the signer seeds for the Vault
+        let signer_seeds: [&[&[u8]]; 1] = [&[
+            b"escrow",
+            self.maker.to_account_info().key.as_ref(),
+            &self.escrow.seed.to_le_bytes()[..],
+            &[self.escrow.bump],
+        ]];
 
-      // Transfer Token A (Vault -> Taker)
-      transfer_checked(
-          CpiContext::new_with_signer(
-              self.token_program.to_account_info(),
-              TransferChecked {
-                  from: self.vault.to_account_info(),
-                  to: self.taker_ata_a.to_account_info(),
-                  mint: self.mint_a.to_account_info(),
-                  authority: self.escrow.to_account_info(),
-              },
-              &signer_seeds,
-          ),
-          self.vault.amount,
-          self.mint_a.decimals,
-      )?;
+        // Transfer Token A (Vault -> Taker)
+        transfer_checked(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.vault.to_account_info(),
+                    to: self.taker_ata_a.to_account_info(),
+                    mint: self.mint_a.to_account_info(),
+                    authority: self.escrow.to_account_info(),
+                },
+                &signer_seeds,
+            ),
+            self.vault.amount,
+            self.mint_a.decimals,
+        )?;
 
-      // Close the Vault
-      close_account(CpiContext::new_with_signer(
-          self.token_program.to_account_info(),
-          CloseAccount {
-              account: self.vault.to_account_info(),
-              authority: self.escrow.to_account_info(),
-              destination: self.maker.to_account_info(),
-          },
-          &signer_seeds,
-      ))?;
+        // Close the Vault
+        close_account(CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            CloseAccount {
+                account: self.vault.to_account_info(),
+                authority: self.escrow.to_account_info(),
+                destination: self.maker.to_account_info(),
+            },
+            &signer_seeds,
+        ))?;
 
-      Ok(())
-  }
+        Ok(())
+    }
 }
 ```
-
 
 Bây giờ chúng ta tạo hàm `handler` và lần này may mắn là chúng ta không cần thực hiện thêm kiểm tra nào nên nó sẽ trông như thế này:
 
@@ -165,7 +160,5 @@ pub fn handler(ctx: Context<Take>) -> Result<()> {
     ctx.accounts.withdraw_and_close_vault()?;
 
     Ok(())
-
 }
-
 ```

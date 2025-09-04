@@ -180,7 +180,6 @@ impl MintInit for MintAccount {
 }
 ```
 
-
 Sau đó chúng ta làm chính xác như vậy cho `TokenAccount`:
 
 ```rust
@@ -705,5 +704,3 @@ Triển khai này cung cấp:
 4. Sử dụng inline để có hiệu suất tốt hơn
 
 Các phiên bản không an toàn (unsafe) bỏ qua kiểm tra xác thực để có hiệu suất tốt hơn khi bạn chắc chắn account hợp lệ, trong khi các phiên bản an toàn đảm bảo xác thực thích hợp trước khi truy cập dữ liệu.
-
-

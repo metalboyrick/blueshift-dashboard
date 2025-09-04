@@ -81,6 +81,7 @@ Sau đó chúng ta cần:
 - Xác minh rằng `AmmState` hợp lệ (vì vậy nếu nó không bằng `AmmState::Disabled`).
 - Kiểm tra việc tạo `vault_x` và `vault_y` để trở thành Associated Token Accounts.
 - Deserialize tất cả các tài khoản token liên quan và sử dụng dữ liệu bên trong chúng để tính toán số lượng cần rút bằng cách sử dụng crate `constant-product-curve` và kiểm tra slippage như thế này:
+
 ```rust
 let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
 let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
@@ -107,6 +108,7 @@ if !(x <= self.instruction_data.min_x && y <= self.instruction_data.min_y) {
     return Err(ProgramError::InvalidArgument);
 }
 ```
+
 - Chuyển số lượng từ các vault đến tài khoản token của người dùng và burn số lượng LP token thích hợp từ tài khoản token của người dùng
 
 > `authority` của `vault_x` và `vault_y` là tài khoản `config`

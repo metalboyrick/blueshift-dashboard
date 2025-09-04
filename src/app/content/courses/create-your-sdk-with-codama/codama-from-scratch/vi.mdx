@@ -12,7 +12,6 @@ Xây dựng một Codama IDL từ đầu có nghĩa là bạn sẽ hoàn toàn t
 
 Bạn có thể tìm thấy tài liệu chi tiết về tất cả các giá trị có sẵn [ở đây](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/valueNodes/README.md).
 
-
 > `ValueNode` chỉ là một kiểu bí danh và nó không thể được sử dụng trực tiếp như một node trong cây. Khi cần một `ValueNode`, hãy sử dụng một trong các loại node thể hiện giá trị cụ thể thay thế.
 
 ### Node kiểu
@@ -31,12 +30,14 @@ Bạn có thể tìm thấy tài liệu chi tiết về tất cả các kiểu c
 
 - `ConstantDiscriminatorNode`: Sử dụng để mô tả một giá trị hằng số tại một vị trí nhất định. Nó nhận vào một `ConstantValueNode` thể hiện một giá trị hằng số và một `number` thể hiện là vị trí:
     
+
     ```ts
     const discriminatorNode = constantDiscriminatorNode(constantValueNodeFromString('utf8', 'Hello'), 64);
     ```
 
 - `FieldDiscriminatorNode`: sử dụng để mô tả một giá trị mặc định của một trường cấu trúc tại một vị trí nhất định. Nó nhận vào một `CamelCaseString` thể hiện tên trường và một `number` thể hiện là vị trí:
     
+
     ```ts
     const discriminatorNode = fieldDiscriminatorNode('accountState', 64);
     ```
@@ -61,6 +62,7 @@ Bạn có thể tìm thấy tài liệu chi tiết về tất cả các kiểu c
 
 - `SizeDiscriminatorNode`: sử dụng để phân biệt giữa các account hoặc instructions dựa trên kích thước của dữ liệu chúng chứa. Nó nhận vào một `number` thể hiện kích thước:
     
+
     ```ts
     const discriminatorNode = sizeDiscriminatorNode(165);
     ```
@@ -121,7 +123,6 @@ const node = rootNode(programNode({ ... }));
 
 Ngoài các yếu tố cơ bản này, node này cũng nhận vào tên chương trình, phiên bản, khóa công khai của chương trình đã triển khai và tài liệu markdown:
 
-
 ```ts
 const node = programNode({
     name: 'counter',
@@ -167,7 +168,6 @@ const node = accountNode({
 Để định nghĩa các instruction của chương trình, chúng ta sử dụng `InstructionNode`. Node này đại diện cho một instruction trong một chương trình và cho phép bạn chỉ định discriminator, các account cần thiết và dữ liệu cho instruction một cách dễ dàng.
 
 Thêm vào đó, bạn có thể bao gồm các account tùy chọn. Dựa trên thiết kế của chương trình, các account tùy chọn có thể được giải quyết theo hai cách: bằng cách bỏ qua chúng hoặc bằng cách chuyển ID của chương trình làm account. Bạn có thể chọn phương pháp giải quyết bằng cách sử dụng trường `optionalAccountStrategy: "omitted" | "programId"`.
-
 
 > Khi `optionalAccountStrategy` không được cung cấp, chiến lược mặc định là sử dụng `programId`.
 
@@ -217,7 +217,6 @@ const node = errorNode({
 ### PDA Node
 
 Để cung cấp định nghĩa cho các địa chỉ được dẫn xuất từ một chương trình cụ thể, chúng ta sử dụng `PdaNode`. Node này được đặc trưng bởi tên và một danh sách các seed có thể là hằng số hoặc biến, cho phép tạo PDA linh hoạt.
-
 
 ```ts
 const node = pdaNode({

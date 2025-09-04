@@ -11,7 +11,6 @@ Hãy nghĩ về nó như một két an toàn kỹ thuật số, nơi một ngư�
 Điều này tạo ra một môi trường không cần tin tưởng, nơi không bên nào phải lo lắng về việc bên kia rút lui khỏi thỏa thuận.
 
 Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qua ba lệnh đơn giản nhưng mạnh mẽ:
-
 - **Make**: Người tạo (người dùng đầu tiên) xác định điều khoản giao dịch và gửi số lượng Token A đã thỏa thuận vào một vault an toàn. Điều này giống như đặt vật phẩm của bạn vào két an toàn và thiết lập điều khoản trao đổi.
 - **Take**: Người nhận (người dùng thứ hai) chấp nhận đề nghị bằng cách chuyển số lượng Token B đã hứa cho người tạo, và đổi lại, nhận được Token A đã bị khóa. Đây là thời điểm cả hai bên hoàn thành phần việc của mình.
 - **Refund**: Nếu người tạo thay đổi ý định hoặc không tìm thấy người nhận phù hợp, họ có thể hủy đề nghị và lấy lại Token A của mình. Điều này giống như lấy lại vật phẩm từ két an toàn nếu thỏa thuận thất bại.
@@ -22,17 +21,17 @@ Trong thử thách này, chúng ta sẽ triển khai khái niệm này thông qu
 
 Hãy bắt đầu bằng cách tạo một workspace Anchor mới:
 
-  ```bash 
-  anchor init blueshift_anchor_escrow 
-  cd blueshift_anchor_escrow 
-  ```
+```bash
+anchor init blueshift_anchor_escrow
+cd blueshift_anchor_escrow
+```
 
 Sau đó chúng ta tiếp tục bằng cách kích hoạt `init-if-needed` trên crate `anchor-lang` và thêm crate `anchor-spl`:
 
-  ```bash 
-  cargo add anchor-lang --features init-if-needed 
-  cargo add anchor-spl
-  ```
+```bash
+cargo add anchor-lang --features init-if-needed
+cargo add anchor-spl
+```
 
 Vì chúng ta đang sử dụng `anchor-spl`, chúng ta cũng cần cập nhật file `programs/blueshift_anchor_escrow/Cargo.toml` để bao gồm `anchor-spl/idl-build` trong tính năng `idl-build`.
 
@@ -82,7 +81,7 @@ declare_id!("22222222222222222222222222222222222222222222");
 
 #[program]
 pub mod blueshift_anchor_escrow {
-use super::*;
+    use super::*;
 
     #[instruction(discriminator = 0)]
     pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
@@ -98,9 +97,7 @@ use super::*;
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         //...
     }
-
 }
-
 ```
 
 Như bạn thấy, chúng ta đã triển khai discriminator tùy chỉnh cho các lệnh. Vì vậy hãy đảm bảo sử dụng phiên bản anchor 0.31.0 hoặc mới hơn.
@@ -124,9 +121,7 @@ pub struct Escrow {
 }
 ```
 
-
 Ý nghĩa của từng trường:
-
 - **seed**: Số ngẫu nhiên được sử dụng trong quá trình tạo seed để một maker có thể mở nhiều escrow với cùng một cặp token; được lưu trữ on-chain để chúng ta luôn có thể tái tạo PDA.
 - **maker**: Ví đã tạo escrow; cần thiết để hoàn tiền và nhận thanh toán.
 - **mint_a** & **mint_b**: Địa chỉ SPL mint cho phía "cho" và "nhận" của việc hoán đổi.
@@ -145,13 +140,13 @@ Bây giờ chúng ta có thể chuyển đến file `errors.rs` nơi chúng ta s
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum EscrowError { 
+pub enum EscrowError {
     #[msg("Invalid amount")]
-    InvalidAmount, 
+    InvalidAmount,
     #[msg("Invalid maker")]
-    InvalidMaker, 
+    InvalidMaker,
     #[msg("Invalid mint a")]
-    InvalidMintA, 
+    InvalidMintA,
     #[msg("Invalid mint b")]
     InvalidMintB,
 }

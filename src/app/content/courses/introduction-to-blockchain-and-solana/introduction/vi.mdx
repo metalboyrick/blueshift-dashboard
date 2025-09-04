@@ -49,6 +49,7 @@ def distributed_transfer(alice_server, bob_server, amount):
         return "Transfer successful"
     return "Insufficient funds"
 ```
+
 Vẫn có vẻ đơn giản? Đây là những gì có thể xảy ra sai:
 - Phân mảnh Mạng: Kết nối giữa các server thất bại ngay sau Bước 1 nhưng trước Bước 2. $100 của Alice biến mất vào khoảng không kỹ thuật số.
 - Server Crash: Server B crash sau khi nhận lệnh "thêm tiền" nhưng trước khi xác nhận đã xử lý. Bob có nhận được tiền không? Không ai biết.
