@@ -1,15 +1,16 @@
 name: Content Translation
 
-on:
-  pull_request:
-    types: [closed]
-    branches:
-      - master
-    paths:
-      - 'messages/en/*.json'
-      - 'src/app/content/challenges/*/en/*.mdx'
-      - 'src/app/content/challenges/*/en/pages/*.mdx'
-      - 'src/app/content/courses/*/*/en.mdx'
+# Temporarily disabled until content translations are ready
+# on:
+#   pull_request:
+#     types: [closed]
+#     branches:
+#       - master
+#     paths:
+#       - 'messages/en/*.json'
+#       - 'src/app/content/challenges/*/en/*.mdx'
+#       - 'src/app/content/challenges/*/en/pages/*.mdx'
+#       - 'src/app/content/courses/*/*/en.mdx'
 
 concurrency:
   group: translation-${{ github.ref }}
