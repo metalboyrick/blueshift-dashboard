@@ -1,0 +1,27 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Burn-Anweisung
+
+Vernichtet Token dauerhaft, indem sie aus dem Umlauf genommen werden. Dies reduziert die Gesamtmenge des Tokens.
+
+Bevor wir Token verbrennen können, müssen wir bereits Folgendes haben:
+- Ein initialisiertes `Mint` Konto.
+- Ein `Token` Konto oder `Associated Token` Konto, das bereits mindestens die Menge enthält, die wir verbrennen möchten.
+
+> Die Menge der Token, die wir verbrennen, wird für Dezimalstellen "normalisiert". Das bedeutet, wenn wir 1 Token mit 6 Dezimalstellen verbrennen möchten, müssen wir tatsächlich `1_000_000` als Betrag angeben
+
+So sieht der CPI-Aufruf für die `burn()` Anweisung aus:
+
+```rust
+burn(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Burn {
+            mint: ctx.accounts.mint.to_account_info(),
+            from: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

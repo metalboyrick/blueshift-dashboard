@@ -1,0 +1,49 @@
+# Rückzahlung
+
+Die Rückzahlungsanweisung schließt unseren Flash-Loan-Zyklus ab, indem sie sicherstellt, dass die geliehenen Mittel mit entsprechenden Gebühren zurückgegeben werden. Diese Anweisung führt zwei wesentliche Schritte aus:
+1. Kreditbetrag extrahieren: Verwenden Sie Anweisungsintrospektion, um den ursprünglichen `amount_borrowed` aus den Daten der Ausleihungsanweisung abzurufen
+2. Mittel zurücküberweisen: Berechnen Sie die `fee` und überweisen Sie den geliehenen Betrag plus Gebühr zurück an das Protokoll
+
+<ArticleSection name="Anweisungsintrospektion" id="instruction-introspection" level="h2" />
+
+Zunächst müssen wir die erste Anweisung in der Transaktion untersuchen, um den ursprünglichen Kreditbetrag zu extrahieren:
+
+```rust
+let ixs = ctx.accounts.instructions.to_account_info();
+
+let mut amount_borrowed: u64;
+
+if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
+    // Check the amount borrowed:
+    let mut borrowed_data: [u8;8] = [0u8;8];
+    borrowed_data.copy_from_slice(&borrow_ix.data[8..16]);
+    amount_borrowed = u64::from_le_bytes(borrowed_data)
+
+} else {
+    return Err(ProtocolError::MissingBorrowIx.into());
+}
+```
+
+> Wir überprüfen nicht, ob dies tatsächlich die `borrow_ix` ist, indem wir die Programm-ID und den Diskriminator verwenden, da es keine Rolle spielt, ob sie tatsächlich eine "gefälschte" Anweisung erstellen; es ist sicher für das Protokoll, da es nur bezahlt wird. Gleichzeitig wissen wir, wenn wir das Geld verliehen haben, dass es die erste Anweisung sein wird und dass der `amount_borrowed` dort sein wird.
+
+<ArticleSection name="Mittelüberweisung" id="transfer-funds" level="h2" />
+
+Als Nächstes berechnen wir die Protokollgebühr und überweisen den Gesamtbetrag zurück:
+
+```rust
+// Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
+let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
+amount_borrowed = amount_borrowed.checked_add(fee).ok_or(ProtocolError::Overflow)?;
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
+        from: ctx.accounts.borrower_ata.to_account_info(),
+        to: ctx.accounts.protocol_ata.to_account_info(),
+        authority: ctx.accounts.borrower.to_account_info(),
+    }), 
+    amount_borrowed
+)?;
+```
+
+Unsere Gebühr ist fest auf 500 Basispunkte codiert, und wir führen "geprüfte" Mathematik durch, um sicherzustellen, dass der Betrag nicht überläuft, was mit sehr großen Zahlen ausgenutzt werden könnte. Zusätzlich konvertieren wir den Betrag in `u128` für die Multiplikation, um einen Zwischenüberlauf zu verhindern, dann wandeln wir sicher zurück in `u64`

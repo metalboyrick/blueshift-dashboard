@@ -1,0 +1,140 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Die zinstragende Erweiterung
+
+Die `InterestBearing` Erweiterung ist eine `Mint` Kontoerweiterung, die es Benutzern ermöglicht, einen Zinssatz auf ihre Token anzuwenden und den aktualisierten Gesamtbetrag, einschließlich Zinsen, zu jedem beliebigen Zeitpunkt abzurufen.
+
+<ArticleSection name="Initialisierung des Mint-Kontos" id="initializing-the-mint-account" level="h2" />
+
+Um die `InterestBearing` Erweiterung auf einem `Mint` Konto zu initialisieren, benötigen wir die `interestBearingMint()` Funktion.
+
+Hier ist, wie man einen Mint mit der zinstragenden Erweiterung erstellt:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeInterestBearingMintInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Interest Bearing extension
+const mintLen = getMintLen([ExtensionType.InterestBearingConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Interest Bearing extension
+const initializeMintInterestBearing = createInitializeInterestBearingMintInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    500,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintNonTransferable,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Berechnung der Zinsen" id="calculating-the-interest" level="h2" />
+
+Die `InterestBearing` Erweiterung generiert keine neuen Token; der angezeigte Betrag enthält einfach die angesammelten Zinsen durch die `amount_to_ui_amount` Funktion, wodurch die Änderung rein optischer Natur ist.
+
+Nachdem wir also das `unpacking` des `Token` Kontos, für das wir die Zinsen berechnen möchten, durchgeführt haben, ist es einfach, alle Informationen zu erhalten, die wir für die Berechnung des Zinsbetrags benötigen.
+
+Glücklicherweise müssen wir das nicht einmal selbst tun, da wir die `amountToUiAmount` Funktion wie folgt verwenden können:
+
+```ts
+const tokenInfo = await getAccount(
+    connection,
+    tokenAccount,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+console.log("Token Amount: ", tokenInfo.amount);
+    
+const uiAmount = await amountToUiAmount(
+    connection,
+    keypair,
+    mint.publicKey,
+    tokenInfo.amount,
+    TOKEN_2022_PROGRAM_ID,
+);
+    
+console.log("UI Amount: ", uiAmount);
+```
+
+<ArticleSection name="Aktualisierung der zinstragenden Erweiterung" id="updating-the-interest-bearing-extension" level="h2" />
+
+Mit der `InterestBearing` Erweiterung ist es möglich, die vom Token-Konto erzeugten Zinsen zu ändern, dank der Art und Weise, wie die Daten strukturiert sind:
+
+```rust
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+Dazu können wir die `updateRateInterestBearingMint` Funktion wie folgt verwenden:
+
+```ts
+const updateRateInstruction = await createUpdateRateInterestBearingMintInstruction(
+    mint.publicKey,
+    newRateAuthority.publicKey,
+    1000, // updated rate
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+```
+
+Und wenn wir möchten, können wir die Autorität für die Festlegung der Zinsen mit der `setAuthority` Funktion ändern, indem wir die richtige `AuthorityType` wie folgt übergeben:
+
+```ts
+const setAuthorityInstruction = await createSetAuthorityInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    AuthorityType.InterestRate,
+    newRateAuthority.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+```

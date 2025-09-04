@@ -1,0 +1,49 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Burn-Anweisung
+
+Vernichtet Token dauerhaft, indem sie aus dem Umlauf genommen werden. Dies reduziert die Gesamtmenge des Tokens.
+
+Bevor wir Token verbrennen können, müssen wir bereits Folgendes haben:
+- Ein initialisiertes `Mint` Konto.
+- Ein `Token` Konto oder `Associated Token` Konto, das bereits mindestens den Betrag enthält, den wir verbrennen möchten.
+
+> Die Menge der Token, die wir verbrennen, wird für Dezimalstellen "normalisiert". Das bedeutet, wenn wir 1 Token mit 6 Dezimalstellen verbrennen möchten, müssen wir tatsächlich `1e6` als Betrag angeben
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Bei Verwendung einer "rohen" Anweisung ohne Abstraktion würde das Verbrennen eines Tokens so aussehen:
+
+```ts
+// Burn tokens to ATA 
+const burnInstruction = createBurnInstruction(
+    tokenAccount, // token account
+    mint, // mint
+    keypair.publicKey // owner
+    1e6, // amount
+);
+
+const transaction = new Transaction().add(burnInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens Burned! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+So würden die gleichen Anweisungen mit der `burn()` Anweisung abstrahiert aussehen:
+
+```ts  
+let tx = await burn(
+    connection, // connection
+    keypair, // payer
+    tokenAccount, // token account
+    keypair.publicKey, // owner of the token account
+    1e6, // amount to transfer
+);
+
+console.log(`Succesfully Burned!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+<ArticleSection name="Checked Instruction" id="checked-instruction" level="h2" />

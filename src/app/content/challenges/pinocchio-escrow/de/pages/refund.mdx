@@ -1,0 +1,27 @@
+# Rückerstattung
+
+Die `refund` Anweisung ermöglicht es dem Ersteller, ein offenes Angebot zu stornieren:
+  - Schließt das Escrow PDA und sendet die Miet-Lamports zurück an den Ersteller.
+- Verschiebt den gesamten Token-A-Bestand aus dem Tresor zurück zum Ersteller und schließt dann das Tresor-Konto.
+
+<ArticleSection name="Erforderliches Konto" id="required-account" level="h2" />
+
+Dies sind die erforderlichen Konten:
+
+- maker: der Ersteller des Escrows. Muss ein Unterzeichner und veränderbar sein
+- escrow: das Escrow-Konto, das wir initialisieren. Muss veränderbar sein
+- mint_a: der Token, den wir im Escrow hinterlegen
+- vault: das zugehörige Token-Konto im Besitz des Escrows. Muss veränderbar sein
+- maker_ata_a: das zugehörige Token-Konto im Besitz des Erstellers. Muss veränderbar sein
+- system_program: das Systemprogramm. Muss ausführbar sein
+- token_program: das Token-Programm. Muss ausführbar sein
+
+Wir lassen dich deine eigene Kontostruktur erstellen, da du jetzt mit dem Prozess vertraut sein solltest.
+
+<ArticleSection name="Anweisungsdaten" id="instruction-data" level="h2" />
+
+Alle Daten, die wir für die Ausführung der Logik benötigen, befinden sich bereits im Escrow-Konto oder in den Konten, die wir deserialisieren. Aus diesem Grund benötigen wir keine `instruction_data` für diese Anweisung.
+
+<ArticleSection name="Logik" id="logic" level="h2" />
+
+Auch hier lassen wir dich deine Flügel ausbreiten und deine eigene Logik dafür erstellen! Scheue dich nicht, zu den vorherigen Abschnitten zurückzugehen, um zu sehen, wie wir die Make- und Take-Anweisung implementiert haben, oder melde dich im Discord, wenn du nicht weiterkommst.

@@ -1,0 +1,63 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Überweisungsanfragen
+
+Überweisungsanfragen sind die unkomplizierteste Zahlungsmethode von Solana Pay, die für einfache SOL- oder SPL-Token-Überweisungen konzipiert wurde, ohne dass eine Serverinteraktion erforderlich ist. Wenn ein Benutzer einen QR-Code scannt oder auf einen Überweisungsanfrage-Link klickt, hat seine Wallet alles, was nötig ist, um die Transaktion sofort zu erstellen und auszuführen.
+
+Die Schönheit der Überweisungsanfragen liegt in ihrer Einfachheit: Alle Zahlungsinformationen sind direkt in der URL codiert, was sie vollständig eigenständig und sofort ausführbar macht.
+
+<ArticleSection name="URL-Struktur und Parameter" id="url-structure" level="h2" />
+
+Überweisungsanfrage-URLs folgen einem standardisierten Format, das jede Solana-Wallet interpretieren kann:
+
+```
+solana:<recipient>?<optional-query-params>
+```
+
+**Erforderlicher Parameter:**
+- `recipient`: Ein base58-codierter öffentlicher Schlüssel, der die Ziel-Wallet repräsentiert. Dies ist das einzige Pflichtfeld, das sicherstellt, dass Zahlungen direkt vom Kunden zum Händler ohne Zwischenhändler gehen.
+
+**Optionale Parameter:**
+- **`amount`**: Gibt den genauen Überweisungsbetrag als Dezimalwert an. Ohne diesen Parameter fordert die Wallet den Benutzer auf, einen Betrag manuell einzugeben – perfekt für Spenden oder flexible Zahlungsszenarien.
+- **`spl-token`**: Die Mint-Adresse für SPL-Token-Überweisungen. Verwandelt eine SOL-Überweisung in eine beliebige Token-Überweisung, von USDC-Zahlungen bis hin zu benutzerdefinierten Treuetokens.
+- **`reference`**: Eine eindeutige Kennung zur Verfolgung von Zahlungen in der Blockchain. Da Händler keine Kontrolle über Transaktionssignaturen haben, dienen Referenzen als durchsuchbare Kennungen für Zahlungsabgleich und Kundensupport.
+- **`label` und `message`**: Benutzerfreundliche Zeichenketten, die den Zahlungskontext erklären. Label identifiziert typischerweise den Händler, während message den spezifischen Kauf beschreibt.
+- **`memo`**: Erstellt einen Eintrag in der Blockchain mit Solanas Memo-Programm. Wertvoll für Compliance, Buchhaltung oder zur Bereitstellung eines permanenten Transaktionskontexts.
+
+### Beispiel 
+
+Hier ist eine Überweisungsanfrage für 1 SOL, die die praktische Verwendung von Parametern demonstriert:
+
+```
+solana:22222222222222222222222222222222222222222222?amount=1&label=Blueshift%20Subscription&message=1%20Month&memo=Order12345&reference=abc123def456
+```
+
+Für Unternehmen, die Stablecoins akzeptieren, hier eine USDC-Überweisungsanfrage:
+
+```
+solana:22222222222222222222222222222222222222222222?amount=200&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&label=Blueshift%20Subscription&message=1%20Month&memo=Order12345&reference=abc123def456
+```
+
+<ArticleSection name="Wann Transfer Requests verwenden" id="when-to-use" level="h2" />
+
+Transfer Requests eignen sich hervorragend für Szenarien, in denen Zahlungsdetails vordefiniert und unveränderlich sind:
+
+**Ideale Anwendungsfälle:**
+- **E-Commerce-Checkouts** mit festen Preisen
+- **Spendenkampagnen**, bei denen Nutzer Beträge auswählen
+- **Abonnementzahlungen** mit bekannten Beträgen
+- **Point-of-Sale-Systeme** für Transaktionen vor Ort
+- **Rechnungszahlungen** mit spezifischen Beträgen
+
+**Hauptvorteile:**
+- **Nicht-interaktive Natur:** Einmal generiert, funktionieren diese URLs unabhängig von Ihren Servern. Perfekt für Situationen, in denen die Netzwerkverbindung unzuverlässig sein könnte oder wenn Sie Infrastrukturabhängigkeiten minimieren möchten.
+- **Garantierte Ausführung:** Zahlungsparameter sind in der URL festgelegt und stellen sicher, dass Kunden genau das bezahlen, was Sie erwarten, ohne dynamische Preisänderungen.
+- **Offline-Fähigkeit:** URLs können lokal auf Geräten wie POS-Terminals generiert werden und ermöglichen Zahlungen auch dann, wenn Backend-Systeme vorübergehend nicht verfügbar sind.
+- **Reduzierte Serverbelastung:** Keine API-Aufrufe während der Zahlungsabwicklung erforderlich, was sie für Szenarien mit hohem Volumen äußerst skalierbar macht.
+- **Universelle Kompatibilität:** Jede Solana-Wallet kann diese Anfragen verarbeiten, ohne dass wallet-spezifische Integrationen erforderlich sind.
+
+Erwägen Sie Transfer Requests, wenn Sie garantierte Zahlungsbeträge benötigen, Serverabhängigkeiten reduzieren möchten oder eine Zahlungsmethode benötigen, die unter allen Netzwerkbedingungen zuverlässig funktioniert.
+
+<ArticleSection name="Beispiel" id="example" level="h2" />
+
+Als vollständiges Beispiel können Sie das [Payment Flow Merchant Example](https://github.com/solana-foundation/solana-pay/blob/master/core/example/payment-flow-merchant/main.ts) von der Solana Foundation verwenden

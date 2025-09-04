@@ -1,0 +1,82 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Tokens auf Solana
+
+![Tokens auf Solana](/graphics/course-banners/tokens-on-solana.png)
+
+Tokens sind digitale Assets, die Eigentum, Zugangsrechte oder Werte in einem Blockchain-Netzwerk repräsentieren. Man kann sie sich als programmierbare Zertifikate vorstellen, die vollständig in digitaler Form existieren: Sie können alles von Geld und Eigentumsanteilen bis hin zu Stimmrechten und Zugangspässen darstellen.
+
+Auf der grundlegendsten Ebene ist ein Token ein Eintrag im Hauptbuch einer Blockchain, der besagt: "Diese Adresse besitzt X Menge dieses Assets." Im Gegensatz zu traditionellen Vermögenswerten, die physische Zertifikate oder zentralisierte Datenbanken zur Nachverfolgung des Eigentums benötigen, nutzen Tokens die Blockchain-Technologie, um manipulationssichere, transparente Aufzeichnungen darüber zu erstellen, wer was besitzt.
+
+<ArticleSection name="Warum Tokens wichtig sind" id="why-token-matters" level="h2" />
+
+Tokens ermöglichen programmierbares Eigentum: Jeder kann digitale Assets mit benutzerdefinierten Regeln erstellen, die festlegen, wie sie übertragen werden können, welche Rechte sie gewähren oder wie sie mit anderen Systemen interagieren.
+
+Dies eröffnet Möglichkeiten wie automatische Dividendenausschüttungen, bedingte Übertragungen oder komplexe Finanzinstrumente, die basierend auf vordefinierten Bedingungen automatisch ausgeführt werden.
+
+Die wichtigste Innovation besteht darin, dass Tokens ohne Zwischenhändler sofort weltweit übertragen werden können, transparent sind (jeder kann das Eigentum überprüfen) und mit komplexer Logik programmiert werden können, während gleichzeitig die Sicherheitsgarantien der zugrundeliegenden Blockchain erhalten bleiben.
+
+<ArticleSection name="Verschiedene Arten von Tokens" id="different-types-of-tokens" level="h2" />
+
+Tokens können basierend auf verschiedenen Klassen kategorisiert werden, zum Beispiel nach ihrem Nutzen oder nach ihren intrinsischen Eigenschaften.
+
+### Basierend auf Eigenschaften
+
+Es gibt 2 Gruppen von Tokens basierend auf ihren "technischen" Eigenschaften: Fungible und Non-Fungible.
+
+- Fungible Tokens: bedeutet austauschbar; sie bestehen aus mehreren identischen Einheiten, die durch jede andere Einheit desselben Tokens ersetzt werden können und in Bruchteile teilbar sind (wie 0,5 Tokens zu besitzen).
+- Non-Fungible Tokens: bedeutet einzigartig und nicht austauschbar; jeder Token ist einzigartig, unteilbar und hat unterschiedliche Eigenschaften, die ihn von allen anderen unterscheiden.
+
+### Basierend auf Nutzen
+
+Basierend auf dem, was diese Tokens leisten können, haben wir verschiedene Gruppen:
+
+- Utility Tokens: bieten Zugang zu einem Produkt oder einer Dienstleistung. Zum Beispiel könnte der Besitz bestimmter Tokens Zugang zu einer Plattform, vergünstigten Gebühren oder speziellen Funktionen gewähren.
+- Governance Tokens: geben Inhabern Stimmrechte in dezentralen Organisationen. Token-Inhaber können über Protokolländerungen, Treasury-Ausgaben oder andere Entscheidungen abstimmen.
+- Security Tokens: repräsentieren Eigentum an realen Vermögenswerten wie Unternehmensanteilen, Immobilien oder Rohstoffen, jedoch in digitaler Form.
+- Stablecoins: sind Tokens, die entwickelt wurden, um einen stabilen Wert zu halten, meist gekoppelt an eine Währung wie den US-Dollar (USDC, USDT).
+- Meme/Community Tokens: existieren hauptsächlich für Spekulation, Community-Building oder Unterhaltungswert.
+
+<ArticleSection name="Unterschied zu anderen Blockchains" id="difference-between-other-blockchains" level="h2" />
+
+Auf Solana wird alles, was mit Tokens zu tun hat, vom [SPL Token Program](https://github.com/solana-program/token) und dem [Token2022 Program](/de/courses/token-2022-program) verwaltet: Solanas natives Token-Framework, das definiert, wie alle Tokens erstellt, verwaltet und übertragen werden.
+
+Es ist ein einziges, einheitliches Programm, das alle Token-Operationen im gesamten Netzwerk verwaltet und so Konsistenz und Interoperabilität gewährleistet.
+
+> Die Entscheidung, eine einzige, einheitliche Schnittstelle für alle Tokens auf Solana zu haben, schafft eine einfache Implementierung, die über alle dApps (dezentralisierte Anwendungen) und Integrationen (wie Wallets, ...) repliziert werden kann
+
+Im Gegensatz zu Blockchain-Systemen, die Transaktionen verfolgen, hat Solana ein kontobasiertes Modell; das bedeutet, dass es Kontostände verfolgt. Für jeden Token-Bestand gibt es ein spezifisches Konto, das den Saldo und das Eigentum dieses Tokens speichert.
+
+Die Beziehung zwischen all diesen Konten ist wie folgt:
+- `Mint`: Jeder Token-Typ hat ein einzigartiges "Mint"-Konto, das die Konfiguration des Tokens enthält: gesamte `supply`, `decimal`, `mintAuthority` und `freezeAuthority`. Es funktioniert als "Geburtsurkunde" des Tokens auf Solana.
+- `Token`: Ein Konto, das den Saldo eines bestimmten Tokens für jeden Besitzer hält. Im Gegensatz zu deiner Haupt-Wallet-Adresse (die SOL enthält), benötigst du separate Token-Konten für jeden verschiedenen Typ von Token, den du halten möchtest. Denke daran wie separate Taschen für verschiedene Währungen.
+- `Associated Token`: Die Standardmethode, um Tokens auf Solana zu halten. Es sind normale `Token`Konten, die "assoziiert" sind, weil sie dauerhaft mit deiner Haupt-Wallet-Adresse durch eine deterministische Adressgenerierung verbunden sind, die die Adresse des `owner` und des `Mint` zusammenführt.
+
+### Unterschied zu Ethereum
+
+Für jeden Token erfordert Ethereum die Bereitstellung eines vollständigen Smart Contracts, der die gesamte Token-Logik, Zustandsverwaltung und Übertragungsregeln enthält.
+
+Jeder Token ist im Wesentlichen sein eigenes Mini-Programm mit individuellem Code, obwohl die meisten dem `ERC-20` Standard für Kompatibilität folgen.
+
+Die Contract-Adresse wird zur Kennung des Tokens, und alle Guthaben werden im Zustand dieses Contracts gespeichert, der ein internes Mapping der Guthaben enthält.
+
+> Dies ist Segen und Fluch zugleich; es gibt Entwicklern die Möglichkeit, benutzerdefinierte Komponenten zu erstellen, ohne sich auf eine Standardimplementierung verlassen zu müssen, die nicht alle ihre Anforderungen erfüllt, aber gleichzeitig kann es potenziell Fehler einführen und verschiedene Schnittstellen bereitstellen, die die Integration und Interaktion erschweren.
+
+Bei Ethereum ist das Konzept der `Token Factory` sehr verbreitet: ein Smart Contract oder Programm, das andere Tokens erstellt. Anstatt manuell einzelne Token-Contracts bereitzustellen oder Mint-Konten einzeln zu erstellen, automatisiert eine Token-Factory den Token-Erstellungsprozess durch eine standardisierte Schnittstelle.
+
+Dies geschieht durch:
+- Vorlagenbasierte Erstellung: Die Factory enthält vorgefertigte Code-Vorlagen oder standardisierte Verfahren zur Erstellung von Tokens. Wenn du einen neuen Token möchtest, stellst du der Factory Parameter (Name, Symbol, Angebot usw.) zur Verfügung, und sie generiert den Token für dich.
+- Stapelverarbeitung: Factories können mehrere Tokens in einer einzigen Transaktion oder einem Prozess erstellen, was effizienter ist als die individuelle Erstellung.
+- Standardisierte Ausgabe: Alle von derselben Factory erstellten Tokens folgen identischen Mustern und Standards, was Konsistenz und Kompatibilität gewährleistet.
+
+Dies ist bei Solana nicht erforderlich, da die `Token Factory` das SPL Token-Programm selbst ist.
+
+### Unterschied zu Bitcoin
+
+Bitcoin hat keinen nativen Token-Erstellungsmechanismus. Tokens müssen auf Bitcoin mithilfe von Overlay-Protokollen oder neueren Ansätzen wie `Ordinals` und `BRC-20` aufgebaut werden. Diese Methoden betten entweder Token-Daten in Bitcoin-Transaktionen mittels `OP_RETURN` Outputs ein oder schreiben Daten direkt auf Satoshis.
+
+> Das Bitcoin-Netzwerk selbst erkennt diese nicht als Tokens an; es sieht nur Bitcoin-Transaktionen mit zusätzlichen Daten.
+
+Übertragungen erfordern die Erstellung einer Bitcoin-Transaktion, die sowohl die Bitcoin-Netzwerkgebühr als auch zusätzliche Daten enthält, die die Token-Übertragung anzeigen. Bei Overlay-Protokollen sendet man im Wesentlichen einen winzigen Betrag an Bitcoin, während man Token-Übertragungsanweisungen in die Transaktionsdaten einbettet.
+
+Das Bitcoin-Netzwerk verarbeitet dies als reguläre Bitcoin-Transaktion, während spezialisierte Software die eingebetteten Token-Daten interpretiert.

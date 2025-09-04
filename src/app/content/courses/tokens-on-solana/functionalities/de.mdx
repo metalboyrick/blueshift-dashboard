@@ -1,0 +1,71 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Funktionalitäten
+
+Das Token-Programm arbeitet mit einer Reihe von Anweisungen, die es ermöglichen, Token-Mints zu erstellen, Token-Konten zu initialisieren, Token zwischen Konten zu übertragen und Berechtigungen zu verwalten.
+
+Es unterstützt auch Multisignatur-Konten für erhöhte Sicherheit und bietet Mechanismen zum Einfrieren von Konten und zur Delegierung von Token-Berechtigungen.
+
+<ArticleSection name="Initialisierung eines Kontos" id="intializing-an-account" level="h2" />
+
+Das Token-Programm verfügt über verschiedene Anweisungen und Hilfsfunktionen, die die Komplexität bei der Initialisierung eines neuen Kontos abstrahieren.
+
+Es gibt unterschiedliche Anweisungen, je nachdem, ob wir ein `Mint` Konto oder ein `Token` Konto initialisieren möchten. Im Fall des `Associated Token` Kontos verwendet das zugehörige Token-Programm im Hintergrund die `initializeAccount` Anweisung, nachdem die korrekte programmabgeleitete Adresse ermittelt wurde.
+
+> Diese Funktion initialisiert nur das Konto, daher müssen wir sicherstellen, dass wir vorher die `createAccount()` Anweisung vom System-Programm verwenden und den korrekten Eigentümer (Token-Programm), Speicherplatz und Lamports festlegen, um es mietfrei zu machen.
+
+<ArticleSection name="Übertragung" id="transfer" level="h2" />
+
+Verschiebt Token von einem Konto auf ein anderes. Dies ist die grundlegende Operation für das Senden von Token zwischen Benutzern.
+
+Der Eigentümer des Token-Kontos muss ein `Signer` dieser Transaktion sein, und das Ziel dieser Übertragung muss ein anderes Token-Konto sein.
+
+> Der Betrag, den wir übertragen möchten, ist ohne Dezimalstellen. Wenn wir also 1 Token mit 6 Dezimalstellen senden möchten, müssen wir die `1e6` Notation verwenden.
+
+<ArticleSection name="Genehmigen" id="approve" level="h2" />
+
+Gewährt einem Delegierten die Berechtigung, eine bestimmte Menge an Token im Namen des Kontoinhabers zu übertragen. Dies ermöglicht programmgesteuerte Token-Übertragungen, ohne die vollständige Kontrolle über das Konto zu gewähren.
+
+> Wir legen einen "genehmigten" Betrag fest, und der Bevollmächtigte kann nur bis zu diesem Betrag überweisen
+
+<ArticleSection name="Widerrufen" id="revoke" level="h2" />
+
+Entzieht dem aktuellen Bevollmächtigten die Berechtigung über das Konto und gibt die volle Kontrolle an den Kontoinhaber zurück.
+
+> Hebt sofort jede bestehende Bevollmächtigung auf, und nur der Kontoinhaber kann die Bevollmächtigung widerrufen (nicht der Bevollmächtigte selbst)
+
+<ArticleSection name="Berechtigung festlegen" id="set-authority" level="h2" />
+
+Ändert die Berechtigung einer Prägung oder eines Kontos. Dies ermöglicht die Übertragung der Inhaberschaft oder die Aktualisierung bestimmter Berechtigungstypen.
+
+> Kann die Prägeberechtigung, Einfrierungsberechtigung oder den Kontoinhaber ändern, und die Berechtigung auf `None` zu setzen ist eine irreversible Aktion, die diese Fähigkeit dauerhaft entfernt
+
+<ArticleSection name="Prägen" id="mint-to" level="h2" />
+
+Erstellt neue Token und hinterlegt sie in einem bestimmten Konto. Nur die Prägeberechtigung kann diese Operation durchführen.
+
+> Erhöht die Gesamtmenge des Tokens und der Betrag berücksichtigt die Dezimalkonfiguration der Prägung
+
+<ArticleSection name="Verbrennen" id="burn" level="h2" />
+
+Zerstört Token dauerhaft, indem sie aus dem Umlauf genommen werden. Dies reduziert die Gesamtmenge des Tokens.
+
+> Reduziert dauerhaft die Gesamtmenge des Tokens und diese Aktion kann vom Kontoinhaber oder Bevollmächtigten durchgeführt werden
+
+<ArticleSection name="Konto schließen" id="close-account" level="h2" />
+
+Schließt ein Token-Konto und überträgt die verbleibende SOL-Miete auf ein Zielkonto. Das Token-Konto muss einen Nullsaldo haben, es sei denn, es handelt sich um ein natives SOL-Konto.
+
+> Ab Token2022 ist es möglich, ein `Mint`Konto mit einem Bestand von 0 zu schließen
+
+<ArticleSection name="Konto einfrieren" id="set-mint-to" level="h2" />
+
+Verhindert alle Token-Operationen auf einem Konto, bis es aufgetaut wird. Nur die Einfrierungsberechtigung der Prägung kann diese Operation durchführen.
+
+> Deaktiviert vollständig Überweisungen, Genehmigungen und Verbrennungen und betrifft nur das spezifisch eingefrorene Konto
+
+<ArticleSection name="Konto auftauen" id="thaw-account" level="h2" />
+
+Aktiviert Token-Operationen auf einem zuvor eingefrorenen Konto wieder. Nur die Freeze-Authority der Münze kann Konten auftauen.
+
+> Stellt die volle Funktionalität eines eingefrorenen Kontos wieder her und kann nur von der Freeze-Authority der Münze durchgeführt werden

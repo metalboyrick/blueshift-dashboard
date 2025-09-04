@@ -1,0 +1,85 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Anweisungen zur Autoritätsübertragung
+
+Ändert die Autorität eines Mints oder Kontos. Dies ermöglicht die Übertragung von Eigentum oder die Aktualisierung bestimmter Autoritätstypen.
+
+Bevor wir die Autorität über ein Token oder Tokenkonto festlegen können, benötigen wir bereits:
+- Ein initialisiertes `Mint`Konto, für das wir die `mintAuthority` oder `freezeAuthority` besitzen
+- Ein initialisiertes `Token`Konto oder `Associated Token`Konto, das uns gehört
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Bei Verwendung einer "rohen" Anweisung ohne Abstraktion würde die Änderung der Autorität eines `Mint` oder `Token`Kontos so aussehen:
+
+```ts
+const changeTokenAuthorityInstruction = createSetAuthorityInstruction(
+    tokenAccount // account
+    keypair.publickey // current authority
+    AuthorityType.AccountOwner
+    newAuthority.publiKey // new authority
+);
+
+const changeMintFreezeAuthorityInstruction = createSetAuthorityInstruction(
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.FreezeAccount
+    newAuthority.publiKey // new authority
+);
+
+const changeMintAuthorityInstruction = createSetAuthorityInstruction(
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.MintTokens
+    newAuthority.publiKey // new authority
+);
+
+const transaction = new Transaction().add(
+    changeTokenAuthorityInstruction,
+    changeMintFreezeAuthorityInstruction,
+    changeMintAuthorityInstruction
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token and Mint authority changed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+So würden die gleichen Anweisungen aussehen, wenn sie mit der `setAuthority()`Anweisung abstrahiert werden:
+
+```ts  
+let tx = await setAuthority(
+    connection,
+    keypair,
+    tokenAccount // account
+    keypair.publickey // current authority
+    AuthorityType.AccountOwner
+    newAuthority.publiKey // new authority
+);
+
+console.log(`Token Account Authority Changed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+
+let tx = await setAuthority(
+    connection,
+    keypair,
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.FreezeAccount
+    newAuthority.publiKey // new authority
+);
+
+console.log(`Mint Freeze Authority Changed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+
+let tx = await setAuthority(
+    connection,
+    keypair,
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.MintTokens
+    newAuthority.publiKey // new authority
+);
+
+console.log(`Mint Authority Changed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

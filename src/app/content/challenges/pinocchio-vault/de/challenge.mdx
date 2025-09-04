@@ -1,0 +1,305 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Der Tresor
+
+![Pinocchio Tresor-Challenge](/graphics/challenge-banners/pinocchio-vault.png)
+
+Ein Tresor ermöglicht Benutzern, ihre Assets sicher zu verwahren. Ein Tresor ist ein grundlegender Baustein im DeFi-Bereich, der es Benutzern im Kern ermöglicht, ihre Assets (in diesem Fall Lamports) sicher zu speichern, sodass nur derselbe Benutzer sie später wieder abheben kann.
+
+In dieser Challenge werden wir einen einfachen Lamport-Tresor erstellen, der zeigt, wie man mit grundlegenden Konten, Program Derived Addresses (PDAs) und Cross-Program Invocation (CPI) arbeitet. Wenn du mit Pinocchio noch nicht vertraut bist, solltest du zunächst die [Einführung in Pinocchio](/de/courses/introduction-to-pinocchio) lesen, um dich mit den Kernkonzepten vertraut zu machen, die wir in diesem Programm verwenden werden.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Bevor du beginnst, stelle sicher, dass Rust und Pinocchio installiert sind. Führe dann in deinem Terminal aus:
+
+```bash
+# create workspace
+cargo new blueshift_vault --lib --edition 2021
+cd blueshift_vault
+```
+
+Füge Pinocchio hinzu:
+
+```bash
+cargo add pinocchio pinocchio-system
+```
+
+Deklariere die Crate-Typen in `Cargo.toml`, um Deployment-Artefakte in `target/deploy` zu generieren:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+<ArticleSection name="Vorlage" id="template" level="h2" />
+
+Beginnen wir mit der grundlegenden Programmstruktur. Wir werden alles in `lib.rs` implementieren, da es sich um ein unkompliziertes Programm handelt. Hier ist die anfängliche Vorlage mit den Kernkomponenten, die wir benötigen werden:
+
+```rust
+#![no_std]
+
+use pinocchio::{account_info::AccountInfo, entrypoint, nostd_panic_handler, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+
+entrypoint!(process_instruction);
+nostd_panic_handler!();
+
+pub mod instructions;
+pub use instructions::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, _)) => Withdraw::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="Einzahlung" id="deposit" level="h2" />
+
+Die Einzahlungsanweisung führt die folgenden Schritte aus:
+1. Überprüft, ob der Tresor leer ist (keine Lamports enthält), um doppelte Einzahlungen zu verhindern
+2. Stellt sicher, dass der Einzahlungsbetrag das mietfreie Minimum für ein Basiskonto überschreitet
+3. Überträgt Lamports vom Eigentümer zum Tresor mittels einer CPI zum System-Programm
+
+Definieren wir zunächst die Kontostruktur für die Einzahlung:
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub owner: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [owner, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // Accounts Checks
+        if !owner.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let (vault_key, _) = find_program_address(&[b"vault", owner.key()], &crate::ID);
+        if vault.key().ne(&vault_key) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // Return the accounts
+        Ok(Self { owner, vault })
+    }
+}
+```
+
+Lassen uns jede Kontoprüfung aufschlüsseln:
+1. `owner`: Muss ein Unterzeichner sein, da er die Transaktion autorisieren muss
+2. `vault`: 
+   - Muss dem System-Programm gehören
+   - Muss null Lamports haben (stellt eine "frische" Einzahlung sicher)
+   - Muss von den korrekten Seeds abgeleitet sein
+   - Muss mit der erwarteten PDA-Adresse übereinstimmen
+
+Jetzt implementieren wir die Datenstruktur für die Anweisung:
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != size_of::<u64>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let amount = u64::from_le_bytes(data.try_into().unwrap());
+
+        // Instruction Checks
+        if amount.eq(&0) {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self { amount })
+    }
+}
+```
+
+Hier prüfen wir lediglich, dass der Betrag nicht null ist.
+
+Zum Schluss implementieren wir die Einzahlungsanweisung:
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_data: DepositInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_data = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        Transfer {
+            from: self.accounts.owner,
+            to: self.accounts.vault,
+            lamports: self.instruction_data.amount,
+        }
+        .invoke()?;
+
+        Ok(())
+    }
+}
+```
+
+<ArticleSection name="Withdraw" id="withdraw" level="h2" />
+
+Die Auszahlungsanweisung führt folgende Schritte aus:
+1. Überprüft, ob der Tresor Lamports enthält (nicht leer ist)
+2. Verwendet die PDA des Tresors, um die Überweisung in eigenem Namen zu signieren
+3. Überweist alle Lamports vom Tresor zurück an den Eigentümer
+
+Zuerst definieren wir die Account-Struktur für die Auszahlung:
+
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub owner: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+    pub bumps: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [owner, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // Basic Accounts Checks
+        if !owner.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let (vault_key, bump) = find_program_address(&[b"vault", owner.key().as_ref()], &crate::ID);
+        if &vault_key != vault.key() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        Ok(Self { owner, vault, bumps: [bump] })
+    }
+}
+```
+
+Lassen Sie uns jede Account-Prüfung aufschlüsseln:
+1. `owner`: Muss ein Unterzeichner sein, da er die Transaktion autorisieren muss
+2. `vault`: 
+   - Muss dem System Program gehören
+   - Muss von den korrekten Seeds abgeleitet sein
+   - Muss mit der erwarteten PDA-Adresse übereinstimmen
+3. `bumps`: Wir speichern den Bump-Seed zur Verwendung bei der PDA-Signierung
+
+Jetzt implementieren wir die Auszahlungsanweisung:
+
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Create PDA signer seeds
+        let seeds = [
+            Seed::from(b"vault"),
+            Seed::from(self.accounts.owner.key().as_ref()),
+            Seed::from(&self.accounts.bumps),
+        ];
+        let signers = [Signer::from(&seeds)];
+
+        // Transfer all lamports from vault to owner
+        Transfer {
+            from: self.accounts.vault,
+            to: self.accounts.owner,
+            lamports: self.accounts.vault.lamports(),
+        }
+        .invoke_signed(&signers)?;
+
+        Ok(())
+    }
+}
+```
+
+Die Sicherheit dieser Auszahlung wird durch zwei Faktoren gewährleistet:
+1. Die PDA des Tresors wird unter Verwendung des öffentlichen Schlüssels des Eigentümers abgeleitet, wodurch sichergestellt wird, dass nur der ursprüngliche Einzahler abheben kann
+2. Die Fähigkeit der PDA, die Überweisung zu signieren, wird durch die Seeds überprüft, die wir an `invoke_signed` übergeben
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Du kannst jetzt dein Programm gegen unsere Unit-Tests testen und deine NFTs beanspruchen!
+
+Beginne mit dem Erstellen deines Programms mit folgendem Befehl in deinem Terminal:
+
+```bash
+cargo build-sbf
+```
+
+Dies hat eine `.so`-Datei direkt in deinem `target/deploy`-Ordner generiert.
+
+Klicke jetzt auf die Schaltfläche `take challenge` und lege die Datei dort ab!

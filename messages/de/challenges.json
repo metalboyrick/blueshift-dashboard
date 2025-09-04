@@ -1,0 +1,247 @@
+{
+  "challenges": {
+    "anchor-memo": {
+      "title": "Anchor Memo",
+      "requirements": {
+        "log": {
+          "title": "Aufgabe 1: Protokolliert `instruction_data` im Programmprotokoll"
+        }
+      }
+    },
+    "anchor-vault": {
+      "title": "Anchor Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Aufgabe 1: Einzahlungen annehmen"
+        },
+        "withdraw": {
+          "title": "Aufgabe 2: Auszahlungen ermöglichen"
+        }
+      }
+    },
+    "anchor-escrow": {
+      "title": "Anchor Escrow",
+      "pages": {
+        "make": {
+          "title": "Erstellen"
+        },
+        "take": {
+          "title": "Annehmen"
+        },
+        "refund": {
+          "title": "Rückerstattung"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Aufgabe 1: Einen Escrow-Tauschhandel erstellen"
+        },
+        "take": {
+          "title": "Aufgabe 2: Einen Escrow-Tauschhandel annehmen"
+        },
+        "refund": {
+          "title": "Aufgabe 3: Einen Escrow-Tauschhandel stornieren"
+        }
+      }
+    },
+    "anchor-flash-loan": {
+      "title": "Anchor Flash Loan",
+      "pages": {
+        "borrow": {
+          "title": "Leihen"
+        },
+        "repay": {
+          "title": "Zurückzahlen"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "Aufgabe: Flash Loan ausleihen und zurückzahlen"
+        }
+      }
+    },
+    "pinocchio-memo": {
+      "title": "Pinocchio Memo",
+      "requirements": {
+        "log": {
+          "title": "Aufgabe 1: Protokolliert Anweisungsdaten im Programmprotokoll"
+        }
+      }
+    },
+    "pinocchio-vault": {
+      "title": "Pinocchio Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Aufgabe 1: Einzahlungen annehmen"
+        },
+        "withdraw": {
+          "title": "Aufgabe 2: Auszahlungen ermöglichen"
+        }
+      }
+    },
+    "pinocchio-escrow": {
+      "title": "Pinocchio Escrow",
+      "pages": {
+        "make": {
+          "title": "Erstellen"
+        },
+        "take": {
+          "title": "Annehmen"
+        },
+        "refund": {
+          "title": "Rückerstattung"
+        },
+        "conclusion": {
+          "title": "Fazit"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Aufgabe 1: Einen Escrow-Tauschhandel erstellen"
+        },
+        "take": {
+          "title": "Aufgabe 2: Einen Escrow-Tauschhandel annehmen"
+        },
+        "refund": {
+          "title": "Aufgabe 3: Einen Escrow-Tauschhandel stornieren"
+        }
+      }
+    },
+    "pinocchio-amm": {
+      "title": "Pinocchio AMM",
+      "pages": {
+        "initialize": {
+          "title": "Initialisieren"
+        },
+        "deposit": {
+          "title": "Einzahlen"
+        },
+        "withdraw": {
+          "title": "Auszahlen"
+        },
+        "swap": {
+          "title": "Tauschen"
+        },
+        "conclusion": {
+          "title": "Fazit"
+        }
+      },
+      "requirements": {
+        "initialize": {
+          "title": "Aufgabe 1: Den AMM initialisieren"
+        },
+        "deposit": {
+          "title": "Aufgabe 2: Liquidität einzahlen"
+        },
+        "withdraw": {
+          "title": "Aufgabe 3: Liquidität auszahlen"
+        },
+        "swap": {
+          "title": "Aufgabe 4: Token tauschen"
+        }
+      }
+    },
+    "pinocchio-secp256r1-vault": {
+      "title": "Pinocchio Secp256r1 Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Aufgabe 1: Einzahlungen annehmen"
+        },
+        "withdraw": {
+          "title": "Aufgabe 2: Auszahlungen ermöglichen"
+        }
+      }
+    },
+    "pinocchio-flash-loan": {
+      "title": "Pinocchio Flash Loan",
+      "pages": {
+        "borrow": {
+          "title": "Leihen"
+        },
+        "repay": {
+          "title": "Zurückzahlen"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "Aufgabe: Flash Loan ausleihen und zurückzahlen"
+        }
+      }
+    },
+    "assembly-memo": {
+      "title": "Assembly Memo",
+      "requirements": {
+        "log": {
+          "title": "Aufgabe 1: Das Memo testen"
+        },
+        "log_different": {
+            "title": "Aufgabe 2: Das Memo mit unterschiedlichen Eingaben testen"
+        }
+      }
+    },
+    "assembly-slippage": {
+      "title": "Assembly Slippage",
+      "requirements": {
+        "slippage": {
+          "title": "Aufgabe 1: Den Slippage mit SPL-Token testen"
+        },
+        "slippage_failure": {
+          "title": "Aufgabe 2: Das Fehlschlagen eines Slippage testen"
+        },
+        "slippage_token2022": {
+          "title": "Aufgabe 3: Den Slippage mit Token2022 testen"
+        }
+      }
+    },
+    "assembly-timeout": {
+      "title": "Assembly Timeout",
+      "requirements": {
+        "timeout": {
+          "title": "Aufgabe 1: Den Timeout testen"
+        },
+        "timeout_failure": {
+          "title": "Aufgabe 2: Das Fehlschlagen eines Timeout testen"
+        }
+      }
+    },
+    "typescript-mint-an-spl-token": {
+      "title": "Einen SPL-Token prägen",
+      "requirements": {
+        "create_mint_account": {
+          "title": "Aufgabe 1: Token-Mint erstellen"
+        },
+        "initialize_mint": {
+          "title": "Aufgabe 2: Mint initialisieren"
+        },
+        "create_token_account": {
+          "title": "Aufgabe 3: Token-Konto erstellen"
+        },
+        "mint_to": {
+          "title": "Aufgabe 4: Token prägen"
+        }
+      }
+    },
+    "pinocchio-quantum-vault": {
+      "title": "Pinocchio Quantum Vault",
+      "pages": {
+        "open": {
+          "title": "Vault öffnen"
+        },
+        "split": {
+          "title": "Vault teilen"
+        },
+        "close": {
+          "title": "Vault schließen"
+        }
+      },
+      "requirements": {
+        "open": {
+          "title": "Aufgabe 1: Einen Quantum Vault öffnen"
+        },
+        "close": {
+          "title": "Aufgabe 2: Einen Quantum Vault schließen"
+        }
+      }
+    }
+  }
+}

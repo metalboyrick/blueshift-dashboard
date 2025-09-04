@@ -1,0 +1,123 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Das Token2022-Programm
+
+![Token 2022 Programm](/graphics/course-banners/token-2022-program.png)
+
+Das Token2022-Programm, auch bekannt als Token Extensions, ist eine Erweiterung der Funktionalität des Token-Programms.
+
+Das Legacy-Token-Programm erfüllt die meisten Anforderungen für fungible und nicht-fungible Token durch eine einfache Reihe von agnostischen Schnittstellen und Strukturen. Es fehlen jedoch spezifischere Funktionen und Implementierungen, die Entwicklern helfen würden, benutzerdefiniertes Verhalten mit einer gemeinsamen Schnittstelle zu erstellen, was die Entwicklung schneller und sicherer machen würde.
+
+Aus genau diesem Grund wurde ein neues Token-Programm namens `Token2022` mit einer neuen Reihe von Funktionen, den sogenannten `Token Extensions`, erstellt. Diese Erweiterungen bieten spezifische, anpassbare Verhaltensweisen, die entweder an den `Token Account` oder den `Mint Account` angehängt werden können.
+
+> Das `SPL-Token Program` (von Entwicklern häufig als `Tokenkeg` bezeichnet, aufgrund der Programmadresse: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) und das `Token2022 Program` sind zwei völlig unterschiedliche Programme, die den gleichen "Ausgangspunkt" teilen. Das bedeutet, dass `Tokenkeg`Token mit `Token2022` deserialisierbar sind, aber sie können beispielsweise nicht innerhalb dieses Programms verwendet werden, um ihnen Erweiterungen hinzuzufügen.
+
+<ArticleSection name="Mint- und Token-Konten" id="mint-and-token-accounts" level="h2" />
+
+Im vorherigen Abschnitt haben wir darüber gesprochen, dass der Hauptunterschied zwischen den Programmen `Tokenkeg` und `Token2022` die **Token Extensions** sind.
+
+Damit diese Erweiterungen durchsetzbar sind, müssen sie direkt in den `Mint` und `Token`Konten existieren, da dies der einzige Weg ist, um sicherzustellen, dass das Regelwerk durchgesetzt wird, während direkt mit dem Token-Programm gearbeitet wird.
+
+Aus diesem Grund schauen wir uns die Hauptunterschiede zwischen den Legacy- und neuen Token-Programmen bei diesen Konten an.
+
+**Legacy Token-Konten**
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If `is_native.is_some`, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Wie Sie sehen können, gibt es für diese Konten keinen geschriebenen Diskriminator. Das liegt daran, dass alle Felder eine feste Länge haben und der Unterschied im Speicherplatz groß genug ist, um zwischen diesen verschiedenen Kontentypen zu unterscheiden, indem man einfach ihre unterschiedlichen Längen vergleicht.
+
+Das Problem mit dem Token Extension Program ist, dass alle zusätzlichen Daten, die für die Erweiterung benötigt werden, am Ende der `Mint` und `Token`Konten angehängt werden, mit denen wir vertraut sind.
+
+Das bedeutet, dass eine Unterscheidung nach Länge nicht ausreichen würde, da wir ein `Mint` mit 3-4 angehängten Erweiterungen haben könnten, das die Länge des `Token`Kontos überschreitet. Aus diesem Grund wird, wenn `Mint` und `Token`Konten Erweiterungen haben, ein Diskriminator wie folgt hinzugefügt:
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Legacy Token Program data
+    /// ...
+    /// Padding (83 empty bytes)
+    pub padding: [u8; 83]
+    /// Discriminator (1)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// Legacy Token Program data
+    /// ...
+    /// Discriminator (2)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+```
+
+Um die Legacy-Struktur beizubehalten, befindet sich der Diskriminator nicht wie üblich im ersten Byte, sondern im Byte `166`.
+
+Das liegt daran, dass die Länge des `Token`Kontos 165 Bytes beträgt, was bedeutet, dass der Diskriminator nach der Basislänge hinzugefügt wird. Für das `Mint`Konto bedeutet dies, dass wir 83 Bytes Padding hinzufügen mussten, um sicherzustellen, dass die beiden Konten die gleiche Basislänge haben.
+
+Um also zwischen den beiden Konten zu unterscheiden, müssen wir nur das 166. Byte (data[165], wenn man von 0 zählt) überprüfen und entsprechend vorgehen.
+
+<ArticleSection name="Token Extensions" id="token-extensions" level="h2" />
+
+Im nächsten Abschnitt werden wir über die Vorteile und die verschiedenen Token Extensions sprechen, die derzeit auf Solana vorhanden sind. In diesem einführenden Absatz werden wir jedoch nur darüber sprechen, wie sie serialisiert und zu den beiden Zustandskonten hinzugefügt werden, über die wir zuvor gesprochen haben.
+
+Jede Erweiterung hat einen Diskriminator, der zusammen mit der Größe dieser Erweiterung direkt auf dem Konto gespeichert wird. Wir nennen dies den "Header" der Erweiterung und er sieht so aus:
+
+```rust
+pub struct ExtensionHeader {
+    /// Extension Discriminator
+    pub discriminator: u16
+    /// Length of the Disriminator
+    pub length: u16
+}
+```
+
+Dies macht es extrem einfach zu wissen, welche Erweiterungen auf dem Token vorhanden sind und nur die Daten derjenigen zu deserialisieren, die wir benötigen, da wir den Diskriminator erfassen und dann zur nächsten Erweiterung springen können, um zu prüfen, was dort vorhanden ist oder nicht.

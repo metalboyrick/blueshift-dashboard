@@ -1,0 +1,18 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Anchor Flash Loan</ChallengeTitle>
+
+Setze nun das Gelernte in die Praxis um. Erstelle ein Flash-Loan-Programm mit dem Anchor-Framework, das die folgenden Anforderungen erfüllt:
+
+<RequirementList>
+  <Requirement title="Herausforderung 1: Erstelle eine `borrow` Anweisung">
+    Dein Programm sollte einem Kreditnehmer ermöglichen, Geld vom Protokoll zu leihen und prüfen, dass eine `repay`
+    Anweisung am Ende der Transaktion vorhanden ist.
+  </Requirement>
+
+  <Requirement title="Herausforderung 2: Erstelle eine `repay` Anweisung">
+    Dein Programm sollte den `borrowed_amount` am Ende der Transaktion überprüfen und das Protokoll mit dem korrekten Betrag zurückzahlen.
+  </Requirement>
+</RequirementList>

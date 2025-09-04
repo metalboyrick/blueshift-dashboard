@@ -1,0 +1,119 @@
+# Tresor öffnen
+
+Die `open` Anweisung erstellt einen programmgesteuerten Adresstresor (PDA), in dem Lamports sicher hinterlegt werden. Dieser PDA verwendet einen gehashten öffentlichen Schlüssel als Seed, wodurch sichergestellt wird, dass nur der Inhaber des ursprünglichen Schlüssels später Gelder abheben kann.
+
+PDAs bieten eine sichere Möglichkeit zur Aufbewahrung von Geldern, weil:
+- Nur dein Programm kann das Konto kontrollieren (es existiert kein privater Schlüssel)
+- Die Tresoradresse wird deterministisch aus dem Hash des Benutzers abgeleitet
+- Abhebungen können nur über die Logik deines Programms erfolgen
+
+<ArticleSection name="Erforderliche Konten" id="required-accounts" level="h2" />
+
+Die Anweisung erfordert diese Konten:
+- `payer`: Bezahlt für die Tresorerstellung (muss Unterzeichner und veränderbar sein)
+- `vault`: Der PDA, der initialisiert wird (muss veränderbar sein)  
+- `system_program`: Erforderlich für die Kontoerstellung (muss ausführbar sein)
+
+Im Code sieht das so aus:
+
+```rust
+pub struct OpenVaultAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for OpenVaultAccounts<'a> {
+    type Error = ProgramError;
+ 
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+ 
+        Ok(Self { payer, vault })
+    }
+}
+```
+
+> Die Kontovalidierung wird durch den `CreateAccount` CPI behandelt. Wenn Konten die Anforderungen nicht erfüllen (Unterzeichner, Veränderbarkeit, Ausführbarkeit), schlägt die Anweisung automatisch fehl.
+
+<ArticleSection name="Anweisungsdaten" id="instruction-data" level="h2" />
+
+Zwei Datenelemente sind erforderlich:
+- `hash`: SHA-256-Hash des öffentlichen Schlüssels des Winternitz-Schlüsselpaars des Benutzers ([u8; 32])
+- `bump`: PDA-Ableitungs-Bump, der vom Client übergeben wird (u8)
+
+> Wir übergeben den Bump vom Client, anstatt ihn on-chain abzuleiten, um Rechenkosten zu sparen.
+
+So sieht es im Code aus:
+
+```rust
+pub struct OpenVaultInstructionData {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for OpenVaultInstructionData {
+    type Error = ProgramError;
+ 
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<OpenVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let hash = data[0..32].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+        let bump = data[32..33].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+ 
+        Ok(Self { hash, bump })
+    }
+}
+```
+
+> Auch hier sind ungültige Parameter selbstkorrigierend: Das Übergeben falscher Hashes blockiert den Tresor, das Übergeben falscher Bumps führt zum Fehlschlagen der PDA-Ableitung.
+
+<ArticleSection name="Anweisungslogik" id="instruction-logic" level="h2" />
+
+Die Anweisung erstellt einen leeren PDA, der unserem Programm zugewiesen ist. Obwohl das Konto keine Daten enthält, stellt die Programmeigentümerschaft sicher, dass Abhebungen nur über unsere kontrollierte Logik erfolgen können.
+
+> Selbst leere Konten müssen mietbefreit sein, um auf Solana bestehen zu bleiben.
+
+So sieht es im Code aus:
+
+```rust
+pub struct OpenVault<'a> {
+    pub accounts: OpenVaultAccounts<'a>,
+    pub instruction_data: OpenVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for OpenVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = OpenVaultInstructionData::try_from(data)?;
+        let accounts = OpenVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> OpenVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+ 
+    pub fn process(&self) -> ProgramResult {
+        let lamports = Rent::get()?.minimum_balance(0);
+        let seeds = [Seed::from(&self.instruction_data.hash), Seed::from(&self.instruction_data.bump)];
+
+        // Create our vault
+        CreateAccount {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&[Signer::from(&seeds)])
+    }
+}
+```
+
+> Diese Anweisung erstellt nur die Vault-Struktur. Einzahlungen werden separat durch einfache Lamport-Überweisungen auf das Vault-Konto abgewickelt.

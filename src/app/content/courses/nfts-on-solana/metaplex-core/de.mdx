@@ -1,0 +1,192 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex Core Programm
+
+Das Metaplex Core Programm adressiert die Komplexitäts- und Kostenprobleme, die der Multi-Account-Architektur des Token Metadata Programms innewohnen. Während Token Metadata auf SPL-Token als Grundlage basiert und mehrere Konten für jedes NFT benötigt, führt dieser Ansatz zu teuren und umständlichen Implementierungen, die sowohl Benutzer als auch das Netzwerk belasten.
+
+Das 2024 veröffentlichte Metaplex Core ist ein ultraleichtes Programm, das speziell für NFT-Operationen entwickelt wurde. Im Gegensatz zu seinem Vorgänger arbeitet Core unabhängig ohne SPL-Token-Abhängigkeiten und verwaltet Minting, Transfers, Burns und anpassbare Verhaltensweisen durch seine eigene Programmlogik.
+
+Dieser Standard der nächsten Generation verwendet ein Single-Account-Design, das die Minting-Kosten erheblich reduziert und gleichzeitig die Gesamtleistung des Netzwerks durch sein flexibles Plugin-System verbessert.
+
+<ArticleSection name="Assets" id="assets" level="h2" />
+
+Der revolutionäre Aspekt von Metaplex Core liegt in seiner einheitlichen Kontostruktur, die die traditionelle Trennung zwischen Mint- und Token-Konten aufhebt.
+
+Da NFTs eine eindeutige Eigentümerschaft mit einem einzigen Besitzer aufrechterhalten, speichert das Programm die Beziehung zwischen Wallet und Asset direkt im Asset-Konto selbst.
+
+Dieses Design ist intuitiv sinnvoll, wenn man bedenkt, dass das ursprüngliche Token Account System entwickelt wurde, um tausende von Besitzern pro Mint zu verwalten - ein Szenario, das bei nicht-fungiblen Tokens nie vorkommt.
+
+Die Asset-Struktur demonstriert diesen effizienzorientierten Ansatz durch ihre minimalen Feldanforderungen:
+
+```rust
+#[derive(Clone, BorshSerialize, BorshDeserialize, Debug, ShankAccount, Eq, PartialEq)]
+pub struct AssetV1 {
+    /// The account discriminator.
+    pub key: Key,
+    /// The owner of the asset.
+    pub owner: Pubkey,
+    /// The update authority of the asset.
+    pub update_authority: UpdateAuthority,
+    /// The name of the asset.
+    pub name: String,
+    /// The URI of the asset that points to the off-chain data.
+    pub uri: String,
+    /// The sequence number used for indexing with compression.
+    pub seq: Option<u64>,
+}
+```
+
+Diese Struktur repräsentiert die absolut minimalen Daten, die für funktionale NFT-Operationen erforderlich sind.
+
+Traditionelle `Mint` Kontofelder werden in diesem Kontext überflüssig, da: der Supply immer eins ist, Dezimalstellen immer null sind, die Mint-Autorität nicht gesetzt sein sollte und die Freeze-Autorität mit dem Update-Autoritätsfeld konsolidiert werden kann.
+
+Ähnlich integriert sich die meiste `Token` Kontofunktionalität direkt in die Asset-Struktur.
+
+Das Fehlen eines expliziten Einfrierungsmechanismus zeigt die intelligente Designphilosophie von Core.
+
+Anstatt Speicherplatz für Funktionen zu reservieren, die viele Assets nie nutzen, implementiert Core die Einfrierungsfunktionalität durch sein Plugin-System, indem es Fähigkeiten bei Bedarf hinzufügt, anstatt ungenutzte Felder zu verwalten.
+
+Dieser Ansatz optimiert die Speicherkosten und bewahrt gleichzeitig die volle Funktionalität für Assets, die Einfrierungsfähigkeiten benötigen.
+
+Die Sammlungszugehörigkeit erhält eine ebenso durchdachte Behandlung durch das Update-Authority-Aufzählungssystem: Da gruppierte Assets typischerweise dieselbe Update-Authority teilen, nutzt Core diese Beziehung, um redundante Feldspeicherung zu eliminieren:
+
+```rust
+pub enum UpdateAuthority {
+    None,
+    Address(Pubkey),
+    Collection(Pubkey),
+}
+```
+
+Das Update-Authority-Feld erfüllt einen dreifachen Zweck, indem es unveränderliche Assets durch `None`, unabhängige Assets durch spezifische Adressen oder Sammlungsmitglieder, die die Update-Authority von ihrer übergeordneten Sammlung erben, kennzeichnet.
+
+Diese elegante Lösung reduziert den Speicherbedarf und behält gleichzeitig klare Autoritätsbeziehungen und die Überprüfung der Sammlungsmitgliedschaft bei.
+
+<ArticleSection name="Collections" id="collections" level="h2" />
+
+Sammlungen in Metaplex Core repräsentieren gruppierte Sets von Assets, die thematische, kreative oder funktionale Beziehungen teilen.
+
+Im Gegensatz zu traditionellen NFT-Sammlungen, die auf externe Verifizierungssysteme angewiesen sind, etablieren Core-Sammlungen überprüfbare On-Chain-Beziehungen zwischen Assets durch ihre integrierte Autoritätsstruktur.
+
+Die Erstellung einer Sammlung beginnt mit der Einrichtung eines Collection Assets, das als maßgebliches übergeordnetes Konto für alle Mitglieder-Assets dient.
+
+Dieses Collection Asset fungiert sowohl als organisatorischer Knotenpunkt als auch als Metadaten-Repository für sammlungsweite Informationen, einschließlich des Sammlungsnamens, der Beschreibung und repräsentativer Bilder.
+
+Das Sammlungskonto fungiert auch als zentraler Kontrollpunkt für Plugins, die für alle Mitglieder-Assets gelten, wodurch Ersteller einheitliche Verhaltensweisen in ihrer gesamten Sammlung implementieren können.
+
+```rust
+pub struct CollectionV1 {
+    /// The account discriminator.
+    pub key: Key, //1
+    /// The update authority of the collection.
+    pub update_authority: Pubkey, //32
+    /// The name of the collection.
+    pub name: String, //4
+    /// The URI that links to what data to show for the collection.
+    pub uri: String, //4
+    /// The number of assets minted in the collection.
+    pub num_minted: u32, //4
+    /// The number of assets currently in the collection.
+    pub current_size: u32, //4
+}
+```
+
+Die Collection-Struktur verwaltet wichtige Statistiken durch ihre Felder `num_minted` und `current_size`, die die Gesamtzahl der jemals in der Sammlung erstellten Assets und die aktuelle Anzahl der aktiven Assets verfolgen. 
+
+Diese Metriken ermöglichen präzise Sammlungsanalysen und unterstützen Funktionen wie Limited-Edition-Veröffentlichungen oder Burn-Tracking, ohne externe Indexierungsdienste zu benötigen.
+
+Wenn ein Asset sein `update_authority` auf `Collection(collection_pubkey)` setzt, übernimmt es automatisch die Autoritätsstruktur der Sammlung und etabliert gleichzeitig eine verifizierbare Mitgliedschaft. Dieses Design eliminiert die Notwendigkeit separater Verifizierungskonten oder externer Attestierungssysteme und schafft unveränderliche Sammlungsbeziehungen, die vollständig on-chain validiert werden können.
+
+<ArticleSection name="Plugins" id="plugins" level="h2" />
+
+Das Plugin-System stellt die innovativste Funktion von Metaplex Core dar und adressiert die Einschränkungen starrer, vordefinierter Verhaltensweisen, die frühere NFT-Standards charakterisierten. 
+
+Während das Legacy-Token-Metadata-Programm komplexe Workarounds wie programmierbare NFTs für benutzerdefinierte Funktionalitäten erforderte, ermöglicht Cores Plugin-Architektur eine granulare Anpassung ohne Einbußen bei Einfachheit oder Leistung.
+
+Cores revolutionärer Ansatz behandelt On-Chain-Daten flexibel, anstatt sie in feste Strukturen zu zwängen. Diese Designphilosophie ermöglicht das flexible, plugin-basierte System, das verschiedene Anwendungsfälle bedient und gleichzeitig ein effizientes Kontomanagement beibehält. 
+
+Jedes Plugin definiert sein eigenes Berechtigungsmodell, das genau festlegt, wer bestimmte Aktionen ausführen kann, während Cores Validierungssystem Konflikte zwischen verschiedenen Autoritäten und Berechtigungen verhindert.
+
+Die Kontoarchitektur teilt sich in zwei unterschiedliche Komponenten auf: 
+- Der Core-Datenbereich mit wesentlichen Asset-Informationen mit vorhersehbaren Feldlängen
+- Der optionale Plugin-Metadatenbereich, in dem zusätzliche Funktionalitäten und benutzerdefinierte Verhaltensweisen angesiedelt sind. 
+
+Diese Trennung stellt sicher, dass grundlegende Assets leichtgewichtig bleiben, während komplexe Funktionalität bei Bedarf skaliert.
+
+Plugin-Metadaten organisieren sich durch eine dreiteilige Struktur: den Header, einzelne Plugins und die Registry, die alles koordiniert.
+
+```
+Header | Plugin1 | Plugin2 | Plugin3 | Registry
+```
+
+Der Plugin-Header dient als Einstiegspunkt und enthält einen `plugin_registry_offset` Zeiger, der den Standort der Registry innerhalb des Kontos angibt:
+
+```rust
+pub struct PluginHeaderV1 {
+    /// The Discriminator of the header which doubles as a Plugin metadata version.
+    pub key: Key, // 1
+    /// The offset to the plugin registry stored at the end of the account.
+    pub plugin_registry_offset: usize, // 8
+}
+```
+
+Die Plugin-Registry fungiert als Koordinationszentrum und verwaltet Vektoren sowohl interner `RegistryRecord` Einträge als auch `ExternalRegistryRecord` Einträge für Drittanbieter-Plugins.
+
+Jeder Datensatz enthält den Plugin-Typ, die zuständige Autorität und die Offset-Position innerhalb des Kontos:
+
+```rust
+pub struct PluginRegistryV1 {
+    /// The Discriminator of the header which doubles as a plugin metadata version.
+    pub key: Key, // 1
+    /// The registry of all plugins.
+    pub registry: Vec<RegistryRecord>, // 4
+    /// The registry of all adapter, third party, plugins.
+    pub external_registry: Vec<ExternalRegistryRecord>, // 4
+}
+
+pub struct RegistryRecord {
+    /// The type of plugin.
+    pub plugin_type: PluginType, // 2
+    /// The authority who has permission to utilize a plugin.
+    pub authority: Authority, // Variable
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+}
+
+pub struct ExternalRegistryRecord {
+    /// The adapter, third party plugin type.
+    pub plugin_type: ExternalPluginAdapterType,
+    /// The authority of the external plugin adapter.
+    pub authority: Authority,
+    /// The lifecycle events for which the external plugin adapter is active.
+    pub lifecycle_checks: Option<Vec<(HookableLifecycleEvent, ExternalCheckResult)>>,
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+    /// For plugins with data, the offset to the data in the account.
+    pub data_offset: Option<usize>,
+    /// For plugins with data, the length of the data in the account.
+    pub data_len: Option<usize>,
+}
+```
+
+Der Abruf von Plugins folgt einem systematischen Prozess, der diese organisierte Struktur nutzt.
+
+Das System lädt zunächst die Asset-Daten, um den Standort des Plugin-Headers zu bestimmen, verwendet dann den Offset des Headers, um die Registry zu lokalisieren, und durchläuft schließlich die Registry-Einträge, um die vollständige Plugin-Liste zu erstellen:
+
+```rust
+pub fn list_plugins(account: &AccountInfo) -> Result<Vec<PluginType>, ProgramError> {
+    let asset = AssetV1::load(account, 0)?;
+    if asset.get_size() == account.data_len() {
+        return Err(MplCoreError::PluginNotFound.into());
+    }
+    let header = PluginHeaderV1::load(account, asset.get_size())?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::load(account, header.plugin_registry_offset)?;
+    Ok(registry
+        .iter()
+        .map(|registry_record| registry_record.plugin_type)
+        .collect())
+}
+```
+
+> Um mehr darüber zu erfahren, wie man das `Core` Programm verwendet, siehe die [offizielle Dokumentation](https://developers.metaplex.com/core)

@@ -1,0 +1,86 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Fehler
+
+Klare, beschreibende Fehlertypen sind in Solana-Programmen, die mit Pinocchio erstellt wurden, unerlässlich. Sie erleichtern das Debugging und bieten Benutzern und Clients, die mit Ihrem Programm interagieren, aussagekräftiges Feedback.
+
+### Die PinocchioError-Enumeration
+
+Bei der Definition benutzerdefinierter Fehlertypen in Rust haben Sie mehrere Optionen, wie `thiserror`, `anyhow` und `failure`. Für Pinocchio-Programme ist `thiserror` die bevorzugte Wahl, weil:
+- Es ermöglicht Ihnen, jede Fehlervariante mit einer menschenlesbaren Nachricht mithilfe des `#[error("...")]`Attributs zu versehen.
+- Es implementiert automatisch die Traits `core::error::Error` und `Display`, wodurch Ihre Fehler leicht zu drucken und zu debuggen sind.
+- Alle Fehlermeldungen und Formatierungen werden zur Kompilierzeit überprüft, was das Risiko von Laufzeitproblemen reduziert.
+- Am wichtigsten ist, dass `thiserror` `no_std`Umgebungen unterstützt, wenn Sie seine Standardfunktionen deaktivieren, was für Pinocchio-Programme erforderlich ist.
+
+Um thiserror in einem Pinocchio-Programm zu verwenden, fügen Sie es zu Ihrer `Cargo.toml` wie folgt hinzu:
+
+```
+[dependencies]
+thiserror = { version = "1.0", default-features = false }
+```
+
+Hier ist, wie Sie einen benutzerdefinierten Fehlertyp für Ihr Pinocchio-Programm definieren können:
+
+```rust
+use {
+    num_derive::FromPrimitive,
+    pinocchio::program_error::{ProgramError, ToStr},
+    thiserror::Error,
+};
+
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum PinocchioError {
+    // 0
+    /// Lamport balance below rent-exempt threshold.
+    #[error("Lamport balance below rent-exempt threshold")]
+    NotRentExempt,
+}
+```
+
+Jede Variante ist mit einer Nachricht versehen, die angezeigt wird, wenn der Fehler auftritt.
+
+Um Ihre benutzerdefinierten Fehler aus Solana-Anweisungen zurückzugeben, implementieren Sie `From<PinocchioError>` für `ProgramError`:
+
+```rust
+impl From<PinocchioError> for ProgramError {
+    fn from(e: PinocchioError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+```
+
+Dies ermöglicht es Ihnen, den `?`Operator zu verwenden und Ihre benutzerdefinierten Fehler nahtlos zurückzugeben.
+
+### Fehler aus Rohwerten deserialisieren
+
+Wenn Sie Rohfehlercodes (wie solche aus Logs oder programmübergreifenden Aufrufen) zurück in Ihre Fehler-Enumeration konvertieren müssen, implementieren Sie `TryFrom<u32>`:
+
+```rust
+impl TryFrom<u32> for PinocchioError {
+    type Error = ProgramError;
+    fn try_from(error: u32) -> Result<Self, Self::Error> {
+        match error {
+            0 => Ok(PinocchioError::NotRentExempt),
+            _ => Err(ProgramError::InvalidArgument),
+        }
+    }
+}
+```
+
+> Dies ist optional, aber nützlich für fortgeschrittene Fehlerbehandlung und Tests.
+
+### Menschenlesbare Fehler
+
+Für Logging und Debugging möchten Sie möglicherweise eine String-Darstellung Ihrer Fehler bereitstellen. Die Implementierung des `ToStr`Traits ermöglicht dies:
+
+```rust
+impl ToStr for PinocchioError {
+    fn to_str<E>(&self) -> &'static str {
+        match self {
+            PinocchioError::NotRentExempt => "Error: Lamport balance below rent-exempt threshold",
+        }
+    }
+}
+```
+
+> Dieser Schritt ist ebenfalls optional, kann aber die Fehlerberichte benutzerfreundlicher gestalten.

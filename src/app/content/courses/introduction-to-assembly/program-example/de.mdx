@@ -1,0 +1,107 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Programm-Beispiel 
+
+Schauen wir uns nun an, wie Register (r0-r10), Speicherbereiche und Anweisungen in einem tatsächlichen Programm zusammenarbeiten. Wir beginnen mit dem einfachsten möglichen sBPF-Programm, um den grundlegenden Ausführungsablauf zu verstehen.
+
+<ArticleSection name="NoOp-program" id="noop-program" level="h2" />
+
+Ein "NoOp"-Programm (No Operation) ist perfekt zum Lernen, da es die wesentliche Programmstruktur ohne Komplexität demonstriert:
+- Wie Programme Eingaben erhalten (im Register r1)
+- Wie sie Ergebnisse zurückgeben (im Register r0)
+- Den grundlegenden Ein-/Ausstiegsablauf, dem jedes sBPF-Programm folgt
+- Wie Rust zu sBPF-Assembly kompiliert wird
+
+Obwohl es "nichts tut", zeigt es dir die Grundlage, auf der jedes Solana-Programm aufbaut.
+
+Nachdem wir nun die grundlegenden sBPF-Operationen kennen, schauen wir uns an, wie sie in einem echten (wenn auch winzigen) Programm aussehen.
+
+<ArticleSection name="Pinocchio NoOp" id="pinocchio-noop" level="h2" />
+
+Unten ist ein hochperformantes "noop", das mit Pinocchio geschrieben wurde. Es gibt lediglich einen Erfolg zurück:
+
+```rust
+#![no_std]
+use pinocchio::{entrypoint::InstructionContext, lazy_program_entrypoint, no_allocator, nostd_panic_handler, ProgramResult};
+
+lazy_program_entrypoint!(process_instruction);
+
+nostd_panic_handler!();
+no_allocator!();
+
+fn process_instruction(
+    _context: InstructionContext, // wrapper around the input buffer
+ ) -> ProgramResult {
+    Ok(())
+}
+```
+
+Wenn wir diesen Code mit `cargo build-sbf --dump` erstellen, erhalten wir einen ELF-Dump, der uns Informationen über unsere Binärdatei im Verzeichnis `/target/deploy/` liefert.
+
+Wir werden dann nach dem Abschnitt `.text` suchen - dem Teil unserer Binärdatei, in dem ausführbarer Code gespeichert ist.
+
+```pinocchio_noop-dump.txt
+Disassembly of section .text
+0000000000000120 <entrypoint>
+     120 b7 00 00 00 00 00 00 00      	mov64 r0, 0x0
+     128 95 00 00 00 00 00 00 00      	exit
+```
+
+Lassen uns aufschlüsseln, was diese Hexadezimalwerte tatsächlich bedeuten, indem wir das Anweisungsformat verwenden, das wir gelernt haben:
+
+Dies ist die erste Anweisung: `120 b7 00 00 00 00 00 00 00`
+- Adresse: `0x120` (innerhalb der Textregion, die bei 0x100000000 beginnt)
+- Opcode: `0xb7` = `mov64` mit Direktwert
+- dst: `0x00` = Register `r0`
+- src: `0x00` = unbenutzt (Direktwert-Operation)
+- offset: `0x0000` = unbenutzt
+- imm: `0x00000000` = Direktwert 0
+
+Und hier ist die zweite Anweisung: `128 95 00 00 00 00 00 00 00`
+- Adresse: `0x128` (8 Bytes nach der ersten Anweisung)
+- Opcode: `0x95` = exit/return
+- Alle anderen Felder: `0x00` = ungenutzt für exit
+
+> Der `0x120`-Offset ist der Ort, an dem der Linker beschlossen hat, die Entrypoint-Funktion innerhalb des `.text`-Abschnitts der ELF-Datei zu platzieren. Die ELF-Datei beginnt mit Headern, Abschnittstabellen und anderen Metadaten, die die ersten ~`0x120` Bytes (288 Bytes) einnehmen. Der eigentliche ausführbare Code kommt nach all diesen Verwaltungsinformationen.
+
+<ArticleSection name="Assembly NoOp" id="assembly-noop" level="h2" />
+
+Wenn wir das Binärprogramm disassemblieren würden, um es wieder in kompilierbares sBPF-Assembly umzuwandeln, würde der Code so aussehen:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    mov64 r0, 0x00   // r0 <- success
+    exit             // finish, return r0
+```
+
+Lassen Sie uns den Code aufschlüsseln:
+- `.globl entrypoint`: Dies ist eine Assembler-Direktive, die dem Linker mitteilt, das Entrypoint-Symbol global sichtbar zu machen. Die Solana-Laufzeitumgebung sucht nach diesem Symbol, um zu wissen, wo die Ausführung Ihres Programms beginnen soll.
+- `entrypoint`: Dies ist ein Label, das die Speicheradresse markiert, an der die Programmausführung beginnt. Wenn die Laufzeitumgebung Ihr Programm lädt, springt sie zu dieser Adresse.
+- `mov64 r0, 0x00`: Bewegt den unmittelbaren Wert 0 in Register r0. Da r0 das Rückgaberegister ist, wird hiermit ein erfolgreicher Rückgabecode festgelegt.
+- `exit`: Beendet die Programmausführung und gibt den Wert in r0 an die Laufzeitumgebung zurück.
+
+> Die Rückgabe von 0 bedeutet, dass wir einen erfolgreichen Programmabschluss zurückgeben.
+
+Dies ist ein extrem kleines Programm mit nur 2 Anweisungen, die nur 2 Compute Units (CUs) für die Ausführung verbrauchen und perfekt zu unserem Rust-Code passen:
+- Wir haben eine Entrypoint-Funktion definiert
+- Wir geben Ok(()) zurück, was zu 0 ausgewertet wird
+- Der Compiler hat die entsprechenden `mov64` und `exit` Anweisungen generiert
+
+<ArticleSection name="Optimierte Assembly NoOp" id="optimized-assembly-noop" level="h2" />
+
+Wir können dies jedoch weiter optimieren. Da die Solana-Laufzeitumgebung `r0` standardmäßig auf 0 initialisiert, können wir die redundante `mov64`Anweisung eliminieren:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    exit
+```
+
+Diese optimierte Version:
+- Kostet nur 1 Compute-Einheit (50% Reduzierung!)
+- Erzeugt identische Ergebnisse (`r0` enthält immer noch 0)
+
+> Deshalb hilft das Verständnis von Assembly bei der Optimierung!
+
+Diese Optimierung ist möglich, weil wir die anfänglichen Registerzustände kennen — etwas, das der Rust-Compiler nicht immer ausnutzt. Das Verständnis von sBPF-Assembly ermöglicht es dir, solche Ineffizienzen in leistungskritischem Code zu identifizieren und zu beseitigen.

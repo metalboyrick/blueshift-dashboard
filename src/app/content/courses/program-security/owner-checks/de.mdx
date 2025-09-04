@@ -1,0 +1,115 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Owner-Prüfungen
+
+Owner-Prüfungen sind die erste Verteidigungslinie in der Sicherheit von Solana-Programmen. Sie verifizieren, dass ein Konto, das an einen Instruktionshandler übergeben wird, tatsächlich dem erwarteten Programm gehört und verhindern so, dass Angreifer bösartige Nachahmungen von Konten einschleusen können.
+
+Jedes Konto in Solanas `AccountInfo`Struktur enthält ein owner-Feld, das angibt, welches Programm dieses Konto kontrolliert. Owner-Prüfungen stellen sicher, dass dieses `owner`Feld mit dem erwarteten `program_id` übereinstimmt, bevor Ihr Programm den Daten des Kontos vertraut.
+
+Die `AccountInfo`Struktur enthält mehrere Felder, einschließlich des Owners, der das Programm repräsentiert, dem das Konto gehört. Owner-Prüfungen stellen sicher, dass dieses `owner`Feld in der `AccountInfo` mit dem erwarteten `program_id` übereinstimmt.
+
+Ohne Owner-Prüfungen kann ein Angreifer eine perfekte "Replik" Ihrer Kontodatenstruktur erstellen, komplett mit dem korrekten Diskriminator und allen richtigen Feldern, und diese verwenden, um Anweisungen zu manipulieren, die auf Datenvalidierung angewiesen sind. Es ist, als würde jemand einen gefälschten Ausweis erstellen, der identisch mit einem echten aussieht, aber von der falschen Autorität kontrolliert wird.
+
+> Die entscheidende Ausnahme ist, wenn Sie die internen Daten des Kontos ändern. In diesen Fällen verhindert Solanas Runtime automatisch, dass andere Programme in Konten schreiben, die ihnen nicht gehören. Aber für Leseoperationen und Validierungslogik sind Sie auf sich allein gestellt.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Betrachten Sie diese anfällige Anweisung, die Logik basierend auf dem `owner` eines `program_account` ausführt:
+
+```rust
+#[program]
+pub mod insecure_check{
+    use super::*;
+    //..
+
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let account_data = ctx.accounts.program_account.try_borrow_data()?;
+        let mut account_data_slice: &[u8] = &account_data;
+        let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+        if account_state.owner != ctx.accounts.owner.key() {
+            return Err(ProgramError::InvalidArgument.into());
+        }
+
+        //..do something
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Der Typ `UncheckedAccount` ist Anchors Art zu sagen: "Ich prüfe nichts, behandle dies mit äußerster Vorsicht." Obwohl die Kontodaten möglicherweise perfekt deserialisiert werden und legitim aussehen, erzeugt die fehlende Owner-Prüfung eine kritische Sicherheitslücke.
+
+Ein Angreifer kann sein eigenes Konto mit identischer Datenstruktur erstellen und es an deine Anweisung übergeben. Dein Programm wird bereitwillig das Ownership-Feld überprüfen, aber da der Angreifer das Konto kontrolliert, können sie innerhalb der Anweisung tun, was sie wollen.
+
+Die Lösung ist einfach, aber wesentlich: Überprüfe immer, ob das Konto im Besitz deines Programms ist, bevor du seinen Inhalt vertraust.
+
+Dies ist super einfach mit `Anchor`, da es möglich ist, diese Überprüfung direkt in der Account-Struktur durchzuführen, indem man einfach `UncheckedAccount` in `ProgramAccount` ändert, wie hier:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+Oder du könntest die `owner` Account-Einschränkung wie folgt hinzufügen:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut, owner = ID)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+
+}
+```
+
+Oder du könntest einfach eine Owner-Prüfung in der Anweisung mit der `ctx.accounts.program_account.owner` Prüfung wie folgt hinzufügen:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ID {
+        return Err(ProgramError::IncorrectProgramId.into());
+    }
+    
+    //..do something
+
+    Ok(())
+}
+```
+
+Durch das Hinzufügen dieser Prüfung wird der Anweisungshandler nur fortfahren, wenn das Konto den korrekten `program_id` hat. Wenn das Konto nicht im Besitz unseres Programms ist, wird die Transaktion fehlschlagen.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+In Pinocchio, da wir nicht die Möglichkeit haben, Sicherheitsprüfungen direkt innerhalb der Account-Struktur hinzuzufügen, sind wir gezwungen, dies in der Anweisungslogik zu tun.
+
+Wir können dies sehr ähnlich wie bei Anchor tun, indem wir die Funktion `is_owned_by()` wie folgt verwenden:
+
+```rust
+if !self.accounts.owner.is_owned_by(ID) {
+    return Err(ProgramError::IncorrectProgramId.into());
+}
+```

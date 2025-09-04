@@ -1,0 +1,231 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Erstelle deine Codama IDL von Grund auf
+
+Eine Codama IDL von Grund auf zu erstellen bedeutet, den kompletten Baum von Knoten für dein Programm zu erstellen. Um dies effizient zu tun, schauen wir uns die verfügbaren Knotentypen an.
+
+<ArticleSection name="Knotentypen" id="node-types" level="h2" />
+
+### Wert-Knoten
+
+Um bestimmte Werte in einen Knoten zu übergeben, verwenden wir `ValueNode`. Dieser Typ repräsentiert alle verfügbaren Wert-Knoten, die verschiedene Datentypen enthalten können.
+
+[Hier](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/valueNodes/README.md) findest du detaillierte Dokumentation zu allen verfügbaren Werten.
+
+> `ValueNode` ist ein Typ-Alias und kann nicht direkt als Knoten verwendet werden. Wenn ein `ValueNode` erforderlich ist, verwende stattdessen einen der spezifischen Wert-Knotentypen.
+
+### Typ-Knoten
+
+Um die Struktur und Form von Daten zu definieren, verwenden wir `TypeNode`. Diese Knoten beschreiben, welche Art von Daten erwartet wird: wie Zahlen, Strings, Structs, Arrays oder benutzerdefinierte Typen.
+
+Sie definieren das Schema, ohne tatsächliche Werte zu enthalten.
+
+[Hier](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/typeNodes/README.md) findest du detaillierte Dokumentation zu allen verfügbaren Typen.
+
+> `TypeNode` ist ein Typ-Alias und kann nicht direkt als Knoten verwendet werden. Wenn ein `TypeNode` erforderlich ist, verwende stattdessen einen der spezifischen Typ-Knotentypen.
+
+### Diskriminator-Knoten
+
+Um zwischen Konten und Anweisungen in unserem Programm zu unterscheiden, verwenden wir Diskriminatoren. Es gibt verschiedene Methoden, um dies zu erreichen, und der `DiscriminatorNode` bietet alle verfügbaren Optionen:
+
+- `ConstantDiscriminatorNode`: Wird verwendet, um einen konstanten Wert an einem bestimmten Offset zu beschreiben. Es nimmt einen `ConstantValueNode` als Konstante und einen `number` als Offset:
+    
+
+    ```ts
+    const discriminatorNode = constantDiscriminatorNode(constantValueNodeFromString('utf8', 'Hello'), 64);
+    ```
+
+- `FieldDiscriminatorNode`: Wird verwendet, um einen Standardwert eines Struct-Felds an einem bestimmten Offset zu beschreiben. Es nimmt einen `CamelCaseString` als Feldnamen und einen `number` als Offset:
+    
+
+    ```ts
+    const discriminatorNode = fieldDiscriminatorNode('accountState', 64);
+    ```
+
+    > Das Feld muss in den Kontodaten oder Anweisungsargumenten verfügbar sein und es muss einen Standardwert haben. Zum Beispiel:
+
+    ```ts
+    accountNode({
+        data: structTypeNode([
+            structFieldTypeNode({
+                name: 'discriminator',
+                type: numberTypeNode('u32'),
+                defaultValue: numberValueNode(42),
+                defaultValueStrategy: 'omitted',
+            }),
+            // ...
+        ]),
+        discriminators: [fieldDiscriminatorNode('discriminator')],
+        // ...
+    });
+    ```
+
+- `SizeDiscriminatorNode`: Wird verwendet, um Konten oder Anweisungen basierend auf der Größe ihrer Daten zu unterscheiden. Es nimmt einen `number` als Größenparameter:
+    
+
+    ```ts
+    const discriminatorNode = sizeDiscriminatorNode(165);
+    ```
+
+> `DiscriminatorNode` ist ein Typalias und kann nicht direkt als Knoten verwendet werden. Wenn ein `DiscriminatorNode` erforderlich ist, verwenden Sie stattdessen einen der spezifischen Diskriminator-Knotentypen.
+
+### Pda Seed Node
+
+Um Seeds für Program Derived Addresses (PDAs) zu definieren, verwenden wir `PdaSeedNode`. Diese Knoten geben an, wie PDA-Adressen entweder aus konstanten Werten oder variablen Eingaben abgeleitet werden sollen. Der `PdaSeedNode` bietet verschiedene Methoden zur Definition von PDA-Seeds:
+
+- `ConstantPdaSeedNode`: Wird verwendet, um einen konstanten Seed für eine programmabgeleitete Adresse zu beschreiben. Es verwendet eine Kombination aus `TypeNode` und `ValueNode`:
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNode(stringTypeNode('utf8'), stringValueNode('auth'));
+    ```
+
+    > Ein `constantPdaSeedNodeFromString`Helper kann auch verwendet werden, um string-basierte Konstanten einfacher zu definieren. Das folgende Beispiel ist zum Beispiel äquivalent zum obigen:
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNodeFromString('utf8', 'auth');
+    ```
+
+- `VariablePdaSeedNode`: Wird verwendet, um einen variablen Seed für eine programmabgeleitete Adresse zu beschreiben. Es nimmt einen Namen und einen `TypeNode`:
+
+    ```ts
+    const pdaSeedNode = variablePdaSeedNode('authority', publicKeyTypeNode())
+    ```
+
+Hier ist, wie sie in einem `pdaNode` verwendet werden:
+
+```ts
+const counterPda = pdaNode({
+    name: 'counter',
+    seeds: [
+        constantPdaSeedNodeFromString('utf8', 'counter'),
+        variablePdaSeedNode('authority', publicKeyTypeNode()),
+    ],
+});
+```
+
+> `PdaSeedNode` ist ein Typalias und kann nicht direkt als Knoten verwendet werden. Wenn ein `PdaSeedNode` erforderlich ist, verwenden Sie stattdessen einen der spezifischen PDA-Seed-Knotentypen.
+
+<ArticleSection name="Eine Codama IDL schreiben" id="writing-a-codama-idl" level="h2" />
+
+Nachdem wir die wichtigsten verfügbaren Knoten in einem Programm untersucht haben, wollen wir nun entdecken, wie man eine Codama IDL von Grund auf erstellt.
+
+### Root-Knoten
+
+Um die Grundlage Ihrer Codama IDL zu erstellen, verwenden wir `RootNode`. Dieser Knoten dient als Container auf oberster Ebene, der Ihr Haupt-`ProgramNode` sowie alle zusätzlichen Programme enthält, auf die das Hauptprogramm verweisen kann.
+
+```ts
+const node = rootNode(programNode({ ... }));
+```
+
+### Programm-Knoten
+
+Um ein vollständiges On-Chain-Programm zu definieren, verwenden wir `ProgramNode`. Dieser Knoten repräsentiert das komplette Programm, das auf der Blockchain bereitgestellt wird, und definiert alle minimal erforderlichen Elemente wie Konten, Anweisungen, PDAs und Fehler.
+
+Zusätzlich zu diesen Kernelementen akzeptiert dieser Knoten den Namen des Programms, die Version, den öffentlichen Bereitstellungsschlüssel und Markdown-Dokumentation:
+
+```ts
+const node = programNode({
+    name: 'counter',
+    publicKey: '22222222222222222222222222222222222222222222',
+    version: '0.0.1',
+    docs: [],
+    accounts: [],
+    instructions: [],
+    definedTypes: [],
+    pdas: [],
+    errors: [],
+});
+```
+
+In den nächsten Abschnitten werden wir all diese Elemente im Detail untersuchen.
+
+### Konto-Knoten
+
+Um On-Chain-Konten zu definieren, verwenden wir `AccountNode`. Dieser Knoten wird durch seinen Namen, seine Datenstruktur und optionale Attribute wie PDA-Definitionen und Konto-Diskriminatoren charakterisiert.
+
+Er repräsentiert die Konten, die typischerweise der `state.rs`Datei Ihres Programms entsprechen.
+
+Das Docs-Feld kann verwendet werden, um Dokumentation hinzuzufügen, die erklärt, was dieses Konto innerhalb des Programms bewirkt:
+
+```ts
+const node = accountNode({
+    name: 'token',
+    data: structTypeNode([
+        structFieldTypeNode({ name: 'mint', type: publicKeyTypeNode() }),
+        structFieldTypeNode({ name: 'owner', type: publicKeyTypeNode() }),
+        structFieldTypeNode({ name: 'amount', type: numberTypeNode('u64') }),
+    ]),
+    discriminators: [sizeDiscriminatorNode(72)],
+    size: 72,
+    pda: pdaLinkNode("associatedTokenAccount"),
+});
+```
+
+> Der `AccountNode` speichert kein Array von `PdaNode`, sondern eine einzelne optionale Verknüpfung zu einem `PdaNode` über einen `PdaLinkNode`. Wenn also ein `PdaNode` innerhalb eines `ProgramNode` definiert ist, können die beiden hier verknüpft werden.
+
+### Anweisungs-Knoten
+
+Um Programmanweisungen zu definieren, verwenden wir `InstructionNode`. Dieser Knoten repräsentiert eine Anweisung in einem Programm und ermöglicht es Ihnen, den Diskriminator, erforderliche Konten und Anweisungsdaten ohne Komplikationen anzugeben.
+
+Zusätzlich können Sie optionale Konten einbeziehen. Je nach Design Ihres Programms können diese optionalen Konten auf zwei Arten aufgelöst werden: indem sie weggelassen werden oder indem die Programm-ID als Konto übergeben wird. Sie können die Auflösungsmethode mit dem Feld `optionalAccountStrategy: "omitted" | "programId"` auswählen.
+
+> Wenn die `optionalAccountStrategy` nicht angegeben wird, wird standardmäßig die `programId` Strategie angenommen.
+
+Das Feld docs kann verwendet werden, um Dokumentation hinzuzufügen, die erklärt, was diese Anweisung innerhalb des Programms bewirkt.
+
+```ts
+const node = instructionNode({
+    name: 'increment',
+    discriminators: [fieldDiscriminatorNode('discriminator')],
+    arguments: [
+        instructionArgumentNode({
+            name: 'discriminator',
+            type: numberTypeNode('u8'),
+            defaultValue: numberValueNode(1),
+            defaultValueStrategy: 'omitted',
+        }),
+    ],
+    accounts: [
+        instructionAccountNode({ name: 'counter', isWritable: true, isSigner: true }),
+        instructionAccountNode({ name: 'authority', isWritable: false, isSigner: false }),
+    ],
+    remainingAccounts: [instructionRemainingAccountsNode(argumentValueNode('authorities'), { isSigner: true })],
+    optionalAccountStrategy: 'omitted',
+});
+```
+
+In `instructionAccountNode` können Sie die Optionalität von Konten mit dem Feld `isOptional: boolean` angeben oder einen `defaultValue` bereitstellen, der zu einem `ValueNode` führt.
+
+> Die defaultValue-Funktionalität funktioniert auch für `instructionArgumentNode`.
+
+Die defaultValueStrategy in instructionArgumentNode bestimmt, wie Standardwerte behandelt werden: "optional" bedeutet, dass der Standardwert des Arguments durch ein bereitgestelltes Argument überschrieben werden kann, oder "omitted", was bedeutet, dass kein Argument bereitgestellt werden sollte und der Standardwert immer verwendet werden sollte
+
+Die Strategie ist standardmäßig "optional", wenn nicht anders angegeben.
+
+### Error Node
+
+Um Fehler zu definieren, die von einem Programm zurückgegeben werden können, verwenden wir `ErrorNode`. Dieser Knoten ist durch einen Namen, einen numerischen Code, der zurückgegeben wird, und eine zugehörige lesbare Nachricht für das Debugging gekennzeichnet.
+
+```ts
+const node = errorNode({
+    name: 'invalidAmountArgument',
+    code: 1,
+    message: 'The amount argument is invalid.',
+});
+```
+
+### PDA Node
+
+Um Definitionen für spezifische Program-Derived Addresses bereitzustellen, verwenden wir `PdaNode`. Dieser Knoten ist durch einen Namen und eine Liste von Seeds gekennzeichnet, die entweder konstant oder variabel sein können, was eine flexible PDA-Generierung ermöglicht.
+
+```ts
+const node = pdaNode({
+    name: 'counter',
+    seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+    docs: ['The counter PDA derived from its authority.'],
+});
+```
+
+> Wenn sich die Programm-ID vom nächsten ProgramNode-Vorgänger unterscheidet, müssen Sie sie mit dem Feld programId angeben.
+
+Dies kann verwendet werden, um PDAs als `defaultValue` im `instructionAccountNode` mit dem `pdaValueNode` zu verknüpfen.

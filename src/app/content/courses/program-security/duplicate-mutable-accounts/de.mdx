@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Duplizierte veränderbare Konten
+
+Angriffe mit duplizierten veränderbaren Konten nutzen Programme aus, die mehrere veränderbare Konten desselben Typs akzeptieren, indem sie dasselbe Konto zweimal übergeben. Dies führt dazu, dass das Programm unwissentlich seine eigenen Änderungen überschreibt. Dadurch entsteht eine Race-Condition innerhalb einer einzelnen Anweisung, bei der spätere Änderungen frühere stillschweigend aufheben können.
+
+Diese Sicherheitslücke betrifft hauptsächlich Anweisungen, die Daten in programmgesteuerten Konten modifizieren, nicht Systemoperationen wie Lamport-Überweisungen. Der Angriff gelingt, weil die Solana-Laufzeitumgebung nicht verhindert, dass dasselbe Konto mehrmals an verschiedene Parameter übergeben wird; es liegt in der Verantwortung des Programms, Duplikate zu erkennen und zu behandeln.
+
+Die Gefahr liegt in der sequentiellen Natur der Anweisungsausführung. Wenn dasselbe Konto zweimal übergeben wird, führt das Programm die erste Änderung durch und überschreibt sie dann sofort mit der zweiten Änderung. Das Konto befindet sich dadurch in einem unerwarteten Zustand, der möglicherweise nicht die Absichten des Benutzers oder die Logik des Programms widerspiegelt.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Betrachten wir diese anfällige Anweisung, die Eigentumsfelder in zwei Programmkonten aktualisiert:
+
+```rust
+#[program]
+pub mod unsafe_update_account{
+    use super::*;
+    
+    //..
+
+    pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+        ctx.accounts.program_account_1.owner = pubkey_a;
+        ctx.accounts.program_account_2.owner = pubkey_b;
+        
+        Ok(())
+    }
+
+    //..
+
+}
+
+#[derive(Accounts)]
+pub struct UpdateAccount<'info> {
+   #[account(mut)]
+    pub program_account_1: Account<'info, ProgramAccount>,
+    #[account(mut)]
+    pub program_account_2: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Dieser Code hat einen kritischen Fehler: Er überprüft nie, ob `program_account_1` und `program_account_2` unterschiedliche Konten sind.
+
+Ein Angreifer kann dies ausnutzen, indem er dasselbe Konto für beide Parameter übergibt. Hier ist, was passiert:
+- Das Programm setzt `program_account_1.owner = pubkey_a`
+- Da beide Parameter auf dasselbe Konto verweisen, überschreibt das Programm dies sofort mit `program_account_2.owner = pubkey_b`
+
+Das Endergebnis: Der Eigentümer des Kontos wird auf `pubkey_b` gesetzt und `pubkey_a` wird vollständig ignoriert.
+
+Dies mag harmlos erscheinen, aber betrachten wir die Auswirkungen. Ein Benutzer, der erwartet, zwei verschiedene Konten mit spezifischen Eigentumszuweisungen zu aktualisieren, stellt fest, dass nur ein Konto modifiziert wurde, und nicht auf die beabsichtigte Weise. In komplexen Protokollen könnte dies zu inkonsistenten Zuständen, fehlgeschlagenen mehrstufigen Operationen oder sogar finanziellen Verlusten führen.
+
+Die Lösung ist unkompliziert. Sie müssen lediglich überprüfen, dass die Konten eindeutig sind, bevor Sie fortfahren:
+
+```rust
+pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+    if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+        return Err(ProgramError::InvalidArgument)
+    }
+
+    ctx.accounts.program_account_1.owner = pubkey_a;
+    ctx.accounts.program_account_2.owner = pubkey_b;
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Bei Pinocchio gilt das gleiche Validierungsmuster:
+
+```rust
+if self.accounts.program_account_1.key() == self.accounts.program_account_2.key() {
+    return Err(ProgramError::InvalidArgument)
+}
+```

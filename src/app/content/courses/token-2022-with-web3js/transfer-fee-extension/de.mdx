@@ -1,0 +1,210 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Die Transfer Fee Extension
+
+Die `TransferFee` Extension ist eine `Mint` Erweiterung, die es dem Ersteller ermöglicht, eine "Steuer" auf den Token festzulegen, die bei jedem Tausch erhoben wird.
+
+Um sicherzustellen, dass der Gebührenempfänger nicht bei jedem Tausch schreibgeschützt wird und um zu gewährleisten, dass wir Transaktionen mit einer `Mint` mit dieser Erweiterung parallelisieren können, wird die Gebühr im Token-Konto des Empfängers zurückgelegt, auf das nur der `Withdraw Authority` zugreifen kann.
+
+<ArticleSection name="Initialisierung des Mint-Kontos" id="initializing-the-mint-account" level="h2" />
+
+Um die `TransferFee` Erweiterung auf einem `Mint` Konto zu initialisieren, benötigen wir die `createInitializeTransferFeeConfigInstruction()` Funktion.
+
+Hier ist, wie man einen Mint mit der Transfer Fee Extension erstellt:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeTransferFeeConfigInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Transfer Fee extension
+const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Transfer Fee extension
+const initializeTransferFeeConfig = createInitializeTransferFeeConfigInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    500,
+    BigInt(1e6),
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTransferFeeConfig,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Übertragung von Tokens mit der Gebühr" id="transferring-tokens-with-the-fee" level="h2" />
+
+Um Tokens für `Mint` zu übertragen, die eine TransferFee` Erweiterung haben, haben wir zwei Wege:
+- Wir können die normale `transferChecked()` Anweisung verwenden, wobei die Berechnung der Gebühr automatisch erfolgt
+- Wir können die `transferCheckedWithFee()` Anweisung verwenden und manuell die `fee` angeben, die wir bei dieser Übertragung zahlen werden. Dies ist sehr nützlich, wenn wir sicherstellen wollen, nicht "gerugged" zu werden, falls die Autorität die Gebühr ändert und eine ungewöhnlich hohe Gebühr festlegt; es ist wie das Festlegen des Slippages für eine Übertragung.
+
+> Selbst wenn die Autorität die Gebühr ändert, wird die neue Gebühr erst 2 Epochen nach der Festlegung aktiv
+
+Hier ist, wie man eine Übertragung mit der `transferCheckedWithFee()` Anweisung erstellt:
+
+```ts
+createTransferCheckedWithFeeInstruction(
+    sourceTokenAccount,
+    mint.publicKey, 
+    destinationTokenAccount, 
+    keypair.publicKey, 
+    BigInt(100e6), // transfer amount
+    6, // decimals
+    BigInt(1e6), // fee paid for the transfer
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(transferInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens transferred! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Einsammeln der Gebühr" id="harvesting-the-fee" level="h2" />
+
+Wie in der Einleitung erwähnt, verbleibt die Übertragungsgebühr im `Token`Konto, das Token empfängt, um eine Schreibsperre des `Mint`Kontos oder des `sourceTokenAccount` zu vermeiden. Aus diesem Grund müssen wir, bevor wir die Gebühr abheben können, in der Lage sein, alle `Token`Konten zu finden, die Gebühren zur Auszahlung haben.
+
+Wir können dies tun, indem wir einen Filter setzen und alle Konten abrufen, die zu dieser Münze gehören, wie folgt:
+
+```ts
+// Retrieve all Token Accounts for the Mint Account
+const allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
+    commitment: "confirmed",
+    filters: [
+        {
+            memcmp: {
+                offset: 0,
+                bytes: mint.publicKey.toString(), // Mint Account address
+            },
+        },
+    ],
+});
+```
+
+Und wir erhalten eine Liste aller `Token`Konten, die eine Gebühr enthalten, indem wir das `Token`Konto entpacken und die Funktion `getTransferAmoun()` wie folgt verwenden:
+
+```ts
+// List of Token Accounts to withdraw fees from
+const accountsToWithdrawFrom: PublicKey[] = [];
+
+for (const accountInfo of allAccounts) {
+    const account = unpackAccount(
+        accountInfo.pubkey,
+        accountInfo.account,
+        TOKEN_2022_PROGRAM_ID,
+    );
+
+    // Extract transfer fee data from each account
+    const transferFeeAmount = getTransferFeeAmount(account);
+
+    // Check if fees are available to be withdrawn
+    if (transferFeeAmount !== null && transferFeeAmount.withheldAmount > 0) {
+        accountsToWithdrawFrom.push(accountInfo.pubkey);
+    }
+}
+```
+
+Danach können wir die Anweisung `withdrawWithheldTokensFromAccounts` mit dem `Withdraw Authority` verwenden, um die Liste der `accountsToWithdrawFrom` wie folgt zu übergeben:
+
+```ts
+const harvestInstructions = createWithdrawWithheldTokensFromAccountsInstruction(
+    mint.publicKey,
+    sourceTokenAccount,
+    keypair.publicKey,
+    [],
+    accountsToWithdrawFrom,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(harvestInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Updating the Fee" id="updating-the-fee" level="h2" />
+
+Nachdem wir unser `Mint` mit der Erweiterung `TranferFee` initialisiert haben, müssen wir möglicherweise diese spezifische Gebühr in Zukunft aktualisieren. Um sicherzustellen, dass der Ersteller seine Token-Inhaber nicht mit einem "Köder und Austausch" betrügt, indem er die Gebühr bei jeder Übertragung sehr hoch ansetzt, wird die neue `TranferFee` erst nach 2 Epochen aktiviert.
+
+Um dies zu berücksichtigen, sehen die Daten der Erweiterung `TransferFee` wie folgt aus:
+
+```rust
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+ 
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Um die Gebühr zu ändern, können wir die Anweisung `setTransferFee` wie folgt verwenden:
+
+```ts
+const setTransferFeeInstruction = createSetTransferFeeInstruction(
+    mint.publicKey
+    keypaird.publicKey
+    [],
+    BigInt(1000), // new transfer fee
+    BigInt(100e6), // new maximum fee amount
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(setTransferFeeInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

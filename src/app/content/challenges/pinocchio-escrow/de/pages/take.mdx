@@ -1,0 +1,183 @@
+# Take
+
+Die `take` Anweisung schließt den Tausch ab:
+  - Schließt den Escrow-Datensatz und sendet die Rent-Lamports zurück an den Ersteller.
+- Überträgt Token A vom Tresor zum Nehmer und schließt dann den Tresor.
+- Überträgt die vereinbarte Menge von Token B vom Nehmer zum Ersteller.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Nachfolgend sind die Konten aufgeführt, die der Kontext benötigt:
+
+- taker: die Person, die das Angebot annehmen möchte. Muss ein Unterzeichner und veränderbar sein.
+- maker: der Ersteller des Escrows. Muss veränderbar sein.
+- escrow: das Escrow-Konto, das wir initialisieren. Muss veränderbar sein.
+- mint_a: der Token, den wir im Escrow hinterlegen
+- mint_b: der Token, den wir erhalten möchten
+- vault: das zugehörige Token-Konto im Besitz des Escrows. Muss veränderbar sein
+- taker_ata_a: das zugehörige Token-Konto im Besitz des Nehmers für mint_a. Muss veränderbar sein
+- taker_ata_b: das zugehörige Token-Konto im Besitz des Nehmers für mint_b. Muss veränderbar sein
+- maker_ata_b: das zugehörige Token-Konto im Besitz des Erstellers für mint_b. Muss veränderbar sein
+- system_program: das System-Programm. Muss ausführbar sein
+- token_program: das Token-Programm. Muss ausführbar sein
+
+Und wir führen folgende Prüfungen daran durch:
+
+```rust
+pub struct TakeAccounts<'a> {
+  pub taker: &'a AccountInfo,
+  pub maker: &'a AccountInfo,
+  pub escrow: &'a AccountInfo,
+  pub mint_a: &'a AccountInfo,
+  pub mint_b: &'a AccountInfo,
+  pub vault: &'a AccountInfo,
+  pub taker_ata_a: &'a AccountInfo,
+  pub taker_ata_b: &'a AccountInfo,
+  pub maker_ata_b: &'a AccountInfo,
+  pub system_program: &'a AccountInfo,
+  pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    let [taker, maker, escrow, mint_a, mint_b, vault, taker_ata_a, taker_ata_b, maker_ata_b, system_program, token_program, _] = accounts else {
+      return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    // Basic Accounts Checks
+    SignerAccount::check(taker)?;
+    ProgramAccount::check(escrow)?;
+    MintInterface::check(mint_a)?;
+    MintInterface::check(mint_b)?;
+    AssociatedTokenAccount::check(taker_ata_b, taker, mint_b, token_program)?;
+    AssociatedTokenAccount::check(vault, escrow, mint_a, token_program)?;
+
+    // Return the accounts
+    Ok(Self {
+      taker,
+      maker,
+      escrow,
+      mint_a,
+      mint_b,
+      taker_ata_a,
+      taker_ata_b,
+      maker_ata_b,
+      vault,
+      system_program,
+      token_program,
+    })
+  }
+}
+```
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Alle Daten, die wir zur Durchführung der Logik benötigen, befinden sich bereits im Escrow-Konto oder in den Konten, die wir deserialisieren. Aus diesem Grund benötigen wir keine `instruction_data` für diese Anweisung.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Wir beginnen mit der Initialisierung der erforderlichen Konten in der `TryFrom` Implementierung, nachdem wir die Konten deserialisiert haben.
+
+Für diesen Schritt stellen wir sicher, dass sowohl das Token-A-Konto des Nehmers als auch das Token-B-Konto des Erstellers mit `AssociatedTokenAccount::init_if_needed` initialisiert sind, da wir nicht sicher sind, ob diese bereits existieren
+
+```rust
+pub struct Take<'a> {
+  pub accounts: TakeAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
+  type Error = ProgramError;
+  
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    let accounts = TakeAccounts::try_from(accounts)?;
+
+    // Initialize necessary accounts
+    AssociatedTokenAccount::init_if_needed(
+      accounts.taker_ata_a,
+      accounts.mint_a,
+      accounts.taker,
+      accounts.taker,
+      accounts.system_program,
+      accounts.token_program,
+    )?;
+
+    AssociatedTokenAccount::init_if_needed(
+      accounts.maker_ata_b,
+      accounts.mint_b,
+      accounts.taker,
+      accounts.maker,
+      accounts.system_program,
+      accounts.token_program,
+    )?;
+
+    Ok(Self {
+      accounts,
+    })
+  }
+}
+```
+
+Wir können uns jetzt auf die eigentliche Logik konzentrieren, die:
+- Die Token vom `taker_ata_b` zum `maker_ata_b` überträgt.
+- Die Token vom `vault` zum `taker_ata_a` überträgt.
+- Das nun leere `vault` schließt und die Miete vom Konto abhebt.
+
+```rust
+impl<'a> Take<'a> {
+  pub const DISCRIMINATOR: &'a u8 = &1;
+  
+  pub fn process(&mut self) -> ProgramResult {
+    let data = self.accounts.escrow.try_borrow_data()?;
+    let escrow = Escrow::load(&data)?;
+
+    // Check if the escrow is valid
+    let escrow_key = create_program_address(&[b"escrow", self.accounts.maker.key(), &escrow.seed.to_le_bytes(), &escrow.bump], &crate::ID)?;
+    if &escrow_key != self.accounts.escrow.key() {
+      return Err(ProgramError::InvalidAccountOwner);
+    }
+    
+    let seed_binding = escrow.seed.to_le_bytes();
+    let bump_binding = escrow.bump;
+    let escrow_seeds = [
+      Seed::from(b"escrow"),
+      Seed::from(self.accounts.maker.key().as_ref()),
+      Seed::from(&seed_binding),
+      Seed::from(&bump_binding),
+    ];
+    let signer = Signer::from(&escrow_seeds);
+    
+    let amount = TokenAccount::get_amount(self.accounts.vault);
+    
+    // Transfer from the Vault to the Taker
+    Transfer {
+      from: self.accounts.vault,
+      to: self.accounts.taker_ata_a,
+      authority: self.accounts.escrow,
+      amount,
+    }.invoke_signed(&[signer.clone()])?;
+
+    // Close the Vault
+    CloseAccount {
+      account: self.accounts.vault,
+      destination: self.accounts.maker,
+      authority: self.accounts.escrow,
+    }.invoke_signed(&[signer.clone()])?;
+
+    // Transfer from the Taker to the Maker
+    Transfer {
+      from: self.accounts.taker_ata_b,
+      to: self.accounts.maker_ata_b,
+      authority: self.accounts.taker,
+      amount: escrow.receive,
+    }.invoke()?;
+
+    // Close the Escrow
+    drop(data);
+    ProgramAccount::close(self.accounts.escrow, self.accounts.taker)?;
+
+    Ok(())
+  }
+}
+```

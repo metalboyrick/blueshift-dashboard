@@ -1,0 +1,155 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
+
+# Das Escrow
+
+Ein Escrow ist ein leistungsstarkes Finanzinstrument, das sichere Token-Tauschgeschäfte zwischen zwei Parteien ermöglicht.
+
+Stellen Sie sich das wie ein digitales Schließfach vor, in dem ein Benutzer Token A einschließen kann und darauf wartet, dass ein anderer Benutzer Token B hinterlegt, bevor der Tausch abgeschlossen wird.
+
+Dies schafft eine vertrauenslose Umgebung, in der sich keine der Parteien Sorgen machen muss, dass die andere vom Geschäft zurücktritt.
+
+In dieser Challenge werden wir dieses Konzept durch drei einfache, aber leistungsstarke Anweisungen implementieren:
+- **Make**: Der Maker (erster Benutzer) definiert die Handelsbedingungen und hinterlegt den vereinbarten Betrag von Token A in einem sicheren Tresor. Dies ist, als würden Sie Ihren Gegenstand in das Schließfach legen und die Bedingungen des Austauschs festlegen.
+- **Take**: Der Taker (zweiter Benutzer) akzeptiert das Angebot, indem er den versprochenen Betrag von Token B an den Maker überweist und im Gegenzug das gesperrte Token A erhält. Dies ist der Moment, in dem beide Parteien ihren Teil des Geschäfts abschließen.
+- **Refund**: Wenn der Maker seine Meinung ändert oder kein geeigneter Taker gefunden wird, kann er das Angebot stornieren und sein Token A zurückerhalten. Dies ist, als würden Sie Ihren Gegenstand aus dem Schließfach zurückholen, wenn das Geschäft nicht zustande kommt.
+
+**Hinweis**: Wenn Sie mit Anchor nicht vertraut sind, sollten Sie zunächst [Anchor für Dummies](/de/courses/anchor-for-dummies) lesen, um sich mit den Kernkonzepten vertraut zu machen, die wir in diesem Programm verwenden werden.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Beginnen wir mit der Erstellung eines neuen Anchor-Workspaces:
+
+```bash
+anchor init blueshift_anchor_escrow
+cd blueshift_anchor_escrow
+```
+
+Wir fahren dann fort, indem wir `init-if-needed` für das `anchor-lang`Crate aktivieren und das `anchor-spl`Crate ebenfalls hinzufügen:
+
+```bash
+cargo add anchor-lang --features init-if-needed
+cargo add anchor-spl
+```
+
+Da wir `anchor-spl` verwenden, müssen wir auch die `programs/blueshift_anchor_escrow/Cargo.toml`Datei aktualisieren, um `anchor-spl/idl-build` in das `idl-build`Feature einzubeziehen.
+
+Öffne `Cargo.toml` und du wirst eine bestehende `idl-build`Zeile sehen, die so aussieht:
+
+```toml
+idl-build = ["anchor-lang/idl-build"]
+```
+
+Ändere sie, um auch `anchor-spl/idl-build` hinzuzufügen:
+
+```toml
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+```
+
+Du kannst jetzt den neu erstellten Ordner öffnen und bist bereit, mit dem Programmieren zu beginnen!
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Diesmal werden wir das Programm, da es ziemlich komplex ist, in kleine, fokussierte Module aufteilen, anstatt alles in die `lib.rs` zu quetschen.
+
+Die Ordnerstruktur wird ungefähr so aussehen:
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+Wobei die `lib.rs` ungefähr so aussehen wird:
+
+```rust
+use anchor_lang::prelude::*;
+
+mod state;
+mod errors;
+mod instructions;
+use instructions::*;
+
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    #[instruction(discriminator = 0)]
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        //...
+    }
+
+    #[instruction(discriminator = 1)]
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        //...
+    }
+
+    #[instruction(discriminator = 2)]
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        //...
+    }
+}
+```
+
+Wie du siehst, haben wir einen benutzerdefinierten Diskriminator für die Anweisungen implementiert. Stelle also sicher, dass du eine Anchor-Version 0.31.0 oder neuer verwendest.
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Wir werden in die `state.rs` wechseln, wo alle Daten für unseren `Escrow` gespeichert sind. Dazu geben wir ihm einen benutzerdefinierten Diskriminator und umschließen die Struktur mit dem `#[account]`Makro wie folgt:
+
+```rust
+use anchor_lang::prelude::*;
+
+#[derive(InitSpace)]
+#[account(discriminator = 1)]
+pub struct Escrow {
+    pub seed: u64,
+    pub maker: Pubkey,
+    pub mint_a: Pubkey,
+    pub mint_b: Pubkey,
+    pub receive: u64,
+    pub bump: u8,
+}
+  ```
+
+Was jedes Feld bewirkt:
+- **seed**: Zufallszahl, die während der Seed-Ableitung verwendet wird, damit ein Maker mehrere Escrows mit demselben Token-Paar eröffnen kann; wird on-chain gespeichert, damit wir das PDA immer neu ableiten können.
+- **maker**: Die Wallet, die das Escrow erstellt hat; wird für Rückerstattungen und zum Empfangen von Zahlungen benötigt.
+- **mint_a** & **mint_b**: Die SPL-Mint-Adressen für die "Geben"- und "Nehmen"-Seiten des Tauschs.
+- **receive**: Wie viel von Token B der Maker haben möchte. (Der Kontostand des Tresors selbst zeigt, wie viel Token A eingezahlt wurde, daher speichern wir das nicht.)
+- **bump**: Zwischengespeichertes Bump-Byte; es während der Laufzeit abzuleiten kostet Rechenleistung, daher speichern wir es einmal.
+
+Wir könnten mehr Informationen einbauen, aber zusätzliche Bytes bedeuten zusätzliche Miete. Wenn wir nur das Wesentliche speichern, bleiben die Einzahlungen günstig, während das Programm trotzdem alle notwendigen Regeln durchsetzen kann.
+
+Wir schließen ab, indem wir das `#[derive(InitSpace)]` Makro hinzufügen, damit wir die Miete dieser Struktur nicht manuell berechnen müssen.
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+Wir können jetzt zur Datei `errors.rs` übergehen, wo wir einige Fehler hinzufügen werden, die wir später wie folgt verwenden werden:
+
+```rust
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum EscrowError {
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Invalid maker")]
+    InvalidMaker,
+    #[msg("Invalid mint a")]
+    InvalidMintA,
+    #[msg("Invalid mint b")]
+    InvalidMintB,
+}
+```
+
+Jeder Enum entspricht einer klaren, für Menschen lesbaren Nachricht, die Anchor anzeigt, wenn eine Einschränkung oder `require!()` fehlschlägt.

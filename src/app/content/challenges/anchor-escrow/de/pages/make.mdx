@@ -1,0 +1,147 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Make" id="make" level="h2" />
+
+Wir können jetzt zur `make` Anweisung übergehen, die sich in der `make.rs` befindet und folgende Aktionen ausführt:
+- Initialisiert den Escrow-Datensatz und speichert alle Bedingungen.
+- Erstellt den Vault (ein ATA für `mint_a` im Besitz des `escrow`).
+- Überträgt die Token A des Makers in diesen Vault mittels eines CPI an das SPL-Token-Programm.
+
+### Konten 
+
+Die in diesem Kontext benötigten Konten sind:
+- `maker`: der Benutzer, der die Bedingungen festlegt und die `mint_a` in den `Escrow` einzahlt
+- `escrow`: das Konto, das die Tauschbedingungen enthält (Maker, Mints, Beträge)
+- `mint_a`: der Token, den der `maker` einzahlt
+- `mint_b`: der Token, den der `maker` im Austausch haben möchte
+- `maker_ata_a`: das Token-Konto, das mit dem `maker` und `mint_a` verknüpft ist und zum Einzahlen von Tokens in den `vault` verwendet wird
+- `vault`: das Token-Konto, das mit dem `escrow` und `mint_a` verknüpft ist, in dem die eingezahlten Tokens aufbewahrt werden
+- `associated_token_program`: das zugehörige Token-Programm, das zur Erstellung der zugehörigen Token-Konten verwendet wird
+- `token_program`: das Token-Programm, das für den CPI-Transfer verwendet wird
+- `system_program`: das Systemprogramm, das zur Erstellung des `Escrow` verwendet wird
+
+Und mit allen Einschränkungen wird es etwa so aussehen:
+
+```rust
+#[derive(Accounts)]
+#[instruction(seed: u64)]
+pub struct Make<'info> {
+    #[account(mut)]
+    pub maker: Signer<'info>,
+    #[account(
+        init,
+        payer = maker,
+        space = Escrow::INIT_SPACE + Escrow::DISCRIMINATOR.len(),
+        seeds = [b"escrow", maker.key().as_ref(), seed.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub escrow: Account<'info, Escrow>,
+
+    /// Token Accounts
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint_a: InterfaceAccount<'info, Mint>,
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint_b: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint_a,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_a: InterfaceAccount<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = maker,
+        associated_token::mint = mint_a,
+        associated_token::authority = escrow,
+        associated_token::token_program = token_program
+    )]
+    pub vault: InterfaceAccount<'info, TokenAccount>,
+
+    /// Programs
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+**Hinweis**: Diese Anweisung übergibt ein einzelnes token_program. Da take Transfers für beide Mints durchführt, müssen wir sicherstellen, dass beide Mints demselben Programm gehören (SPL Token oder Token-2022), sonst wird der CPI fehlschlagen.
+
+### Logik 
+
+Nach der Initialisierung der Konten können wir endlich die Logik bearbeiten, indem wir kleinere Hilfsfunktionen als Implementierung der Kontostruktur erstellen.
+
+Wir beginnen mit dem Befüllen des `Escrow` mithilfe des `set_inner()` Helfers und fahren dann mit der Einzahlung der Token durch den `transfer` CPI wie folgt fort:
+
+```rust
+impl<'info> Make<'info> {
+    /// # Create the Escrow
+    fn populate_escrow(&mut self, seed: u64, amount: u64, bump: u8) -> Result<()> {
+        self.escrow.set_inner(Escrow {
+            seed,
+            maker: self.maker.key(),
+            mint_a: self.mint_a.key(),
+            mint_b: self.mint_b.key(),
+            receive: amount,
+            bump,
+        });
+
+        Ok(())
+    }
+
+    /// # Deposit the tokens
+    fn deposit_tokens(&self, amount: u64) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.maker_ata_a.to_account_info(),
+                    mint: self.mint_a.to_account_info(),
+                    to: self.vault.to_account_info(),
+                    authority: self.maker.to_account_info(),
+                },
+            ),
+            amount,
+            self.mint_a.decimals,
+        )?;
+
+        Ok(())
+    }
+}
+```
+
+Wir können sehen, dass Anchor uns auf mehrere Arten hilft:
+- `set_inner()`: garantiert, dass jedes Feld befüllt wird.
+- `transfer_checked`: umschließt den Token CPI genau wie die System-Helfer, die wir zuvor verwendet haben.
+
+Und jetzt können wir dazu übergehen, eine `handler` Funktion zu erstellen, in der wir einige Prüfungen durchführen, bevor wir die Helfer verwenden, wie hier:
+
+```rust
+pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+    // Validate the amount
+    require_gt!(receive, 0, EscrowError::InvalidAmount);
+    require_gt!(amount, 0, EscrowError::InvalidAmount);
+
+    // Save the Escrow Data
+    ctx.accounts.populate_escrow(seed, receive, ctx.bumps.escrow)?;
+
+    // Deposit Tokens
+    ctx.accounts.deposit_tokens(amount)?;
+
+    Ok(())
+}
+  ```
+
+Hier fügen wir zwei Validierungsprüfungen hinzu; eine für das `amount` und eine für das `receive` Argument, um sicherzustellen, dass wir für keines der beiden einen Nullwert übergeben.
+
+### Warnung
+
+Bestimmte Erweiterungen von SPL Token-2022, z.B. Transfer-Hooks, vertrauliche Transfers, Standard-Kontostatus können Sicherheitslücken wie blockierte Transfers, gesperrte Gelder und Rug Pulls in Escrow-Logik, Tresoren oder CPIs verursachen.
+
+- Stelle sicher, dass `mint_a` und `mint_b` dem gleichen Token-Programm gehören, um CPI-Fehler zu vermeiden.
+- Verwende gut geprüfte Tokens (z.B. USDC, wSOL) aus dem Standard SPL Token-Programm.
+- Vermeide ungeprüfte oder komplexe Token-2022 Mints.

@@ -1,0 +1,128 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Das Token2022-Programm
+
+![Token 2022 mit Anchor](/graphics/course-banners/token-2022-with-anchor.png)
+
+Das Token2022-Programm, auch bekannt als Token Extensions, ist eine Erweiterung der Funktionalität des Token-Programms.
+
+Wenn du mehr über die zusätzlichen Funktionen und die Unterschiede zum Legacy-Token-Programm erfahren möchtest, folge [diesem Kurs](/de/courses/token-2022-program)
+
+> Wenn du mit Anchor nicht vertraut bist, empfehlen wir dir, zuerst unseren Kurs [Anchor für Einsteiger](/de/courses/anchor-for-dummies) durchzugehen, bevor du weitermachst.
+
+In Anchor befindet sich alles, was mit Tokens zu tun hat, im `anchor-spl` Crate. Aus diesem Grund können wir nach der Initialisierung eines `Anchor`Workspace einfach Folgendes tun:
+
+```bash
+cargo add anchor-spl
+```
+
+> Die Version von `anchor-spl` muss dieselbe sein wie die unseres `anchor-lang` Crates. Und Token2022-Erweiterungen sind erst ab Version 0.30.0 verfügbar.
+
+Vergiss nicht, das `idl-build`Feature zu aktualisieren, das sich im `[features]`Abschnitt der `Cargo.toml`Datei unseres Programms befindet, mit `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
+
+<ArticleSection name="Mint- und Token-Konten" id="mint-and-token-accounts" level="h2" />
+
+Wenn du mit `Anchor` vertraut bist, weißt du, dass es eine Reihe von Makros gibt, die dem Benutzer helfen, viele der Komplexitäten bei der Initialisierung von Konten zu abstrahieren.
+
+Dasselbe funktioniert hier für `Mint`, `Token` und `Associated Token`Konten.
+
+### Mint-Konto mit Erweiterungen
+
+Da `Mint`Konten mit Erweiterungen eine andere Größe haben und einem anderen Programm gehören, hat `Anchor` einen neuen Kontotyp erstellt, der unabhängig davon funktioniert, ob das `Mint`Konto vom Legacy-Token oder vom Token2022-Programm stammt.
+
+Um sie zu verwenden, müssen wir nur sowohl `TokenInterface` als auch `Mint` aus dem `anchor_spl::token_interface` importieren, wie folgt:
+
+```rust
+use anchor_spl::token_interface::{TokenInterface, Mint};
+```
+
+Danach können wir einfach `pub mint: InterfaceAccount<'info, Mint>,` ausführen und angeben, dass wir möchten, dass der Mint das token_program-Konto verwendet, das wir in der Account-Struktur haben, wie hier: `mint::token_program = token_program` und fertig!
+
+> Die Token-Schnittstelle bietet eine gemeinsame Methode zur Interaktion mit beiden Kontotypen, ohne die Unterschiede in ihrer Deserialisierungslogik behandeln zu müssen, während gleichzeitig Typsicherheit und korrekte Validierung gewährleistet werden.
+
+Bevor wir darauf eingehen, wie man dem Mint-Konto Erweiterungen hinzufügt, hier ist, wie man einen Mint mit dem Token2022-Programm erstellt:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+Glücklicherweise hat `Anchor` für uns gesorgt und einige Makros erstellt, um die beliebtesten Erweiterungen direkt im Initialisierungsschritt hinzuzufügen, wie folgt:
+
+```rust
+#[account(
+    // ...init
+    extensions::metadata_pointer::authority = <target_account>,
+    extensions::metadata_pointer::metadata_address = <target_account>,
+    extensions::group_pointer::authority = <target_account>,
+    extensions::group_pointer::group_address = <target_account>,
+    extensions::group_member_pointer::authority = <target_account>,
+    extensions::group_member_pointer::member_address = <target_account>,
+    extensions::transfer_hook::authority = <target_account>,
+    extensions::transfer_hook::program_id = <target_pubkey>
+    extensions::close_authority::authority = <target_account>,
+    extensions::permanent_delegate::delegate = <target_account>,
+)]
+pub mint: InterfaceAccount<'info, Mint>,
+```
+
+### Associated Token Account mit Erweiterungen
+
+`Associated Token`Konten kommen standardmäßig mit der `ImmutableOwner`Erweiterung. Der einzige Unterschied zwischen der Erstellung eines Legacy- oder Token2022 `Token Account` ist also nur die Verwendung des `Interface Account`.
+
+Hier ist, wie man ein Associated Token Account erstellt:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateAssociatedToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program,
+    )]
+    pub associated_token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+### Token Account mit Erweiterungen
+
+Die `Token`Konten kommen standardmäßig ohne Erweiterungen und haben keine Makros, die uns helfen. Mit Makros können wir also nur ein normales Token2022 `Token`Konto erstellen.
+
+Hier ist, wie man ein Token-Konto erstellt:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+        token::token_program = token_program,
+    )]
+    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
