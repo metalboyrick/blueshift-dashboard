@@ -1,13 +1,23 @@
 const [langCode] = process.argv.slice(2);
 
-const langMap = {
-  fr: 'French',
-  vi: 'Vietnamese',
-  'zh-CN': 'Simplified Chinese',
-  'zh-HK': 'Traditional Chinese',
-  id: 'Indonesian',
-  uk: 'Ukrainian',
-  de: 'German',
+// Custom mappings for specific formatting preferences
+const customNames = {
+  'zh-CN': 'Chinese (Simplified)',
+  'zh-HK': 'Chinese (Traditional)',
 };
 
-console.log(langMap[langCode] || langCode);
+function getLanguageName(locale) {
+  // First check custom mappings
+  if (customNames[locale]) {
+    return customNames[locale];
+  }
+  
+  try {
+    const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
+    return displayNames.of(locale);
+  } catch {
+    return locale;
+  }
+}
+
+console.log(getLanguageName(langCode));
