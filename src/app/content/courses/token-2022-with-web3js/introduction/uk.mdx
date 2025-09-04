@@ -1,0 +1,178 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Програма Token2022
+
+![Token 2022 з Web3JS](/graphics/course-banners/token-2022-with-web3js.png)
+
+Програма Token2022, також відома як Token Extensions (Розширення токенів), є надмножиною функціональності, яку надає програма Token.
+
+Якщо ви хочете дізнатися більше про додаткові функції та відмінності від програми Legacy token, перейдіть до [цього курсу](/uk/courses/token-2022-program)
+
+Почнімо з встановлення необхідного пакету для роботи з програмою SPL Token за допомогою Web3.js:
+
+```
+npm i @solana/spl-token
+```
+
+<ArticleSection name="Mint та Token акаунти" id="mint-and-token-accounts" level="h2" />
+
+Якщо ви знайомі зі створенням акаунтів `Mint`, акаунтів `Associated Token` або акаунтів `Token` за допомогою TypeScript, ви побачите, що Token2022 слідує дуже схожому шаблону.
+
+Основна відмінність полягає в ініціалізації акаунтів, оскільки розширення потребують додаткового простору і повинні бути налаштовані до фіналізації mint.
+
+### Mint акаунт з розширеннями
+
+При додаванні розширень до `Mint`, нам потрібно:
+- Розрахувати додатковий простір, необхідний для даних розширення
+- Ініціалізувати кожне розширення з його специфічною конфігурацією
+- Забезпечити правильний порядок інструкцій ініціалізації
+
+Ось як створити mint з розширенням Transfer Fee:
+
+```ts
+import {
+  Keypair,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+  createInitializeMintInstruction,
+  createInitializeTransferFeeConfigInstruction,
+  getMintLen,
+  ExtensionType,
+  TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Transfer Fee extension
+const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Transfer Fee extension
+const initializeTransferFeeConfig = createInitializeTransferFeeConfigInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    500,
+    BigInt(1e6),
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTransferFeeConfig, // Extension must be initialized before mint
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Як бачите, це досить просто:
+- Згенеруйте пару ключів `Mint` за допомогою функції `Keypair.generate()`.
+- Розрахуйте довжину акаунта `Mint` з конкретним розширенням за допомогою функції `getMintLen()`
+- Розрахуйте мінімальну кількість лампортів за допомогою `connection.getMinimumBalanceForRentExemption(mintLen)`
+- Створіть акаунт з правильною довжиною, рентою та власником
+- Ініціалізуйте потрібне розширення на акаунті `Mint` з відповідними функціональними можливостями
+- Ініціалізуйте акаунт `Mint`
+
+> Базовий акаунт Mint без розширень має такий самий розмір, як і традиційний `Mint`. Розширення додають свої специфічні вимоги до даних поверх цього базового розміру, разом із заповненням та дискримінатором, які ідентифікують акаунт як Token2022 `Mint`.
+
+### Асоційований токен-рахунок з розширеннями
+
+Рахунки `Associated Token` мають розширення `ImmutableOwner` за замовчуванням. Тому єдина різниця між створенням Legacy або Token2022 `Token Account` полягає лише в програмі-власнику.
+
+Ось як створити рахунок `Associated Token`:
+
+```ts
+const ata = await getAssociatedTokenAddress(
+    mint.publicKey,
+    keypair.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID
+);
+
+// Create ATA creation instructions for all accounts
+const createAtaInstructions = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    ata, // associated token account address
+    keypair.publicKey, // owner
+    mint.publicKey, // mint
+    TOKEN_2022_PROGRAM_ID
+)
+```
+
+### Токен-рахунок з розширеннями
+
+Механізм створення рахунку `Token` з розширеннями подібний до того, що ми робили з рахунком `Mint`:
+- Розрахувати додатковий простір, необхідний для даних розширення
+- Ініціалізувати кожне розширення з його специфічною конфігурацією
+- Забезпечити правильний порядок інструкцій ініціалізації
+
+Ось як створити рахунок `Token` з розширенням `CpiGuard`:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+// Size of Token Account with extensions
+const accountLen = getAccountLen([ExtensionType.CpiGuard]);
+
+// Minimum lamports required for Token Account
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+const enableCpiGuardInstruction = createEnableCpiGuardInstruction(
+    tokenAccount.publicKey,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeAccountInstruction,
+    enableCpiGuardInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {commitment: "finalized"});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

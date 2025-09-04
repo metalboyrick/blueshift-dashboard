@@ -1,0 +1,353 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Амм
+
+![Завдання Pinocchio Amm](/graphics/challenge-banners/pinocchio-amm.png)
+
+Автоматичний маркет-мейкер (AMM) є фундаментальним будівельним блоком децентралізованих фінансів, що дозволяє користувачам обмінювати токени безпосередньо зі смарт-контрактом, не покладаючись на традиційну книгу замовлень або централізовану біржу.
+
+Уявіть AMM як самостійно функціонуючий пул ліквідності: користувачі вносять пари токенів, а AMM використовує математичну формулу для визначення ціни та здійснення обмінів між ними. Це дозволяє будь-кому миттєво торгувати токенами в будь-який час, без необхідності контрагента.
+
+Якщо придивитися уважніше, ви помітите, що AMM — це не що інше, як Escrow з додатковими кроками, розрахунками та логікою. Тому, якщо ви пропустили, пройдіть [Завдання Pinocchio Escrow](/uk/challenges/pinocchio-escrow) перед тим, як приступити до цього курсу.
+
+У цьому завданні ви реалізуєте простий AMM з чотирма основними інструкціями:
+- **Ініціалізація**: налаштування AMM шляхом створення його конфігураційного рахунку та випуску токена LP (постачальника ліквідності), який представляє частки в пулі.
+- **Депозит**: дозволяє користувачам постачати як `token_x`, так і `token_y` до пулу. Натомість вони отримують пропорційну кількість LP токенів, що представляють їхню частку ліквідності.
+- **Вивід**: дозволяє користувачам обмінювати свої LP токени для виведення своєї частки `token_x` та `token_y` з пулу, фактично видаляючи ліквідність.
+- **Обмін**: дозволяє будь-кому обмінювати token_x на `token_y` (або навпаки) використовуючи пул, з невеликою комісією, яка сплачується постачальникам ліквідності.
+
+**Примітка**: якщо ви не знайомі з Pinocchio, вам слід почати з читання [Вступу до Pinocchio](/uk/courses/introduction-to-pinocchio), щоб ознайомитися з основними концепціями, які ми будемо використовувати в цій програмі.
+
+<ArticleSection name="Встановлення" id="installation" level="h2" />
+
+Почнімо зі створення нового середовища Rust:
+
+```bash
+# create workspace
+cargo new blueshift_native_amm --lib --edition 2021
+cd blueshift_native_amm
+```
+
+Додайте `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` та `constant-product-curve`, створений [Dean](https://x.com/deanmlittle), щоб обробляти всі розрахунки для нашого Amm:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
+```
+
+Оголосіть типи крейту в `Cargo.toml`, щоб згенерувати артефакти розгортання в `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Тепер ви готові писати свою програму amm.
+
+<ArticleSection name="Крива постійного продукту" id="constant-product-curve" level="h2" />
+
+В основі більшості AMM лежить проста, але потужна формула, відома як крива постійного продукту. Ця формула забезпечує, що добуток резервів двох токенів у пулі завжди залишається постійним, навіть коли користувачі торгують або надають ліквідність.
+
+### Формула
+
+Найпоширеніша формула AMM: `x * y = k`, де:
+- `x` = кількість токенів X у пулі
+- `y` = кількість токенів Y у пулі
+- `k` = константа (ніколи не змінюється)
+
+Коли хтось обмінює один токен на інший, пул коригує резерви так, щоб добуток `k` залишався незмінним. Це створює криву ціни, яка автоматично коригується на основі попиту та пропозиції.
+
+### Приклад
+
+Припустімо, пул починається зі 100 токенів X і 100 токенів Y: `100 * 100 = 10,000`.
+
+Якщо користувач хоче обміняти 10 токенів X на токени Y, пул повинен зберегти `k = 10,000`. Отже, якщо `x_new` = 110 (після депозиту), розв'яжемо для `y_new`: `110 * y_new = 10,000`, тому `y_new = 10,000 / 110 ≈ 90.91`.
+
+Користувач отримає `100 - 90.91 = 9.09` токенів Y (мінус будь-які комісії).
+
+### Надання ліквідності
+
+Коли користувачі вносять обидва токени в пул, вони стають постачальниками ліквідності (LP). Натомість вони отримують LP-токени, які представляють їхню частку в пулі.
+- LP-токени випускаються пропорційно до кількості ліквідності, яку ви додаєте.
+- Коли ви виводите кошти, ви спалюєте свої LP-токени, щоб повернути свою частку обох токенів (плюс частку комісій, зібраних від обмінів).
+
+Перший постачальник ліквідності встановлює початкове співвідношення. Наприклад, якщо ви внесете 100 X і 100 Y, ви можете отримати 100 LP токенів.
+
+Після цього, якщо в пулі вже є 100 X і 100 Y, і ви додаєте 10 X і 10 Y, ви отримуєте LP токени пропорційно вашому внеску: `share = deposit_x / total_x = 10 / 100 = 10%` тому Amm випустить на гаманець користувача 10% від загальної кількості LP токенів.
+
+### Комісії
+
+За кожен своп зазвичай стягується невелика комісія (наприклад, 0,3%), яка додається до пулу. Це означає, що постачальники ліквідності заробляють частку комісій за торгівлю, збільшуючи вартість своїх LP токенів з часом і стимулюючи людей надавати ліквідність.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Цього разу ми розділимо програму на невеликі, цілеспрямовані модулі замість того, щоб все запихати в `lib.rs`. Структура папок виглядатиме приблизно так:
+
+```
+src
+├── instructions
+│       ├── deposit.rs
+│       ├── initialize.rs
+│       ├── mod.rs
+│       ├── swap.rs
+│       └── withdraw.rs
+├── lib.rs
+└── state.rs
+```
+
+Точка входу, яка знаходиться в `lib.rs`, завжди виглядає однаково:
+
+```rust
+use pinocchio::{
+    account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
+    ProgramResult,
+};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Initialize::DISCRIMINATOR, data)) => {
+            Initialize::try_from((data, accounts))?.process()
+        }
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, data)) => Withdraw::try_from((data, accounts))?.process(),
+        Some((Swap::DISCRIMINATOR, data)) => Swap::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Ми перейдемо до `state.rs`, де зберігаються всі дані для нашого `AMM`.
+
+Розділимо це на три частини: визначення структури, допоміжні функції для читання та допоміжні функції для запису
+
+Спочатку розглянемо визначення структури:
+
+```rust
+use core::mem::size_of;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+
+#[repr(C)]
+pub struct Config {
+    state: u8,
+    seed: [u8; 8],
+    authority: Pubkey,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    fee: [u8; 2],
+    config_bump: [u8; 1],
+}
+
+#[repr(u8)]
+pub enum AmmState {
+    Uninitialized = 0u8,
+    Initialized = 1u8,
+    Disabled = 2u8,
+    WithdrawOnly = 3u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<Config>();
+
+    //...
+}
+```
+
+Атрибут `#[repr(C)]` забезпечує нашій структурі передбачуване, C-сумісне розташування в пам'яті, яке залишається незмінним на різних платформах і версіях компілятора Rust. Це критично важливо для програм, що працюють у блокчейні, де дані повинні надійно серіалізуватися та десеріалізуватися.
+
+Ми зберігаємо `seed` (u64) і `fee` (u16) як масиви байтів замість їхніх рідних типів, щоб забезпечити безпечну десеріалізацію. Коли дані зчитуються з пам'яті облікового запису, немає гарантії щодо вирівнювання пам'яті, і читання `u64` з невирівняної адреси пам'яті є невизначеною поведінкою. Використовуючи масиви байтів і конвертуючи за допомогою `from_le_bytes()`, ми забезпечуємо безпечне зчитування даних незалежно від вирівнювання, а також гарантуємо послідовний порядок байтів little-endian на всіх платформах.
+
+Кожне поле в структурі `Config` має конкретне призначення:
+- **state**: відстежує поточний статус AMM (наприклад, неініціалізований, ініціалізований, вимкнений або лише для виведення).
+- **seed**: унікальне значення, що використовується для генерації програмно-похідної адреси (PDA), дозволяючи існувати кільком AMM з різними конфігураціями.
+- **authority**: публічний ключ з адміністративним контролем над AMM (наприклад, для призупинення чи оновлення пулу). Може бути встановлений як незмінний шляхом передачі `[0u8; 32]`.
+- **mint_x**: адреса монети SPL токена X у пулі.
+- **mint_y**: адреса монети SPL токена Y у пулі.
+- **fee**: комісія за обмін, виражена в базисних пунктах (1 базисний пункт = 0,01%), яка стягується з кожної угоди та розподіляється між постачальниками ліквідності.
+- **config_bump**: початкове значення bump, що використовується при отриманні PDA для забезпечення дійсності та унікальності адреси облікового запису конфігурації. Зберігається для підвищення ефективності отримання PDA.
+
+Перелік `AmmState` визначає можливі стани для AMM, що полегшує керування життєвим циклом пулу та обмеження певних дій залежно від його статусу.
+
+### Допоміжні функції для читання
+
+Допоміжні функції для читання забезпечують безпечний, ефективний доступ до даних `Config` з належною валідацією та запозиченням:
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load(account_info: &AccountInfo) -> Result<Ref<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes_unchecked(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub unsafe fn load_unchecked(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Self::from_bytes_unchecked(
+            account_info.borrow_data_unchecked(),
+        ))
+    }
+
+    /// Return a `Config` from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`, and
+    /// it is properly aligned to be interpreted as an instance of `Config`.
+    /// At the moment `Config` has an alignment of 1 byte.
+    /// This method does not perform a length validation.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> &Self {
+        &*(bytes.as_ptr() as *const Config)
+    }
+
+    /// Return a mutable `Config` reference from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked_mut(bytes: &mut [u8]) -> &mut Self {
+        &mut *(bytes.as_mut_ptr() as *mut Config)
+    }
+
+    // Getter methods for safe field access
+    #[inline(always)]
+    pub fn state(&self) -> u8 { self.state }
+
+    #[inline(always)]
+    pub fn seed(&self) -> u64 { u64::from_le_bytes(self.seed) }
+
+    #[inline(always)]
+    pub fn authority(&self) -> &Pubkey { &self.authority }
+
+    #[inline(always)]
+    pub fn mint_x(&self) -> &Pubkey { &self.mint_x }
+
+    #[inline(always)]
+    pub fn mint_y(&self) -> &Pubkey { &self.mint_y }
+
+    #[inline(always)]
+    pub fn fee(&self) -> u16 { u16::from_le_bytes(self.fee) }
+
+    #[inline(always)]
+    pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
+}
+```
+
+Ключові особливості допоміжних функцій для читання:
+- Безпечне запозичення: метод `load` повертає `Ref<Self>`, який безпечно керує запозиченням даних облікового запису, запобігаючи гонкам даних і забезпечуючи безпеку пам'яті.
+- Валідація: і `load`, і `load_unchecked` перевіряють довжину даних облікового запису та власника перед наданням доступу до структури.
+- Методи отримання: доступ до всіх полів здійснюється через методи отримання, які обробляють перетворення з масивів байтів у їхні правильні типи (наприклад, `u64::from_le_bytes` для `seed`).
+- Продуктивність: атрибут `#[inline(always)]` забезпечує вбудовування цих часто викликаних методів для оптимальної продуктивності.
+
+### Помічники для запису
+
+Помічники для запису надають безпечні, перевірені методи для модифікації даних `Config`:
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load_mut(account_info: &AccountInfo) -> Result<RefMut<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
+            Self::from_bytes_unchecked_mut(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub fn set_state(&mut self, state: u8) -> Result<(), ProgramError> {
+        if state.ge(&(AmmState::WithdrawOnly as u8)) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.state = state as u8;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_fee(&mut self, fee: u16) -> Result<(), ProgramError> {
+        if fee.ge(&10_000) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.fee = fee.to_le_bytes();
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_inner(
+        &mut self,
+        seed: u64,
+        authority: Pubkey,
+        mint_x: Pubkey,
+        mint_y: Pubkey,
+        fee: u16,
+        config_bump: [u8; 1],
+    ) -> Result<(), ProgramError> {
+        self.set_state(AmmState::Initialized as u8)?;
+        self.set_seed(seed);
+        self.set_authority(authority);
+        self.set_mint_x(mint_x);
+        self.set_mint_y(mint_y);
+        self.set_fee(fee)?;
+        self.set_config_bump(config_bump);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn has_authority(&self) -> Option<Pubkey> {
+        let bytes = self.authority();
+        let chunks: &[u64; 4] = unsafe { &*(bytes.as_ptr() as *const [u64; 4]) };
+        if chunks.iter().any(|&x| x != 0) {
+            Some(self.authority)
+        } else {
+            None
+        }
+    }
+}
+```
+
+Ключові особливості помічників для запису:
+- Змінне запозичення: Метод `load_mut` повертає `RefMut<Self>`, який безпечно керує змінним запозиченням з даних облікового запису.
+- Перевірка введення: Методи на кшталт `set_state` та `set_fee` включають перевірку для забезпечення збереження лише дійсних значень (наприклад, комісія не може перевищувати 10 000 базисних пунктів).
+- Атомарні оновлення: Метод `set_inner` дозволяє ефективно та атомарно оновлювати всі поля структури одночасно, мінімізуючи ризик непослідовного стану.
+- Перевірка повноважень: Метод `has_authority` забезпечує ефективний спосіб перевірки, чи встановлено повноваження (ненульове значення) або чи є AMM незмінним (усі нулі).
+- Перетворення байтів: Багатобайтові значення правильно перетворюються на масиви байтів у форматі little-endian за допомогою методів на кшталт `to_le_bytes()` для забезпечення послідовної міжплатформної поведінки.

@@ -1,0 +1,168 @@
+# Депозит
+
+Інструкція `deposit` виконує три основні завдання:
+- Депозит токенів `mint_x` та `mint_y` на основі кількості LP, яку користувач хоче `mint`.
+- Розрахунок суми для депозиту та перевірка, що сума не перевищує `max_x` та `max_y`, визначені користувачем.
+- Емісія правильної кількості `mint_lp` в користувацькому ata.
+
+> Як зазначено в розділі інструкції `initialize`; ми ініціалізуємо всі `Associated Token Accounts` поза нашою інструкцією з метою оптимізації.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Нижче наведено рахунки, необхідні для цього контексту:
+- `user`: Користувач, який вносить токен у ліквідність Amm. Має бути `signer`.
+- `mint_lp`: Рахунок Mint, який представлятиме ліквідність пулу. Має бути переданий як `mutable`.
+- `vault_x`: Токен-рахунок, який містить усі токени X, внесені в пул. Має бути переданий як `mutable`.
+- `vault_y`: Токен-рахунок, який містить усі токени Y, внесені в пул. Має бути переданий як `mutable`.
+- `user_x_ata`: Асоційований токен-рахунок користувача для токена X. Це вихідний рахунок, з якого токени X користувача будуть переведені в пул. Має бути переданий як `mutable`.
+- `user_y_ata`: Асоційований токен-рахунок користувача для токена Y. Це вихідний рахунок, з якого токени Y користувача будуть переведені в пул. Має бути переданий як `mutable`.
+- `user_lp_ata`: Асоційований токен-рахунок користувача для LP токенів. Це цільовий рахунок, куди будуть емітовані LP токени. Має бути переданий як `mutable`.
+- `config`: Конфігураційний рахунок для пулу AMM. Зберігає всі відповідні параметри та стан пулу.
+- `token program`: Рахунок програми SPL Token. Це необхідно для виконання операцій з токенами, таких як перекази та емісія. Має бути `executable`.
+
+Тут, знову ж таки, я залишу реалізацію вам:
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub user: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub vault_x: &'a AccountInfo,
+    pub vault_y: &'a AccountInfo,
+    pub user_x_ata: &'a AccountInfo,
+    pub user_y_ata: &'a AccountInfo,
+    pub user_lp_ata: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    //..
+  }
+}
+```
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Ось дані інструкції, які нам потрібно передати:
+- `amount`: Кількість LP токенів, яку користувач бажає отримати. Має бути `[u64]`
+- `max_x`: Максимальна кількість токенів X, яку користувач готовий внести. Має бути `[u64]`
+- `max_y`: Максимальна кількість токенів Y, яку користувач готовий внести. Має бути `[u64]`
+- `expiration`: Термін дії цього ордера. Важливо переконатися, що транзакція має бути виконана за певний проміжок часу. Має бути `[i64]`
+
+Ми будемо обробляти реалізацію для `DepositInstructionData` так само, як і ініціалізацію. Тому я залишу реалізацію вам:
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+    pub max_x: u64,
+    pub max_y: u64,
+    pub expiration: i64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+> Переконайтеся, що будь-яка з сум, як-от `amount`, `max_y` та `max_x` більші за нуль, і що термін дії ордера ще не минув, використовуючи системну змінну `Clock`.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Ми починаємо з десеріалізації як `instruction_data`, так і `accounts`.
+
+Потім нам потрібно:
+- Завантажити акаунт `Config`, щоб отримати всі дані всередині нього. Ми можемо зробити це за допомогою допоміжної функції `Config::load()`.
+- Перевірити, що `AmmState` є дійсним (тобто, чи дорівнює він `AmmState::Initialized`)
+- Перевірити виведення `vault_x` та `vault_y` як Associated Token Accounts таким чином:
+
+```rust
+// Check if the vault_x is valid
+let (vault_x, _) = find_program_address(
+    &[
+        self.accounts.config.key(),
+        self.accounts.token_program.key(),
+        config.mint_x(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+
+if vault_x.ne(self.accounts.vault_x.key()) {
+    return Err(ProgramError::InvalidAccountData);
+}
+```
+
+- Десеріалізувати всі задіяні токен-акаунти та використати дані всередині них для обчислення суми депозитів за допомогою крейту `constant-product-curve` та перевірки на проковзування таким чином:
+
+```rust
+// Deserialize the token accounts
+let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
+let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
+let vault_y = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_y)? };
+
+// Grab the amounts to deposit
+let (x, y) = match mint_lp.supply() == 0 && vault_x.amount() == 0 && vault_y.amount() == 0 {
+    true => (self.instruction_data.max_x, self.instruction_data.max_y),
+    false => {
+        let amounts = ConstantProduct::xy_deposit_amounts_from_l(
+            vault_x.amount(),
+            vault_y.amount(),
+            mint_lp.supply(),
+            self.instruction_data.amount,
+            6,
+        )
+        .map_err(|_| ProgramError::InvalidArgument)?;
+
+        (amounts.x, amounts.y)
+    }
+};
+
+// Check for slippage
+if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+> Якщо це перший депозит, ми можемо пропустити розрахунок LP токенів і депозитів і просто використати значення, яке пропонує користувач
+
+- Переказати суми з токен-рахунків користувача до сховищ і емітувати відповідну кількість LP токенів на токен-рахунок користувача
+
+Ви повинні бути достатньо кваліфікованими, щоб зробити це самостійно, тому я залишаю реалізацію вам:
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_data: DepositInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_data = DepositInstructionData::try_from(data)?;
+
+        // Return the initialized struct
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+      //..
+
+      Ok(())
+    }
+}
+```

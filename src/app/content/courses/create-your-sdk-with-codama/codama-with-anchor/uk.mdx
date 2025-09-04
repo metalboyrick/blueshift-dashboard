@@ -1,0 +1,25 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Створення Codama IDL з Anchor IDL
+
+Створення Codama IDL з Anchor надзвичайно просте. Після генерації Anchor IDL за допомогою команди anchor build, нам потрібно встановити пакет '@codama/nodes-from-anchor':
+
+```
+pnpm install codama @codama/nodes-from-anchor
+```
+
+А потім конвертувати Anchor IDL безпосередньо за допомогою функції `rootNodeFromAnchor `:
+
+```ts
+import { createFromRoot } from 'codama';
+import { rootNodeFromAnchor } from '@codama/nodes-from-anchor';
+import anchorIdl from 'anchor-idl.json';
+
+const codama = createFromRoot(rootNodeFromAnchor(anchorIdl));
+```
+
+Це дає вам повністю функціональний Codama IDL, готовий для генерації клієнта. Однак справжня потужність Codama полягає в можливості розширювати та налаштовувати ваш IDL за межами того, що можливо з базовими визначеннями Anchor.
+
+Оскільки процес конвертації зосереджується на структурному перекладі, часто виникає потреба додати зручні для розробників функції, такі як власні угоди про іменування, додаткову інформацію про типи або спеціалізовані методи клієнта. Система відвідувачів Codama робить ці вдосконалення простими та потужними.
+
+Ви можете дізнатися більше про те, як налаштовувати та вдосконалювати ваш конвертований IDL за допомогою відвідувачів у уроці [Оновлення Codama IDL](/uk/courses/create-your-sdk-with-codama/updating-codama-idl).

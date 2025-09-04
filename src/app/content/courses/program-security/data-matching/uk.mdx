@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Зіставлення даних
+
+Зіставлення даних — це практика безпеки, яка полягає у перевірці того, що дані облікового запису містять очікувані значення, перш ніж довіряти їм у логіці вашої програми. Якщо перевірки `owner` підтверджують, хто контролює обліковий запис, а перевірки `signer` підтверджують авторизацію, зіставлення даних гарантує, що внутрішній стан облікового запису відповідає припущенням вашої програми.
+
+Це стає критично важливим, коли обробники інструкцій залежать від відносин між обліковими записами або коли певні значення даних визначають поведінку програми. Без належної перевірки даних зловмисники можуть маніпулювати потоком програми, створюючи облікові записи з неочікуваними комбінаціями даних, навіть якщо ці облікові записи проходять базові перевірки власності та авторизації.
+
+Небезпека полягає в розриві між структурною та логічною перевіркою. Ваша програма може правильно перевіряти, що обліковий запис має правильний тип і належить правильній програмі, але все одно робити неправильні припущення щодо відносин між різними частинами даних.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу інструкцію, яка оновлює власність програмного облікового запису:
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+На перший погляд цей код здається безпечним. `owner` правильно позначений як `Signer`, що гарантує авторизацію транзакції. `program_account` має правильний тип і належить програмі. Усі базові перевірки безпеки пройдено.
+
+Але є критичний недолік: програма ніколи не перевіряє, чи `owner`, який підписав транзакцію, насправді той самий, що й `owner`, збережений у даних `program_account`.
+
+Зловмисник може скористатися цим, виконавши такі дії:
+- Створити власну пару ключів (назвімо її `attacker_keypair`)
+- Знайти будь-який програмний обліковий запис, який вони хочуть захопити
+- Створити транзакцію, де: `owner` — це `attacker_keypair` (яким вони керують і можуть підписувати); `new_owner` — це їхній основний публічний ключ, а `program_account` — обліковий запис жертви
+
+Транзакція успішно виконується, оскільки `attacker_keypair` правильно її підписує, але програма ніколи не перевіряє, чи відповідає `attacker_keypair` фактичному `owner`, що зберігається в `program_account.owner`. Зловмисник успішно передає право власності на чужий обліковий запис собі.
+
+На щастя, `Anchor` робить цю перевірку надзвичайно простою безпосередньо в структурі облікового запису, додавши обмеження `has_one` таким чином:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut, has_one = owner)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Або ми можемо вирішити змінити дизайн програми і зробити `program_account` PDA, похідним від `owner` таким чином:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        seeds = [owner.key().as_ref()],
+        bump
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Або ви можете просто перевірити ці дані в інструкції, використовуючи перевірку `ctx.accounts.program_account.owner` таким чином:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+    Ok(())
+}
+```
+
+Додавши цю перевірку, обробник інструкцій продовжить виконання, лише якщо обліковий запис має правильний `owner`. Якщо `owner` неправильний, транзакція завершиться невдачею.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio, оскільки ми не маємо можливості додавати перевірки безпеки безпосередньо всередині структури облікового запису, ми змушені робити це в логіці інструкцій.
+
+Ми можемо зробити це, десеріалізуючи дані облікового запису та перевіряючи значення `owner`:
+
+```rust
+let account_data = ctx.accounts.program_account.try_borrow_data()?;
+let mut account_data_slice: &[u8] = &account_data;
+let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+if account_state.owner != self.accounts.owner.key() {
+    return Err(ProgramError::InvalidAccountData.into());
+}
+```
+
+> Вам потрібно буде створити власну функцію `ProgramAccount::try_deserialize()`, оскільки Pinocchio дозволяє нам обробляти десеріалізацію та серіалізацію на наш розсуд

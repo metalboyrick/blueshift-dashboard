@@ -1,0 +1,89 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Програма Token
+
+![SPL Token з Anchor](/graphics/course-banners/spl-token-with-anchor.png)
+
+У Solana все, що пов'язано з токенами, обробляється [Програмою SPL Token](https://github.com/solana-program/token) та [Програмою Token2022](/uk/courses/token-2022-program): нативним фреймворком токенів Solana, який визначає, як усі токени створюються, керуються та передаються.
+
+Це єдина, уніфікована програма, яка обробляє всі операції з токенами в мережі, забезпечуючи узгодженість та взаємодію.
+
+> Рішення мати єдиний, уніфікований інтерфейс для всіх токенів на Solana створює просту реалізацію, яку можна відтворити у всіх dApps (децентралізованих додатках) та інтеграціях (як-от гаманці, ...)
+
+Для anchor все, що пов'язано з токенами, можна знайти в крейті `anchor-spl`. З цієї причини, після ініціалізації робочого простору `Anchor` ми можемо просто зробити:
+
+```bash
+cargo add anchor-spl
+```
+
+> Якщо ви не знайомі з anchor, рекомендуємо пройти наш курс [Anchor для початківців](/uk/courses/anchor-for-dummies) перед тим, як рухатися далі.
+
+<ArticleSection name="Рахунки Mint та Token" id="mint-and-token-accounts" level="h2" />
+
+Якщо ви знайомі з `Anchor`, то знаєте, що вони мають набір макросів, які допомагають користувачу абстрагуватися від багатьох складнощів, пов'язаних з ініціалізацією рахунків.
+
+Те саме працює тут для рахунків `Mint`, `Token` та `Associated Token`.
+
+### Рахунок Mint
+
+Завдяки макросам, які пропонує `Anchor`, ось як ми можемо легко створити рахунок `Mint`:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+    )]
+    pub mint: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Рахунок Token
+
+Те саме стосується рахунку `Token`. Створення рахунків `Token` через макроси виглядало б так:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Асоційований рахунок токена
+
+Те саме стосується рахунку `Associated Token`. Створення рахунків `Associated Token` через макроси виглядало б подібно до створення рахунку `Token`, єдина відмінність полягає в обмеженнях, і це виглядало б так:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+```

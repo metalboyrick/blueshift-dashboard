@@ -1,0 +1,99 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Розширення постійного делегата
+
+Розширення `PermanentDelegate` є розширенням облікового запису Mint, яке дозволяє мати постійного делегата для всіх токенів цього мінту, який здатний переказувати або спалювати будь-який токен цього мінту з будь-якого облікового запису токенів.
+
+<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+
+Щоб ініціалізувати розширення `PermanentDelegate` на обліковому записі `Mint`, нам знадобиться функція `initializePermanentDelegate()`.
+
+Ось як створити мінт з розширенням постійного делегата:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializePermanentDelegateInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Permanent Delegate extension
+const mintLen = getMintLen([ExtensionType.PermanentDelegate]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Permanent Delegate extension
+const initializePermanentDelegate = createInitializePermanentDelegateInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializePermanentDelegate,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Closing the Mint Account" id="closing-the-mint-account" level="h2" />
+
+Якщо обліковий запис `Mint` має нульовий запас, `CloseMint Authority` може повернути орендну плату за цей обліковий запис, використовуючи інструкцію `closeAccount` таким чином:
+
+```ts
+const closeMintInstruction = createCloseAccountInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(closeMintInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: false});
+
+console.log(`Mint closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Permissioned Actions" id="permissioned-actions" level="h2" />
+
+На відміну від звичайних делегатів, які можна відкликати, ця делегована повноваження є постійною та незмінною.
+
+Це означає, що кожна звичайна дія, як-от `transfer()`, `burn()`, `approve()` та `freeze()`, може бути виконана за потреби безпосередньо повноваженим органом без необхідності підпису фактичного власника.
+
+Це означає, що ми можемо просто використовувати звичайні інструкції `transferChecked()`, `burnChecked()`, ... і передати повноваження `PermanetDelegate` у полі `authority`.

@@ -1,0 +1,46 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкція закриття рахунку
+
+Закриває токен-рахунок і переказує залишок орендної плати SOL на цільовий рахунок. Токен-рахунок повинен мати нульовий баланс, якщо це не нативний рахунок SOL.
+
+> Починаючи з Token2022 можливо закрити `Mint` рахунок, який має запас 0
+
+Перш ніж ми зможемо закрити будь-який токен-рахунок, нам потрібно вже мати:
+- Ініціалізований `Mint` рахунок
+- Ініціалізований `Token` рахунок або `Associated Token` рахунок, який не містить жодних токенів.
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Використовуючи лише "сиру" інструкцію без будь-якої абстракції, закриття рахунку виглядатиме так:
+
+```ts
+// Delegate an ATA 
+const closeAccountInstruction = createCloseAccountInstruction(
+    tokenAccount // account
+    keypair.publickey // destination
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(closeAccountInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+Ось як ті самі інструкції виглядатимуть з абстракцією за допомогою інструкції `closeAccount()`:
+
+```ts
+  let tx = await closeAccount(
+    connection,
+    keypair,
+    ata.address, // token Account
+    keypair.publicKey, // destination
+    keypair.publicKey, // authority
+);
+
+console.log(`Succesfully Closed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

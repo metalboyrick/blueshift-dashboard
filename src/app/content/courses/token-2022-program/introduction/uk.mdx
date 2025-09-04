@@ -1,0 +1,123 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Програма Token2022
+
+![Програма Token 2022](/graphics/course-banners/token-2022-program.png)
+
+Програма Token2022, також відома як Token Extensions (Розширення токенів), є надмножиною функціональності, яку надає програма Token.
+
+Застаріла програма Token задовольняє більшість потреб для взаємозамінних та невзаємозамінних токенів через простий набір агностичних інтерфейсів і структур. Однак їй бракує більш спеціалізованих функцій та реалізацій, які допомогли б розробникам створювати власну поведінку зі спільним інтерфейсом, роблячи розробку швидшою та безпечнішою.
+
+Саме з цієї причини була створена нова програма Token під назвою `Token2022` з новим набором функцій, які називаються `Token Extensions`. Ці розширення забезпечують специфічну, налаштовувану поведінку, яку можна прикріпити або до `Token Account`, або до `Mint Account`.
+
+> `SPL-Token Program` (розробники зазвичай називають її `Tokenkeg`, через адресу програми: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) та `Token2022 Program` — це дві абсолютно різні програми, які мають однакову "відправну точку". Це означає, що токени `Tokenkeg` можна десеріалізувати за допомогою `Token2022`, але їх не можна використовувати всередині цієї програми, наприклад, для додавання розширень.
+
+<ArticleSection name="Рахунки Mint та Token" id="mint-and-token-accounts" level="h2" />
+
+У попередньому розділі ми говорили про те, що основною відмінністю між програмами `Tokenkeg` та `Token2022` є **Token Extensions**.
+
+Щоб бути дієвими, ці розширення повинні знаходитися безпосередньо всередині рахунків `Mint` та `Token`, оскільки це єдиний спосіб забезпечити дотримання набору правил під час безпосередньої роботи з програмою токенів.
+
+З цієї причини розглянемо основні відмінності між застарілою та новою програмами токенів на цих рахунках.
+
+**Застарілі токен-акаунти**
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If `is_native.is_some`, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Як бачите, для цих акаунтів немає записаного дискримінатора. Це тому, що всі поля мають фіксовану довжину, і різниця в розмірі достатньо велика, щоб розрізняти ці різні типи акаунтів, просто порівнюючи їхні різні довжини.
+
+Проблема з програмою розширення токенів полягає в тому, що будь-які додаткові дані, необхідні для розширення, додаються в кінець акаунтів `Mint` та `Token`, з якими ми вже знайомі.
+
+Це означає, що розрізнення за довжиною буде недостатнім, оскільки ми можемо мати `Mint` з 3-4 приєднаними розширеннями, що перевищує довжину акаунта `Token`. З цієї причини, коли акаунти `Mint` та `Token` мають розширення, до них додається дискримінатор таким чином:
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Legacy Token Program data
+    /// ...
+    /// Padding (83 empty bytes)
+    pub padding: [u8; 83]
+    /// Discriminator (1)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// Legacy Token Program data
+    /// ...
+    /// Discriminator (2)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+```
+
+Щоб зберегти застарілу структуру, дискримінатор розміщується не в першому байті, як зазвичай, а в байті `166`.
+
+Це тому, що довжина акаунта `Token` становить 165 байтів, що означає, що дискримінатор додається після базової довжини. Для акаунта `Mint` це означає, що нам довелося додати 83 байти заповнення, щоб забезпечити однакову базову довжину для обох акаунтів.
+
+Отже, щоб розрізнити два акаунти, нам просто потрібно перевірити 166-й байт (data[165], якщо рахувати від 0) і діяти відповідно.
+
+<ArticleSection name="Розширення токенів" id="token-extensions" level="h2" />
+
+У наступному розділі ми поговоримо про переваги та різні розширення токенів, які наразі присутні в Solana, але в цьому вступному абзаці ми просто розглянемо, як вони серіалізуються та додаються до двох акаунтів стану, про які ми говорили раніше.
+
+Кожне розширення має дискримінатор, який зберігається разом із розміром цього розширення безпосередньо на рахунку. Ми називатимемо це "заголовком" розширення, і він виглядає так:
+
+```rust
+pub struct ExtensionHeader {
+    /// Extension Discriminator
+    pub discriminator: u16
+    /// Length of the Disriminator
+    pub length: u16
+}
+```
+
+Це робить надзвичайно легким визначення, які розширення є на токені, і десеріалізацію даних лише тих, які нам потрібні, оскільки ми можемо отримати дискримінатор, а потім перейти до наступного розширення, щоб перевірити, що там є чи немає.

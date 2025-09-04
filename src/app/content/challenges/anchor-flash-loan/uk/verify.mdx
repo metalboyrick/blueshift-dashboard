@@ -1,0 +1,18 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Флеш-кредит Anchor</ChallengeTitle>
+
+Тепер перевірте свої знання на практиці. Створіть програму флеш-кредиту з використанням фреймворку Anchor, яка відповідає таким вимогам:
+
+<RequirementList>
+  <Requirement title="Завдання 1: Створіть інструкцію `borrow`">
+    Ваша програма повинна дозволяти позичальнику отримувати кошти від протоколу та перевіряти наявність інструкції `repay`
+    наприкінці транзакції.
+  </Requirement>
+
+  <Requirement title="Завдання 2: Створіть інструкцію `repay`">
+    Ваша програма повинна перевіряти `borrowed_amount` наприкінці транзакції та повертати протоколу правильну суму.
+  </Requirement>
+</RequirementList>

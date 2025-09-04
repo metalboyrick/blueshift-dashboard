@@ -1,0 +1,136 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Довільні CPI
+
+Атаки довільного міжпрограмного виклику (Cross Program Invocation, CPI) відбуваються, коли програми сліпо викликають будь-яку програму, передану як параметр, замість того, щоб перевіряти, чи викликають вони потрібну програму.
+
+Це перетворює вашу захищену програму на пускач шкідливого коду, дозволяючи зловмисникам перехоплювати повноваження вашої програми та виконувати несанкціоновані операції від імені вашої програми.
+
+Небезпека полягає в гнучкій моделі облікових записів Solana. Оскільки викликаючі сторони можуть передавати будь-який ідентифікатор програми у список облікових записів вашої інструкції, відсутність перевірки адрес програм означає, що ваша програма стає проксі для виконання довільного коду.
+
+Зловмисник може підмінити шкідливу програму, яка імітує очікуваний інтерфейс, але виконує зовсім інші операції — наприклад, реверсує перекази, спустошує рахунки або маніпулює станом у неочікуваний спосіб.
+
+Особливо підступним це робить те, що атака вдається навіть коли всі інші перевірки безпеки проходять успішно. Ваша програма може правильно перевіряти власність облікових записів, перевіряти підписи та верифікувати структури даних, але все одно викликати шкідливий код, оскільки вона ніколи не підтверджувала, що спілкується з правильною програмою.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу інструкцію, яка виконує переказ токенів:
+
+```rust
+#[program]
+pub mod insecure_cpi{
+    use super::*;
+    //..
+
+    pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
+        solana_program::program::invoke(
+            &spl_token::instruction::transfer(
+                ctx.accounts.token_program.key,
+                ctx.accounts.source.key,
+                ctx.accounts.destination.key,
+                ctx.accounts.authority.key,
+                &[],
+                amount,
+            )?,
+            &[
+                ctx.accounts.source.clone(),
+                ctx.accounts.destination.clone(),
+                ctx.accounts.authority.clone(),
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct SendTokens<'info> {
+    authority: Signer<'info>,
+    source: Account<'info, Token>,
+    destination: Account<'info, Token>,
+    /// CHECK: This account will not be checked by Anchor
+    pub token_program: UncheckedAccount<'info>,
+}
+```
+
+Цей код на перший погляд здається безпечним. Джерело та призначення правильно перевіряються як токен-рахунки, а повноваження повинні підписати транзакцію. Однак поле `token_program` є `UncheckedAccount`, що означає, що Anchor не виконує жодної перевірки для нього.
+
+Зловмисник може використати це так:
+- Створити шкідливу програму з інструкцією переказу, яка має такий самий інтерфейс, як і переказ SPL Token
+- Замість переказу токенів від джерела до призначення, їхня шкідлива програма робить зворотне або щось гірше
+- Передає свою шкідливу програму як параметр `token_program`
+- Ваша програма несвідомо викликає код зловмисника з повними повноваженнями над транзакцією
+
+Атака вдається, тому що хоча токен-акаунти є легітимними, програма, яка виконує операцію, такою не є. Зловмисна програма може переказувати токени в неправильному напрямку, спустошувати рахунки на користь гаманця зловмисника або виконувати будь-які операції, які дозволяють передані акаунти.
+
+На щастя, `Anchor` робить цю перевірку надзвичайно простою безпосередньо в структурі акаунта, просто змінивши `UncheckedAccount` на `Program` і передавши тип `Token`, який автоматично перевіряє ідентифікатор програми:
+
+```rust
+#[derive(Accounts)]
+pub struct SendTokens<'info> {
+    authority: Signer<'info>,
+    source: Account<'info, Token>,
+    destination: Account<'info, Token>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+Ще краще, використовуйте допоміжні функції CPI від Anchor, які автоматично обробляють перевірку програми:
+
+```rust
+pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
+    transfer(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.from_token_account.to_account_info(),
+                to: ctx.accounts.to_token_account.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            },
+        ),
+        &amount,
+    )?;
+
+    Ok(())
+}
+```
+
+Для власної перевірки, явно перевіряйте ідентифікатор програми перед здійсненням CPI:
+
+```rust
+pub fn send_tokens(ctx: Context<SendTokens>, amount: u64) -> Result<()> {
+    if &spl_token::ID != ctx.accounts.token_program.key {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    solana_program::program::invoke(
+        &spl_token::instruction::transfer(
+            ctx.accounts.token_program.key,
+            ctx.accounts.source.key,
+            ctx.accounts.destination.key,
+            ctx.accounts.authority.key,
+            &[],
+            amount,
+        )?,
+        &[
+            ctx.accounts.source.clone(),
+            ctx.accounts.destination.clone(),
+            ctx.accounts.authority.clone(),
+        ],
+    )?;
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio потрібна ручна перевірка, оскільки немає автоматичної перевірки програми:
+
+```rust
+if self.accounts.token_program.pubkey() != &spl_token::ID {
+    return Err(ProgramError::MissingRequiredSignature.into());
+}
+```

@@ -1,0 +1,185 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Запит на транзакцію
+
+Запити на транзакції розкривають повну потужність Solana Pay, дозволяючи створювати динамічні транзакції на сервері, які можуть обробляти будь-який тип операцій Solana.
+
+На відміну від запитів на переказ, які містять всю платіжну інформацію в URL, запити на транзакції використовують інтерактивні кінцеві точки для створення користувацьких транзакцій на основі даних у реальному часі та бізнес-логіки.
+
+Цей підхід перетворює Solana Pay з простої платіжної системи на повноцінну комерційну платформу, здатну обробляти складні бізнес-сценарії, динамічне ціноутворення та складні потоки транзакцій.
+
+<ArticleSection name="Як працюють запити на транзакції" id="how-it-works" level="h2" />
+
+Запити на транзакції використовують простий формат URL, який вказує на кінцеву точку вашого сервера:
+
+```
+solana:<link>
+```
+
+Значення `link` має бути URL до вашої API-кінцевої точки, яка обробляє як запити `GET`, так і `POST`. Коли користувач сканує QR-код запиту на транзакцію, його гаманець ініціює чотирикроковий процес:
+1. **Початковий GET-запит**: Отримує інформацію для відображення, наприклад, назву вашого бізнесу та логотип
+2. **Підтвердження користувача**: Гаманець показує користувачу інформацію про бізнес
+3. **POST-запит**: Надсилає публічний ключ користувача на вашу кінцеву точку
+4. **Відповідь з транзакцією**: Ваш сервер створює користувацьку транзакцію та повертає її як рядок у форматі base64
+
+Потім гаманець представляє цю транзакцію користувачу для схвалення та підписання.
+
+> Ви можете включити параметри в URL, щоб отримати до них доступ з вашої кінцевої точки, ось так:
+
+```
+solana:https://myapi.com/pay?amount=100&product=premium&reference=abc123
+```
+
+<ArticleSection name="Створення API-кінцевої точки" id="api-endpoint" level="h2" />
+
+Створення кінцевої точки запиту на транзакцію вимагає обробки як GET, так і POST запитів за однією URL-адресою. Ось структура з використанням Next.js App Router:
+
+```ts
+import { NextRequest, NextResponse } from 'next/server';
+
+// CORS headers for wallet compatibility
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
+export async function GET() {
+  // Implementation details below...
+}
+
+export async function POST(request: NextRequest) {
+  // Implementation details below...
+}
+```
+
+> Оскільки гаманці роблять запити з різних джерел до вашої кінцевої точки, заголовки CORS є обов'язковими. Без них запити від гаманців не виконаються.
+
+### Обробник GET-запитів
+
+GET-запит надає інформацію для відображення, яка допомагає користувачам зрозуміти, з чим вони взаємодіють:
+
+```ts
+export async function GET() {
+  return NextResponse.json({
+    label: "Coffee Shop Demo",
+    icon: "https://solana.com/src/img/branding/solanaLogoMark.svg",
+  }, { headers: corsHeaders });
+}
+```
+
+**Формат відповіді:**
+
+```json
+{
+  "label": "Coffee Shop Demo",
+  "icon": "https://solana.com/src/img/branding/solanaLogoMark.svg"
+}
+```
+
+Ця інформація допомагає користувачу зрозуміти, з чим він збирається взаємодіяти, перш ніж перейти до фактичного створення транзакції.
+
+### Обробник POST-запитів
+
+POST-запит — це де запити транзакцій дійсно розкривають свій потенціал. Ваша кінцева точка отримує публічний ключ користувача і будує повністю індивідуальну транзакцію:
+
+```ts
+export async function POST(request: NextRequest) {
+  // Parse user's public key from request body
+  const body = await request.json();
+  const { account } = body;
+
+  // Connect to Solana network
+  const connection = new Connection(clusterApiUrl("devnet"));
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+
+  // Create transaction with user as fee payer
+  const transaction = new Transaction({
+    feePayer: new PublicKey(account),
+    blockhash: blockhash,
+    lastValidBlockHeight: lastValidBlockHeight,
+  });
+
+  // ========================================
+  // ADD YOUR CUSTOM INSTRUCTIONS HERE
+  // ========================================
+  
+  // This is where you build your transaction logic.
+  // You can add any combination of instructions:
+  
+  // Example 1: Simple SOL transfer
+  // const transferInstruction = SystemProgram.transfer({
+  //   fromPubkey: new PublicKey(account),
+  //   toPubkey: new PublicKey("YOUR_MERCHANT_WALLET"),
+  //   lamports: LAMPORTS_PER_SOL * 0.01, // 0.01 SOL
+  // });
+  // transaction.add(transferInstruction);
+
+  // Serialize the transaction for the wallet
+  const serializedTransaction = transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  });
+
+  return NextResponse.json({
+    transaction: serializedTransaction.toString('base64'),
+    message: "Transaction created successfully", // Customize this message
+  }, { headers: corsHeaders });
+}
+```
+
+> Ваш застосунок не надсилає транзакцію в мережу, тому у вас не буде доступу до підпису транзакції для відстеження. Використовуйте параметри посилання, як пояснено в [Вступному уроці](/uk/courses/solana-pay/introduction#reference)
+
+<ArticleSection name="Advanced Capabilities" id="advanced-capabilities" level="h2" />
+
+### Транзакції з обмеженим доступом
+
+Запити транзакцій дозволяють реалізувати складний контроль доступу, перевіряючи умови перед створенням транзакцій. Оскільки ви контролюєте кінцеву точку, ви можете перевіряти володіння NFT, членство в білому списку або будь-які інші критерії:
+
+```ts
+// Check NFT ownership before building transaction
+const nfts = await metaplex.nfts().findAllByOwner({ owner: account }).run(); 
+
+const hasRequiredNFT = nfts.some(nft => 
+  nft.collection?.address.toString() === requiredCollection
+);
+
+if (!hasRequiredNFT) {
+  return response.status(403).json({ 
+    error: "Access denied: Required NFT not found" 
+  });
+}
+
+// Build transaction only for verified users
+```
+
+### Часткове підписання для підвищеної безпеки
+
+Для транзакцій, що вимагають схвалення від адміністративної пари ключів або багатосторонньої автентифікації, Solana Pay підтримує часткове підписання. Ваш сервер може додати свій підпис перед надсиланням користувачу:
+
+```ts
+const transaction = new Transaction({
+  feePayer: account,
+  blockhash,
+  lastValidBlockHeight,
+});
+
+// Add your instructions requiring admin signature
+transaction.add(customInstruction);
+
+// Partially sign with your admin keypair
+transaction.partialSign(adminKeypair);
+
+// Send to user for final signature
+const serializedTransaction = transaction.serialize({
+  requireAllSignatures: false,
+});
+```
+
+<ArticleSection name="Example" id="example" level="h2" />
+
+Як повноцінний приклад, ви можете використати [Приклад Solana NFT Minter](https://github.com/solana-developers/solana-pay-nft-minter/tree/main) від Solana Foundation

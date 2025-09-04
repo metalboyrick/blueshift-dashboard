@@ -1,0 +1,85 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+![Assembly Memo Challenge](/graphics/challenge-banners/assembly-memo.png)
+
+# Assembly Memo
+
+У цьому розділі ми використаємо sBPF Assembly для створення механізму логування для нашої програми.
+
+Простота компактної програми для нотаток — ідеальна відправна точка для вашої подорожі у світ sBPF assembly!
+
+Якщо ви не знайомі з програмуванням на асемблері, перегляньте [вступний курс з Assembly](/uk/courses/introduction-to-assembly)
+
+<ArticleSection name="Program Design" id="program-design" level="h2" />
+
+Наша програма просто розмістить правильну адресу пам'яті у відповідний регістр, а потім виконає `sol_log_` системний виклик. Це виглядатиме так:
+
+```sbpf
+.equ NUM_ACCOUNTS, 0x00
+.equ DATA_LEN, 0x08
+.equ DATA, 0x10
+.globl entrypoint
+entrypoint:
+  ldxdw r0, [r1+NUM_ACCOUNTS]
+  ldxdw r2, [r1+DATA_LEN]
+  add64 r1, DATA
+  call sol_log_
+  exit
+```
+
+<ArticleSection name="Memory Offsets" id="memory-offsets" level="h2" />
+
+Програма починається з оголошення трьох констант `.equ`, які визначають розташування даних інструкцій у пам'яті:
+
+```sbpf
+.equ NUM_ACCOUNTS, 0x00  ; Offset for number of accounts
+.equ DATA_LEN, 0x08      ; Offset for data length
+.equ DATA, 0x10          ; Offset for actual data
+```
+
+Ці константи позначають байтові зміщення відносно вказівника на буфер входу в `r1`:
+- `NUM_ACCOUNTS` (0x0000): Вказує на кількість облікових записів у заголовку даних інструкції для валідації
+- `DATA_LEN` (0x08): Вказує на довжину даних інструкції в заголовку даних інструкції
+- `DATA` (0x10): Вказує на дані інструкції в заголовку даних інструкції
+
+На відміну від мов високого рівня, які абстрагують розташування пам'яті, асемблер вимагає точного знання, де знаходиться кожен фрагмент даних.
+
+<ArticleSection name="Entrypoint and Initial Validation" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+  ldxdw r0, [r1+NUM_ACCOUNTS]   ; Load number of accounts into r0
+```
+
+Кожна програма sBPF починається з глобального символу `.entrypoint`. Середовище виконання Solana надає дані облікових записів та інструкцій через регістр `r1`.
+
+Ця перша інструкція завантажує кількість облікових записів у `r0`. Оскільки `r0` — це регістр, який VM зчитує при виході, це служить двом цілям:
+1. Завантажує кількість облікових записів для нашого використання
+2. Забезпечує автоматичний збій програми, якщо передаються будь-які облікові записи (ненульове значення в r0)
+
+<ArticleSection name="Системний виклик Sol Log" id="sol-log-syscall" level="h2" />
+
+Далі ми підготуємо аргументи для системного виклику `sol_log_`:
+
+```sbpf
+ldxdw r2, [r1+DATA_LEN]   ; Load length of memo into r2
+add64  r1, DATA           ; Adjust r1 to point to memo bytes
+```
+
+Ці інструкції налаштовують аргументи для `sol_log_`:
+- `r2` отримує довжину даних нотатки
+- `r1` коригується для безпосереднього вказування на байти нотатки
+
+А після цього ми викликаємо `sol_log_` і виходимо:
+
+```sbpf
+call 16   ; Call sol_log_ (helper ID 16)
+exit      ; Return using r0 value
+```
+
+<ArticleSection name="Висновок" id="conclusion" level="h2" />
+
+Програма:
+1. Викликає 16 (`sol_log_`) для виведення нотатки в журнал валідатора
+2. Виходить, використовуючи значення в `r0`

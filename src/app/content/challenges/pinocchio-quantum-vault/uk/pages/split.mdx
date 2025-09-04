@@ -1,0 +1,148 @@
+# Розділення сховища
+
+Інструкція `split` дозволяє здійснювати часткове виведення коштів з квантово-стійких сховищ шляхом розподілу лампортів між кількома рахунками. Це необхідно для схем підпису Вінтерніца, які можна безпечно використовувати лише один раз.
+
+На відміну від традиційної криптографії, підписи Вінтерніца стають вразливими після одноразового використання. Інструкція розділення дозволяє:
+- Розподіляти платежі між кількома отримувачами в одній транзакції
+- Переносити залишкові кошти до нового квантового сховища зі свіжою парою ключів (передаючи квантове сховище як рахунок `refund`)
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Інструкція потребує трьох рахунків:
+
+- `vault`: Вихідне сховище, що містить збережені лампорти (має бути змінюваним)
+- `split`: Рахунок отримувача для вказаної суми (має бути змінюваним)  
+- `refund`: Рахунок отримувача для залишку балансу сховища (має бути змінюваним)
+
+Рахунок `refund` часто є новим квантовим сховищем зі свіжою парою ключів Вінтерніца, що забезпечує постійну безпеку для залишкових коштів.
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct SplitVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub split: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for SplitVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, split, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, split, refund })
+    }
+}
+```
+
+> Валідація рахунків обробляється середовищем виконання. Якщо рахунки не відповідають вимогам (змінюваність), інструкція автоматично завершиться невдачею.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Потрібні три елементи даних:
+- `signature`: Підпис Вінтерніца, що підтверджує володіння парою ключів сховища
+- `amount`: Лампорти для переказу на розділений рахунок (8 байтів, little-endian)
+- `bump`: Бамп деривації PDA для оптимізації (1 байт)
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct SplitVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub amount: [u8; 8],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for SplitVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<SplitVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+            amount: data[897..905].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Процес верифікації включає такі кроки:
+
+1. Формування повідомлення: Створюється 72-байтове повідомлення, що містить: суму для розділення, публічний ключ рахунку `split` та публічний ключ рахунку `refund`
+
+2. Перевірка підпису: Підпис Вінтерніца використовується для відновлення початкового хешу публічного ключа, який потім порівнюється з насінням деривації PDA сховища.
+
+3. Валідація PDA: Швидка перевірка еквівалентності гарантує, що відновлений хеш відповідає PDA сховища, доводячи, що підписувач володіє сховищем.
+
+4. Розподіл коштів у разі успішної валідації: вказана сума переказується на рахунок `split`, залишок переказується на рахунок `refund`, а рахунок `vault` закривається.
+
+> Оскільки програма володіє рахунком `vault`, ви можете переказувати лампорти безпосередньо без необхідності викликати міжпрограмну інвокацію (CPI).
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct SplitVault<'a> {
+    pub accounts: SplitVaultAccounts<'a>,
+    pub instruction_data: SplitVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for SplitVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = SplitVaultInstructionData::try_from(data)?;
+        let accounts = SplitVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> SplitVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&self) -> ProgramResult {
+        // Assemble our Split message
+        let mut message = [0u8; 72];
+        message[0..8].clone_from_slice(&self.instruction_data.amount);
+        message[8..40].clone_from_slice(self.accounts.split.key());
+        message[40..].clone_from_slice(self.accounts.refund.key());
+
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(&message).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault, send split balance to Split account, refund remainder to Refund account
+        *self.accounts.split.try_borrow_mut_lamports()? += u64::from_le_bytes(self.instruction_data.amount);
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports().saturating_sub(u64::from_le_bytes(self.instruction_data.amount));
+
+        self.accounts.vault.close()
+    }
+}
+```
+
+> Реконструкція повідомлення запобігає атакам повторного відтворення підпису, коли зловмисники підставляють інші рахунки отримувачів під час MEV-інгу дійсних підписів, захоплених з мемпулу.

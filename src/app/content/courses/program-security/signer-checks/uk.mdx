@@ -1,0 +1,124 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Перевірки підписувача
+
+Перевірки підписувача — це цифровий еквівалент вимоги рукописного підпису, вони доводять, що власник облікового запису дійсно авторизував транзакцію, а не хтось інший діяв від його імені. У середовищі Solana без довіри це криптографічне підтвердження є єдиним способом перевірити справжність авторизації.
+
+Це стає критичним при роботі з Program Derived Accounts (PDA) та операціями з обмеженим доступом. Більшість програмних облікових записів зберігають поле `authority`, яке визначає, хто може їх змінювати, а багато PDA походять від конкретних облікових записів користувачів. Без перевірки підписувача ваша програма не має способу відрізнити законних власників від зловмисних імітаторів.
+
+Наслідки відсутності перевірок підписувача руйнівні: будь-який обліковий запис може виконувати операції, які повинні бути обмежені для певних авторитетів, що призводить до несанкціонованого доступу, спустошення рахунків і повної втрати контролю над станом програми.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу інструкцію, яка передає право власності на програмний обліковий запис:
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+На перший погляд, це виглядає безпечно. Обмеження `has_one = owner` гарантує, що обліковий запис власника, переданий в інструкцію, відповідає полю `owner`, збереженому в `program_account`. Перевірка даних ідеальна, але є фатальний недолік.
+
+Зверніть увагу, що `owner` є `UncheckedAccount`, а не `Signer`. Це означає, що хоча Anchor перевіряє, чи відповідає наданий обліковий запис збереженому власнику, він ніколи не перевіряє, чи цей обліковий запис дійсно підписав транзакцію.
+
+Зловмисник може скористатися цим, виконавши такі дії:
+- Знайти будь-який програмний обліковий запис, який вони хочуть захопити
+- Прочитати відкритий ключ поточного власника з даних облікового запису
+- Створити транзакцію, яка передає відкритий ключ реального власника як параметр власника
+- Встановити себе як `new_owner`
+- Відправити транзакцію без підпису реального власника
+
+Обмеження `has_one` проходить, оскільки публічні ключі збігаються, але через відсутність перевірки підписанта, зловмисник успішно передає право власності собі без згоди законного власника. Отримавши контроль над обліковим записом, вони можуть виконувати будь-які операції як новий власник.
+
+На щастя, `Anchor` робить цю перевірку надзвичайно простою безпосередньо в структурі облікового запису, просто змінивши `UncheckedAccount` на `Signer` ось так:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Або ви можете додати обмеження облікового запису `signer` ось так:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    #[account(signer)]
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Або ви можете просто додати перевірку підписанта в інструкції, використовуючи перевірку `ctx.accounts.owner.is_signer` ось так:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if !ctx.accounts.owner.is_signer {
+        return Err(ProgramError::MissingRequiredSignature.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+
+    Ok(())
+}
+```
+
+Додавши цю перевірку, обробник інструкцій продовжить виконання лише якщо обліковий запис власника підписав транзакцію. Якщо обліковий запис не підписано, транзакція завершиться невдачею.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio, оскільки ми не маємо можливості додавати перевірки безпеки безпосередньо всередині структури облікового запису, ми змушені робити це в логіці інструкцій.
+
+Ми можемо зробити це дуже подібно до Anchor, використовуючи функцію `is_signer()` ось так:
+
+```rust
+if !self.accounts.owner.is_signer() {
+    return Err(ProgramError::MissingRequiredSignature.into());
+}
+```

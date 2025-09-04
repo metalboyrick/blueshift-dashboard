@@ -1,0 +1,264 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Основи Mollusk
+
+![Тестування з Mollusk](/graphics/course-banners/testing-with-mollusk.png)
+
+Ефективне тестування програм Solana вимагає фреймворку, який збалансовує швидкість, точність та аналітичні можливості. Під час розробки складної програмної логіки вам потрібне середовище, яке забезпечує швидку ітерацію без втрати можливості тестувати граничні випадки або точно вимірювати продуктивність.
+
+Ідеальний фреймворк для тестування Solana повинен забезпечувати три основні можливості: 
+- Швидке виконання для коротких циклів розробки, 
+- Гнучке маніпулювання станом облікових записів для всебічного тестування граничних випадків, 
+- Детальні показники продуктивності для оптимізаційних інсайтів.
+
+Mollusk відповідає цим вимогам, надаючи оптимізоване середовище тестування, спеціально розроблене для розробки програм Solana.
+
+<ArticleSection name="Що таке Mollusk" id="what-is-mollusk" level="h2" />
+
+[Mollusk](https://github.com/anza-xyz/mollusk), створений і підтримуваний [Джо Колфілдом](https://x.com/realbuffalojoe) з команди [Anza](https://x.com/anza_xyz), — це легкий тестовий інструмент для програм Solana, який забезпечує прямий інтерфейс до виконання програми без накладних витрат повного середовища валідатора.
+
+Замість симуляції повного середовища валідатора, Mollusk будує конвеєр виконання програми, використовуючи низькорівневі компоненти Solana Virtual Machine (SVM). Цей підхід усуває непотрібні накладні витрати, зберігаючи при цьому основну функціональність, необхідну для ретельного тестування програм.
+
+Фреймворк досягає виняткової продуктивності, виключаючи важкі компоненти, такі як `AccountsDB` та `Bank` з реалізації валідатора Agave. Цей вибір дизайну вимагає явного створення облікових записів, що фактично стає перевагою, оскільки надає точний контроль над станами облікових записів і дозволяє тестувати сценарії, які було б важко відтворити в повному середовищі валідатора.
+
+Тестовий інструмент Mollusk підтримує всебічні параметри конфігурації, включаючи налаштування обчислювального бюджету, модифікації набору функцій та налаштування sysvar. Ці конфігурації керуються безпосередньо через структуру `Mollusk` і можуть бути змінені за допомогою вбудованих допоміжних функцій.
+
+<ArticleSection name="Перші кроки" id="first-steps" level="h2" />
+
+Основний крейт `mollusk-svm` забезпечує фундаментальну інфраструктуру для тестування, тоді як додаткові крейти пропонують спеціалізовані помічники для поширених програм Solana, таких як `Token` та `Memo`.
+
+### Налаштування
+
+Додайте основний крейт Mollusk до вашого проєкту:
+
+```
+cargo add mollusk-svm --dev
+```
+
+За потреби включіть помічники для конкретних програм:
+
+```
+cargo add mollusk-svm-programs-memo mollusk-svm-programs-token --dev
+```
+
+Ці додаткові крейти надають попередньо налаштованих помічників для стандартних програм Solana. Це зменшує шаблонний код і спрощує налаштування типових сценаріїв тестування, що включають операції з токенами або інструкції memo.
+
+> Прапорець `--dev` у `cargo add <crate-name> --dev` використовується для збереження легкої ваги бінарного файлу вашої програми, додаючи їх у розділ `[dev-dependencies]` у вашому `Cargo.toml`
+> Ця конфігурація гарантує, що утиліти для тестування не збільшують розмір розгортання вашої програми, одночасно забезпечуючи доступ до всіх необхідних типів Solana та допоміжних функцій під час розробки.
+
+### Додаткові залежності
+
+Кілька крейтів Solana покращують досвід тестування, надаючи основні типи та утиліти:
+
+```
+cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk --dev
+```
+
+<ArticleSection name="Основи Mollusk" id="mollusk-basics" level="h2" />
+
+Почніть з оголошення `program_id` та створення екземпляра `Mollusk` з адресою, яку ви використовували у своїй програмі, щоб вона викликалася правильно і не викидала помилку "ProgramMismatch" під час тестування, та шляхом до збудованої програми, як показано нижче:
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+// Alternative using an Array of bytes
+// pub const ID: [u8; 32] = [
+//    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+//    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+//    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+//    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+// ];
+
+#[test]
+fn test() {
+    // Omit the `.so` file extension for the program name since
+    // it is automatically added when Mollusk is loading the file.
+    let mollusk = Mollusk::new(&ID, "target/deploy/program");
+
+    // Alternative using an Array of bytes
+    // let mollusk = Mollusk::new(&Pubkey::new_from_array(ID), "target/deploy/program")
+}
+```
+
+Для тестування ми можемо використовувати один із чотирьох основних методів API:
+
+- `process_instruction`: Обробляє інструкцію та повертає результат.
+- `process_and_validate_instruction`: Обробляє інструкцію та виконує серію перевірок результату, викликаючи паніку, якщо будь-яка перевірка не вдається.
+- `process_instruction_chain`: Обробляє ланцюжок інструкцій та повертає результат.
+- `process_and_validate_instruction_chain`: Обробляє ланцюжок інструкцій та виконує серію перевірок для кожного результату, викликаючи паніку, якщо будь-яка перевірка не вдається.
+
+Але перш ніж використовувати ці методи, нам потрібно створити наші облікові записи та структуру інструкцій для передачі:
+
+### Облікові записи
+
+Під час тестування програм Solana за допомогою Mollusk ви працюватимете з кількома типами облікових записів, які відображають сценарії виконання програм у реальному світі. Розуміння того, як правильно створювати ці облікові записи, є важливим для ефективного тестування.
+
+Найбільш фундаментальним типом облікового запису є `SystemAccount`, який має два основні варіанти:
+- Платник: Обліковий запис з лампортами, який фінансує створення програмних облікових записів або переказ лампортів
+- Обліковий запис за замовчуванням: Порожній обліковий запис без лампортів, зазвичай використовується для представлення програмного облікового запису, що очікує ініціалізації в інструкції
+
+Системні облікові записи не містять даних і належать Системній програмі. Основна відмінність між платниками та неініціалізованими обліковими записами полягає в їхньому балансі лампортів: платники мають кошти, тоді як неініціалізовані облікові записи починаються порожніми.
+
+Ось як створити ці базові облікові записи в Mollusk:
+
+```rust
+use solana_sdk::{
+    account::Account,
+    system_program
+};
+
+// Payer account with lamports for transactions
+let payer = Pubkey::new_unique();
+let payer_account = Account::new(100_000_000, 0, &system_program::id());
+
+// Uninitialized account with no lamports
+let default_account = Account::default();
+```
+
+Для `ProgramAccounts`, що містять дані, у вас є два підходи до створення:
+
+```rust
+use solana_sdk::account::Account;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let program_account_account = Account {
+    lamports,
+    data,
+    owner: ID, // The program's that owns the account
+    executable: false,
+    rent_epoch: 0,
+};
+```
+
+Після створення облікових записів, скомпілюйте їх у формат, який очікує Mollusk:
+
+```rust
+let accounts = [
+    (user, user_account),
+    (program_account, program_account_account)
+];
+```
+
+### Інструкції
+
+Створення інструкцій для тестування Mollusk є простим, коли ви розумієте три основні компоненти: `program_id`, який ідентифікує вашу програму, `instruction_data`, що містить дискримінатор та параметри, та метадані облікового запису, які вказують, які облікові записи задіяні та їхні дозволи.
+
+Ось базова структура інструкції:
+
+```rust
+use solana_sdk::instruction::{Instruction, AccountMeta};
+
+let instruction = Instruction::new_with_bytes(
+    ID, // Your program's ID
+    &[0], // Instruction data (discriminator + parameters)
+    vec![AccountMeta::new(payer, true)], // Account metadata
+);
+```
+
+Дані інструкції повинні включати дискримінатор інструкції, за яким слідують будь-які параметри, які потребує ваша інструкція. Для програм Anchor дискримінатори за замовчуванням — це 8-байтові значення, отримані з назви інструкції.
+
+Щоб спростити генерацію дискримінаторів Anchor, використовуйте цю допоміжну функцію та створюйте дані інструкції, об'єднуючи дискримінатор із серіалізованими параметрами:
+
+```rust
+use sha2::{Sha256, Digest};
+
+let instruction_data = &[
+    &get_anchor_discriminator_from_name("deposit"),
+    &1_000_000u64.to_le_bytes()[..],
+]
+.concat();
+
+pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("global:{}", name));
+    let result = hasher.finalize();
+
+    [
+        result[0], result[1], result[2], result[3],
+        result[4], result[5], result[6], result[7],
+    ]
+}
+```
+
+Для структури `AccountMeta` нам потрібно використовувати відповідний конструктор на основі дозволів облікового запису:
+
+- `AccountMeta::new(pubkey, is_signer)`: Для змінюваних облікових записів
+- `AccountMeta::new_readonly(pubkey, is_signer)`: Для облікових записів лише для читання
+
+Логічний параметр вказує, чи повинен обліковий запис підписувати транзакцію. Більшість облікових записів не є підписантами (false), за винятком платників та авторизованих осіб, які повинні авторизувати операції.
+
+### Виконання
+
+Підготувавши облікові записи та інструкції, ви можете виконувати та перевіряти логіку вашої програми за допомогою API виконання Mollusk. Mollusk надає чотири різні методи виконання залежно від того, чи потрібні вам перевірки валідації та чи тестуєте ви одну чи кілька інструкцій.
+
+Найпростіший метод виконання обробляє одну інструкцію без валідації:
+
+```rust
+mollusk.process_instruction(&instruction, &accounts);
+```
+
+Це повертає результати виконання, які ви можете перевірити вручну, але не виконує автоматичну валідацію.
+
+Для комплексного тестування використовуйте метод валідації, який дозволяє вказати очікувані результати:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::success(), // Verify the transaction succeeded
+        Check::compute_units(5_000), // Expect specific compute usage
+        Check::account(&payer).data(&expected_data).build(), // Validate account data
+        Check::account(&payer).owner(&ID).build(), // Validate account owner
+        Check::account(&payer).lamports(expected_lamports).build(), // Check lamport balance
+    ],
+);
+```
+
+> Ми можемо виконувати кілька перевірок для одного облікового запису, "об'єднуючи" їх таким чином: `Check::account(&payer).data(&expected_data).owner(&ID).build()`
+
+Система валідації підтримує різні типи перевірок для верифікації різних аспектів результатів виконання. Для тестування граничних випадків ви можете перевірити, що інструкції завершуються з помилкою, як і очікувалося:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::err(ProgramError::MissingRequiredSignature), // Expect specific error
+    ],
+);
+```
+
+Для тестування складних робочих процесів, які вимагають кількох інструкцій, використовуйте методи ланцюжка інструкцій:
+
+```rust
+mollusk.process_instruction_chain(
+    &[
+        (&instruction, &accounts),
+        (&instruction_2, &accounts_2)
+    ]
+);
+```
+
+Комбінуйте кілька інструкцій з комплексною валідацією:
+
+```rust
+mollusk.process_and_validate_instruction_chain(&[
+    (&instruction, &accounts, &[Check::success()]),
+    (&instruction_2, &accounts_2, &[
+        Check::success(),
+        Check::account(&target_account).lamports(final_balance).build(),
+    ]),
+]);
+```

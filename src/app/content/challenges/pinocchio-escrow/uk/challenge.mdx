@@ -1,0 +1,204 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Ескроу
+
+![Завдання Pinocchio Ескроу](/graphics/challenge-banners/pinocchio-escrow.png)
+
+Ескроу — це потужний фінансовий інструмент, який забезпечує безпечний обмін токенами між двома сторонами.
+
+Уявіть це як цифрову банківську скриньку, де один користувач може заблокувати Токен А, очікуючи, поки інший користувач внесе Токен Б, перш ніж обмін буде завершено.
+
+Це створює середовище без довіри, де жодній стороні не потрібно турбуватися про те, що інша відмовиться від угоди.
+
+У цьому завданні ми реалізуємо цю концепцію через три прості, але потужні інструкції:
+- **Make**: Мейкер (перший користувач) визначає умови угоди та вносить узгоджену кількість Токена А в захищене сховище. Це схоже на розміщення вашого предмета в банківській скриньці та встановлення умов обміну.
+- **Take**: Тейкер (другий користувач) приймає пропозицію, переказуючи обіцяну кількість Токена Б мейкеру, і натомість отримує заблокований Токен А. Це момент, коли обидві сторони виконують свою частину угоди.
+- **Refund**: Якщо мейкер змінює своє рішення або не знаходиться відповідний тейкер, він може скасувати пропозицію та повернути свій Токен А. Це схоже на повернення вашого предмета з банківської скриньки, якщо угода зривається.
+
+**Примітка**: Якщо ви не знайомі з Pinocchio, вам варто почати з читання [Вступу до Pinocchio](/uk/courses/introduction-to-pinocchio), щоб ознайомитися з основними концепціями, які ми будемо використовувати в цій програмі.
+
+<ArticleSection name="Встановлення" id="installation" level="h2" />
+
+Почнімо зі створення нового середовища Rust:
+
+```bash
+# create workspace
+cargo new blueshift_escrow --lib --edition 2021
+cd blueshift_escrow
+```
+
+Додайте pinocchio, pinocchio-system, pinocchio-token та pinocchio-associated-token:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+```
+
+Оголосіть типи крейту в `Cargo.toml`, щоб згенерувати артефакти розгортання в `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Тепер ви готові написати свою програму умовного депонування.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Цього разу ми розділимо програму на невеликі, сфокусовані модулі замість того, щоб все запихати в `lib.rs`. Структура папок виглядатиме приблизно так:
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── helpers.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+Точка входу, яка знаходиться в `lib.rs`, дуже схожа на те, що ми робили в попередніх уроках, тому ми розглянемо її дуже швидко:
+
+```rust
+use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Make::DISCRIMINATOR, data)) => Make::try_from((data, accounts))?.process(),
+        Some((Take::DISCRIMINATOR, _)) => Take::try_from(accounts)?.process(),
+        Some((Refund::DISCRIMINATOR, _)) => Refund::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Ми перейдемо до `state.rs`, де зберігаються всі дані для нашого `Escrow`. Розділимо це на дві частини: визначення структури та її реалізацію.
+
+Спочатку розглянемо визначення структури:
+
+```rust
+use pinocchio::{program_error::ProgramError, pubkey::Pubkey};
+use core::mem::size_of;
+
+#[repr(C)]
+pub struct Escrow {
+    pub seed: u64,        // Random seed for PDA derivation
+    pub maker: Pubkey,    // Creator of the escrow
+    pub mint_a: Pubkey,   // Token being deposited
+    pub mint_b: Pubkey,   // Token being requested
+    pub receive: u64,     // Amount of token B wanted
+    pub bump: [u8;1]      // PDA bump seed
+}
+```
+
+Атрибут `#[repr(C)]` забезпечує передбачуване розміщення в пам'яті для нашої структури, що є критично важливим для даних у блокчейні. Кожне поле має конкретне призначення:
+- **seed**: Випадкове число, яке дозволяє одному мейкеру створювати кілька умовних депонувань з однією і тією ж парою токенів
+- **maker**: Адреса гаманця, який створив умовне депонування і отримає токени
+- **mint_a**: Адреса мінту SPL токена для токена, що депонується
+- **mint_b**: Адреса мінту SPL токена для токена, що запитується
+- **receive**: Точна кількість токена B, яку мейкер хоче отримати
+- **bump**: Один байт, що використовується у виведенні PDA для забезпечення того, щоб адреса не знаходилася на кривій Ed25519
+
+Тепер розглянемо реалізацію з усіма її допоміжними методами:
+
+```rust
+impl Escrow {
+    pub const LEN: usize = size_of::<u64>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<u64>()
+    + size_of::<[u8;1]>();
+
+    #[inline(always)]
+    pub fn load_mut(bytes: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &mut *core::mem::transmute::<*mut u8, *mut Self>(bytes.as_mut_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn load(bytes: &[u8]) -> Result<&Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &*core::mem::transmute::<*const u8, *const Self>(bytes.as_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
+    }
+
+    #[inline(always)]
+    pub fn set_maker(&mut self, maker: Pubkey) {
+        self.maker = maker;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_a(&mut self, mint_a: Pubkey) {
+        self.mint_a = mint_a;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_b(&mut self, mint_b: Pubkey) {
+        self.mint_b = mint_b;
+    }
+
+    #[inline(always)]
+    pub fn set_receive(&mut self, receive: u64) {
+        self.receive = receive;
+    }
+
+    #[inline(always)]
+    pub fn set_bump(&mut self, bump: [u8;1]) {
+        self.bump = bump;
+    }
+
+    #[inline(always)]
+    pub fn set_inner(&mut self, seed: u64, maker: Pubkey, mint_a: Pubkey, mint_b: Pubkey, receive: u64, bump: [u8;1]) {
+        self.seed = seed;
+        self.maker = maker;
+        self.mint_a = mint_a;
+        self.mint_b = mint_b;
+        self.receive = receive;
+        self.bump = bump;
+    }
+}
+```
+
+Реалізація забезпечує кілька ключових функцій:
+1. **Точний розрахунок розміру**: `LEN` точно обчислює розмір облікового запису, підсумовуючи розмір кожного поля
+2. **Безпечне завантаження**: `load` забезпечує безпечний спосіб завантаження та перевірки даних escrow
+3. **Оптимізації продуктивності**:
+   - `#[inline(always)]` для геттерів для максимальної продуктивності
+   - Небезпечні методи для випадків, коли ми знаємо, що запозичення безпечне
+   - Ефективне встановлення полів за допомогою `set_inner`
+4. **Безпека пам'яті**: Належна перевірка довжини даних облікового запису та власності
+5. **Документація**: Чіткі коментарі, що пояснюють призначення та міркування безпеки кожного методу
+
+Ця реалізація забезпечує безпеку та ефективність нашого стану escrow, з належною перевіркою та оптимізацією продуктивності там, де це доречно.

@@ -1,0 +1,135 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Підміна типів
+
+Атаки з підміною типів використовують програми, які не перевіряють типи облікових записів, дозволяючи зловмисникам підставляти облікові записи з ідентичними структурами даних, але різним призначенням. Оскільки Solana зберігає всі дані облікових записів як необроблені байти, програма, яка не перевіряє типи облікових записів, може бути обманута і сприйняти `VaultConfig` як `AdminSettings`, що може призвести до катастрофічних наслідків.
+
+Вразливість виникає через структурну неоднозначність. Коли кілька типів облікових записів мають однакову структуру даних (наприклад, обидва мають поле `owner: Pubkey`), перевірок власника та валідації даних недостатньо для їх розрізнення. Зловмисник, який контролює один тип облікового запису, може маскуватися під власника зовсім іншого типу облікового запису, обходячи логіку авторизації, розроблену для конкретних цілей облікових записів.
+
+Без дискримінаторів (унікальних ідентифікаторів, які розрізняють типи облікових записів) ваша програма стає вразливою до складних атак з імітацією, коли зловмисники можуть використовувати розрив між структурною подібністю та логічним призначенням.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу інструкцію, яка виконує адміністративні операції на основі власності облікового запису:
+
+```rust
+#[program]
+pub mod insecure_check{
+    use super::*;
+    //..
+
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let program_account_one = ctx.accounts.program_account_one.to_account_info();
+        if program_account_one.owner != ctx.program_id {
+            return Err(ProgramError::IllegalOwner.into());
+        }
+        if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
+            return Err(ProgramError::InvalidAccountData.into());
+        }
+
+        //..do something
+    
+        Ok(())
+
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub admin: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_one: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_two: UncheckedAccount<'info>,
+
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub struct ProgramAccountOne {
+    owner: Pubkey,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub struct ProgramAccountTwo {
+    owner: Pubkey,
+}
+```
+
+Цей код виглядає безпечним: він перевіряє власність програми та підтверджує адміністративні повноваження. Але є фатальний недолік: він ніколи не перевіряє, що `program_account_one` насправді є `ProgramAccountOne`, а не якимось іншим типом облікового запису з такою ж структурою даних.
+
+Зловмисник може використати це так:
+- Створити або контролювати обліковий запис `ProgramAccountTwo`
+- Встановити себе як власника в даних цього облікового запису
+- Передати свій `ProgramAccountTwo` як параметр `program_account_one`
+- Оскільки обидва типи облікових записів мають ідентичні структури `owner: Pubkey`, десеріалізація успішно завершується
+- Зловмисник стає "адміністратором" для операцій, призначених лише для власників `ProgramAccountOne`
+
+Solana використовує дискримінатори для вирішення цієї проблеми:
+- 8-байтовий дискримінатор Anchor (за замовчуванням): Походить від назви облікового запису, автоматично додається до облікових записів, позначених #[account]. (з anchor `0.31.0` можливо реалізувати "користувацькі" дискримінатори)
+- Дискримінація на основі довжини: Використовується Token Program для розрізнення між обліковими записами Token та Mint (хоча Token2022 тепер використовує явні дискримінатори)
+
+Найпростіше рішення — використання вбудованої перевірки типів Anchor:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub admin: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_one: Account<'info, ProgramAccountOne>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_two: Account<'info, ProgramAccountTwo>,
+
+}
+
+#[account]
+pub struct ProgramAccountOne {
+    owner: Pubkey,
+}
+
+#[account]
+pub struct ProgramAccountTwo {
+    owner: Pubkey,
+}
+```
+
+Або для користувацької валідації можна додати явні перевірки дискримінатора:
+
+```rust
+pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+    let program_account_one = ctx.accounts.program_account_one.to_account_info();
+    if program_account_one.owner != ctx.program_id {
+        return Err(ProgramError::IllegalOwner.into());
+    }
+    if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+    let data = program_account_one.data.borrow();
+    // Assume ProgramAccountOne has a discriminator of 8 bytes
+    let discriminator = &data[..8];
+    if discriminator != ProgramAccountOne::DISCRIMINATOR {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    //..do something
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio перевірку дискримінатора реалізуйте вручну:
+
+```rust
+let account_data = self.accounts.program_account.try_borrow_data()?;
+
+if account_data[0] != DISCRIMINATOR {
+    return Err(ProgramError::AccountAlreadyInitialized.into());
+}
+```

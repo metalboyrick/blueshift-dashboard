@@ -1,0 +1,229 @@
+{
+  "courses": {
+    "introduction-to-blockchain-and-solana": {
+      "title": "Вступ до блокчейну та Solana",
+      "lessons": {
+        "introduction": "Вступ",
+        "blockchain-fundamentals": "Основи блокчейну",
+        "blockchain-evolution": "Еволюція блокчейну",
+        "introduction-to-solana": "Вступ до Solana",
+        "conclusion": "Висновок"
+      }
+    },
+    "anchor-for-dummies": {
+      "title": "Anchor для початківців",
+      "lessons": {
+        "anchor-101": "Основи Anchor",
+        "anchor-accounts": "Акаунти в Anchor", 
+        "anchor-instructions": "Інструкції в Anchor",
+        "testing-your-program": "Тестування вашої програми",
+        "program-deployment": "Розгортання програми",
+        "client-side-development": "Розробка на стороні клієнта",
+        "advanced-anchor": "Просунутий Anchor",
+        "conclusion": "Висновок"
+      }
+    },
+    "introduction-to-pinocchio": {
+      "title": "Вступ до Pinocchio",
+      "lessons": {
+        "pinocchio-101": "Основи Pinocchio",
+        "pinocchio-accounts": "Акаунти в Pinocchio",
+        "pinocchio-instructions": "Інструкції в Pinocchio",
+        "pinocchio-errors": "Помилки в Pinocchio",
+        "reading-and-writing-data": "Читання та запис даних",
+        "testing-your-program": "Тестування вашої програми",
+        "performance": "Продуктивність",
+        "conclusion": "Висновок"
+      }
+    },
+    "introduction-to-assembly": {
+      "title": "Вступ до асемблера",
+      "lessons": {
+        "assembly-101": "Основи асемблера",
+        "registers-and-memory": "Регістри та пам'ять",
+        "instructions": "Інструкції",
+        "tooling": "Інструментарій",
+        "program-example": "Приклад програми",
+        "conclusion": "Висновок"
+      }
+    },
+    "program-security": {
+      "title": "Безпека програм",
+      "lessons": {
+        "introduction": "Вступ",
+        "signer-checks": "Перевірки підписувача",
+        "owner-checks": "Перевірки власника",
+        "data-matching": "Зіставлення даних",
+        "duplicate-mutable-accounts": "Дублікати змінюваних акаунтів",
+        "reinitialization-attacks": "Атаки повторної ініціалізації",
+        "revival-attacks": "Атаки відновлення",
+        "arbitrary-cpi": "Довільний CPI",
+        "type-cosplay": "Підміна типів",
+        "pda-sharing": "Спільне використання PDA",
+        "conclusion": "Висновок"
+      }
+    },
+    "secp256r1-on-solana": {
+      "title": "Secp256r1 на Solana",
+      "lessons": {
+        "introduction": "Secp256r1 на Solana",
+        "secp256r1-with-anchor": "Secp256r1 з Anchor",
+        "secp256r1-with-pinocchio": "Secp256r1 з Pinocchio",
+        "conclusion": "Висновок"
+      }
+    },
+    "tokens-on-solana": {
+      "title": "Токени на Solana",
+      "lessons": {
+        "introduction": "Вступ",
+        "mint-and-token-accounts": "Емісія та токен-акаунти",
+        "functionalities": "Функціональності",
+        "metaplex-token-metadata": "Метадані токенів Metaplex",
+        "conclusion": "Висновок"
+      }
+    },
+    "nfts-on-solana": {
+      "title": "NFT на Solana",
+      "lessons": {
+        "introduction": "Вступ",
+        "metaplex-token-metadata": "Метадані токенів Metaplex",
+        "metaplex-core": "Основи Metaplex",
+        "conclusion": "Висновок"
+      }
+    },
+    "spl-token-with-web3js": {
+      "title": "SPL токен з Web3.js",
+      "lessons": {
+        "introduction": "Вступ",
+        "mint-to": "Емісія",
+        "transfer": "Переказ",
+        "burn": "Спалювання",
+        "close-account": "Закриття акаунту",
+        "approve-and-revoke": "Схвалення та відкликання",
+        "freeze-and-thaw": "Заморожування та розморожування",
+        "set-authority": "Встановлення повноважень",
+        "conclusion": "Висновок"
+      }
+    },
+    "spl-token-with-anchor": {
+      "title": "SPL токен з Anchor",
+      "lessons": {
+        "introduction": "Вступ",
+        "mint-to": "Емісія",
+        "transfer": "Переказ",
+        "burn": "Спалювання",
+        "close-account": "Закриття акаунту",
+        "approve-and-revoke": "Схвалення та відкликання",
+        "freeze-and-thaw": "Заморожування та розморожування",
+        "set-authority": "Встановлення повноважень",
+        "conclusion": "Висновок"
+      }
+    },
+    "token-2022-program": {
+      "title": "Програма Token2022",
+      "lessons": {
+        "introduction": "Вступ",
+        "token-extensions": "Розширення токенів",
+        "conclusion": "Висновок"
+      }
+    },
+    "token-2022-with-web3js": {
+      "title": "Token2022 з Web3.js",
+      "lessons": {
+        "introduction": "Вступ",
+        "transfer-fee-extension": "Розширення комісії за переказ",
+        "mint-close-authority-extension": "Розширення повноважень закриття емісії",
+        "default-account-state-extension": "Розширення стану акаунту за замовчуванням",
+        "immutable-owner-extension": "Розширення незмінного власника",
+        "memo-transfer-extension": "Розширення переказу з нотаткою",
+        "non-transferable-extension": "Розширення неможливості переказу",
+        "interest-bearing-extension": "Розширення нарахування відсотків",
+        "cpi-guard-extension": "Розширення захисту CPI",
+        "permanent-delegate-extension": "Розширення постійного делегата",
+        "metadata-extension": "Розширення метаданих",
+        "group-and-member-extension": "Розширення групи та учасника",
+        "conclusion": "Висновок"
+      }
+    },
+    "token-2022-with-anchor": {
+      "title": "Token2022 з Anchor",
+      "lessons": {
+        "introduction": "Вступ",
+        "transfer-fee-extension": "Розширення комісії за переказ",
+        "mint-close-authority-extension": "Розширення повноважень закриття емісії",
+        "default-account-state-extension": "Розширення стану акаунту за замовчуванням",
+        "immutable-owner-extension": "Розширення незмінного власника",
+        "memo-transfer-extension": "Розширення переказу з нотаткою",
+        "non-transferable-extension": "Розширення неможливості переказу",
+        "interest-bearing-extension": "Розширення нарахування відсотків",
+        "cpi-guard-extension": "Розширення захисту CPI",
+        "permanent-delegate-extension": "Розширення постійного делегата",
+        "metadata-extension": "Розширення метаданих",
+        "group-and-member-extension": "Розширення групи та учасника",
+        "conclusion": "Висновок"
+      }
+    },
+    "instruction-introspection": {
+      "title": "Інтроспекція інструкцій",
+      "lessons": {
+        "introduction": "Вступ",
+        "introspection-with-anchor": "Інтроспекція з Anchor",
+        "introspection-with-pinocchio": "Інтроспекція з Pinocchio",
+        "conclusion": "Висновок"
+      }
+    },
+    "testing-with-mollusk": {
+      "title": "Тестування з Mollusk",
+      "lessons": {
+        "mollusk-101": "Основи Mollusk",
+        "advanced-functionalities": "Розширені функціональності",
+        "conclusion": "Висновок"
+      }
+    },
+    "solana-pay": {
+      "title": "Solana Pay",
+      "lessons": {
+        "introduction": "Вступ",
+        "transfer-request": "Запит на переказ",
+        "transaction-request": "Запит на транзакцію",
+        "conclusion": "Висновок"
+      }
+    },
+    "create-your-sdk-with-codama": {
+      "title": "Створення SDK з Codama",
+      "lessons": {
+        "introduction": "Вступ",
+        "codama-from-scratch": "Codama IDL з нуля",
+        "codama-with-anchor": "Codama IDL з Anchor",
+        "updating-codama-idl": "Оновлення Codama IDL",
+        "conclusion": "Висновок"
+      }
+    },
+    "winternitz-signatures-on-solana": {
+      "title": "Підписи Winternitz на Solana",
+      "lessons": {
+        "introduction": "Вступ",
+        "winternitz-signatures-with-anchor": "Підписи Winternitz з Anchor",
+        "winternitz-signatures-with-pinocchio": "Підписи Winternitz з Pinocchio",
+        "conclusion": "Висновок"
+      }
+    },
+    "testing-with-litesvm": {
+      "title": "Тестування з LiteSVM",
+      "lessons": {
+        "litesvm-101": "Основи LiteSVM",
+        "typescript": "LiteSVM з Typescript",
+        "rust": "LiteSVM з Rust",
+        "conclusion": "Висновок"
+      }
+    },
+    "testing-with-surfpool": {
+      "title": "Тестування з Surfpool",
+      "lessons": {
+        "surfpool-101": "Основи Surfpool",
+        "advanced-functionalities": "Розширені функціональності",
+        "conclusion": "Висновок"
+      }
+    }
+  }
+}

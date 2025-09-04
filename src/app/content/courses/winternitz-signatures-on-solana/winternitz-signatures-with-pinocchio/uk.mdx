@@ -1,0 +1,221 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Підписи Вінтерніца з Pinocchio
+
+[Dean](https://x.com/deanmlittle) з команди Blueshift випустив перший пакет, який забезпечує сумісність Pinocchio для створення та перевірки підписів Вінтерніца.
+
+Ця реалізація особливо цінна для забезпечення квантово-стійкої безпеки для блокчейн-додатків.
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+Ця реалізація використовує `w = 8` для балансування обмежень Solana: лімітів розміру транзакцій та обмежень обчислювальних одиниць.
+
+Параметр Вінтерніца `w` створює фундаментальний компроміс між розміром підпису та обчислювальними вимогами:
+- Вищі значення w означають менші підписи, але більше обчислень, оскільки перевірка вимагає більше хеш-операцій на компонент підпису
+- Нижчі значення w означають більші підписи, але менше обчислень, оскільки перевірка вимагає менше хеш-операцій на компонент підпису
+
+Solana накладає два критичних обмеження, які формують вибір параметрів:
+- Обмеження розміру транзакції (1024 байти): З `w = 8`, повна реалізація створює підписи розміром рівно 1024 байти, використовуючи 256-бітні хеші (32 байти × 32 компоненти). Це споживає весь простір транзакції, не залишаючи місця для накладних витрат транзакції та додаткових даних.
+- Обмеження обчислювальних одиниць: Перехід до `w = 16` вдвічі зменшив би розмір підпису, але перевищив би ліміти обчислювальних одиниць (CU) Solana під час перевірки, оскільки кожен компонент підпису вимагав би значно більше хеш-операцій.
+
+Оскільки обмеження обчислювальних одиниць не можна вирішити шляхом налаштування параметрів, проблема розміру підпису вирішується шляхом скорочення підписів до 896 байтів і мерклізації решти компонентів. Цей підхід зберігає безпеку, створюючи необхідний простір для накладних витрат транзакції.
+
+Ось чому реалізація зупинилася на `w = 8`: це представляє оптимальну точку, де обчислювальні вимоги залишаються керованими, а скорочення підпису забезпечує практичне рішення для обмежень розміру.
+
+### Генерація ключів
+
+Згенеруйте приватний ключ та отримайте відповідний публічний ключ за допомогою SDK:
+
+```rust
+use winternitz::{hash::WinternitzKeccak, privkey::WinternitzPrivkey};
+
+// Generate a new random private key
+let privkey = WinternitzPrivkey::generate();
+
+// Derive the corresponding public key
+let pubkey = privkey.pubkey::<WinternitzKeccak>();
+```
+
+Публічний ключ отримується шляхом багаторазового застосування хеш-функції до компонентів приватного ключа, створюючи одностороннє перетворення, яке забезпечує безпеку.
+
+### Підписання повідомлень
+
+```rust
+// Sign a message
+let message = b"Hello, World!";
+let signature = privkey.sign::<WinternitzKeccak>(message);
+```
+
+Процес підписання генерує компоненти підпису на основі дайджесту повідомлення, де кожен компонент вимагає певної кількості хеш-операцій, визначених відповідними бітами повідомлення.
+
+### Перевірка підпису
+
+```rust
+// Recover public key from signature and message
+let recovered_pubkey = signature.recover_pubkey::<WinternitzKeccak>(message);
+
+// Verify by comparing public keys
+assert_eq!(recovered_pubkey, pubkey);
+```
+
+Перевірка відтворює публічний ключ з підпису та повідомлення, а потім порівнює його з очікуваним публічним ключем для підтвердження автентичності.
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+Для реалізації перевірки підпису Winternitz у вашій програмі Pinocchio вам потрібно:
+1. Крейт `solana-winternitz`: Він надає основну функціональність підпису Winternitz
+2. Створення та перевірка PDA з використанням квантово-захищеного виведення адрес
+
+Почнемо з додавання крейту `solana-winternitz`
+
+```
+cargo add solana-winternitz
+```
+
+### Оптимізація розміру підпису
+
+Реалізація використовує усічений підхід для відповідності обмеженням транзакцій Solana:
+- Повний підпис (`WinternitzSignature`): 1024 байти (32 байти × 32 компоненти).
+- Усічений підпис (`WinternitzCommitmentSignature`): 896 байтів (32 байти × 28 компонентів).
+- Доступний простір: 128 байтів залишається для накладних витрат транзакції
+
+Усічення з 256-бітних до 224-бітних хешів зберігає високий рівень безпеки, забезпечуючи при цьому практичну зручність використання. Решта компонентів підпису мерклізуються для збереження повної моделі безпеки.
+
+### Налаштування квантово-захищених PDA
+
+Оскільки традиційні підписи блокчейну залишаються вразливими до квантових атак, ця реалізація використовує Program Derived Addresses (PDA) для квантової безпеки.
+
+PDA не мають пов'язаних приватних ключів, що робить їх захищеними від криптографічних атак.
+
+Ось як створити PDA з публічного ключа Winternitz:
+
+```rust
+pub struct CreateWinternitzPDA {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl CreateWinternitzPDA {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        let data: [u8; 33] = bytes
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+        let (hash, bump) = array_refs![&data, 32, 1];
+        Ok(Self {
+            hash: *hash,
+            bump: *bump,
+        })
+    }
+
+    pub fn create_pda(&self, accounts: &CreatePDAAccounts) -> ProgramResult {
+        let seeds = [Seed::from(&self.hash), Seed::from(&self.bump)];
+        let signers = [Signer::from(&seeds)];
+        
+        // Create the quantum-secure PDA
+        CreateAccount {
+            from: accounts.payer,
+            to: accounts.vault,
+            lamports: accounts.lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+> Хеш, що використовується для отримання PDA, є коренем Меркла, створеним з 28 із 32 компонентів відкритого ключа. Це тому що, як було сказано раніше, ми можемо вмістити лише скорочений підпис.
+
+Суть перевірки Вінтерніца полягає у відновленні відкритого ключа з підпису та повідомлення, а потім перевірці, чи відповідає він очікуваному PDA. Ось повний процес перевірки:
+
+```rust
+pub struct VerifyWinternitzSignature {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl VerifyWinternitzSignature {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        if bytes.len() != 897 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        let (signature_bytes, bump) = bytes.split_at(896);
+        Ok(Self {
+            signature: WinternitzSignature::from(signature_bytes.try_into().unwrap()),
+            bump: [bump[0]],
+        })
+    }
+
+    pub fn verify_and_execute(&self, accounts: &VerifyAccounts, message: &[u8]) -> ProgramResult {
+        // Recover the public key from signature and message
+        let recovered_pubkey = self.signature.recover_pubkey(message);
+        let hash = recovered_pubkey.merklize();
+        
+        // Verify PDA ownership
+        let expected_pda = solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ]);
+        
+        if expected_pda.ne(accounts.pda.key()) {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        
+        // Execute the protected operation
+        self.execute_protected_operation(accounts)
+    }
+
+    fn execute_protected_operation(&self, accounts: &VerifyAccounts) -> ProgramResult {
+        // Your quantum-secure operation logic here
+        Ok(())
+    }
+}
+```
+
+Функція `recover_pubkey()` реконструює оригінальний відкритий ключ, перетворюючи підписане повідомлення в значення дайджесту, які вказують, скільки додаткових хешів потрібно кожному компоненту, і створює 28 компонентів відкритого ключа, які можуть бути згенеровані лише з правильним приватним ключем.
+
+Функція `merklize()` потім будує бінарне дерево з 28 компонентів відкритого ключа, створюючи єдиний 32-байтовий корінь, який унікально представляє всі 28 компонентів
+
+<ArticleSection name="Міркування щодо безпеки" id="security-considerations" level="h2" />
+
+Завжди включайте критичні параметри в підписане повідомлення, щоб запобігти маніпуляціям:
+
+```rust
+// Construct message with security parameters
+let message = [
+    accounts.recipient.key().as_ref(),     // Prevent recipient substitution
+    &amount.to_le_bytes(),                 // Prevent amount manipulation
+    &expiry_timestamp.to_le_bytes(),       // Prevent replay attacks
+].concat();
+```
+
+### Перевірки терміну дії
+
+Оскільки підписи Вінтерніца залишаються дійсними необмежений час, впроваджуйте обмеження за часом:
+
+```rust
+// Verify signature hasn't expired
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(
+    message[40..48].try_into()
+    .map_err(|_| ProgramError::InvalidInstructionData)?
+);
+
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+### Перевірки відкритого ключа
+
+Переконайтеся, що лише авторизовані сторони можуть скористатися підписом:
+
+```rust
+// Verify the recipient is authorized
+let intended_recipient = &message[0..32];
+if accounts.recipient.key().as_ref().ne(intended_recipient) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```

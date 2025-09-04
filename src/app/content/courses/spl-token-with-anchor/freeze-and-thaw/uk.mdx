@@ -1,0 +1,45 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкції з заморожування та розморожування
+
+Заморожування блокує всі операції з токенами на рахунку, доки він не буде розморожений. Лише орган заморожування монети може виконувати цю операцію.
+
+> Повністю вимикає перекази, схвалення та спалювання, і впливає лише на конкретний заморожений рахунок
+
+Розморожування відновлює операції з токенами на раніше замороженому рахунку. Лише орган заморожування монети може розморожувати рахунки.
+
+> Відновлює повну функціональність замороженого рахунку і може виконуватися лише органом заморожування монети
+
+Перш ніж ми зможемо заморозити або розморозити будь-який рахунок токенів, нам потрібно вже мати:
+- Ініціалізований рахунок `Mint`, для якого ми маємо `freezeAuthority`
+- Ініціалізований рахунок `Token` або рахунок `Associated Token`, який ми хочемо заморозити або розморозити
+
+Ось як виглядає CPI до інструкції `freeze_account()`: 
+
+```rust
+freeze_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        FreezeAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```
+
+А ось як виглядає CPI до інструкції `thaw_account()`: 
+
+```rust
+thaw_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        ThawAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

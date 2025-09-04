@@ -1,0 +1,184 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Миттєва позика Anchor
+
+![Миттєва позика Anchor](/graphics/challenge-banners/anchor-flash-loan.png)
+
+Інтроспекція інструкцій — це потужна функція, яка дозволяє блокчейн-програмі вивчати та аналізувати інші інструкції в межах одного пакету транзакцій. Це включає інструкції, які ще не були виконані, надаючи вашій програмі можливість "заглядати наперед" і приймати рішення на основі того, що відбудеться пізніше в транзакції.
+
+Уявіть це як рентгенівський зір для транзакцій: ваша програма може бачити крізь усю транзакцію, щоб зрозуміти повну послідовність операцій перед тим, як вирішити, як діяти далі.
+
+Найпереконливішим застосуванням інтроспекції інструкцій є миттєві позики. Це унікальний тип позики, який існує лише в межах однієї транзакції.
+
+Ось як працюють миттєві позики:
+- **Позичання**: На початку транзакції ви можете миттєво позичити велику суму капіталу, використовуючи інструкцію `loan`
+- **Використання**: Ви можете використовувати цей позичений капітал для торгівлі, арбітражу чи інших операцій у межах тієї ж транзакції
+- **Повернення**: Перед завершенням транзакції ви повинні повернути позику плюс невелику комісію, використовуючи інструкцію `repay`
+
+Ключове розуміння полягає в тому, що миттєві позики покладаються на атомарну природу блокчейн-транзакцій. Якщо будь-яка частина транзакції не вдається (включаючи повернення), вся транзакція відкочується, ніби її ніколи не було. Це означає, що кредитор не має жодного ризику: або він отримує повернення коштів, або позика фактично ніколи не відбувалася.
+
+У цьому завданні ви створите просту програму миттєвої позики, яка демонструє інтроспекцію інструкцій у дії. Програма буде аналізувати дані інструкцій та рахунки в різних інструкціях у межах однієї транзакції, щоб забезпечити виконання умов позики.
+
+Якщо ви новачок у інтроспекції інструкцій, рекомендуємо почати з [Курсу з інтроспекції інструкцій](/uk/courses/instruction-introspection), щоб зрозуміти фундаментальні концепції, які використовуються в цій програмі.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Перш ніж почати, переконайтеся, що у вас встановлені Rust та Anchor. Якщо вам потрібні інструкції з налаштування, зверніться до [офіційної документації Anchor](https://www.anchor-lang.com/docs/installation). Потім у терміналі виконайте:
+
+```bash
+anchor init blueshift_anchor_flash_loan
+```
+
+Додайте необхідні залежності:
+- `anchor-spl`: Надає утиліти для роботи з SPL токенами (стандарт токенів Solana)
+
+```bash
+cd blueshift_anchor_flash_loan
+cargo add anchor-spl
+```
+
+Тепер ви готові зануритися у створення вашої програми флеш-кредитування!
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Давайте побудуємо основу нашої програми флеш-кредитування, налаштувавши базову структуру, акаунти та обробку помилок, які будуть використовуватися як для інструкцій запозичення, так і для повернення.
+
+Ми реалізуємо все в `lib.rs`, оскільки у нас є лише дві інструкції, які використовують однакову структуру акаунтів. Ось наш початковий шаблон з усіма необхідними компонентами:
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::{
+  token::{Token, TokenAccount, Mint, Transfer, transfer}, 
+  associated_token::AssociatedToken
+}; 
+use anchor_lang::{
+  Discriminator,
+  solana_program::sysvar::instructions::{
+      ID as INSTRUCTIONS_SYSVAR_ID,
+      load_instruction_at_checked
+  }
+};
+
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_flash_loan {
+  use super::*;
+
+  pub fn borrow(ctx: Context<Loan>, borrow_amount: u64) -> Result<()> {
+    // borrow logic...
+    
+    Ok(())
+  }
+
+  pub fn repay(ctx: Context<Loan>) -> Result<()> {
+    // repay logic...
+
+    Ok(())
+  }
+}
+
+#[derive(Accounts)]
+pub struct Loan<'info> {
+  // loan accounts...
+}
+
+#[error_code]
+pub enum ProtocolError {
+  // error enum..
+}
+```
+
+**Примітка**: не забудьте змінити ID програми на `22222222222222222222222222222222222222222222`, оскільки ми використовуємо його для тестування вашої програми.
+
+<ArticleSection name="Accounts" id="accounts" level="h2" />
+
+Оскільки інструкції `borrow` і `repay` працюють з однаковими акаунтами, ми можемо створити єдиний контекст `Loan`, який обслуговує обидві функції. Це робить наш код більш підтримуваним і зрозумілим.
+
+Наша структура акаунтів `Loan` потребує таких компонентів:
+- `borrower`: користувач, який запитує флеш-кредит.
+- `protocol`: Program Derived Address (PDA), який володіє пулом ліквідності протоколу.
+- `mint`: конкретний токен, який позичається.
+- `borrower_ata`: Associated Token Account позичальника, який отримає позичені токени.
+- `protocol_ata`: Associated Token Account протоколу, який надасть позичені токени.
+- `instructions`: акаунт Instructions Sysvar для інтроспекції.
+- `token_program`, `associated_token_program` та `system_program`: необхідні програми для програми.
+
+Ось як ми визначаємо структуру облікового запису:
+
+```rust
+#[derive(Accounts)]
+pub struct Loan<'info> {
+  #[account(mut)]
+  pub borrower: Signer<'info>,
+  #[account(
+    seeds = [b"protocol".as_ref()],
+    bump,
+  )]
+  pub protocol: SystemAccount<'info>,
+
+  pub mint: Account<'info, Mint>,
+  #[account(
+    init_if_needed,
+    payer = borrower,
+    associated_token::mint = mint,
+    associated_token::authority = borrower,
+  )]
+  pub borrower_ata: Account<'info, TokenAccount>,
+  #[account(
+    mut,
+    associated_token::mint = mint,
+    associated_token::authority = protocol,
+  )]
+  pub protocol_ata: Account<'info, TokenAccount>,
+
+  #[account(address = INSTRUCTIONS_SYSVAR_ID)]
+  /// CHECK: InstructionsSysvar account
+  instructions: UncheckedAccount<'info>,
+  pub token_program: Program<'info, Token>,
+  pub associated_token_program: Program<'info, AssociatedToken>,
+  pub system_program: Program<'info, System>
+}
+```
+
+Як бачите, облікові записи, необхідні для цієї інструкції, та їхні обмеження досить прості:
+- `protocol`: використовує `seeds = [b"protocol".as_ref()]` для створення детермінованої адреси, яка володіє всією ліквідністю протоколу. Це гарантує, що тільки наша програма може контролювати ці кошти.
+- `borrower_ata`: використовує `init_if_needed`, оскільки позичальник може ще не мати пов'язаного токен-акаунта для цього конкретного токена. Обмеження автоматично створює його за потреби.
+- `protocol_ata`: повинен вже існувати і бути змінюваним, оскільки ми будемо переказувати з нього токени. Обмеження `associated_token::authority = protocol` гарантує, що тільки PDA протоколу може авторизувати перекази.
+- `instructions`: використовує обмеження `address` для перевірки того, що ми звертаємося до правильного системного облікового запису, який містить дані інструкції транзакції.
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+Флеш-кредити вимагають точної валідації на кількох етапах, тому нам потрібна комплексна обробка помилок. Ось наш повний перелік помилок:
+
+```rust
+#[error_code]
+pub enum ProtocolError {
+    #[msg("Invalid instruction")]
+    InvalidIx,
+    #[msg("Invalid instruction index")]
+    InvalidInstructionIndex,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Not enough funds")]
+    NotEnoughFunds,
+    #[msg("Program Mismatch")]
+    ProgramMismatch,
+    #[msg("Invalid program")]
+    InvalidProgram,
+    #[msg("Invalid borrower ATA")]
+    InvalidBorrowerAta,
+    #[msg("Invalid protocol ATA")]
+    InvalidProtocolAta,
+    #[msg("Missing repay instruction")]
+    MissingRepayIx,
+    #[msg("Missing borrow instruction")]
+    MissingBorrowIx,
+    #[msg("Overflow")]
+    Overflow,
+}
+```
+
+З цією основою ми готові реалізувати основну логіку для наших інструкцій флеш-кредитування. Структура облікових записів забезпечує правильну обробку токенів, а система помилок надає чіткий зворотний зв'язок для налагодження та перевірки безпеки.
+
+> Програма ще не зовсім компілюється. Чи можете ви зрозуміти чому?

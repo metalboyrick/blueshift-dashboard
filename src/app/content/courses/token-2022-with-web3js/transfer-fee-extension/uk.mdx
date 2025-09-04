@@ -1,0 +1,210 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Розширення комісії за переказ
+
+Розширення `TransferFee` є розширенням `Mint`, яке дозволяє творцю встановлювати "податок" на токен, який стягується щоразу, коли хтось виконує обмін.
+
+Щоб переконатися, що отримувач комісії не отримує блокування запису щоразу, коли хтось виконує обмін, і щоб забезпечити можливість паралельного виконання транзакцій, що містять `Mint` з цим розширенням, комісія відкладається на рахунку токенів отримувача, з якого може зняти кошти лише `Withdraw Authority`.
+
+<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+
+Щоб ініціалізувати розширення `TransferFee` на рахунку `Mint`, нам знадобиться функція `createInitializeTransferFeeConfigInstruction()`.
+
+Ось як створити емісію з розширенням комісії за переказ:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeTransferFeeConfigInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Transfer Fee extension
+const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Transfer Fee extension
+const initializeTransferFeeConfig = createInitializeTransferFeeConfigInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    500,
+    BigInt(1e6),
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTransferFeeConfig,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Transferring Tokens with the Fee" id="transferring-tokens-with-the-fee" level="h2" />
+
+Для переказу токенів для `Mint`, які мають розширення TransferFee`, у нас є два шляхи:
+- Ми можемо використовувати звичайну інструкцію `transferChecked()`, і при цьому розрахунок комісії обробляється автоматично
+- Ми можемо використовувати інструкцію `transferCheckedWithFee()` і вказати вручну `fee`, яку ми збираємося сплатити при цьому переказі. Це дуже корисно, якщо ми хочемо переконатися, що не станемо жертвою "раг пулу", якщо власник змінить комісію і створить аномально високу комісію; це схоже на встановлення проковзування для переказу.
+
+> Навіть якщо власник змінить комісію, нова комісія стає активною через 2 епохи після встановлення
+
+Ось як створити переказ за допомогою інструкції `transferCheckedWithFee()`:
+
+```ts
+createTransferCheckedWithFeeInstruction(
+    sourceTokenAccount,
+    mint.publicKey, 
+    destinationTokenAccount, 
+    keypair.publicKey, 
+    BigInt(100e6), // transfer amount
+    6, // decimals
+    BigInt(1e6), // fee paid for the transfer
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(transferInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens transferred! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Harvesting the Fee" id="harvesting-the-fee" level="h2" />
+
+Як зазначено у вступі, комісія за переказ залишається на рахунку `Token`, який отримує токени, щоб уникнути блокування запису для рахунку `Mint` або `sourceTokenAccount`. З цієї причини, перш ніж мати можливість зняти комісію, нам потрібно буде знайти всі рахунки `Token`, які мають комісії для отримання.
+
+Ми можемо зробити це, встановивши фільтр і отримавши всі рахунки, що належать до цього випуску, таким чином:
+
+```ts
+// Retrieve all Token Accounts for the Mint Account
+const allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
+    commitment: "confirmed",
+    filters: [
+        {
+            memcmp: {
+                offset: 0,
+                bytes: mint.publicKey.toString(), // Mint Account address
+            },
+        },
+    ],
+});
+```
+
+І отримати список усіх рахунків `Token`, які мають комісію, розпакувавши рахунок `Token` і використовуючи функцію `getTransferAmoun()` таким чином:
+
+```ts
+// List of Token Accounts to withdraw fees from
+const accountsToWithdrawFrom: PublicKey[] = [];
+
+for (const accountInfo of allAccounts) {
+    const account = unpackAccount(
+        accountInfo.pubkey,
+        accountInfo.account,
+        TOKEN_2022_PROGRAM_ID,
+    );
+
+    // Extract transfer fee data from each account
+    const transferFeeAmount = getTransferFeeAmount(account);
+
+    // Check if fees are available to be withdrawn
+    if (transferFeeAmount !== null && transferFeeAmount.withheldAmount > 0) {
+        accountsToWithdrawFrom.push(accountInfo.pubkey);
+    }
+}
+```
+
+Після цього ми можемо використати інструкцію `withdrawWithheldTokensFromAccounts` з `Withdraw Authority`, щоб передати список `accountsToWithdrawFrom` таким чином:
+
+```ts
+const harvestInstructions = createWithdrawWithheldTokensFromAccountsInstruction(
+    mint.publicKey,
+    sourceTokenAccount,
+    keypair.publicKey,
+    [],
+    accountsToWithdrawFrom,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(harvestInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Оновлення комісії" id="updating-the-fee" level="h2" />
+
+Після ініціалізації нашого `Mint` з розширенням `TranferFee`, нам може знадобитися оновити цю конкретну комісію в майбутньому. І щоб переконатися, що творець не "обманює" власників токенів за допомогою "приманки та підміни", встановлюючи дуже високу комісію щоразу, коли виконується переказ, нова `TranferFee` буде активована через 2 епохи.
+
+Щоб врахувати це, ось як виглядають дані розширення `TransferFee`: 
+
+```rust
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+ 
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Отже, щоб змінити комісію, ми можемо використати інструкцію `setTransferFee` таким чином:
+
+```ts
+const setTransferFeeInstruction = createSetTransferFeeInstruction(
+    mint.publicKey
+    keypaird.publicKey
+    [],
+    BigInt(1000), // new transfer fee
+    BigInt(100e6), // new maximum fee amount
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(setTransferFeeInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

@@ -1,0 +1,28 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкція переказу
+
+Переміщує токени з одного рахунку на інший. Це базова операція для надсилання токенів між користувачами.
+
+Перш ніж ми зможемо переказати будь-який токен, нам потрібно вже мати:
+- Ініціалізований `Mint` рахунок.
+- Вихідний рахунок `Token` або `Associated Token`, на якому вже є принаймні та кількість, яку ми хочемо переказати.
+- Цільовий рахунок `Token` або `Associated Token`, який отримає токени з вихідного рахунку `Token`.
+
+> Кількість токенів, які ми переказуємо, "нормалізована" для десяткових знаків. Це означає, що якщо ми хочемо переказати 1 токен, який має 6 десяткових знаків, нам потрібно буде фактично вказати `1_000_000` як кількість
+
+Ось як виглядає CPI до інструкції `transfer()`: 
+
+```rust
+transfer(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.from_token_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

@@ -1,0 +1,176 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Розгортання програми
+
+Після завершення розробки програми розгорніть її в devnet або mainnet, щоб користувачі могли з нею взаємодіяти.
+
+<ArticleSection name="Program Deployment" id="program-deployment" level="h2" />
+
+Зберіть вашу програму, щоб згенерувати необхідні файли для розгортання:
+
+```
+anchor build
+```
+
+Це створює папку `target/deploy`, яка містить:
+- `<project-name>.so`: байткод вашої програми
+- `<project-name>-keypair.json`: згенерована пара ключів для розгортання
+
+> Ви можете замінити цю пару ключів на адресу з бажаним префіксом, підставивши пару ключів у файл `<project-name>-keypair.json`.
+
+Отримайте адресу програми:
+
+```
+solana address -k target/deploy/<project-name>-keypair.json
+```
+
+Оновіть функцію `declare_id!()` у файлі `lib.rs` з цією адресою, потім налаштуйте ваш `Anchor.toml` з правильним цільовим кластером та ID програми:
+
+```
+[provider]
+cluster = "devnet"
+
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
+```
+
+Розгорніть вашу програму:
+
+```
+anchor deploy
+```
+
+Це розгортає програму, використовуючи вказану адресу, кластер та гаманець з `Anchor.toml` як платника комісії.
+
+### Помилки розгортання
+
+Невдалі розгортання створюють проміжні буферні акаунти, які утримують лампорти. Ви побачите інструкції з відновлення, наприклад:
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+Щоб відновити ваш баланс:
+
+- **Відновіть розгортання**, відновивши пару ключів:
+
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+
+    Введіть 12-слівну мнемонічну фразу, коли буде запропоновано, потім розгорніть з буфером:
+
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- **Закрийте** буфер, щоб повернути лампорти:
+
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### Розгортання через Solana CLI
+
+Ви можете розгортати свої програми безпосередньо за допомогою Solana CLI замість Anchor:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+Під час перевантаження мережі використовуйте ці прапорці для підвищення успішності розгортання:
+- `--with-compute-unit-price`: Встановлює ціну обчислювальної одиниці в мікро-лампортах
+- `--use-rpc`: Надсилає транзакції до RPC замість валідаторів TPU
+- `--max-sign-attempts`: Максимальна кількість повторних спроб після закінчення терміну дії blockhash
+
+<ArticleSection name="Program Upgrade" id="program-upgrade" level="h2" />
+
+За замовчуванням `anchor deploy` створює новий ідентифікатор програми. Щоб оновити існуючу програму, зберігаючи її адресу та пов'язані облікові записи:
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+Якщо новий виконуваний файл більший за розгорнуту версію, спочатку розширте обліковий запис програми:
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### Оновлення через Solana CLI
+
+Процес залишається тим самим: за потреби розширте, потім розгорніть:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### Створення незмінних програм
+
+Ви можете видалити повноваження на оновлення, щоб зробити вашу програму незмінною:
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> Ця дія незворотна. Після встановлення програму неможливо оновити.
+
+### Міграція програм
+
+Міграція переносить програму з однієї адреси на іншу. CLI закриває стару програму та повторно розгортає її в новому місці:
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> Міграція порушує всі існуючі PDA, оскільки вони походять від старого ідентифікатора програми. Користувачі повинні оновити свої додатки для використання нової адреси та змінити повноваження над будь-яким токен-акаунтом, повноваження якого є PDA.
+
+<ArticleSection name="Uploading an IDL" id="uploading-an-idl" level="h2" />
+
+Файл мови опису інтерфейсу (IDL) надає стандартизований JSON-опис інструкцій та облікових записів вашої програми, що полегшує інтеграцію клієнтів.
+
+Завантажте IDL в мережу, щоб допомогти розробникам інтегрувати вашу програму:
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### Оновлення IDL
+
+Після повторного розгортання вашої програми, оновіть onchain IDL:
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+<ArticleSection name="Verified Builds" id="verified-builds" level="h2" />
+
+Верифіковані збірки гарантують, що виконувана програма, розгорнута на Solana, відповідає вихідному коду у вашому репозиторії. Ця перевірка дозволяє розробникам і користувачам підтвердити, що програма в блокчейні точно відповідає публічній кодовій базі.
+
+Процес верифікації порівнює хеш програми в блокчейні з локально зібраною програмою з вихідного коду, виявляючи будь-які розбіжності між версіями.
+
+Збірка програм за допомогою Solana CLI може вбудовувати в бінарні файли код, специфічний для конкретної машини. Компіляція однієї і тієї ж програми на різних машинах може створювати різні виконувані файли. Щоб вирішити цю проблему, виконуйте збірку всередині контейнера Docker з фіксованими залежностями для отримання відтворюваних результатів.
+
+Anchor надає команди CLI, які керують збіркою та конфігурацією Docker:
+
+```
+anchor build --verifiable
+```
+
+Перевірте збірку порівняно з програмою, розгорнутою в основній мережі:
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+> `<lib-name>` відповідає імені, визначеному у файлі `Cargo.toml` вашої програми.

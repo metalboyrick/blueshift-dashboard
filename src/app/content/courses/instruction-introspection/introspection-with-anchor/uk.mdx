@@ -1,0 +1,81 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інтроспекція інструкцій з Anchor
+
+Anchor не має вбудованого помічника для sysvar `Instruction`, але всі типи та функції з крейту `solana_program` за замовчуванням підтримуються в Anchor.
+
+Щоб використовувати інтроспекцію інструкцій в Anchor, вам потрібно додати крейт `solana_program` до вашого проєкту:
+
+```sh
+cargo add solana-program
+```
+
+Після додавання крейту ви можете отримати доступ до необхідних функцій, імпортувавши їх:
+
+```rust
+use solana_program::sysvar::instructions::{
+    self,
+    load_current_index_checked, 
+    load_instruction_at_checked
+}; 
+```
+
+<ArticleSection name="Як використовувати інтроспекцію" id="how-to-use-introspection" level="h2" />
+
+Як згадувалося у вступі, інтроспекція інструкцій працює шляхом десеріалізації даних з облікового запису sysvar `Instruction`, щоб надати деталі про інструкції в транзакції.
+
+Хоча функція `load_instruction_at_checked` перевіряє, що обліковий запис, який десеріалізується, є правильним, хорошою практикою є додавання додаткової перевірки до вашої структури облікового запису:
+
+```rust
+#[account(address = instructions::ID)]
+/// CHECK: InstructionsSysvar account
+instructions: UncheckedAccount<'info>,
+```
+
+Тепер ви можете почати працювати з інтроспекцією інструкцій.
+
+Спочатку перевірте індекс поточної інструкції за допомогою функції `load_current_index_checked`:
+
+```rust
+// Check the index of the currently executing instruction. This could be in a different position than [0]).
+let index = load_current_index_checked(&ctx.accounts.instructions.to_account_info())?;
+```
+
+Далі ви можете перевірити інструкцію за відносним індексом за допомогою `load_instruction_at_checked`. Тут ми перевіримо інструкцію, яка йде безпосередньо після поточної:
+
+```rust
+// Load the next instruction to check its input.
+let ix = load_instruction_at_checked(index as usize + 1, &ctx.accounts.instructions.to_account_info())?;
+```
+
+Перш ніж перейти до наступного кроку, важливо розглянути, яка інформація є важливою для запобігання зловмисній атаці.
+
+Зазвичай ми починаємо з перевірки, чи програма, яка викликається, є очікуваною. У цьому прикладі ми проводимо інтроспекцію іншої інструкції з тієї ж програми:
+
+```rust
+require_keys_eq!(ix.program_id, ID, EscrowError::InvalidProgram);
+```
+
+Далі перевірте, чи інструкція є тією, яку ви очікуєте. Для цього порівняйте дискримінатор інструкції з очікуваним. У цьому випадку, оскільки це інша інструкція Anchor, ви можете зробити це так:
+
+```rust
+require!(ix.data[0..8].eq(instruction::TakeEnd::DISCRIMINATOR.as_slice()), EscrowError::InvalidIx);
+```
+
+> Anchor спрощує це, надаючи трейт `Discriminator` `anchor_lang::Discriminator` безпосередньо на
+інструкції.
+
+Потім ви можете виконувати більш специфічні для програми перевірки на основі логіки інструкції, яка перевіряється.
+
+У цьому прикладі ми перевіряємо, чи правильні дані інструкції (сума). Дані інструкції завжди десеріалізуються після дискримінатора, тому ви можете зробити це так:
+
+```rust
+require!(ix.data[8..16].eq(&escrow.take_amount.to_le_bytes()), EscrowError::InvalidAmount);
+```
+
+Нарешті, перевірте облікові записи, присутні в інструкції, яку ви досліджуєте. Цей крок вимагає знання точної структури структури `Account`, оскільки ви будете запитувати дані або відкритий ключ облікового запису за певним індексом:
+
+```rust
+let maker_ata = get_associated_token_address(&ctx.accounts.maker.key(), &escrow.mint_b);
+require_keys_eq!(ix.accounts.get(3).unwrap().pubkey, maker_ata, EscrowError::InvalidMakerATA);
+```

@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Спільне використання PDA
+
+Атаки на спільне використання PDA експлуатують програми, які використовують одну й ту саму Program Derived Address (PDA) для кількох користувачів або доменів, дозволяючи зловмисникам отримувати доступ до коштів, даних або дозволів, які їм не належать. Хоча використання глобальної PDA може здаватися елегантним рішенням для загальнопрограмних операцій, це створює небезпечне перехресне забруднення, коли дії одного користувача можуть впливати на активи іншого користувача.
+
+Вразливість виникає через недостатню специфічність сіда при отриманні PDA. Коли кілька облікових записів використовують один і той самий авторитет PDA, програма втрачає здатність розрізняти законні та незаконні спроби доступу. Зловмисник може створити власні облікові записи, які посилаються на ту саму спільну PDA, а потім використовувати повноваження підпису цієї PDA для маніпулювання активами, що належать іншим користувачам.
+
+Це особливо руйнівно в протоколах DeFi, де PDA контролюють сховища токенів, баланси користувачів або дозволи на зняття коштів. Спільна PDA по суті створює головний ключ, який розблоковує активи кількох користувачів, перетворюючи окремі операції користувачів на потенційні атаки проти всього протоколу.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу систему зняття коштів, яка використовує PDA на основі монети для підпису:
+
+```rust
+#[program]
+pub mod insecure_withdraw{
+    use super::*;
+    //..
+
+    pub fn withdraw(ctx: Context<WithdrawTokens>) -> Result<()> {
+
+        //..
+        // other conditions/actions...
+        //..
+
+        let amount = ctx.accounts.vault.amount;
+        
+        let seeds = &[
+            ctx.accounts.pool.mint.as_ref(),
+            &[ctx.accounts.pool.bump],
+        ];
+
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.withdraw_destination.to_account_info(),
+                    authority: ctx.accounts.pool.to_account_info(),
+                },
+            ),
+            &amount,
+            seeds,
+        )?;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        seeds = [b"pool", pool.mint.as_ref()],
+        bump = pool.bump,                                        
+    )]
+    pool: Account<'info, TokenPool>,
+    vault: Account<'info, TokenAccount>,
+    withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool {
+    pub mint: Pubkey,
+    pub bump: u8,
+}
+```
+
+Цей код має критичний недолік: PDA отримується з використанням лише адреси монети. Це означає, що всі сховища для одного типу токенів мають однаковий авторитет підпису, створюючи небезпечний вектор атаки.
+
+Зловмисник може використати це, виконавши такі дії:
+- Створення власного сховища для тієї ж монети
+- Виклик інструкції з власною адресою як `withdraw_destination`
+- Використання спільного авторитету PDA для зняття токенів з будь-якого сховища, яке використовує ту саму монету
+- Виведення коштів інших користувачів на власне призначення
+
+Атака вдається, оскільки авторитет PDA не розрізняє різні екземпляри пулу, він враховує лише тип монети, а не конкретного користувача, який повинен мати доступ до цих коштів.
+
+Можливе рішення — створення PDA, специфічних для окремих користувачів і призначень, та використання обмежень seeds і bump від Anchor для перевірки деривації PDA:
+
+```rust
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        has_one = vault,
+        has_one = withdraw_destination,
+        seeds = [b"pool", vault.key().as_ref(), withdraw_destination.key().as_ref()],
+        bump = pool.bump,                                        
+    )]
+    pool: Account<'info, TokenPool>, // Authority for the vault
+    #[account(mut)]
+    vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool{
+    pub vault:Pubkey,
+    pub withdraw_destination:Pubkey,
+    pub bump:u8
+}
+```
+
+Така ж зміна внесена в обробник інструкцій. Одна з можливих ситуацій, де це може бути корисним — програма маржинальної торгівлі, яка дозволяє ліквідувати угоду користувача, коли вони втратили певну суму, наприклад, коли вони самі встановлюють стоп-лосс. Код перевірятиме умову досягнення цієї суми, а потім дозволить будь-кому зупинити торгівлю та вивести залишкові кошти до пункту призначення, рахунку виведення.
+
+Один PDA, що контролює всі кошти для певної монети, створив би ситуацію, коли якщо умови виконуються для користувачів одночасно, наприклад, багато користувачів наближаються до стоп-лосу/ліквідації, тоді будь-який окремий користувач міг би вивести ці кошти для всіх цих користувачів, можливо, в одній або кількох транзакціях, що містять кілька інструкцій, які роблять це для різних користувачів.

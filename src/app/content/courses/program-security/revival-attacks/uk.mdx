@@ -1,0 +1,135 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Атаки відродження
+
+Атаки відродження використовують механізм закриття облікових записів Solana, повертаючи "мертві" облікові записи до життя в межах однієї транзакції.
+
+Коли ви закриваєте обліковий запис, переказуючи з нього лампорти, Solana не одразу видаляє його; обліковий запис очищується лише після завершення транзакції. Ця затримка створює небезпечне вікно, коли зловмисники можуть "відродити" закриті облікові записи, надсилаючи лампорти назад, залишаючи зомбі-акаунти із застарілими даними, яким ваша програма може все ще довіряти.
+
+Атака вдається через фундаментальне нерозуміння життєвого циклу облікового запису. Розробники припускають, що закриття облікового запису робить його негайно непридатним для використання, але насправді обліковий запис залишається доступним до завершення транзакції. Зловмисник може обрамити вашу інструкцію закриття переказом, який повертає орендну плату облікового запису, запобігаючи збиранню сміття та підтримуючи обліковий запис у стані, придатному для експлуатації.
+
+Це особливо руйнівно в протоколах, де закриття облікового запису представляє завершення, наприклад: завершення умовного депонування, вирішення суперечок або спалювання активів. Відроджений обліковий запис може обманути вашу програму, змушуючи її вважати, що ці операції ніколи не завершувалися, потенційно дозволяючи подвійні витрати, несанкціонований доступ або маніпуляції з протоколом.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу інструкцію, яка закриває програмний обліковий запис:
+
+```rust
+#[program]
+pub mod insecure_close{
+    use super::*;
+
+    //..
+
+    pub fn close(ctx: Context<Close>) -> Result<()> {
+        let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+        **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+            .checked_add(ctx.accounts.account_to_close.to_account_info().lamports())
+            .unwrap();
+        **ctx.accounts.account_to_close.to_account_info().lamports.borrow_mut() = 0;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Close<'info> {
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+Цей код виглядає правильним: він переказує всі лампорти з облікового запису до пункту призначення, що має запустити збирання сміття. Однак дані облікового запису залишаються незміненими, і обліковий запис все ще доступний у межах тієї ж транзакції.
+
+Зловмисник може використати це, створивши транзакцію з кількома інструкціями:
+- Інструкція 1: Викликати вашу функцію закриття для виведення лампортів з облікового запису
+- Інструкція 2: Переказати лампорти назад на "закритий" обліковий запис (відродження)
+- Інструкція 3: Використати відроджений обліковий запис у подальших операціях
+
+Результатом є обліковий запис-зомбі, який виглядає закритим для логіки вашої програми, але залишається функціональним з усіма своїми початковими даними. Це може призвести до:
+- Подвійних витрат: Використання "закритих" ескроу-рахунків кілька разів
+- Обходу авторизації: Відновлення адміністративних облікових записів, які мають бути деактивовані
+- Пошкодження стану: Операції з обліковими записами, які більше не повинні існувати
+
+Найбезпечнішим рішенням є використання обмеження Anchor `close`, яке автоматично забезпечує безпечне закриття:
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+   #[account(
+        mut,
+        close = owner,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Або ви можете додати обмеження облікового запису `signer` таким чином:
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(signer)]
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Для власної логіки закриття реалізуйте повний шаблон безпечного закриття:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    let account = ctx.accounts.account.to_account_info();
+
+    let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+    **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+        .checked_add(account.lamports())
+        .unwrap();
+    **account.lamports.borrow_mut() = 0;
+
+    let mut data = account.try_borrow_mut_data()?;
+    for byte in data.deref_mut().iter_mut() {
+        *byte = 0;
+    }
+
+    let dst: &mut [u8] = &mut data;
+    let mut cursor = std::io::Cursor::new(dst);
+    cursor
+        .write_all(&anchor_lang::__private::CLOSED_ACCOUNT_DISCRIMINATOR)
+        .unwrap();
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio реалізуйте шаблон закриття вручну:
+
+```rust
+self.program_account.realloc(0, true)?;
+self.program_account.close()?;
+
+let mut data_ref = self.program_account.try_borrow_mut_data()?;
+data_ref[0] = 0xff;
+```

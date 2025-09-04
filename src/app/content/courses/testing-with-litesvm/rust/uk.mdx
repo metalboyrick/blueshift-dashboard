@@ -1,0 +1,300 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM з Rust
+
+Пакет `litesvm` надає основну інфраструктуру тестування для створення легкого середовища Solana, де ви можете безпосередньо маніпулювати станом рахунків та виконувати транзакції для ваших програм.
+
+<ArticleSection name="Перші кроки" id="first-steps" level="h2" />
+
+Додайте LiteSVM до вашого проєкту:
+
+```bash
+cargo add --dev litesvm
+```
+
+<ArticleSection name="Основи LiteSVM" id="basics" level="h2" />
+
+Почніть з оголошення ідентифікатора вашої програми та створення екземпляра LiteSVM.
+
+Використовуйте точно такий самий ідентифікатор програми, який ви визначили у своїй програмі, щоб забезпечити правильне виконання транзакцій і уникнути помилок `ProgramMismatch` під час тестування:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::{pubkey, Pubkey};
+
+const program_id: Pubkey = pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Load the program with the right publickey
+    svm.add_program_from_file(program_id, "target/deploy/program.so");
+}
+```
+
+Для виконання тестів створіть об'єкт транзакції та використовуйте функцію `.send_transaction(tx)`:
+
+```rust
+use litesvm::LiteSVM;
+use solana_transaction::Transaction;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Transaction
+    let mut tx = Transaction::new_signed_with_payer(
+        &[...ixs],
+        Some(&payer.pubkey()),
+        &[...signersKeypair],
+        svm.latest_blockhash(),
+    );
+
+    // Send the Transaction
+    let result = svm.send_transaction(tx).unwrap();
+}
+```
+
+<ArticleSection name="Рахунки" id="accounts" level="h2" />
+
+Під час тестування програм Solana з LiteSVM ви працюватимете з кількома типами рахунків, які відображають сценарії виконання програм у реальному світі.
+
+Розуміння того, як правильно створювати ці рахунки, є важливим для ефективного тестування.
+
+### Системні рахунки
+
+Найбільш фундаментальним типом рахунку є системний рахунок, який має два основні варіанти:
+- **Рахунки платника**: рахунки з лампортами, які фінансують створення програмних рахунків або переказ лампортів
+- **Неініціалізовані рахунки**: порожні рахунки без лампортів, зазвичай використовуються для представлення програмних рахунків, які очікують ініціалізації
+
+Системні рахунки не містять даних і належать Системній Програмі. Ключова відмінність між рахунками платників та неініціалізованими рахунками полягає в їхньому балансі лампортів: платники мають кошти, тоді як неініціалізовані рахунки починаються порожніми.
+
+Ось як створити рахунок `payer` у LiteSVM:
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports: 100_000_000,
+            data: [],
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+> Неініціалізований рахунок — це просто звичайний згенерований рахунок з `Keypair.generate()` - додаткове налаштування не потрібне.
+
+### Програмні рахунки
+
+Для програмних рахунків, які містять користувацькі структури даних, ви можете використовувати подібний підхід.
+Вам також потрібно буде серіалізувати дані рахунку в масив байтів, що можна зробити вручну або за допомогою бібліотеки, такої як `borsh`, `bincode` або `solana_program_pack`.
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
+
+    // Serialize the account data into the byte array defined above
+    // ...
+
+    let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports,
+            data: account_data,
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> Під час тестування вам не потрібно розраховувати точну ренту. Ви можете встановити lamports на велике значення, наприклад `100_000_000_000`, і пропустити розрахунок ренти, оскільки це не реальні кошти.
+
+### Токен-акаунти
+
+Для серіалізації даних для SPL Token акаунтів ви можете використовувати `spl_token::Mint` та `spl_token::Account`, які реалізують `solana_program_pack::Pack`.
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_account::Account;
+use spl_token::{ID as TOKEN_PROGRAM_ID, state::{Mint, Account as TokenAccount}};
+use solana_program_pack::Pack;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Mint Account
+    let mint = Keypair::new();
+
+    // Populate the data of the Mint Account
+    let mint_data = Mint {
+        mint_authority: None.into(),
+        supply: 0,
+        decimals: 6,
+        is_initialized: true,
+        freeze_authority: None.into(),
+    };
+
+    let mut mint_account_data = vec![0; Mint::LEN];
+    Mint::pack(mint_data, &mut mint_account_data).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(Mint::LEN);
+
+    // Add the Mint Account
+    svm.set_account(
+        mint.pubkey(),
+        Account {
+            lamports,
+            data: mint_account_data,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+
+    // Create a new Token Account
+    let token_account = Keypair::new();
+    let owner = Keypair::new();
+
+    // Populate the data of the Token Account
+    let token_account_data = TokenAccount {
+        mint: mint.pubkey(),
+        owner: owner.pubkey(),
+        amount: 0,
+        delegate: None.into(),
+        state: spl_token::state::AccountState::Initialized,
+        is_native: None.into(),
+        delegated_amount: 0,
+        close_authority: None.into(),
+    };
+
+    let mut token_account_data_bytes = vec![0; TokenAccount::LEN];
+    TokenAccount::pack(token_account_data, &mut token_account_data_bytes).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(TokenAccount::LEN);
+
+    // Add the Token Account
+    svm.set_account(
+        token_account.pubkey(),
+        Account {
+            lamports,
+            data: token_account_data_bytes,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+<ArticleSection name="Execution" id="execution" level="h2" />
+
+Після створення акаунтів та додавання їх до вашого екземпляра LiteSVM, ви можете надсилати транзакції та перевіряти логіку вашої програми.
+
+Перед надсиланням транзакції ви можете симулювати результат:
+
+```rust
+let simulated_result = svm.simulate_transaction(tx);
+```
+
+Потім надішліть транзакцію та перевірте її логи:
+
+```rust
+let result = svm.send_transaction(tx);
+let logs = result.logs;
+```
+
+### Розширені функції
+
+До та після виконання весь реєстр, що міститься у вашому екземплярі LiteSVM, можна читати та налаштовувати.
+
+Ви можете маніпулювати значеннями sysvar, такими як годинник:
+
+```rust
+// Change the Clock
+let mut new_clock = svm.get_sysvar::<Clock>();
+new_clock.unix_timestamp = 1735689600;
+svm.set_sysvar::<Clock>(&new_clock);
+
+// Jump to a certain Slot
+svm.warp_to_slot(500);
+
+// Expire the current blockhash
+svm.expire_blockhash();
+```
+
+Ви також можете читати дані акаунтів та протоколу:
+
+```rust
+// Get all the information about an account (data, lamports, owner, ...)
+svm.get_account(&account.publickey);
+
+// Get the lamport balance of an account
+svm.get_balance(&account.publickey);
+
+// Get the number of Compute Unit used till now
+svm.get_compute_budget();
+```
+
+Або налаштувати поведінку середовища виконання:
+
+```rust
+// Sets the compute budget
+let compute_budget = ComputeBudget::default();
+compute_budget.compute_unit_limit = 2_000_000;
+svm.with_compute_budget(compute_budget);
+
+// Sets Sigverify as active
+svm.with_sigverify(true);
+
+// Sets the Blockhash check as active
+svm.with_blockhash_check(true);
+
+// Sets the default Sysvars
+svm.with_sysvars();
+
+// Set the FeatureSet to use
+svm.with_feature_set(FeatureSet::default())
+```

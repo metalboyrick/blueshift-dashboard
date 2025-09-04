@@ -1,0 +1,7 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Розширення Cpi Guard
+
+Розширення `CpiGuard` є розширенням облікового запису `Token`, яке забороняє певні дії всередині міжпрограмних викликів, захищаючи користувачів від зловмисних програм, які можуть спробувати маніпулювати їхніми токен-рахунками без явної згоди.
+
+> На жаль, неможливо ініціалізувати або оновити розширення CpiGuard через CPI, для отримання додаткової інформації прочитайте [це](https://github.com/solana-labs/solana-program-library/blob/6968859e2ee0a1764da572de340cdb58e2b4586f/token/program-2022/src/extension/cpi_guard/processor.rs#L44-L46)
