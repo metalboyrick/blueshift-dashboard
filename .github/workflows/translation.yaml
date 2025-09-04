@@ -11,6 +11,10 @@ on:
       - 'src/app/content/challenges/*/en/pages/*.mdx'
       - 'src/app/content/courses/*/*/en.mdx'
 
+concurrency:
+  group: translation-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   check_changes:
     if: github.event.pull_request.merged == true
@@ -79,7 +83,7 @@ jobs:
           node-version: '24'
 
       - name: Cache npx packages
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npx-lingodev-${{ hashFiles('.github/workflows/i18n.yaml') }}
