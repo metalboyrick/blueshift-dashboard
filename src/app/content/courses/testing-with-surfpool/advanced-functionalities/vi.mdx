@@ -1,0 +1,168 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Các chức năng nâng cao
+
+Surfnet không chỉ sao chép mainnet trên localnet—nó cho phép bạn nâng cao và sửa đổi các tính năng cốt lõi của Solana bằng cách thay đổi tài khoản, biến hệ thống và trạng thái blockchain.
+
+Những sửa đổi này diễn ra thông qua các lệnh gọi RPC đến Surfnet, cho phép thay đổi cả theo chương trình (cho môi trường kiểm thử tự động) và thông qua lệnh terminal (cho các hoạt động đơn lẻ).
+
+Để thực hiện các lệnh gọi RPC trong mã của bạn, hãy sử dụng:
+
+```ts
+const surfnetCall = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "<surfnet-method>",
+    "params": [<surfnet-method-params]
+}
+
+await fetch(connection.rpcEndpoint, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(surfnetCall)
+});
+```
+
+Để thực hiện các lệnh gọi RPC trong terminal của bạn, hãy sử dụng:
+
+```bash
+curl -X POST \
+    -H "Content-Type: application/json" \
+    -d '{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "<surfnet-method>",
+        "params": [<surfnet-method-params]
+    }' \
+    http://localhost:8899
+```
+
+<ArticleSection name="Tùy chỉnh biến hệ thống" id="customize-system-variables" level="h2" />
+
+### Du hành thời gian
+
+Nhảy đến bất kỳ điểm nào trong lịch sử blockchain bằng phương thức `surfnet_timeTravel`. Điều này vô cùng giá trị để kiểm tra cách chương trình của bạn hoạt động ở các trạng thái mạng khác nhau hoặc tái tạo lỗi đã xảy ra tại thời điểm cụ thể.
+
+Chỉ định một trong các tham số: `absoluteEpoch`, `absoluteSlot`, hoặc `absoluteTimestamp` như sau:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_timeTravel",
+  "params": [
+    {
+      "absoluteEpoch": 0
+    }
+  ]
+}
+```
+
+### Tạm dừng và tiếp tục tạo khối
+
+Kiểm soát tiến trình khối để gỡ lỗi giao dịch từng bước hoặc kiểm tra logic nhạy cảm về thời gian. Sử dụng `surfnet_pauseClock` để dừng việc tạo khối và `surfnet_resumeClock` để tiếp tục:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_pauseClock", // or "surfnet_resumeClock"
+  "params": []
+}
+```
+
+<ArticleSection name="Sửa đổi dữ liệu tài khoản" id="modify-account-data" level="h2" />
+
+### Thiết lập tham số SOL
+
+Cấu hình các tham số cung cấp SOL để kiểm tra các kịch bản kinh tế hoặc trường hợp đặc biệt.
+
+Phương thức `surfnet_setSupply` chấp nhận các tham số `circulating`, `nonCirculating`, `nonCirculatingAccounts`, và `total`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setSupply",
+  "params": [
+    {
+      "circulating": 1000000000,
+      "nonCirculating": 1000000000,
+      "nonCirculatingAccounts": [],
+      "total": 1000000000
+    }
+  ]
+}
+```
+
+### Chuyển tài khoản giữa các chương trình
+
+Sao chép tài khoản chương trình từ chương trình này sang chương trình khác bằng `surfnet_cloneProgramAccount`. Hữu ích cho việc kiểm tra nâng cấp chương trình hoặc di chuyển trạng thái giữa các phiên bản chương trình khác nhau.
+
+Yêu cầu cả `destinationProgramId` và `sourceProgramId`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_cloneProgramAccount",
+  "params": [
+    {
+      "destinationProgramId": "string",
+      "sourceProgramId": "string"
+    }
+  ]
+}
+```
+
+### Cập nhật dữ liệu tài khoản
+
+> Cập nhật một tài khoản đã tồn tại với các phương thức sau sẽ ghi đè lên trạng thái tài khoản
+
+Sửa đổi bất kỳ thuộc tính nào của tài khoản bao gồm lamports, dữ liệu, chủ sở hữu và trạng thái thực thi bằng cách sử dụng `surfnet_setAccount`. 
+
+Phương thức này yêu cầu một `pubkey` và chấp nhận các trường tùy chọn cho `data`, `executable`, `lamports`, `owner`, và `rentEpoch`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setAccount",
+  "params": [
+    "1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM",
+    {
+      "data": "0x123456",
+      "executable": false,
+      "lamports": 1000000000,
+      "owner": "11111111111111111111111111111111",
+      "rentEpoch": 0
+    }
+  ]
+}
+```
+
+Ngoài ra, đối với các sửa đổi tài khoản token, hãy sử dụng phương thức chuyên biệt `surfnet_setTokenAccount`, phương thức này đơn giản hóa việc thay đổi dữ liệu cho Tài khoản Token.
+
+Yêu cầu các tham số `owner` và `mint`, với các trường tùy chọn cho `amount`, `closeAuthority`, `delegate`, `delegateAmount`, `state`, và `tokenProgram`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setTokenAccount",
+  "params": [
+    "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
+    "11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3",
+    {
+      "amount": 1000000000,
+      "closeAuthority": "111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj",
+      "delegate": "11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP",
+      "delegatedAmount": 1000000000,
+      "state": "initialized"
+    },
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  ]
+}
+```

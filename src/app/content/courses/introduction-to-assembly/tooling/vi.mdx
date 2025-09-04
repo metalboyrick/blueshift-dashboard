@@ -1,0 +1,104 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Công cụ
+
+Việc viết và xây dựng các chương trình sBPF Assembly truyền thống đòi hỏi bộ công cụ đầy đủ của Solana, điều này có thể phức tạp để thiết lập và phụ thuộc vào nền tảng. Chính vì lý do này, [Dean](https://x.com/deanmlittle), với sự đóng góp của [Claire](https://x.com/clairefxyz), đã tạo ra sBPF: một bộ công cụ hoàn chỉnh để tạo và xây dựng các chương trình sBPF Assembly.
+
+<ArticleSection name="Cài đặt" id="installation" level="h2" />
+
+Chúng ta bắt đầu bằng cách cài đặt gói bằng cách:
+
+```
+cargo install --git https://github.com/blueshift-gg/sbpf.git
+```
+
+Sau đó chúng ta sẽ có thể thực hiện tất cả các lệnh sau:
+- `init`: Tạo khung dự án mới.
+- `build`: Biên dịch thành tệp thực thi chương trình Solana.
+- `deploy`: Xây dựng và triển khai chương trình.
+- `test`: Kiểm tra chương trình đã triển khai.
+- `e2e`: Xây dựng, triển khai và kiểm tra chương trình.
+- `clean`: Dọn dẹp các tệp xây dựng và triển khai.
+- `help`: In thông báo này hoặc trợ giúp của (các) lệnh phụ đã cho.
+
+```text
+Usage: sbpf <COMMAND>
+
+Commands:
+  init    Create a new project scaffold
+  build   Compile into a Solana program executable
+  deploy  Build and deploy the program
+  test    Test deployed program
+  e2e     Build, deploy and test a program
+  clean   Clean up build and deploy artifacts
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+<ArticleSection name="Khởi tạo dự án mới" id="initialize-a-new-project" level="h2" />
+
+Để tạo một dự án mới, sử dụng lệnh `sbpf init`. Mặc định, nó khởi tạo một dự án với các bài kiểm tra Rust sử dụng Mollusk. Bạn cũng có thể khởi tạo một dự án với các bài kiểm tra TypeScript bằng cách sử dụng tùy chọn `--ts-tests`.
+
+```text
+sbpf init --help
+Create a new project scaffold
+
+Usage: sbpf init [OPTIONS] [NAME]
+
+Arguments:
+  [NAME]  The name of the project to create
+
+Options:
+  -t, --ts-tests  Initialize with TypeScript tests instead of Mollusk Rust tests
+  -h, --help      Print help information
+  -V, --version   Print version information
+```
+
+Sau khi khởi tạo dự án, bạn có thể điều hướng vào thư mục dự án và sử dụng các lệnh khác để xây dựng, triển khai và kiểm tra chương trình của bạn.
+
+<ArticleSection name="Xây dựng chương trình" id="building-programs" level="h2" />
+
+sBPF cung cấp hai tùy chọn xây dựng tùy thuộc vào thiết lập và nhu cầu của bạn:
+
+### Xây dựng sBPF
+
+Lệnh xây dựng sử dụng một trình hợp ngữ độc lập không yêu cầu thêm các phụ thuộc. Nó hoàn hảo để học tập và thử nghiệm vì nó "hoạt động ngay lập tức" trên bất kỳ nền tảng nào.
+
+```
+sbpf build
+```
+
+{/*
+
+TODO: Cập nhật sbpf để kích hoạt xây dựng llvm như một cấu hình tùy chọn sau đó kích hoạt lại điều này
+
+### Bản dựng đầy đủ
+
+Lệnh dựng tiêu chuẩn cung cấp tích hợp với bộ công cụ Solana đầy đủ và các tính năng quản lý dự án.
+
+> Điều này yêu cầu phải cài đặt [Công cụ dòng lệnh Solana](https://docs.anza.xyz/cli/install/).
+
+```
+sbpf build
+```
+
+ */}
+
+### Sử dụng nâng cao
+
+Bạn có thể ghi đè trình liên kết mặc định bằng một tệp liên kết tùy chỉnh bằng cách đưa nó vào thư mục src với cùng tên như chương trình của bạn. Ví dụ:
+
+```text
+src/example/example.s
+src/example/example.ld
+```
+
+<ArticleSection name="Development Environment" id="development-environment" level="h2" />
+
+Để có trải nghiệm phát triển tốt nhất, hãy cân nhắc cài đặt [tiện ích mở rộng VS Code sBPF Assembly](https://github.com/deanmlittle/vscode-sbpf-asm) cung cấp:
+- Tô sáng cú pháp cho assembly sBPF
+- Hoàn thành mã cho các lệnh và thanh ghi
+- Phát hiện lỗi và cảnh báo

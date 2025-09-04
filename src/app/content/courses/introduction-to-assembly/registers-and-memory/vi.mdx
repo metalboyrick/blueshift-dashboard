@@ -1,0 +1,111 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Thanh ghi sBPF và Mô hình Bộ nhớ
+
+Khi chương trình sBPF của bạn thực thi, nó hoạt động với hai cơ chế lưu trữ chính: 11 thanh ghi tốc độ cao được tích hợp vào bộ xử lý và các vùng bộ nhớ có tổ chức chứa mọi thứ khác.
+
+<ArticleSection name="Registers" id="registers" level="h2" />
+
+Thanh ghi giống như 11 ô lưu trữ được đánh số (`r0` đến `r10`) được tích hợp trực tiếp vào bộ xử lý. Mỗi ô chứa một giá trị 64-bit và cung cấp khả năng truy cập tức thì không có độ trễ. Khi bạn thực thi `add64 r1, r2`, bộ xử lý ngay lập tức truy xuất giá trị từ cả hai thanh ghi và thực hiện phép tính.
+
+Sự đánh đổi rất đơn giản: bạn chỉ có tổng cộng 11 ô, vì vậy bạn cần sử dụng chúng một cách chiến lược cho các giá trị mà bạn đang làm việc.
+
+sBPF gán vai trò cụ thể cho mỗi thanh ghi:
+
+| Thanh ghi | Vai trò                | Callee-saved?  | Ghi chú sử dụng                             |
+|----------|----------------------|----------------|---------------------------------------------|
+| `r0`     | Giá trị trả về        | Không          | Kết quả hàm, giá trị trả về syscall        |
+| `r1`     | Con trỏ buffer đầu vào | Không          | Trỏ đến 0x400000000 khi bắt đầu             |
+| `r2-r5`  | Tạm thời/đối số       | Không          | Đối số hàm trợ giúp, giá trị tạm thời      |
+| `r6-r9`  | Mục đích chung         | Có             | Phải bảo toàn qua các lời gọi               |
+| `r10`    | Con trỏ khung          | Có, chỉ đọc    | Cơ sở ngăn xếp, không thể sửa đổi trực tiếp |
+
+Các thanh ghi `r6` đến `r9` là _callee-saved_, nghĩa là giá trị của chúng được duy trì qua các lời gọi hàm. Sử dụng chúng cho dữ liệu quan trọng cần tồn tại qua các lần gọi hàm.
+
+Các thanh ghi còn lại (`r0`-`r5`) sẽ bị ghi đè trong quá trình gọi syscall và gọi hàm.
+
+Thanh ghi `r10` là "đặc biệt" vì nó đóng vai trò là con trỏ khung, trỏ đến cơ sở không gian ngăn xếp của bạn và duy trì chế độ chỉ đọc. Bạn truy cập các biến ngăn xếp bằng cách sử dụng offset âm như `[r10 - 8]` và `[r10 - 16]`.
+
+<ArticleSection name="Bộ nhớ" id="memory" level="h2" />
+
+Trong khi các thanh ghi lưu trữ các giá trị đang được sử dụng, bộ nhớ lưu trữ mọi thứ khác. sBPF tổ chức bộ nhớ thành các vùng cố định với bố cục giống nhau trên tất cả các chương trình:
+
+| Vùng   | Địa chỉ bắt đầu | Mục đích                | Kích thước/Ghi chú                                     |
+|--------|-----------------|-------------------------|--------------------------------------------------------|
+| Text   | 0x100000000     | Mã và dữ liệu chỉ đọc   | Tệp nhị phân chương trình                              |
+| Stack  | 0x200000000     | Biến cục bộ             | 4 KiB cho mỗi khung stack, với độ sâu gọi tối đa là 64 |
+| Heap   | 0x300000000     | Cấp phát động           | 32 KiB                                                 |
+| Input  | 0x400000000     | Tham số chương trình    | Dữ liệu tài khoản và hướng dẫn được tuần tự hóa       |
+
+- **Vùng text** chứa mã thực thi và dữ liệu chỉ đọc như các hằng số chuỗi. Dữ liệu được định nghĩa với các chỉ thị `.quad` thường nằm ở đây.
+- **Vùng stack** chứa các biến cục bộ. Với `r10` trỏ đến cơ sở stack, bạn truy cập các biến cục bộ bằng cách sử dụng offset âm: `[r10 - 16]`, `[r10 - 24]`, v.v.
+- **Vùng input** chứa các tham số của chương trình. Khi bắt đầu, `r1` trỏ đến vùng này (`0x400000000`), cho phép bạn đọc dữ liệu tài khoản được tuần tự hóa và các tham số hướng dẫn được truyền vào chương trình của bạn.
+
+Bố cục cố định này cung cấp ba lợi ích chính: bảo mật thông qua cách ly bộ nhớ giữa các chương trình, tính xác định với các địa chỉ giống nhau trên tất cả các trình xác thực, và hiệu suất thông qua tối ưu hóa trình biên dịch cho các vị trí đã biết.
+
+> Việc cố gắng truy cập các địa chỉ không được ánh xạ sẽ kích hoạt AccessViolation và giao dịch sẽ thất bại.
+
+<ArticleSection name="Sử dụng thanh ghi và bộ nhớ" id="using-registers-and-memory" level="h2" />
+
+Đây là cách thanh ghi và bộ nhớ hoạt động cùng nhau trong thực tế:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    // On entry: r1 points to input data at 0x400000000
+    
+    ldxdw r0, [r1 + 0]      // Load first 8 bytes from input into r0
+    mov64 r2, 42            // Put 42 in register r2
+    add64 r0, r2            // Add them: r0 = r0 + r2
+    
+    stxdw [r10 - 8], r0     // Store result on stack
+    mov64 r0, 0             // Return success
+    exit
+```
+
+Chương trình này minh họa mẫu điển hình:
+- Sử dụng thanh ghi `r1` (con trỏ đầu vào) để đọc từ bộ nhớ
+- Sử dụng thanh ghi `r0` và `r2` cho các phép tính
+- Sử dụng thanh ghi `r10` (con trỏ khung) để truy cập bộ nhớ stack
+- Trả về kết quả trong thanh ghi `r0`
+
+Quy trình làm việc tuân theo một mẫu nhất quán: tải dữ liệu từ bộ nhớ vào các thanh ghi, thực hiện tính toán với các thanh ghi, sau đó lưu kết quả trở lại bộ nhớ khi cần thiết.
+
+### Sử dụng ngăn xếp
+
+Ngăn xếp hoạt động với `r10` là con trỏ khung, trỏ đến cơ sở của khung ngăn xếp hiện tại của bạn (địa chỉ cao nhất). Các biến cục bộ sử dụng offset âm:
+
+```sbpf
+// Store a value on the stack
+mov64 r0, 42
+stxdw [r10 - 8], r0         // Store at first stack slot
+
+// Load it back
+ldxdw r1, [r10 - 8]         // Load from first stack slot
+```
+
+Các vị trí trong ngăn xếp thường có độ rộng 8 byte, vì vậy các biến liên tiếp sử dụng các offset như `[r10 - 8]`, `[r10 - 16]`, `[r10 - 24]`, và tiếp tục.
+
+### Điểm vào và thoát chương trình
+
+Chương trình của bạn bắt đầu thực thi tại ký hiệu được đánh dấu bằng `.globl` (thường là điểm vào). Trạng thái thanh ghi ban đầu là tối thiểu và có thể dự đoán được:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    // On entry:
+    // r1 = 0x400000000 (input buffer pointer)
+    // r10 = 0x200001000 (0x200000000 stack start + 0x1000 4KiB frame size)
+    // r0, r2-r9 = 0 (all other registers zeroed)
+
+    // Your program logic here
+
+    mov64 r0, 0     // Success code (0 = SUCCESS)
+    exit            // Return to runtime
+```
+
+Hành vi thoát phụ thuộc vào độ sâu của lời gọi:
+- Ở độ sâu lời gọi 0, lệnh thoát kết thúc chương trình với `r0` là mã kết quả. 
+- Ở các cấp độ gọi sâu hơn, lệnh thoát hoạt động như một câu lệnh return, khôi phục các thanh ghi được lưu bởi người gọi (`r6`-`r9`) và con trỏ khung của người gọi (`r10`) trước khi tiếp tục thực thi tại địa chỉ trả về.
+
+Thời gian chạy tự động xử lý việc thiết lập và dọn dẹp thông qua mã đầu và cuối ngầm định, bao gồm cấu hình trạng thái thanh ghi ban đầu và xử lý trả về cuối cùng.

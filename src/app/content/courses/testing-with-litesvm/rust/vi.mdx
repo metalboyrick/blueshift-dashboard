@@ -1,0 +1,300 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM với Rust
+
+Gói `litesvm` cung cấp cơ sở hạ tầng kiểm thử cốt lõi để tạo môi trường Solana nhẹ, nơi bạn có thể trực tiếp thao tác trạng thái tài khoản và thực thi các giao dịch đối với chương trình của bạn.
+
+<ArticleSection name="Các bước đầu tiên" id="first-steps" level="h2" />
+
+Thêm LiteSVM vào dự án của bạn:
+
+```bash
+cargo add --dev litesvm
+```
+
+<ArticleSection name="Cơ bản về LiteSVM" id="basics" level="h2" />
+
+Bắt đầu bằng cách khai báo ID chương trình của bạn và tạo một phiên bản LiteSVM.
+
+Sử dụng chính xác ID chương trình mà bạn đã định nghĩa trong chương trình của mình để đảm bảo các giao dịch thực thi chính xác và không gây ra lỗi `ProgramMismatch` trong quá trình kiểm thử:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::{pubkey, Pubkey};
+
+const program_id: Pubkey = pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Load the program with the right publickey
+    svm.add_program_from_file(program_id, "target/deploy/program.so");
+}
+```
+
+Để thực thi các bài kiểm thử, tạo một đối tượng giao dịch và sử dụng hàm `.send_transaction(tx)`:
+
+```rust
+use litesvm::LiteSVM;
+use solana_transaction::Transaction;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Transaction
+    let mut tx = Transaction::new_signed_with_payer(
+        &[...ixs],
+        Some(&payer.pubkey()),
+        &[...signersKeypair],
+        svm.latest_blockhash(),
+    );
+
+    // Send the Transaction
+    let result = svm.send_transaction(tx).unwrap();
+}
+```
+
+<ArticleSection name="Tài khoản" id="accounts" level="h2" />
+
+Khi kiểm thử các chương trình Solana với LiteSVM, bạn sẽ làm việc với một số loại tài khoản phản ánh các kịch bản thực thi chương trình trong thế giới thực.
+
+Hiểu cách xây dựng các tài khoản này một cách đúng đắn là điều cần thiết để kiểm thử hiệu quả.
+
+### Tài khoản hệ thống
+
+Loại tài khoản cơ bản nhất là tài khoản hệ thống, có hai biến thể chính:
+- **Tài khoản thanh toán**: Tài khoản có lamports để tài trợ cho việc tạo tài khoản chương trình hoặc chuyển lamport
+- **Tài khoản chưa khởi tạo**: Tài khoản trống không có lamports, thường được sử dụng để đại diện cho các tài khoản chương trình đang chờ khởi tạo
+
+Tài khoản hệ thống không chứa dữ liệu và thuộc sở hữu của Chương trình Hệ thống. Sự khác biệt chính giữa tài khoản thanh toán và tài khoản chưa khởi tạo là số dư lamport: tài khoản thanh toán có tiền, trong khi tài khoản chưa khởi tạo bắt đầu với số dư trống.
+
+Đây là cách tạo tài khoản `payer` trong LiteSVM:
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports: 100_000_000,
+            data: [],
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+> Một tài khoản chưa khởi tạo đơn giản chỉ là một tài khoản được tạo bình thường với `Keypair.generate()` - không cần thiết lập thêm.
+
+### Tài khoản chương trình
+
+Đối với tài khoản chương trình chứa cấu trúc dữ liệu tùy chỉnh, bạn có thể sử dụng phương pháp tương tự.
+Bạn cũng cần phải tuần tự hóa dữ liệu tài khoản thành một mảng byte, điều này có thể được thực hiện thủ công hoặc bằng cách sử dụng thư viện như `borsh`, `bincode`, hoặc `solana_program_pack`.
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
+
+    // Serialize the account data into the byte array defined above
+    // ...
+
+    let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports,
+            data: account_data,
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> Trong quá trình kiểm thử, bạn không cần tính toán chính xác tiền thuê. Bạn có thể đặt lamports với một giá trị lớn như `100_000_000_000` và bỏ qua việc tính toán tiền thuê vì đây không phải là tiền thật.
+
+### Tài khoản token
+
+Để tuần tự hóa dữ liệu cho tài khoản SPL Token, bạn có thể sử dụng `spl_token::Mint` và `spl_token::Account`, các lớp này triển khai `solana_program_pack::Pack`.
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_account::Account;
+use spl_token::{ID as TOKEN_PROGRAM_ID, state::{Mint, Account as TokenAccount}};
+use solana_program_pack::Pack;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Mint Account
+    let mint = Keypair::new();
+
+    // Populate the data of the Mint Account
+    let mint_data = Mint {
+        mint_authority: None.into(),
+        supply: 0,
+        decimals: 6,
+        is_initialized: true,
+        freeze_authority: None.into(),
+    };
+
+    let mut mint_account_data = vec![0; Mint::LEN];
+    Mint::pack(mint_data, &mut mint_account_data).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(Mint::LEN);
+
+    // Add the Mint Account
+    svm.set_account(
+        mint.pubkey(),
+        Account {
+            lamports,
+            data: mint_account_data,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+
+    // Create a new Token Account
+    let token_account = Keypair::new();
+    let owner = Keypair::new();
+
+    // Populate the data of the Token Account
+    let token_account_data = TokenAccount {
+        mint: mint.pubkey(),
+        owner: owner.pubkey(),
+        amount: 0,
+        delegate: None.into(),
+        state: spl_token::state::AccountState::Initialized,
+        is_native: None.into(),
+        delegated_amount: 0,
+        close_authority: None.into(),
+    };
+
+    let mut token_account_data_bytes = vec![0; TokenAccount::LEN];
+    TokenAccount::pack(token_account_data, &mut token_account_data_bytes).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(TokenAccount::LEN);
+
+    // Add the Token Account
+    svm.set_account(
+        token_account.pubkey(),
+        Account {
+            lamports,
+            data: token_account_data_bytes,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+<ArticleSection name="Execution" id="execution" level="h2" />
+
+Với các tài khoản đã được tạo và thêm vào phiên bản LiteSVM của bạn, bây giờ bạn có thể gửi các giao dịch và xác thực logic chương trình của mình.
+
+Trước khi gửi một giao dịch, bạn có thể mô phỏng kết quả:
+
+```rust
+let simulated_result = svm.simulate_transaction(tx);
+```
+
+Sau đó gửi giao dịch và kiểm tra nhật ký của nó:
+
+```rust
+let result = svm.send_transaction(tx);
+let logs = result.logs;
+```
+
+### Tính năng nâng cao
+
+Trước và sau khi thực thi, toàn bộ sổ cái chứa trong phiên bản LiteSVM của bạn đều có thể đọc và tùy chỉnh được.
+
+Bạn có thể thao tác với các giá trị sysvar như đồng hồ:
+
+```rust
+// Change the Clock
+let mut new_clock = svm.get_sysvar::<Clock>();
+new_clock.unix_timestamp = 1735689600;
+svm.set_sysvar::<Clock>(&new_clock);
+
+// Jump to a certain Slot
+svm.warp_to_slot(500);
+
+// Expire the current blockhash
+svm.expire_blockhash();
+```
+
+Bạn cũng có thể đọc dữ liệu tài khoản và giao thức:
+
+```rust
+// Get all the information about an account (data, lamports, owner, ...)
+svm.get_account(&account.publickey);
+
+// Get the lamport balance of an account
+svm.get_balance(&account.publickey);
+
+// Get the number of Compute Unit used till now
+svm.get_compute_budget();
+```
+
+Hoặc cấu hình cách thức hoạt động của runtime:
+
+```rust
+// Sets the compute budget
+let compute_budget = ComputeBudget::default();
+compute_budget.compute_unit_limit = 2_000_000;
+svm.with_compute_budget(compute_budget);
+
+// Sets Sigverify as active
+svm.with_sigverify(true);
+
+// Sets the Blockhash check as active
+svm.with_blockhash_check(true);
+
+// Sets the default Sysvars
+svm.with_sysvars();
+
+// Set the FeatureSet to use
+svm.with_feature_set(FeatureSet::default())
+```

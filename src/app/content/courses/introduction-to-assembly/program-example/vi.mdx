@@ -1,0 +1,107 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ví dụ chương trình 
+
+Bây giờ hãy xem cách các thanh ghi (r0-r10), vùng nhớ và các lệnh hoạt động cùng nhau trong một chương trình thực tế. Chúng ta sẽ bắt đầu với chương trình sBPF đơn giản nhất có thể để hiểu luồng thực thi cơ bản.
+
+<ArticleSection name="NoOp-program" id="noop-program" level="h2" />
+
+Một chương trình "NoOp" (Không Thực hiện Thao tác) là hoàn hảo để học vì nó thể hiện cấu trúc chương trình thiết yếu mà không có bất kỳ độ phức tạp nào:
+- Cách chương trình nhận đầu vào (trong thanh ghi r1)
+- Cách chúng trả về kết quả (trong thanh ghi r0)
+- Luồng vào/ra cơ bản mà mọi chương trình sBPF đều tuân theo
+- Cách Rust biên dịch thành assembly sBPF
+
+Mặc dù nó "không làm gì cả", nhưng nó cho bạn thấy nền tảng mà mọi chương trình Solana đều xây dựng trên đó.
+
+Bây giờ chúng ta đã biết các thao tác sBPF cơ bản, hãy xem chúng trông như thế nào trong một chương trình thực tế (dù rất nhỏ).
+
+<ArticleSection name="Pinocchio NoOp" id="pinocchio-noop" level="h2" />
+
+Dưới đây là một "noop" hiệu suất cao được viết bằng Pinocchio. Tất cả những gì nó làm là trả về thành công:
+
+```rust
+#![no_std]
+use pinocchio::{entrypoint::InstructionContext, lazy_program_entrypoint, no_allocator, nostd_panic_handler, ProgramResult};
+
+lazy_program_entrypoint!(process_instruction);
+
+nostd_panic_handler!();
+no_allocator!();
+
+fn process_instruction(
+    _context: InstructionContext, // wrapper around the input buffer
+ ) -> ProgramResult {
+    Ok(())
+}
+```
+
+Nếu chúng ta xây dựng mã này với `cargo build-sbf --dump`, chúng ta sẽ nhận được một bản dump ELF cung cấp thông tin về tệp nhị phân của chúng ta trong thư mục `/target/deploy/`.
+
+Sau đó chúng ta sẽ muốn tìm phần `.text` — phần của tệp nhị phân nơi mã thực thi được lưu trữ.
+
+```pinocchio_noop-dump.txt
+Disassembly of section .text
+0000000000000120 <entrypoint>
+     120 b7 00 00 00 00 00 00 00      	mov64 r0, 0x0
+     128 95 00 00 00 00 00 00 00      	exit
+```
+
+Hãy phân tích những byte hex này thực sự có ý nghĩa gì bằng cách sử dụng định dạng lệnh mà chúng ta đã học:
+
+Đây là lệnh đầu tiên: `120 b7 00 00 00 00 00 00 00`
+- Địa chỉ: `0x120` (trong vùng văn bản bắt đầu tại 0x100000000)
+- Opcode: `0xb7` = `mov64` với giá trị tức thời
+- dst: `0x00` = thanh ghi `r0`
+- src: `0x00` = không sử dụng (thao tác tức thời)
+- offset: `0x0000` = không sử dụng
+- imm: `0x00000000` = giá trị tức thời 0
+
+Và đây là hướng dẫn thứ hai: `128 95 00 00 00 00 00 00 00`
+- Địa chỉ: `0x128` (8 byte sau hướng dẫn đầu tiên)
+- Mã lệnh: `0x95` = thoát/trả về
+- Tất cả các trường khác: `0x00` = không sử dụng cho lệnh thoát
+
+> Vị trí `0x120` là nơi trình liên kết quyết định đặt hàm điểm vào trong phần `.text` của tệp ELF. Tệp ELF bắt đầu với các tiêu đề, bảng phần và các siêu dữ liệu khác chiếm ~`0x120` byte đầu tiên (288 byte). Mã thực thi thực sự đến sau tất cả thông tin quản lý đó.
+
+<ArticleSection name="Assembly NoOp" id="assembly-noop" level="h2" />
+
+Nếu chúng ta phân tích mã nhị phân để chuyển nó trở lại thành mã Assembly sBPF có thể biên dịch, mã sẽ trông như thế này:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    mov64 r0, 0x00   // r0 <- success
+    exit             // finish, return r0
+```
+
+Hãy phân tích mã:
+- `.globl entrypoint`: Đây là một chỉ thị trình biên dịch cho trình liên kết biết để làm cho biểu tượng điểm vào hiển thị toàn cục. Môi trường chạy Solana tìm kiếm biểu tượng này để biết nơi bắt đầu thực thi chương trình của bạn.
+- `entrypoint`: Đây là một nhãn đánh dấu địa chỉ bộ nhớ nơi bắt đầu thực thi chương trình. Khi môi trường chạy tải chương trình của bạn, nó nhảy đến địa chỉ này.
+- `mov64 r0, 0x00`: Di chuyển giá trị tức thời 0 vào thanh ghi r0. Vì r0 là thanh ghi trả về, điều này thiết lập mã trả về thành công.
+- `exit`: Kết thúc thực thi chương trình và trả về giá trị trong r0 cho môi trường chạy.
+
+> trả về 0 có nghĩa là chúng ta đang trả về thành công cho chương trình.
+
+Đây là một chương trình cực kỳ nhỏ, với chỉ 2 lệnh tiêu thụ chỉ 2 đơn vị tính toán (CU) để thực thi, khớp hoàn hảo với mã Rust của chúng ta:
+- Chúng ta đã định nghĩa một hàm điểm vào
+- Chúng ta trả về Ok(()) được đánh giá là 0
+- Trình biên dịch đã tạo ra các lệnh `mov64` và `exit` thích hợp
+
+<ArticleSection name="Tối ưu hóa Assembly NoOp" id="optimized-assembly-noop" level="h2" />
+
+Tuy nhiên, chúng ta có thể tối ưu hóa điều này hơn nữa. Vì môi trường chạy Solana khởi tạo `r0` thành 0 theo mặc định, chúng ta có thể loại bỏ lệnh `mov64` dư thừa:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    exit
+```
+
+Phiên bản đã tối ưu hóa này:
+- Chỉ tốn 1 đơn vị tính toán (giảm 50%!)
+- Tạo ra kết quả giống hệt (`r0` vẫn chứa giá trị 0)
+
+> Đây là lý do tại sao việc hiểu assembly giúp tối ưu hóa!
+
+Việc tối ưu hóa này khả thi vì chúng ta biết trạng thái ban đầu của các thanh ghi — điều mà trình biên dịch Rust không phải lúc nào cũng tận dụng được. Hiểu về assembly sBPF cho phép bạn xác định và loại bỏ những sự kém hiệu quả như vậy trong mã quan trọng về hiệu suất.
