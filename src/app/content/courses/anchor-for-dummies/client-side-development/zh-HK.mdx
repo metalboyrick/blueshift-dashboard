@@ -1,0 +1,307 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 客戶端開發
+
+大多數 dApp 使用 TypeScript 與已部署的 Solana 程式互動。了解如何在客戶端整合您的程式對於構建功能性應用程式至關重要。
+
+<ArticleSection name="Anchor Client SDK" id="anchor-client-sdk" level="h2" />
+
+Anchor 通過一個界面描述語言 (IDL) 文件簡化了與 Solana 程式的客戶端互動，該文件反映了您的程式結構。
+
+結合 Anchor 的 TypeScript 庫 (@coral-xyz/anchor)，IDL 提供了一種簡化的方式來構建指令和交易。
+
+### 設置
+
+在創建 Anchor 程式時，`@coral-xyz/anchor` 套件會自動安裝。運行 anchor build 後，Anchor 會生成：
+- 位於 `target/idl/<program-name>.json` 的 IDL
+- 位於 `target/types/<program-name>.ts` 的 TypeScript SDK
+
+這些文件抽象了大部分底層的複雜性。使用以下結構將它們傳輸到您的 TypeScript 客戶端：
+
+```
+src
+├── anchor
+│     ├── <program-name>.json
+│     └── <program-name>.ts
+└── integration.ts
+```
+
+> `integration.ts` 文件包含程式互動邏輯。`<program-name>.json` 文件是 IDL，而 `<program-name>.ts` 包含生成的 TypeScript 類型。
+
+要將錢包適配器與 Anchor 的 TypeScript SDK 一起使用，請創建一個 Provider 對象，該對象結合了連接（localhost、devnet 或 mainnet）和錢包（支付和簽署交易的地址）。
+
+設置錢包和連接：
+
+```ts
+import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
+
+const { connection } = useConnection();
+const wallet = useAnchorWallet();
+```
+
+> 來自 `useWallet` 的 `@solana/wallet-adapter-react` 鉤子與 Anchor 的 Provider 所期望的錢包對象不兼容。這就是為什麼我們使用 `useAnchorWallet` 鉤子的原因。
+
+創建 Provider 對象並將其設置為默認值：
+
+```
+import { AnchorProvider, setProvider } from "@coral-xyz/anchor";
+
+const provider = new AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
+
+setProvider(provider);
+```
+
+### 程式
+
+Anchor 的 Program 對象為與 Solana 程式互動創建了一個自定義 API。此 API 作為所有鏈上程式通信的核心接口：
+- 發送交易，
+- 獲取反序列化的帳戶，
+- 解碼指令數據，
+- 訂閱帳戶更改，
+- 監聽事件
+
+透過匯入類型和IDL來建立Program物件：
+
+```ts
+import <program-name> from "./<program-name>.json";
+import type { <Program-Type> } from "./<program-name>.ts";
+import { Program, Idl } from "@coral-xyz/anchor";
+
+const program = new Program(<program-name> as <Program-Type>);
+```
+
+如果你尚未設定預設的provider，請明確指定：
+
+```ts
+const program = new Program(<program-name> as <Program-Type>, provider);
+```
+
+配置完成後，使用Anchor Methods Builder來構建指令和交易。`MethodsBuilder`利用IDL提供了一個簡化的格式，用於構建調用程式指令的交易。
+
+基本的`MethodsBuilder`模式：
+
+```ts
+await program.methods
+  .instructionName(instructionDataInputs)
+  .accounts({})
+  .signers([])
+  .rpc();
+```
+
+> API使用camelCase命名方式，而非Rust的snake_case慣例。使用點語法調用指令名稱，並以逗號分隔的值傳遞參數。
+
+使用`.signers()`傳遞provider以外的額外簽署者。
+
+### 帳戶
+
+使用點語法在`MethodsBuilder`上調用`.accounts`，並傳遞一個物件，其中包含根據IDL指令所需的每個帳戶。
+
+> 從Anchor 0.30.0開始，可以自動解析的帳戶（例如PDA或明確地址）已包含在IDL中，且不需要在`.accounts`調用中指定（`.accountPartial()`成為預設值）。若要手動傳遞所有帳戶，請使用`.accountsStrict()`。
+
+### 交易
+
+通過Anchor發送交易的預設方法是`.rpc()`，該方法直接將交易發送到區塊鏈。
+
+對於需要後端簽署的場景（例如在前端使用用戶錢包創建交易，然後使用後端密鑰對其進行安全簽署），請使用`.transaction()`：
+
+```ts
+const transaction = await program.methods
+  .instructionName(instructionDataInputs)
+  .accounts({})
+  .transaction();
+
+//... Sign the transaction in the backend
+
+// Send the transaction to the chain
+await sendTransaction(transaction, connection);
+```
+
+要捆綁多個Anchor指令，請使用`.instruction()`來獲取指令物件：
+
+```ts
+// Create first instruction
+const instructionOne = await program.methods
+  .instructionOneName(instructionOneDataInputs)
+  .accounts({})
+  .instruction();
+
+// Create second instruction
+const instructionTwo = await program.methods
+  .instructionTwoName(instructionTwoDataInputs)
+  .accounts({})
+  .instruction();
+
+// Add both instructions to one transaction
+const transaction = new Transaction().add(instructionOne, instructionTwo);
+
+// Send transaction
+await sendTransaction(transaction, connection);
+```
+
+<ArticleSection name="獲取和篩選帳戶" id="fetch-and-filter-accounts" level="h2" />
+
+當你的程式創建數百個帳戶時，追蹤它們會變得具有挑戰性。Program物件提供了高效獲取和篩選程式帳戶的方法。
+
+獲取特定帳戶類型的所有地址：
+
+```ts
+const accounts = await program.account.counter.all();
+```
+
+使用`memcmp`標誌篩選特定帳戶：
+
+```ts
+const accounts = await program.account.counter.all([
+  {
+    memcmp: {
+      offset: 8,
+      bytes: bs58.encode(new BN(0, "le").toArray()),
+    },
+  },
+]);
+```
+
+> 這會提取所有 `Counter` 帳戶，其中第一個字段等於 0。
+
+若要檢查帳戶數據是否更改，請使用 fetch 提取特定帳戶的反序列化帳戶數據：
+
+```ts
+const account = await program.account.counter.fetch(ACCOUNT_ADDRESS);
+```
+
+同時提取多個帳戶：
+
+```ts
+const accounts = await program.account.counter.fetchMultiple([
+  ACCOUNT_ADDRESS_ONE,
+  ACCOUNT_ADDRESS_TWO,
+]);
+```
+
+<ArticleSection name="事件與 Webhooks" id="events-and-webhooks" level="h2" />
+
+與其每次用戶連接錢包時提取鏈上數據，不如設置系統來監聽區塊鏈並將相關數據存儲在數據庫中。
+
+有兩種主要方法來監聽鏈上事件：
+- 輪詢：客戶端以一定間隔反覆檢查新數據。服務器無論是否有更改都會回應最新數據，可能會返回重複的信息。
+- 流式傳輸：服務器僅在有更新時將數據推送到客戶端。由於僅傳輸相關更改，這提供了更高效的實時數據傳輸。
+
+若要流式傳輸 Anchor 指令，請使用監聽事件的 webhooks，並在事件發生時將其發送到您的服務器。例如，每當您的市場上發生 NFT 銷售時，更新數據庫條目。
+
+> 對於極低延遲的應用程序（例如 5 毫秒的差異很重要），webhooks 可能無法提供足夠的速度。
+
+Anchor 提供了兩個用於發出事件的宏：
+- `emit!()`：使用 `sol_log_data()` 系統調用直接將事件發送到程序日誌，將事件數據編碼為以 "Program Data" 為前綴的 base64 字符串
+- `emit_cpi!()`：通過跨程序調用（CPI）發出事件。事件數據被編碼並包含在 CPI 的指令數據中，而不是程序日誌中
+
+### `emit!()` 宏
+
+程序實現：
+
+```rust
+use anchor_lang::prelude::*;
+ 
+declare_id!("8T7MsCZyzxboviPJg5Rc7d8iqEcDReYR2pkQKrmbg7dy");
+ 
+#[program]
+pub mod event {
+    use super::*;
+ 
+    pub fn emit_event(_ctx: Context<EmitEvent>, input: String) -> Result<()> {
+        emit!(CustomEvent { message: input });
+        Ok(())
+    }
+}
+ 
+#[derive(Accounts)]
+pub struct EmitEvent {}
+ 
+#[event]
+pub struct CustomEvent {
+    pub message: String,
+}
+```
+
+使用 Anchor SDK 幫助程序進行 base64 解碼的客戶端事件監聽：
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { Event } from "../target/types/event";
+ 
+describe("event", () => {
+  // Configure the client to use the local cluster.
+  anchor.setProvider(anchor.AnchorProvider.env());
+ 
+  const program = anchor.workspace.Event as Program<Event>;
+ 
+  it("Emits custom event", async () => {
+    // Set up listener before sending transaction
+    const listenerId = program.addEventListener("customEvent", event => {
+      // Process the event data
+      console.log("Event Data:", event);
+    });
+  });
+});
+```
+
+### `emit_cpi!()` 宏
+
+程序實現：
+
+```rust
+use anchor_lang::prelude::*;
+ 
+declare_id!("2cDQ2LxKwQ8fnFUz4LLrZ157QzBnhPNeQrTSmWcpVin1");
+ 
+#[program]
+pub mod event_cpi {
+    use super::*;
+ 
+    pub fn emit_event(ctx: Context<EmitEvent>, input: String) -> Result<()> {
+        emit_cpi!(CustomEvent { message: input });
+        Ok(())
+    }
+}
+ 
+#[event_cpi]
+#[derive(Accounts)]
+pub struct EmitEvent {}
+ 
+#[event]
+pub struct CustomEvent {
+    pub message: String,
+}
+```
+
+客戶端事件解碼：
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { EventCpi } from "../target/types/event_cpi";
+ 
+describe("event-cpi", () => {
+  // Configure the client to use the local cluster.
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const program = anchor.workspace.EventCpi as Program<EventCpi>;
+ 
+  it("Emits custom event", async () => { 
+    // Fetch the transaction data
+    const transactionData = await program.provider.connection.getTransaction(
+      transactionSignature,
+      { commitment: "confirmed" },
+    );
+ 
+    // Decode the event data from the CPI instruction data
+    const eventIx = transactionData.meta.innerInstructions[0].instructions[0];
+    const rawData = anchor.utils.bytes.bs58.decode(eventIx.data);
+    const base64Data = anchor.utils.bytes.base64.encode(rawData.subarray(8));
+    const event = program.coder.events.decode(base64Data);
+
+    console.log(event);
+  });
+});
+```

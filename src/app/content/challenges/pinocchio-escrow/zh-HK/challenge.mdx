@@ -1,0 +1,204 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Escrow（第三方託管）
+
+![Pinocchio Escrow Challenge](/graphics/challenge-banners/pinocchio-escrow.png)
+
+Escrow 是一種強大的金融工具，能夠在雙方之間實現安全的代幣交換。
+
+可以將其想像成一個數碼保險箱，一位用戶可以將代幣 A 鎖定在其中，等待另一位用戶存入代幣 B，然後完成交換。
+
+這創造了一個無需信任的環境，雙方都不需要擔心對方會退出交易。
+
+在這個挑戰中，我們將通過三個簡單但強大的指令來實現這個概念：
+- **Make（創建）**：創建者（第一位用戶）定義交易條款，並將約定數量的代幣 A 存入安全保險庫。這就像將你的物品放入保險箱並設定交換條件。
+- **Take（接受）**：接受者（第二位用戶）通過向創建者轉移約定數量的代幣 B 來接受交易，並獲得鎖定的代幣 A。這是雙方完成各自交易條件的時刻。
+- **Refund（退款）**：如果創建者改變主意或未找到合適的接受者，他們可以取消交易並取回代幣 A。這就像在交易失敗時從保險箱中取回你的物品。
+
+**注意**：如果你對 Pinocchio 不熟悉，應該先閱讀 [Pinocchio 簡介](/zh-HK/courses/introduction-to-pinocchio)，以熟悉我們將在此程序中使用的核心概念。
+
+<ArticleSection name="安裝" id="installation" level="h2" />
+
+讓我們從創建一個全新的 Rust 環境開始：
+
+```bash
+# create workspace
+cargo new blueshift_escrow --lib --edition 2021
+cd blueshift_escrow
+```
+
+新增 pinocchio、pinocchio-system、pinocchio-token 和 pinocchio-associated-token：
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+```
+
+在 `Cargo.toml` 中聲明 crate 類型，以便在 `target/deploy` 中生成部署工件：
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+現在你已準備好編寫你的托管程序。
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+這次我們將把程序分成小而專注的模組，而不是將所有內容都塞進 `lib.rs` 中。文件夾結構大致如下：
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── helpers.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+入口點位於 `lib.rs` 中，看起來與我們在上一課中所做的非常相似，因此我們將快速瀏覽：
+
+```rust
+use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Make::DISCRIMINATOR, data)) => Make::try_from((data, accounts))?.process(),
+        Some((Take::DISCRIMINATOR, _)) => Take::try_from(accounts)?.process(),
+        Some((Refund::DISCRIMINATOR, _)) => Refund::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+我們將進入 `state.rs`，其中存放了我們 `Escrow` 的所有數據。我們將其分為兩部分：結構定義及其實現。
+
+首先，讓我們看看結構定義：
+
+```rust
+use pinocchio::{program_error::ProgramError, pubkey::Pubkey};
+use core::mem::size_of;
+
+#[repr(C)]
+pub struct Escrow {
+    pub seed: u64,        // Random seed for PDA derivation
+    pub maker: Pubkey,    // Creator of the escrow
+    pub mint_a: Pubkey,   // Token being deposited
+    pub mint_b: Pubkey,   // Token being requested
+    pub receive: u64,     // Amount of token B wanted
+    pub bump: [u8;1]      // PDA bump seed
+}
+```
+
+`#[repr(C)]` 屬性確保我們的結構具有可預測的內存佈局，這對於鏈上數據至關重要。每個字段都有特定的用途：
+- **seed**：一個隨機數，允許一個 maker 使用相同的代幣對創建多個托管
+- **maker**：創建托管並將接收代幣的錢包地址
+- **mint_a**：存入代幣的 SPL 代幣鑄幣地址
+- **mint_b**：請求代幣的 SPL 代幣鑄幣地址
+- **receive**：maker 想要接收的 B 代幣的確切數量
+- **bump**：在 PDA 派生中使用的一個字節，用於確保地址不在 Ed25519 曲線上
+
+現在，讓我們看看包含所有輔助方法的實現：
+
+```rust
+impl Escrow {
+    pub const LEN: usize = size_of::<u64>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<u64>()
+    + size_of::<[u8;1]>();
+
+    #[inline(always)]
+    pub fn load_mut(bytes: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &mut *core::mem::transmute::<*mut u8, *mut Self>(bytes.as_mut_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn load(bytes: &[u8]) -> Result<&Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &*core::mem::transmute::<*const u8, *const Self>(bytes.as_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
+    }
+
+    #[inline(always)]
+    pub fn set_maker(&mut self, maker: Pubkey) {
+        self.maker = maker;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_a(&mut self, mint_a: Pubkey) {
+        self.mint_a = mint_a;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_b(&mut self, mint_b: Pubkey) {
+        self.mint_b = mint_b;
+    }
+
+    #[inline(always)]
+    pub fn set_receive(&mut self, receive: u64) {
+        self.receive = receive;
+    }
+
+    #[inline(always)]
+    pub fn set_bump(&mut self, bump: [u8;1]) {
+        self.bump = bump;
+    }
+
+    #[inline(always)]
+    pub fn set_inner(&mut self, seed: u64, maker: Pubkey, mint_a: Pubkey, mint_b: Pubkey, receive: u64, bump: [u8;1]) {
+        self.seed = seed;
+        self.maker = maker;
+        self.mint_a = mint_a;
+        self.mint_b = mint_b;
+        self.receive = receive;
+        self.bump = bump;
+    }
+}
+```
+
+此實現提供了幾個關鍵功能：
+1. **精確大小計算**：`LEN` 通過累加每個欄位的大小來精確計算帳戶大小
+2. **安全加載**：`load` 提供了一種安全的方式來加載和驗證托管數據
+3. **性能優化**：
+   - 在 getter 上使用 `#[inline(always)]` 以實現最大性能
+   - 當我們確定借用是安全時，使用不安全的方法
+   - 使用 `set_inner` 高效地設置欄位
+4. **內存安全**：正確驗證帳戶數據的長度和所有權
+5. **文檔**：清晰的註解，解釋每個方法的用途和安全考量
+
+此實現確保了我們的托管狀態既安全又高效，並在適當的地方進行了正確的驗證和性能優化。

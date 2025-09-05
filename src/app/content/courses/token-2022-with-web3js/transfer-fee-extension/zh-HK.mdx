@@ -1,0 +1,210 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 轉移費用擴展
+
+`TransferFee` 擴展是一個 `Mint` 擴展，允許創建者設置一個「稅」，每當有人進行交換時都會收取該稅。
+
+為了確保費用接收者在每次有人進行交換時不會被寫鎖，並確保我們可以對包含此擴展的 `Mint` 的交易進行並行處理，費用會被存放在接收者的代幣帳戶中，只有 `Withdraw Authority` 可以提取。
+
+<ArticleSection name="初始化鑄幣帳戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `Mint` 帳戶上初始化 `TransferFee` 擴展，我們需要使用 `createInitializeTransferFeeConfigInstruction()` 函數。
+
+以下是如何使用轉移費用擴展創建鑄幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeTransferFeeConfigInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Transfer Fee extension
+const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Transfer Fee extension
+const initializeTransferFeeConfig = createInitializeTransferFeeConfigInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    500,
+    BigInt(1e6),
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTransferFeeConfig,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="帶有費用的代幣轉移" id="transferring-tokens-with-the-fee" level="h2" />
+
+要轉移帶有 TransferFee 擴展的 `Mint` 代幣，我們有兩種方式：
+- 我們可以使用普通的 `transferChecked()` 指令，這樣費用的計算會自動處理。
+- 我們可以使用 `transferCheckedWithFee()` 指令，並手動提供我們在該轉移中要支付的 `fee`。這在我們想確保不會因為權限更改費用而被「割韭菜」時非常有用，因為這可能會導致費用異常高；這就像為轉移設置滑點一樣。
+
+> 即使權限更改了費用，新費用會在設置後的兩個時代生效。
+
+以下是如何使用 `transferCheckedWithFee()` 指令進行轉移的方法：
+
+```ts
+createTransferCheckedWithFeeInstruction(
+    sourceTokenAccount,
+    mint.publicKey, 
+    destinationTokenAccount, 
+    keypair.publicKey, 
+    BigInt(100e6), // transfer amount
+    6, // decimals
+    BigInt(1e6), // fee paid for the transfer
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(transferInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens transferred! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="收取費用" id="harvesting-the-fee" level="h2" />
+
+如引言所述，轉賬費用會保留在接收代幣的`Token`帳戶中，以避免對`Mint`帳戶或`sourceTokenAccount`進行寫鎖定。因此，在提取費用之前，我們需要能夠搜尋所有有費用可提取的`Token`帳戶。
+
+我們可以通過設置篩選器來獲取屬於該鑄幣的所有帳戶，具體如下：
+
+```ts
+// Retrieve all Token Accounts for the Mint Account
+const allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
+    commitment: "confirmed",
+    filters: [
+        {
+            memcmp: {
+                offset: 0,
+                bytes: mint.publicKey.toString(), // Mint Account address
+            },
+        },
+    ],
+});
+```
+
+然後通過解包`Token`帳戶並使用`getTransferAmoun()`函數，獲取所有內含費用的`Token`帳戶列表，具體如下：
+
+```ts
+// List of Token Accounts to withdraw fees from
+const accountsToWithdrawFrom: PublicKey[] = [];
+
+for (const accountInfo of allAccounts) {
+    const account = unpackAccount(
+        accountInfo.pubkey,
+        accountInfo.account,
+        TOKEN_2022_PROGRAM_ID,
+    );
+
+    // Extract transfer fee data from each account
+    const transferFeeAmount = getTransferFeeAmount(account);
+
+    // Check if fees are available to be withdrawn
+    if (transferFeeAmount !== null && transferFeeAmount.withheldAmount > 0) {
+        accountsToWithdrawFrom.push(accountInfo.pubkey);
+    }
+}
+```
+
+之後，我們可以使用`withdrawWithheldTokensFromAccounts`指令，結合`Withdraw Authority`，傳遞`accountsToWithdrawFrom`列表，具體如下：
+
+```ts
+const harvestInstructions = createWithdrawWithheldTokensFromAccountsInstruction(
+    mint.publicKey,
+    sourceTokenAccount,
+    keypair.publicKey,
+    [],
+    accountsToWithdrawFrom,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(harvestInstructions);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="更新費用" id="updating-the-fee" level="h2" />
+
+在使用`TranferFee`擴展初始化我們的`Mint`後，我們可能需要在未來更新該特定費用。為了確保創建者不會通過每次執行轉賬時設置非常高的費用來對代幣持有者進行「誘餌與切換」的操作，新`TranferFee`將在2個時期後啟用。
+
+為了適應這一點，以下是`TransferFee`擴展的數據結構：
+
+```rust
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+ 
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+因此，我們可以使用`setTransferFee`指令來更改費用，具體如下：
+
+```ts
+const setTransferFeeInstruction = createSetTransferFeeInstruction(
+    mint.publicKey
+    keypaird.publicKey
+    [],
+    BigInt(1000), // new transfer fee
+    BigInt(100e6), // new maximum fee amount
+    TOKEN_2022_PROGRAM_ID,
+)
+
+const transaction = new Transaction().add(setTransferFeeInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Withheld tokens harvested! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

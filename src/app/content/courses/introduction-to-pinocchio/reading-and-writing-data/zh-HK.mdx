@@ -1,0 +1,753 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 讀取和寫入數據
+
+在構建優化的 Solana 程式時，高效的數據序列化和反序列化對性能有顯著影響。
+
+雖然 Pinocchio 不需要低層次的記憶體操作，但了解如何高效地讀取和寫入帳戶數據可以幫助您構建更快的程式。
+
+本指南中的技術適用於任何 Solana 開發框架；無論您使用的是 Pinocchio、Anchor 還是原生 SDK。關鍵在於謹慎設計數據結構並安全地處理序列化。
+
+### 何時使用不安全代碼
+
+僅在以下情況下使用不安全代碼：
+- 您需要最大性能，並且已測量出安全替代方案過於緩慢
+- 您可以嚴格驗證所有安全不變性
+- 您清楚地記錄安全要求
+
+> 儘可能選擇安全的替代方案。
+
+<ArticleSection name="Safety Principles" id="safety-principles" level="h2" />
+
+在處理原始字節數組和記憶體操作時，我們必須小心避免未定義行為。理解這些原則對於編寫正確且可靠的代碼至關重要。
+
+### 緩衝區邊界檢查
+
+在任何讀取或寫入操作之前，始終驗證您的緩衝區是否足夠大。讀取或寫入超出分配記憶體的範圍是未定義行為。
+
+```rust
+// Good: Check bounds first
+if data.len() < size_of::<u64>() {
+    return Err(ProgramError::InvalidInstructionData);
+}
+let value = u64::from_le_bytes(data[0..8].try_into().unwrap());
+
+// Bad: No bounds checking - could panic or cause UB
+let value = u64::from_le_bytes(data[0..8].try_into().unwrap());
+```
+
+### 對齊要求
+
+Rust 中的每種類型都有一個對齊要求，決定它可以在記憶體中的放置位置。從未正確對齊的記憶體中讀取類型會導致未定義行為。大多數基本類型的對齊要求等於它們的大小：
+- `u8`：1 字節對齊
+- `u16`：2 字節對齊
+- `u32`：4 字節對齊
+- `u64`：8 字節對齊
+
+這意味著 `u64` 必須存儲在能被 8 整除的記憶體地址，而 `u16` 必須從偶數地址開始。
+
+如果不遵守這一點，編譯器會自動在結構體字段之間插入不可見的「填充」字節，以確保每個字段符合其對齊要求。
+
+> 此外，結構體的總大小必須是其最大字段對齊要求的倍數。
+
+以下是一個排序不佳的結構體範例：
+
+```rust
+#[repr(C)]
+struct BadOrder {
+    small: u8,    // 1 byte
+    // padding: [u8; 7] since `big` needs to be aligned at 8 bytes.
+    big: u64,     // 8 bytes  
+    medium: u16,  // 2 bytes
+    // padding: [u8; 6] since the struct size needs to be aligned to 8 bytes.
+}
+```
+
+編譯器在 small 後插入了 7 個填充字節，因為 big 需要 8 字節對齊。然後在結尾再添加 6 個字節，使總大小（24 字節）成為 8 的倍數，浪費了 13 個字節。
+
+更好的方法是像這樣排列結構體的字段：
+
+```rust
+#[repr(C)]
+struct GoodOrder {
+    big: u64,     // 8 bytes
+    medium: u16,  // 2 bytes  
+    small: u8,    // 1 byte
+    // padding: [u8; 5] since the struct size needs to be aligned to 8 bytes.
+}
+```
+
+通過將較大的字段放在前面，我們將填充從 13 字節減少到僅 5 字節。
+
+> 黃金法則是按照從最大到最小的對齊要求排列結構體字段，以最小化填充並減少內存使用。
+
+還有另一種更高級的方法，可以實現最大化空間效率的數據序列化和反序列化。我們可以創建零填充結構體，完全消除對齊要求：
+
+```rust
+#[repr(C)]
+struct ByteArrayStruct {
+    big: [u8; 8],    // represents u64
+    medium: [u8; 2], // represents u16  
+    small: u8,
+}
+```
+
+在這種情況下，大小正好是 11 字節，因為所有內容都對齊為 1 字節。
+
+### 有效位模式
+
+並非所有位模式對每種類型都是有效的。類似 `bool`、`char` 和 `enums` 的類型有受限的有效值。將無效的位模式讀入這些類型會導致未定義行為。
+
+<ArticleSection name="讀取數據" id="reading-data" level="h2" />
+
+有幾種從帳戶緩衝區讀取數據的方法，每種方法都有不同的權衡：
+
+### 按字段反序列化（推薦）
+
+最安全的方法是逐個字段地反序列化。這避免了所有對齊問題，因為您處理的是字節數組：
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+    pub recipient: Pubkey,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() < (size_of::<u64>() + size_of::<Pubkey>()) {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // No alignment issues: we're reading bytes and converting
+        let amount = u64::from_le_bytes(
+            data[0..8].try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+        );
+        
+        let recipient = Pubkey::try_from(&data[8..40])
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+        Ok(Self { amount, recipient })
+    }
+}
+```
+
+### 零拷貝反序列化
+
+這可以用於具有正確對齊結構的最大性能，但需要仔細檢查對齊：
+
+```rust
+#[repr(C)]
+pub struct Config {
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    pub seed: u64,        // This field requires 8-byte alignment
+    pub fee: u16,         // This field requires 2-byte alignment  
+    pub state: u8,
+    pub config_bump: u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<Self>();
+    
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, ProgramError> {
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Critical: Check alignment for the most restrictive field (u64 in this case)
+        if (data.as_ptr() as usize) % core::mem::align_of::<Self>() != 0 {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: We've verified length and alignment
+        Ok(unsafe { &*(data.as_ptr() as *const Self) })
+    }
+}
+
+// Alternative: Avoid alignment issues entirely by using byte arrays for types with
+// alignment requirement greater than 1 and provide accessor methods
+#[repr(C)]
+pub struct ConfigSafe {
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    seed: [u8; 8],      // Convert with u64::from_le_bytes when needed
+    fee: [u8; 2],       // Convert with u16::from_le_bytes when needed
+    pub state: u8,
+    pub config_bump: u8,
+}
+
+impl ConfigSafe {
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, ProgramError> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: No alignment check needed - everything is u8 aligned
+        Ok(unsafe { &*(data.as_ptr() as *const Self) })
+    }
+    
+    pub fn seed(&self) -> u64 {
+        u64::from_le_bytes(self.seed)
+    }
+    
+    pub fn fee(&self) -> u16 {
+        u16::from_le_bytes(self.fee)
+    }
+}
+```
+
+如你所見，seed 和 fee 欄位是私有的。這是因為我們應該始終使用存取方法來讀取數據，因為它們的值是由字節數組表示的。
+
+當你直接訪問欄位（`config.seed`）時，編譯器可能需要創建對該欄位記憶體位置的引用，即使是暫時的。如果該欄位未正確對齊，創建引用將導致未定義的行為，即使你從未明確使用該引用！
+
+存取方法通過在方法範圍內執行讀取操作來避免這種情況，編譯器可以在此範圍內優化掉任何中間引用。
+
+```rust
+#[repr(C, packed)]  // This can cause unaligned fields!
+pub struct PackedConfig {
+    pub state: u8,
+    pub seed: u64,    // This u64 might not be 8-byte aligned due to packing
+}
+
+impl PackedConfig {
+    pub fn seed(&self) -> u64 {
+        self.seed  // Safe: Direct value copy, no reference created
+    }
+}
+
+// Usage:
+let config = PackedConfig::load(account)?;
+
+// ❌ UNDEFINED BEHAVIOR: Creates a reference to potentially unaligned field
+let seed_ref = &config.seed; // Compiler must create a reference here!
+
+// ❌ UNDEFINED BEHAVIOR: Even this can be problematic
+let seed_value = config.seed; // May create temporary reference internally
+
+// ✅ SAFE: Accessor method reads value without creating reference
+let seed_value = config.seed(); // No intermediate reference
+```
+
+> `u8` 欄位始終可以安全地直接訪問，因為 `u8` 的對齊為 1，並且始終對齊，因此我們可以直接使用 `self.state`
+
+在這種情況下，我們沒有任何「特殊類型」，但請始終記住，有些類型由於無效的位模式需要額外注意：
+
+```rust
+pub struct StateAccount {
+    pub is_active: bool,
+    pub state_type: StateType,
+    pub data: [u8; 32],
+}
+
+#[repr(u8)]
+pub enum StateType {
+    Inactive = 0,
+    Active = 1,
+    Paused = 2,
+}
+
+impl StateAccount {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, ProgramError> {
+        if data.len() < size_of::<Self>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Safely handle bool (only 0 or 1 are valid)
+        let is_active = match data[0] {
+            0 => false,
+            1 => true,
+            _ => return Err(ProgramError::InvalidAccountData),
+        };
+
+        // Safely handle enum
+        let state_type = match data[1] {
+            0 => StateType::Inactive,
+            1 => StateType::Active, 
+            2 => StateType::Paused,
+            _ => return Err(ProgramError::InvalidAccountData),
+        };
+
+        let mut data_array = [0u8; 32];
+        data_array.copy_from_slice(&data[2..34]);
+
+        Ok(Self {
+            is_active,
+            state_type,
+            data: data_array,
+        })
+    }
+}
+```
+
+### 應避免的危險模式
+
+以下是可能導致未定義行為並應避免的常見模式：
+
+1. 將 `transmute()` 用於未對齊數據
+
+```rust
+// ❌ UNDEFINED BEHAVIOR: transmute requires proper alignment
+let value: u64 = unsafe { core::mem::transmute(bytes_slice) };
+```
+
+`transmute()` 假設源數據已正確對齊到目標類型。如果你正在處理任意字節切片，這種假設通常會被違反。
+
+2. 指針轉換到打包結構
+
+```rust
+#[repr(C, packed)]
+pub struct PackedConfig {
+    pub state: u8,
+    pub seed: u64,     // This u64 is only 1-byte aligned!
+    pub authority: Pubkey,
+}
+
+// ❌ UNDEFINED BEHAVIOR: Creates references to unaligned fields
+let config = unsafe { &*(data.as_ptr() as *const PackedConfig) };
+let seed_value = config.seed; // UB: May create reference to unaligned u64
+```
+
+即使結構適合記憶體，訪問多字節欄位也可能創建未對齊的引用。
+
+3. 在打包結構上直接訪問欄位
+
+```rust
+#[repr(C, packed)]
+pub struct PackedStruct {
+    pub a: u8,
+    pub b: u64,
+}
+
+let packed = /* ... */;
+// ❌ UNDEFINED BEHAVIOR: Creates reference to unaligned field
+let b_ref = &packed.b;
+// ❌ UNDEFINED BEHAVIOR: May create temporary reference
+let b_value = packed.b;
+```
+
+4. 未經驗證假設對齊
+
+```rust
+// ❌ UNDEFINED BEHAVIOR: No alignment check
+let config = unsafe { &*(data.as_ptr() as *const Config) };
+```
+
+數據適配並不代表其對齊正確。
+
+5. 錯誤使用`read_unaligned()`
+
+```rust
+// ❌ WRONG: read_unaligned needs proper layout, not just size
+#[repr(Rust)]  // Default layout - not guaranteed!
+pub struct BadStruct {
+    pub field: u64,
+}
+
+let value = unsafe { (data.as_ptr() as *const BadStruct).read_unaligned() };
+```
+
+`read_unaligned()`仍然要求結構體具有可預測的佈局（`#[repr(C)]`）。
+
+<ArticleSection name="Writing Data" id="writing-data" level="h2" />
+
+安全地寫入數據遵循與讀取類似的原則：
+
+### 按字段序列化（推薦）
+
+```rust
+impl Config {
+    pub fn write_to_buffer(&self, data: &mut [u8]) -> Result<(), ProgramError> {
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let mut offset = 0;
+        
+        // Write authority
+        data[offset..offset + 32].copy_from_slice(self.authority.as_ref());
+        offset += 32;
+        
+        // Write mint_x  
+        data[offset..offset + 32].copy_from_slice(self.mint_x.as_ref());
+        offset += 32;
+        
+        // Write mint_y
+        data[offset..offset + 32].copy_from_slice(self.mint_y.as_ref());
+        offset += 32;
+        
+        // Write seed
+        data[offset..offset + 8].copy_from_slice(&self.seed.to_le_bytes());
+        offset += 8;
+        
+        // Write fee
+        data[offset..offset + 2].copy_from_slice(&self.fee.to_le_bytes());
+        offset += 2;
+        
+        // Write state
+        data[offset] = self.state;
+        offset += 1;
+        
+        // Write config_bump
+        data[offset] = self.config_bump;
+
+        Ok(())
+    }
+}
+```
+
+此方法是最安全的，因為它顯式地將每個字段序列化到字節緩衝區中：
+- 無需考慮對齊問題：您正在寫入字節數組
+- 顯式字節序：您可以使用to_le_bytes()控制字節順序
+- 清晰的內存佈局：易於調試和理解
+- 無未定義行為：所有操作都在字節數組上進行
+
+### 直接修改（零拷貝）
+
+為了獲得最大性能，您可以將字節緩衝區轉換為結構體並直接修改字段。這需要結構體正確對齊：
+
+```rust
+impl Config {
+    pub fn from_bytes_mut(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Check alignment
+        if (data.as_ptr() as usize) % core::mem::align_of::<Self>() != 0 {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: We've verified length and alignment
+        Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
+    }
+}
+```
+
+當對齊已驗證且結構體使用`#[repr(C)]`時，直接字段修改不會創建未對齊的引用。
+
+### 使用設置器的字節數組方法（最安全 + 快速）
+
+結合兩者的優點：我們可以在內部使用字節數組，但提供方便的設置器：
+
+```rust
+#[repr(C)]
+pub struct ConfigSafe {
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    seed: [u8; 8],
+    fee: [u8; 2],
+    pub state: u8,
+    pub config_bump: u8,
+}
+
+impl ConfigSafe {
+    pub fn from_bytes_mut(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // No alignment check needed - everything is u8 aligned
+        Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
+    }
+    
+    pub fn seed(&self) -> u64 {
+        u64::from_le_bytes(self.seed)
+    }
+    
+    pub fn fee(&self) -> u16 {
+        u16::from_le_bytes(self.fee)
+    }
+
+    // Setters that handle endianness correctly
+
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed.to_le_bytes();
+    }
+    
+    pub fn set_fee(&mut self, fee: u16) {
+        self.fee = fee.to_le_bytes();
+    }
+}
+```
+
+這是理想的，因為：
+- 無對齊問題：所有字段都按字節對齊
+- 快速直接修改：初始設置後無序列化開銷
+- 一致的字節序：設置器處理字節順序轉換
+- 類型安全：設置器接受預期的類型，而不是字節數組
+
+<ArticleSection name="Dynamically Sized Data" id="dynamically-sized-data" level="h2" />
+
+盡可能避免直接在帳戶中存儲動態大小的數據。然而，有些使用場景需要這樣做。
+
+如果您的帳戶包含動態數據，請始終將所有靜態大小的字段放在結構體的開頭，並將動態數據附加在末尾。
+
+### 單一動態欄位
+
+這是最簡單的情況：在帳戶的末尾有一個可變長度的部分：
+
+```rust
+#[repr(C)]
+pub struct DynamicAccount {
+    pub fixed_data: [u8; 32],
+    pub counter: u64,
+    // Dynamic data follows after the struct in memory
+    // Layout: [fixed_data][counter][dynamic_data...]
+}
+
+impl DynamicAccount {
+    pub const FIXED_SIZE: usize = size_of::<Self>();
+    
+    /// Safely parse account with dynamic data
+    pub fn from_bytes_with_dynamic(data: &[u8]) -> Result<(&Self, &[u8]), ProgramError> {
+        if data.len() < Self::FIXED_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: We've verified the buffer is large enough for the fixed part
+        // The fixed part only contains [u8; 32] and u64, which have predictable layout
+        let fixed_part = unsafe { &*(data.as_ptr() as *const Self) };
+        
+        // Everything after the fixed part is dynamic data
+        let dynamic_part = &data[Self::FIXED_SIZE..];
+        
+        Ok((fixed_part, dynamic_part))
+    }
+    
+    /// Get mutable references to both parts
+    pub fn from_bytes_mut_with_dynamic(data: &mut [u8]) -> Result<(&mut Self, &mut [u8]), ProgramError> {
+        if data.len() < Self::FIXED_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Split the buffer to avoid borrowing issues
+        let (fixed_bytes, dynamic_bytes) = data.split_at_mut(Self::FIXED_SIZE);
+        
+        // SAFETY: We've verified the size and split safely
+        let fixed_part = unsafe { &mut *(fixed_bytes.as_mut_ptr() as *mut Self) };
+        
+        Ok((fixed_part, dynamic_bytes))
+    }
+}
+
+/// Writing single dynamic field
+impl DynamicAccount {
+    pub fn write_with_dynamic(
+        data: &mut [u8], 
+        fixed_data: &[u8; 32], 
+        counter: u64,
+        dynamic_data: &[u8]
+    ) -> Result<(), ProgramError> {
+        let total_size = Self::FIXED_SIZE + dynamic_data.len();
+        
+        if data.len() != total_size {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Write fixed part field by field (safest approach)
+        data[0..32].copy_from_slice(fixed_data);
+        data[32..40].copy_from_slice(&counter.to_le_bytes());
+        
+        // Write dynamic part
+        data[Self::FIXED_SIZE..].copy_from_slice(dynamic_data);
+        
+        Ok(())
+    }
+    
+    /// Update just the dynamic portion
+    pub fn update_dynamic_data(&mut self, account_data: &mut [u8], new_data: &[u8]) -> Result<(), ProgramError> {
+        if account_data.len() < Self::FIXED_SIZE + new_data.len() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Write new dynamic data
+        account_data[Self::FIXED_SIZE..Self::FIXED_SIZE + new_data.len()].copy_from_slice(new_data);
+        
+        Ok(())
+    }
+}
+```
+
+為了避免未定義的行為，請務必檢查帳戶數據緩衝區至少與靜態大小部分一樣大。動態部分可能為空，因此此檢查至關重要。
+
+此佈局確保了固定大小欄位的偏移量始終是已知的，無論動態數據的長度如何。
+
+在讀取動態大小數據時，有兩種主要情況：
+
+- 末尾的單一動態欄位：您可以輕鬆地在運行時確定動態數據的大小和偏移量，如下所示：
+
+```rust
+const DYNAMIC_DATA_START_OFFSET: usize = size_of::<[u8; 32]>();
+
+#[repr(C)]
+pub struct DynamicallySizedAccount {
+    pub sized_data: [u8; 32],
+    // pub dynamic_data: &'info [u8], // Not part of the struct, but follows in the buffer
+}
+
+impl DynamicallySizedAccount {
+    /// Returns the length of the dynamic data section.
+    #[inline(always)]
+    pub fn get_dynamic_data_len(data: &[u8]) -> Result<usize, ProgramError> {
+        if data.len().le(&DYNAMIC_DATA_START_OFFSET) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(data.len() - DYNAMIC_DATA_START_OFFSET)
+    }
+
+    /// Returns a slice of the dynamic data.
+    #[inline(always)]
+    pub fn read_dynamic_data(data: &[u8]) -> Result<&[u8], ProgramError> {
+        if data.len().le(&DYNAMIC_DATA_START_OFFSET) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(&data[DYNAMIC_DATA_START_OFFSET..])
+    }
+}
+```
+
+### 多個動態欄位
+
+這種方法更為複雜，因為我們需要一種方法來確定每個動態欄位（除了最後一個）的長度。最常見的方法是為每個動態欄位（除了最後一個）添加一個前綴，表示其長度，這樣我們就可以正確解析緩衝區。
+
+這裡是一個簡單而穩健的模式：將第一個動態欄位的長度作為 u8（或者如果需要更大的大小，可以使用 u16 等）存儲在靜態大小數據之後。第一個動態欄位隨後，第二個動態欄位佔據緩衝區的剩餘部分。
+
+```rust
+#[repr(C)]  
+pub struct MultiDynamicAccount {
+    pub fixed_data: [u8; 32],
+    pub timestamp: u64,
+    // Layout: [fixed_data][timestamp][len1: u8][data1][data2: remainder]
+}
+
+impl MultiDynamicAccount {
+    pub const FIXED_SIZE: usize = size_of::<Self>();
+    pub const LEN_PREFIX_SIZE: usize = size_of::<u8>();
+    pub const MIN_SIZE: usize = Self::FIXED_SIZE + Self::LEN_PREFIX_SIZE;
+    
+    /// Parse account with two dynamic sections
+    pub fn parse_dynamic_fields(data: &[u8]) -> Result<(&[u8; 32], u64, &[u8], &[u8]), ProgramError> {
+        if data.len() < Self::MIN_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Extract fixed data safely
+        let fixed_data = data[..32].try_into()
+            .map_err(|_| ProgramError::InvalidAccountData)?;
+            
+        let timestamp = u64::from_le_bytes(
+            data[32..40].try_into()
+                .map_err(|_| ProgramError::InvalidAccountData)?
+        );
+            
+        // Read length of first dynamic field (single byte)
+        let len = data[Self::FIXED_SIZE] as usize;
+        
+        // Validate we have enough data
+        if data.len() <  Self::MIN_SIZE + len {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        let data_1 = &data[Self::MIN_SIZE..Self::MIN_SIZE + len];
+        let data_2 = &data[Self::MIN_SIZE + len..]; // Remainder
+        
+        Ok((fixed_data, timestamp, data_1, data_2))
+    }
+    
+    /// Write account with two dynamic sections
+    pub fn write_with_multiple_dynamic(
+        buffer: &mut [u8],
+        fixed_data: &[u8; 32],
+        timestamp: u64,
+        data_1: &[u8],
+        data_2: &[u8]
+    ) -> Result<(), ProgramError> {
+        let total_size = Self::MIN_SIZE + data_1.len() + data_2.len();
+        
+        if buffer.len() != total_size {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Validate data_1 length fits in u8
+        if data_1.len() > u8::MAX as usize {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        
+        let mut offset = 0;
+        
+        // Write fixed data
+        buffer[offset..offset + 32].copy_from_slice(fixed_data);
+        offset += 32;
+        
+        buffer[offset..offset + 8].copy_from_slice(&timestamp.to_le_bytes());
+        offset += 8;
+        
+        // Write length prefix for data1 (single byte)
+        buffer[offset] = data_1.len() as u8;
+        offset += 1;
+        
+        // Write data1
+        buffer[offset..offset + data_1.len()].copy_from_slice(data_1);
+        offset += data_1.len();
+        
+        // Write data2 (remainder - no length prefix needed)
+        buffer[offset..].copy_from_slice(data_2);
+        
+        Ok(())
+    }
+}
+```
+
+### 調整帳戶大小
+
+每次更新動態欄位時，如果大小發生變化，您必須調整帳戶的大小。以下是一個通用的調整帳戶大小的函數：
+
+```rust
+pub fn resize_account(
+    account: &AccountInfo,
+    payer: &AccountInfo,
+    new_size: usize,
+    zero_out: bool,
+) -> ProgramResult {
+    // If the account is already the correct size, return early
+    if new_size == account.data_len() {
+        return Ok(());
+    }
+
+    // Calculate rent requirements
+    let rent = Rent::get()?;
+    let new_minimum_balance = rent.minimum_balance(new_size);
+
+    // Adjust lamports to meet rent-exemption requirements
+    match new_minimum_balance.cmp(&account.lamports()) {
+        core::cmp::Ordering::Greater => {
+            // Need more lamports for rent exemption
+            let lamports_diff = new_minimum_balance.saturating_sub(account.lamports());
+            **payer.try_borrow_mut_lamports()? -= lamports_diff;
+            **account.try_borrow_mut_lamports()? += lamports_diff;
+        }
+        core::cmp::Ordering::Less => {
+            // Return excess lamports to payer
+            let lamports_diff = account.lamports().saturating_sub(new_minimum_balance);
+            **account.try_borrow_mut_lamports()? -= lamports_diff;
+            **payer.try_borrow_mut_lamports()? += lamports_diff;
+        }
+        core::cmp::Ordering::Equal => {
+            // No lamport transfer needed
+        }
+    }
+
+    // Reallocate the account
+    account.resize(new_size)?;
+
+    Ok(())
+}
+```

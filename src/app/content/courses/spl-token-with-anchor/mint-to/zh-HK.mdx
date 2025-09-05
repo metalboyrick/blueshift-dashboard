@@ -1,0 +1,27 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mint To 指令
+
+建立新代幣並將其存入指定帳戶。只有鑄幣權限持有人可以執行此操作。
+
+在我們鑄造任何代幣之前，我們需要已經擁有：
+- 已初始化的`Mint`帳戶，並且我們持有`mintAuthority`
+- 已初始化的`Token`帳戶或`Associated Token`帳戶，這是我們將鑄造代幣的目標帳戶
+
+> 我們鑄造的代幣數量是根據小數位數進行「標準化」的。這意味著，如果我們想鑄造一個有6位小數的代幣，我們實際上需要輸入`1_000_000`作為數量
+
+以下是對`mint_to()`指令的CPI調用方式：
+
+```rust
+mint_to(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        MintTo {
+            mint: ctx.accounts.mint_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

@@ -1,0 +1,175 @@
+# 初始化
+
+`initialize` 指令執行兩個主要任務：
+- 初始化 `Config` 帳戶，並存儲 AMM 正確運行所需的所有資訊。
+- 建立 `mint_lp` Mint 帳戶，並將 `mint_authority` 指派給 `config` 帳戶。
+
+> 我們不會在這裡初始化任何關聯代幣帳戶（ATAs），因為這通常是不必要的，並且可能會浪費資源。在後續的 `deposit`、`withdraw` 和 `swap` 指令中，我們將檢查代幣是否已存入正確的 ATAs。然而，您應該在前端建立一個 "initializeAccount" 輔助工具，以便按需生成這些帳戶。
+
+<ArticleSection name="所需帳戶" id="required-accounts" level="h2" />
+
+以下是此情境所需的帳戶：
+- `initializer`：`config` 帳戶的創建者。這不一定也必須是其管理者。必須是 `signer` 和 `mutable`，因為此帳戶將支付 `config` 和 `mint_lp` 的初始化費用。
+- `mint_lp`：代表池流動性的 Mint 帳戶。`mint_authority` 應設置為 `config` 帳戶。必須作為 `mutable` 傳遞。
+- `config`：正在初始化的配置帳戶。必須是 `mutable`。
+- `system` 和 `token` 程式：初始化上述帳戶所需的程式帳戶。必須是 `executable`。
+
+> 隨著經驗的增加，您會注意到許多這些檢查可以省略，而依賴於 CPI 本身強制執行的約束。例如，對於此帳戶結構，任何顯式檢查都不是必要的；如果不符合約束，程式將默認失敗。在我們進行邏輯分析時，我會指出這些細微差別。
+
+由於與我們通常建立的 struct 沒有太大差異，我將把實現部分留給你：
+
+```rust
+pub struct InitializeAccounts<'a> {
+    pub initializer: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    //..
+  }
+}
+```
+
+> 你需要傳入上述討論的所有帳戶，但並非所有帳戶都需要包含在 `InitializeAccounts` struct 中，因為在實現過程中你可能不需要直接引用每個帳戶。
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+以下是我們需要傳入的指令數據：
+- `seed`：用於 PDA（程序派生地址）種子推導的隨機數。這允許創建唯一的池實例。必須是 `[u64]`
+- `fee`：交換費用，以基點表示（1 基點 = 0.01%）。此費用在每次交易中收取，並分配給流動性提供者。必須是 `[u16]`
+- `mint_x`：池中代幣 X 的 SPL 代幣鑄幣地址。必須是 `[u8; 32]`
+- `mint_y`：池中代幣 Y 的 SPL 代幣鑄幣地址。必須是 `[u8; 32]`
+- `config_bump`：用於推導 `config` 帳戶 PDA 的 bump 種子。必須是 `u8`
+- `lp_bump`：用於推導 `lp_mint` 帳戶 PDA 的 bump 種子。必須是 `u8`
+- `authority`：將擁有 AMM 管理權限的公鑰。如果未提供，池可以設置為不可變。必須是 `[u8; 32]`
+
+> 如你所見，這些字段中的幾個可以以不同方式推導。例如，我們可以通過傳入 `Mint` 帳戶並直接從中讀取來獲取 `mint_x`，或者在程序內部生成 `bump` 值。然而，通過顯式傳遞它們，我們的目標是創建最優化和高效的程序。
+
+在這個實現中，我們以比平常更靈活和低層次的方式處理指令數據解析。因此，我們將解釋為什麼我們做出以下決定：
+
+```rust
+#[repr(C, packed)]
+pub struct InitializeInstructionData {
+    pub seed: u64,
+    pub fee: u16,
+    pub mint_x: [u8; 32],
+    pub mint_y: [u8; 32],
+    pub config_bump: [u8; 1],
+    pub lp_bump: [u8; 1],
+    pub authority: [u8; 32],
+}
+
+impl TryFrom<&[u8]> for InitializeInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        const INITIALIZE_DATA_LEN_WITH_AUTHORITY: usize = size_of::<InitializeInstructionData>();
+        const INITIALIZE_DATA_LEN: usize =
+            INITIALIZE_DATA_LEN_WITH_AUTHORITY - size_of::<[u8; 32]>();
+
+        match data.len() {
+            INITIALIZE_DATA_LEN_WITH_AUTHORITY => {
+                Ok(unsafe { (data.as_ptr() as *const Self).read_unaligned() })
+            }
+            INITIALIZE_DATA_LEN => {
+                // If the authority is not present, we need to build the buffer and add it at the end before transmuting to the struct
+                let mut raw: MaybeUninit<[u8; INITIALIZE_DATA_LEN_WITH_AUTHORITY]> = MaybeUninit::uninit();
+                let raw_ptr = raw.as_mut_ptr() as *mut u8;
+                unsafe {
+                    // Copy the provided data
+                    core::ptr::copy_nonoverlapping(data.as_ptr(), raw_ptr, INITIALIZE_DATA_LEN);
+                    // Add the authority to the end of the buffer
+                    core::ptr::write_bytes(raw_ptr.add(INITIALIZE_DATA_LEN), 0, 32);
+                    // Now transmute to the struct
+                    Ok((raw.as_ptr() as *const Self).read_unaligned())
+                }
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+}
+```
+
+`InitializeInstructionData` 中的 authority 欄位是可選的，可以省略以創建不可變的池。
+
+為了實現這一點並在創建不可變池時節省 32 字節的交易數據，我們會檢查指令數據的長度並相應地解析數據；如果數據較短，我們將 authority 欄位設置為 `None`，通過向緩衝區末尾寫入 32 個零字節來完成；如果它包含完整的 `authority` 欄位，我們會將字節切片直接轉換為結構體。
+
+<ArticleSection name="指令邏輯" id="instruction-logic" level="h2" />
+
+我們首先反序列化 `instruction_data` 和 `accounts`。
+
+然後我們需要：
+- 使用系統程序中的 `CreateAccount` 指令和以下種子創建 `Config` 帳戶：
+
+```rust
+let seed_binding = self.instruction_data.seed.to_le_bytes();
+let config_seeds = [
+    Seed::from(b"config"),
+    Seed::from(&seed_binding),
+    Seed::from(&self.instruction_data.mint_x),
+    Seed::from(&self.instruction_data.mint_y),
+    Seed::from(&self.instruction_data.config_bump),
+];
+```
+
+- 使用 `Config::load_mut_unchecked()` 幫助器加載 `Config` 帳戶，然後使用 `config.set_inner()` 幫助器填充所需的所有數據。
+- 使用 `CreateAccount` 和 `InitializeMint2` 指令以及以下種子為 lp 創建 `Mint` 帳戶：
+
+```rust
+let mint_lp_seeds = [
+    Seed::from(b"mint_lp"),
+    Seed::from(self.accounts.config.key()),
+    Seed::from(&self.instruction_data.lp_bump),
+];
+```
+
+> `mint_lp` 的 `mint_authority` 是 `config` 帳戶
+
+你應該已經足夠熟練可以自行完成這部分，因此我將把實現留給你：
+
+```rust
+pub struct Initialize<'a> {
+    pub accounts: InitializeAccounts<'a>,
+    pub instruction_data: InitializeInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Initialize<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = InitializeAccounts::try_from(accounts)?;
+        let instruction_data: InitializeInstructionData = InitializeInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Initialize<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+      //..
+
+      Ok(())
+    }
+}
+```
+
+<ArticleSection name="安全性" id="security" level="h2" />
+
+如前所述，這可能看起來不尋常，但我們不需要對傳入的帳戶進行顯式檢查。
+
+這是因為在實際操作中，如果有問題，指令會失敗；要麼在 CPI（跨程序調用）期間，要麼在我們放入程序中的早期檢查中失敗。
+
+例如，考慮 `initializer` 帳戶。我們期望它同時是 `signer` 和 `mutable`，但如果不是，`CreateAccount` 指令將會自動失敗，因為它需要這些屬性來滿足 `payer` 的要求。
+
+同樣地，如果 `config` 帳戶被傳遞了無效的 `mint_x` 或 `mint_y`，任何嘗試存入協議的操作都會在代幣轉移過程中失敗。
+
+隨著經驗的增加，你會發現可以省略許多檢查，以保持指令的輕量化和優化，依賴系統和下游指令來強制執行約束。

@@ -1,0 +1,26 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 設定權限指引
+
+更改代幣或帳戶的權限。這允許轉移所有權或更新特定的權限類型。
+
+在我們設定任何代幣或代幣帳戶的權限之前，我們需要已經完成以下準備：
+- 初始化一個`Mint`帳戶，並且我們擁有`mintAuthority`或`freezeAuthority`
+- 初始化一個`Token`帳戶或`Associated Token`帳戶，並且我們擁有該帳戶
+
+以下是`set_authority()`指令的CPI範例：
+
+```rust
+set_authority(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        SetAuthority {
+            account_or_mint: ctx.accounts.mint_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            current_authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &spl_token::instruction::AuthorityType::MintTokens, // authority_type
+    Some(new_authority.key()) // new_autority
+)?;
+```

@@ -1,0 +1,164 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Take" id="take" level="h2" />
+
+我們現在可以移至 `take` 指令，該指令位於 `take.rs`，並將執行以下操作：
+- 關閉托管記錄，將其租金 lamports 返回給創建者。
+- 將 Token A 從保管庫移至接受者，然後關閉保管庫。
+- 將商定數量的 Token B 從接受者移至創建者。
+
+### 帳戶
+
+在此情境中需要的帳戶包括：
+- `taker`：接受 `maker` 條款並進行交換的用戶
+- `maker`：最初設定條款的用戶
+- `escrow`：存放此交換所有條款的帳戶
+- `mint_a`：`maker` 存入的代幣
+- `mint_b`：`maker` 想要交換的代幣
+- `vault`：與 `escrow` 和 `mint_a` 關聯的代幣帳戶，將代幣發送給 `taker`
+- `taker_ata_a`：與 `taker` 和 `mint_a` 關聯的代幣帳戶，將從 `vault` 接收代幣
+- `taker_ata_b`：與 `taker` 和 `mint_b` 關聯的代幣帳戶，將代幣發送給 `maker`
+- `maker_ata_b`：與 `maker` 和 `mint_b` 關聯的代幣帳戶，將接收來自 `taker` 的代幣
+- `associated_token_program`：用於創建關聯代幣帳戶的關聯代幣程式
+- `token_program`：用於 CPI 傳輸的代幣程式
+- `system_program`：用於創建 `Escrow` 的系統程式
+
+結合所有約束條件後，它看起來會像這樣：
+
+  ```rust
+#[derive(Accounts)]
+pub struct Take<'info> {
+    #[account(mut)]
+    pub taker: Signer<'info>,
+    #[account(mut)]
+    pub maker: SystemAccount<'info>,
+    #[account(
+        mut,
+        close = maker,
+        seeds = [b"escrow", maker.key().as_ref(), escrow.seed.to_le_bytes().as_ref()],
+        bump = escrow.bump,
+        has_one = maker @ EscrowError::InvalidMaker,
+        has_one = mint_a @ EscrowError::InvalidMintA,
+        has_one = mint_b @ EscrowError::InvalidMintB,
+    )]
+    pub escrow: Box<Account<'info, Escrow>>,
+
+    /// Token Accounts
+    pub mint_a: Box<InterfaceAccount<'info, Mint>>,
+    pub mint_b: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        mut,
+        associated_token::mint = mint_a,
+        associated_token::authority = escrow,
+        associated_token::token_program = token_program
+    )]
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        payer = taker,
+        associated_token::mint = mint_a,
+        associated_token::authority = taker,
+        associated_token::token_program = token_program
+    )]
+    pub taker_ata_a: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        associated_token::mint = mint_b,
+        associated_token::authority = taker,
+        associated_token::token_program = token_program
+    )]
+    pub taker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        payer = taker,
+        associated_token::mint = mint_b,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Programs
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+  ```
+
+### 邏輯
+
+在邏輯部分，我們首先將代幣從`taker_ata_b`轉移到`maker_ata_b`；接著，我們將代幣從`vault`轉移到`taker_ata_a`，然後像這樣關閉現在已經空的保管庫：
+
+```rust
+impl<'info> Take<'info> {
+    fn transfer_to_maker(&mut self) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.taker_ata_b.to_account_info(),
+                    to: self.maker_ata_b.to_account_info(),
+                    mint: self.mint_b.to_account_info(),
+                    authority: self.taker.to_account_info(),
+                },
+            ),
+            self.escrow.receive,
+            self.mint_b.decimals,
+        )?;
+
+        Ok(())
+    }
+
+    fn withdraw_and_close_vault(&mut self) -> Result<()> {
+        // Create the signer seeds for the Vault
+        let signer_seeds: [&[&[u8]]; 1] = [&[
+            b"escrow",
+            self.maker.to_account_info().key.as_ref(),
+            &self.escrow.seed.to_le_bytes()[..],
+            &[self.escrow.bump],
+        ]];
+
+        // Transfer Token A (Vault -> Taker)
+        transfer_checked(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.vault.to_account_info(),
+                    to: self.taker_ata_a.to_account_info(),
+                    mint: self.mint_a.to_account_info(),
+                    authority: self.escrow.to_account_info(),
+                },
+                &signer_seeds,
+            ),
+            self.vault.amount,
+            self.mint_a.decimals,
+        )?;
+
+        // Close the Vault
+        close_account(CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            CloseAccount {
+                account: self.vault.to_account_info(),
+                authority: self.escrow.to_account_info(),
+                destination: self.maker.to_account_info(),
+            },
+            &signer_seeds,
+        ))?;
+
+        Ok(())
+    }
+}
+```
+
+我們現在創建`handler`函數，這次幸運的是我們不需要執行任何額外的檢查，因此它將如下所示：
+
+```rust
+pub fn handler(ctx: Context<Take>) -> Result<()> {
+    // Transfer Token B to Maker
+    ctx.accounts.transfer_to_maker()?;
+
+    // Withdraw and close the Vault
+    ctx.accounts.withdraw_and_close_vault()?;
+
+    Ok(())
+}
+```

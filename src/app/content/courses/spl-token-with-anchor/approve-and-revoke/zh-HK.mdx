@@ -1,0 +1,47 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 批准和撤銷指令
+
+批准授予代理人代表帳戶擁有者轉移特定數量代幣的權限。這使得程式化的代幣轉移成為可能，而無需授予完整的帳戶控制權。
+
+> 我們設定一個「批准」的數量，代理人只能轉移不超過該數量的代幣
+
+撤銷會移除當前代理人對帳戶的權限，將完整的控制權返回給帳戶擁有者。
+
+> 立即取消任何現有的代理權，並且只有帳戶擁有者可以撤銷代理權（代理人本身無法撤銷）
+
+在我們可以代理或撤銷任何代幣帳戶之前，我們需要已經完成以下操作：
+- 初始化了一個`Mint`帳戶。
+- 初始化了一個`Token`帳戶或`Associated Token`帳戶，這是我們將要控制的帳戶
+
+> 我們鑄造的代幣數量是根據小數位數「標準化」的。這意味著，如果我們想鑄造一個有6位小數的代幣，我們實際上需要輸入`1_000_000`作為數量
+
+以下是對`approve()`指令的CPI的樣子：
+
+```rust
+approve(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Approve {
+            to: ctx.accounts.token_account.to_account_info(),
+            delegate: ctx.accounts.delegate.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```
+
+以下是對`revoke()`指令的CPI的樣子：
+
+```rust
+revoke(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Revoke {
+            pub source: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

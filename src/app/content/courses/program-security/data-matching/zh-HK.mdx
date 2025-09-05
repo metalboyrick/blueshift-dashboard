@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 資料匹配
+
+資料匹配是一種安全實踐，用於驗證帳戶資料是否包含預期的值，從而在程式邏輯中信任它。雖然 `owner` 檢查可以驗證誰控制了一個帳戶，`signer` 檢查可以驗證授權，但資料匹配確保帳戶的內部狀態與程式的假設一致。
+
+當指令處理器依賴於帳戶之間的關係或特定資料值決定程式行為時，這變得尤為重要。如果沒有適當的資料驗證，攻擊者可以通過製作具有意外資料組合的帳戶來操縱程式流程，即使這些帳戶通過了基本的所有權和授權檢查。
+
+危險在於結構驗證與邏輯驗證之間的差距。您的程式可能正確地驗證了一個帳戶具有正確的類型並由正確的程式擁有，但仍可能對不同資料片段之間的關係做出錯誤的假設。
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+考慮以下這個易受攻擊的指令，它更新了一個程式帳戶的所有權：
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+這段程式碼乍看之下似乎是安全的。`owner` 被正確地標記為 `Signer`，確保他們授權了交易。`program_account` 被正確地類型化並由程式擁有。所有基本的安全檢查都通過了。
+
+但存在一個關鍵缺陷：程式從未驗證簽署交易的 `owner` 是否實際上與存儲在 `program_account` 資料中的 `owner` 相同。
+
+攻擊者可以通過以下方式利用這一點：
+- 創建他們自己的密鑰對（我們稱之為 `attacker_keypair`）
+- 找到他們想要劫持的任何程式帳戶
+- 製作一個交易，其中：`owner` 是 `attacker_keypair`（他們控制並可以簽署的）；`new_owner` 是他們的主要公鑰，而 `program_account` 是受害者的帳戶
+
+交易成功是因為`attacker_keypair`正確地簽署了交易，但程式從未檢查`attacker_keypair`是否與儲存在`program_account.owner`中的實際`owner`相符。攻擊者成功地將他人的帳戶所有權轉移到自己名下。
+
+幸運的是，`Anchor`讓我們可以非常輕鬆地在帳戶結構中直接執行此檢查，只需添加`has_one`約束，如下所示：
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut, has_one = owner)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+或者，我們可以選擇更改程式的設計，將`program_account`設計為從`owner`派生的PDA，如下所示：
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        seeds = [owner.key().as_ref()],
+        bump
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+或者，你可以在指令中使用`ctx.accounts.program_account.owner`檢查來驗證該數據，如下所示：
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+    Ok(())
+}
+```
+
+通過添加此檢查，指令處理器將僅在帳戶具有正確的`owner`時繼續執行。如果`owner`不正確，交易將失敗。
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+在Pinocchio中，由於我們無法在帳戶結構內直接添加安全檢查，因此我們被迫在指令邏輯中進行此操作。
+
+我們可以通過反序列化帳戶的數據並檢查`owner`值來完成此操作：
+
+```rust
+let account_data = ctx.accounts.program_account.try_borrow_data()?;
+let mut account_data_slice: &[u8] = &account_data;
+let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+if account_state.owner != self.accounts.owner.key() {
+    return Err(ProgramError::InvalidAccountData.into());
+}
+```
+
+> 你需要創建自己的`ProgramAccount::try_deserialize()`函數，因為Pinocchio允許我們按照自己的方式處理反序列化和序列化

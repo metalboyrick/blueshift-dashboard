@@ -1,0 +1,30 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF Assembly 備忘錄</ChallengeTitle>
+
+建立一個只有一個指令的程式。它必須：
+- 如果指令數據包含任何帳戶，應該失敗（這可以通過將`r0`設置為帳戶數量來完成）
+- 將`r2`設置為指令數據的長度，並將`r1`設置為指令數據的偏移量，
+- 調用`sol_log_`系統調用。
+
+首先按照[工具部分](/zh-HK/courses/introduction-to-assembly/tooling)中介紹的方式安裝 sBPF 套件，然後在終端中使用以下命令構建您的程式：
+
+```
+sbpf build
+```
+
+這將在您的`target/deploy`文件夾中生成一個`.so`文件。
+
+現在點擊`take challenge`按鈕，然後將文件拖放到那裡！
+
+<RequirementList>
+  <Requirement title="挑戰 1：測試備忘錄">
+    您的程式應該成功並記錄`Hello, Solana!`
+  </Requirement>
+
+  <Requirement title="挑戰 2：使用不同輸入測試備忘錄">
+    為了確保您沒有硬編碼`Hello, Solana!`字串，我們將使用另一個輸入再次嘗試：`Hello, Solana, but different!`
+  </Requirement>
+</RequirementList>

@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 凍結和解凍指引
+
+凍結會阻止帳戶上的所有代幣操作，直到該帳戶被解凍。只有鑄幣的凍結權限持有人可以執行此操作。
+
+> 完全禁用轉賬、授權和銷毀操作，並且僅影響特定的已凍結帳戶
+
+解凍會重新啟用之前被凍結帳戶上的代幣操作。只有鑄幣的凍結權限持有人可以解凍帳戶。
+
+> 恢復已凍結帳戶的全部功能，並且只能由鑄幣的凍結權限持有人執行
+
+在我們可以凍結和解凍任何代幣之前，我們需要已經完成以下操作：
+- 初始化了一個我們持有`freezeAuthority`的`Mint`帳戶
+- 初始化了一個我們想要凍結或解凍的`Token`帳戶或`Associated Token`帳戶
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+僅使用「原始」指令而不進行任何抽象，以下是凍結代幣的操作方式：
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    tokenAccount.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Freeze an ATA 
+const freezeInstruction = createFreezeAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    freezeInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and frozen! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+僅使用「原始」指令而不進行任何抽象，以下是撤銷代幣的操作方式：
+
+```ts
+// Thaw an ATA 
+const thawInstruction = createThawAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(thawInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token account thawed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+以下是使用`freezeAccount()`指令進行抽象後的操作方式：
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    tokenAccount.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await freezeAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Frozen!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+以下是使用`thawAccount()`指令進行抽象後的操作方式：
+
+```ts
+let tx = await thawAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Thawed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

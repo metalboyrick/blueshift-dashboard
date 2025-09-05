@@ -1,0 +1,102 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 鑄幣與代幣帳戶
+
+如我們在上一節所說，`SPL Token` 程式的基礎構件是帳戶：代表代幣所有資訊的鑄幣帳戶，以及代表這些特定代幣所有權資訊的代幣帳戶。
+
+對於每個唯一的鑄幣帳戶，分類帳中有數以千計的不同代幣帳戶，代表該代幣的持有者數量。
+
+在本節中，我們將更深入地探討這些不同的帳戶：
+
+<ArticleSection name="鑄幣帳戶" id="the-mint-account" level="h2" />
+
+Solana 上的代幣由代幣程式擁有的鑄幣帳戶地址唯一標識。此帳戶作為特定代幣的全域計數器，並存儲以下數據：
+- 供應量：代幣的總供應量
+- 小數位數：代幣的小數精度
+- 鑄幣權限：被授權創建新代幣單位以增加供應量的帳戶
+- 凍結權限：被授權凍結代幣帳戶中代幣的帳戶，防止其被轉移或銷毀
+
+以下是鏈上數據的樣子：
+
+```rust
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+```
+
+### 元數據
+
+在區塊鏈瀏覽器和錢包中，代幣通常因為特定的名稱和圖像而變得可識別且易於閱讀。
+
+我們將代幣的名稱、符號和圖像稱為 `Metadata`。因為在其原生形式中，`Mint` 帳戶僅僅是一個長度為 32 字節的公鑰，沒有任何可供人類閱讀的資訊。
+
+在原生的 SPL 代幣程式中，無法直接在代幣上設置元數據。因此，像 [Metaplex](https://www.metaplex.com/) 這樣的協議開發了 [MPL-token-metadata](https://github.com/metaplex-foundation/mpl-token-metadata) 程式，為每個代幣提供了關聯元數據的方法。
+
+> 使用代幣擴展功能和 [Token2022 程式](/zh-HK/courses/token-2022-program)，這一切將徹底改變。Metadata 擴展允許您將元數據直接嵌入到鑄幣帳戶中，無需依賴外部程式。
+
+### 非同質化代幣
+
+雖然代幣的用途由創建者具體決定，他們可以選擇將特定代幣設置為治理代幣、實用代幣或社區代幣，但我們可以根據一些特徵來區分同質化代幣和非同質化代幣：
+
+非同質化代幣需要具備以下特徵：
+- 供應量為 1，因為它們是唯一的
+- 小數位數為 0，因為它們是不可分割的
+- 沒有鑄幣權限，因為我們不希望添加更多具有相同特徵的代幣，這會 "破壞" 代幣的唯一性
+
+在 Token 程式中，無法原生地強制執行這些特徵。因此，像 `MPL-token-metadata` 這樣的程式不僅提供了元數據的實現，還提供了強制執行這些約束的實現，並能輕鬆創建 NFT。
+
+<ArticleSection name="代幣帳戶" id="the-token-account" level="h2" />
+
+Token 程式創建代幣帳戶以追蹤每個代幣單位的個人所有權。代幣帳戶存儲以下數據：
+- 鑄幣：代幣帳戶持有的代幣
+- 擁有者：被授權從代幣帳戶轉移代幣的帳戶
+- 數量：代幣帳戶當前持有的代幣數量
+
+以下是鏈上數據的樣子：
+
+```rust
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If is_native.is_some, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+每個錢包需要為其想要持有的每種代幣（鑄幣）擁有一個代幣帳戶，並將錢包地址設置為代幣帳戶的擁有者。每個錢包可以擁有多個針對同一代幣（鑄幣）的代幣帳戶，但一個代幣帳戶只能有一個擁有者，並且只能持有一種代幣（鑄幣）。
+
+<ArticleSection name="The Associated Token Account" id="the-associated-token-account" level="h2" />
+
+關聯代幣帳戶簡化了查找特定鑄幣和擁有者的代幣帳戶地址的過程。可以將關聯代幣帳戶視為特定鑄幣和擁有者的「預設」代幣帳戶。
+
+關聯代幣帳戶的地址是根據擁有者的地址和鑄幣帳戶的地址推導出來的。需要理解的是，關聯代幣帳戶只是一個具有特定地址的代幣帳戶。
+
+這引入了 Solana 開發中的一個關鍵概念：[程式推導地址](https://solana.com/docs/core/pda) (PDA)。PDA 使用預定義的輸入確定性地推導出地址，從而使查找帳戶地址變得簡單。

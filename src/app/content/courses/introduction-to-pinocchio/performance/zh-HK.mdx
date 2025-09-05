@@ -1,0 +1,105 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 效能
+
+雖然許多開發者選擇使用 Pinocchio 來精細控制帳戶欄位，但其真正的強項在於實現最大效能。
+
+在本節中，我們將探討在 Solana 程式中實現最佳效率的實用策略。
+
+<ArticleSection name="Superfluous Checks" id="superfluous-checks" level="h2" />
+
+開發者經常為了安全性而添加額外的帳戶約束，但這可能會引入不必要的負擔。區分必要的檢查和多餘的檢查是很重要的。
+
+例如，當僅僅從 `Token Account` 或 `Mint` 讀取時，反序列化和驗證是必要的。但如果這些相同的帳戶稍後在 CPI（跨程式調用）中使用，任何不匹配或錯誤都會導致指令在該點失敗。因此，預先的檢查可能是多餘的。
+
+同樣地，驗證 Token 帳戶的 "owner" 通常是多餘的；特別是當帳戶由 PDA（程式衍生地址）控制時。如果 owner 不正確，CPI 會因為無效的種子而失敗。在轉帳不是由 PDA 執行的情況下，您應該專注於驗證接收者，特別是在存入 PDA 控制的帳戶時，因為發送者的利益與程式的利益是一致的。
+
+讓我們來看一個 `Escrow` 的例子：
+
+...
+
+### 關聯代幣程式
+
+`Associated Token Accounts`（ATA）雖然方便，但會帶來效能成本。除非絕對必要，否則避免強制使用它們，並且永遠不要在您的指令邏輯中要求創建它們。在大多數情況下，`init-if-needed` 模式會增加可避免的複雜性和資源使用（例如在由像 Jupiter 這樣的路由器組成的 Amm 指令中）。
+
+如果你的程式依賴 ATAs，請確保它們已在外部建立。在你的程式內，通過直接推導預期地址來驗證其正確性，例如：
+
+```rust
+let (associated_token_account, _) = find_program_address(
+    &[
+        self.accounts.owner.key(),
+        self.accounts.token_program.key(),
+        self.accounts.mint.key(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+```
+
+通過減少不必要的檢查和帳戶需求，你可以降低計算成本並簡化程式的執行，從而釋放原生 Solana 開發的全部性能潛力。
+
+> 添加檢查以使指令早期失敗具有其優勢，因為消耗的計算單元肯定會更少。因此，考慮指令是否主要會與類似 `{ skipPreflight: true }` 的標誌一起使用。
+
+<ArticleSection name="Perf Flag" id="perf-flag" level="h2" />
+
+Rust 的功能標誌提供了一種強大的方式來有條件地編譯代碼，使你能夠為不同的構建配置（例如開發、測試或生產中的最大性能）切換功能。
+
+這在 Solana 程式中特別有用，因為每個計算單元都很重要。
+
+### 設置功能標誌
+
+功能標誌定義在你的 `Cargo.toml` 文件中的 `[features]` 部分。例如，你可能需要一個 `perf` 標誌來通過禁用日誌記錄和額外檢查來啟用性能優化：
+
+```
+[features]
+default = ["perf"]
+perf = []
+```
+
+在這裡，perf 功能預設是啟用的，但你可以在構建或測試時覆蓋它。
+
+### 在代碼中使用功能標誌
+
+你可以使用 Rust 的條件編譯屬性根據活動功能包含或排除代碼。例如：
+
+```rust
+pub fn process(ctx: Context<'info>) -> ProgramResult {
+    #[cfg(not(feature = "perf"))]
+    sol_log("Create Class");
+    Self::try_from(ctx)?.execute()
+}
+```
+
+大多數程式會將指令的名稱作為日誌返回，以便於調試並確保調用的是正確的指令。
+
+然而，這是昂貴的，實際上除了使瀏覽器更易讀和增強調試外並不需要。
+
+```rust
+#[cfg(not(feature = "perf"))]
+if name.len() > MAX_NAME_LEN {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+另一個例子是之前討論過的多餘檢查。
+
+如果我們知道指令在沒有這些檢查的情況下是安全的，我們不應該將它們設為默認，而是應該將它們隱藏在一個標誌後面。
+
+> 在這個例子中，我們創建了一個`perf`標誌來表示，如果我們希望程式的性能達到最佳，我們應該在編譯時使用 perf 標誌。
+
+### 使用不同標誌進行構建
+
+要使用或不使用`perf`功能來構建程式，請使用：
+
+- 啟用性能優化（默認）：
+
+```
+cargo build-bpf
+```
+
+- 啟用額外檢查和日誌：
+
+```
+cargo build-bpf --no-default-features
+```
+
+這種方法允許您通過切換功能標誌，在開發安全性和生產速度之間調整單一代碼庫。

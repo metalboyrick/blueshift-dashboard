@@ -1,0 +1,247 @@
+{
+  "challenges": {
+    "anchor-memo": {
+      "title": "Anchor Memo",
+      "requirements": {
+        "log": {
+          "title": "挑戰 1：將 `instruction_data` 記錄到程式日誌"
+        }
+      }
+    },
+    "anchor-vault": {
+      "title": "Anchor Vault",
+      "requirements": {
+        "deposit": {
+          "title": "挑戰 1：接受存款"
+        },
+        "withdraw": {
+          "title": "挑戰 2：允許提款"
+        }
+      }
+    },
+    "anchor-escrow": {
+      "title": "Anchor Escrow",
+      "pages": {
+        "make": {
+          "title": "建立"
+        },
+        "take": {
+          "title": "接受"
+        },
+        "refund": {
+          "title": "退款"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "挑戰 1：建立一個托管交換交易"
+        },
+        "take": {
+          "title": "挑戰 2：接受一個托管交換交易"
+        },
+        "refund": {
+          "title": "挑戰 3：取消一個托管交換交易"
+        }
+      }
+    },
+    "anchor-flash-loan": {
+      "title": "Anchor Flash Loan",
+      "pages": {
+        "borrow": {
+          "title": "借款"
+        },
+        "repay": {
+          "title": "還款"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "挑戰：閃電貸款的借款與還款"
+        }
+      }
+    },
+    "pinocchio-memo": {
+      "title": "Pinocchio Memo",
+      "requirements": {
+        "log": {
+          "title": "挑戰 1：將指令數據記錄到程式日誌"
+        }
+      }
+    },
+    "pinocchio-vault": {
+      "title": "Pinocchio Vault",
+      "requirements": {
+        "deposit": {
+          "title": "挑戰 1：接受存款"
+        },
+        "withdraw": {
+          "title": "挑戰 2：允許提款"
+        }
+      }
+    },
+    "pinocchio-escrow": {
+      "title": "Pinocchio Escrow",
+      "pages": {
+        "make": {
+          "title": "建立"
+        },
+        "take": {
+          "title": "接受"
+        },
+        "refund": {
+          "title": "退款"
+        },
+        "conclusion": {
+          "title": "結論"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "挑戰 1：建立一個托管交換交易"
+        },
+        "take": {
+          "title": "挑戰 2：接受一個托管交換交易"
+        },
+        "refund": {
+          "title": "挑戰 3：取消一個托管交換交易"
+        }
+      }
+    },
+    "pinocchio-amm": {
+      "title": "Pinocchio AMM",
+      "pages": {
+        "initialize": {
+          "title": "初始化"
+        },
+        "deposit": {
+          "title": "存款"
+        },
+        "withdraw": {
+          "title": "提款"
+        },
+        "swap": {
+          "title": "交換"
+        },
+        "conclusion": {
+          "title": "結論"
+        }
+      },
+      "requirements": {
+        "initialize": {
+          "title": "挑戰 1：初始化 AMM"
+        },
+        "deposit": {
+          "title": "挑戰 2：存入流動性"
+        },
+        "withdraw": {
+          "title": "挑戰 3：提取流動性"
+        },
+        "swap": {
+          "title": "挑戰 4：交換代幣"
+        }
+      }
+    },
+    "pinocchio-secp256r1-vault": {
+      "title": "Pinocchio Secp256r1 Vault",
+      "requirements": {
+        "deposit": {
+          "title": "挑戰 1：接受存款"
+        },
+        "withdraw": {
+          "title": "挑戰 2：允許提款"
+        }
+      }
+    },
+    "pinocchio-flash-loan": {
+      "title": "Pinocchio Flash Loan",
+      "pages": {
+        "borrow": {
+          "title": "借款"
+        },
+        "repay": {
+          "title": "還款"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "挑戰：閃電貸款的借款與還款"
+        }
+      }
+    },
+    "assembly-memo": {
+      "title": "Assembly Memo",
+      "requirements": {
+        "log": {
+          "title": "挑戰 1：測試備忘錄"
+        },
+        "log_different": {
+            "title": "挑戰 2：使用不同輸入測試備忘錄"
+        }
+      }
+    },
+    "assembly-slippage": {
+      "title": "Assembly Slippage",
+      "requirements": {
+        "slippage": {
+          "title": "挑戰 1：使用 SPL-Token 測試滑點"
+        },
+        "slippage_failure": {
+          "title": "挑戰 2：測試滑點失敗"
+        },
+        "slippage_token2022": {
+          "title": "挑戰 3：使用 Token2022 測試滑點"
+        }
+      }
+    },
+    "assembly-timeout": {
+      "title": "Assembly Timeout",
+      "requirements": {
+        "timeout": {
+          "title": "挑戰 1：測試超時"
+        },
+        "timeout_failure": {
+          "title": "挑戰 2：測試超時失敗"
+        }
+      }
+    },
+    "typescript-mint-an-spl-token": {
+      "title": "鑄造 SPL 代幣",
+      "requirements": {
+        "create_mint_account": {
+          "title": "挑戰 1：建立代幣鑄造帳戶"
+        },
+        "initialize_mint": {
+          "title": "挑戰 2：初始化鑄造"
+        },
+        "create_token_account": {
+          "title": "挑戰 3：建立代幣帳戶"
+        },
+        "mint_to": {
+          "title": "挑戰 4：鑄造代幣"
+        }
+      }
+    },
+    "pinocchio-quantum-vault": {
+      "title": "Pinocchio Quantum Vault",
+      "pages": {
+        "open": {
+          "title": "開啟保險庫"
+        },
+        "split": {
+          "title": "分割保險庫"
+        },
+        "close": {
+          "title": "關閉保險庫"
+        }
+      },
+      "requirements": {
+        "open": {
+          "title": "挑戰 1：開啟量子保險庫"
+        },
+        "close": {
+          "title": "挑戰 2：關閉量子保險庫"
+        }
+      }
+    }
+  }
+}

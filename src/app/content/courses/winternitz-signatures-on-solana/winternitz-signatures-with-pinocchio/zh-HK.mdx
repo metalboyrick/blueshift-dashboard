@@ -1,0 +1,221 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Winternitz 簽名與 Pinocchio
+
+[Dean](https://x.com/deanmlittle) 來自 Blueshift 團隊，已經發布了首個支持 Pinocchio 相容性的 crate，用於創建和驗證 Winternitz 簽名。
+
+此實現對於為區塊鏈應用程式提供抗量子安全性特別有價值。
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+此實現使用 `w = 8` 來平衡 Solana 的限制：交易大小限制和計算單元限制。
+
+Winternitz 參數 `w` 在簽名大小和計算需求之間創造了一個基本的權衡：
+- 較高的 w 值意味著簽名較小，但需要更多的計算，因為驗證每個簽名組件需要更多的雜湊操作
+- 較低的 w 值意味著簽名較大，但需要較少的計算，因為驗證每個簽名組件需要較少的雜湊操作
+
+Solana 強加了兩個關鍵限制，影響了參數的選擇：
+- 交易大小限制（1024 字節）：使用 `w = 8`，完整實現會生成正好 1024 字節的簽名，使用 256 位元雜湊（32 字節 × 32 個組件）。這會佔用整個交易空間，沒有餘地容納交易開銷和額外數據。
+- 計算單元限制：切換到 `w = 16` 雖然可以將簽名大小減半，但在驗證過程中會超出 Solana 的計算單元（CU）限制，因為每個簽名組件需要顯著更多的雜湊操作。
+
+由於計算單元限制無法通過參數調整解決，簽名大小問題通過將簽名截短至 896 字節並對剩餘組件進行 Merkle 化來解決。此方法在保留安全性的同時，為交易開銷創造了必要的空間。
+
+這就是為什麼實現選擇了 `w = 8`：它代表了一個甜蜜點，計算需求保持可控，而簽名截短為解決大小限制提供了一個實用的解決方案。
+
+### 金鑰生成
+
+使用 SDK 生成私鑰並推導出相應的公鑰：
+
+```rust
+use winternitz::{hash::WinternitzKeccak, privkey::WinternitzPrivkey};
+
+// Generate a new random private key
+let privkey = WinternitzPrivkey::generate();
+
+// Derive the corresponding public key
+let pubkey = privkey.pubkey::<WinternitzKeccak>();
+```
+
+公鑰是通過對私鑰組件多次應用雜湊函數推導出來的，這是一種單向轉換，確保了安全性。
+
+### 簽署訊息
+
+```rust
+// Sign a message
+let message = b"Hello, World!";
+let signature = privkey.sign::<WinternitzKeccak>(message);
+```
+
+簽署過程基於訊息摘要生成簽名組件，每個組件需要根據相應的訊息位數執行特定次數的雜湊操作。
+
+### 簽名驗證
+
+```rust
+// Recover public key from signature and message
+let recovered_pubkey = signature.recover_pubkey::<WinternitzKeccak>(message);
+
+// Verify by comparing public keys
+assert_eq!(recovered_pubkey, pubkey);
+```
+
+驗證過程會從簽名和訊息中重建公鑰，然後與預期的公鑰進行比較以確認真實性。
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+要在你的 Pinocchio 程式中實現 Winternitz 簽名驗證，你需要：
+1. `solana-winternitz` crate：提供核心的 Winternitz 簽名功能
+2. 使用量子安全地址推導進行 PDA 的創建和驗證
+
+讓我們從添加 `solana-winternitz` crate 開始
+
+```
+cargo add solana-winternitz
+```
+
+### 簽名大小優化
+
+該實現使用截斷方法以適應 Solana 的交易限制：
+- 完整簽名 (`WinternitzSignature`)：1024 字節（32 字節 × 32 個組件）。
+- 截斷簽名 (`WinternitzCommitmentSignature`)：896 字節（32 字節 × 28 個組件）。
+- 可用空間：剩餘 128 字節用於交易開銷
+
+從 256 位元雜湊截斷到 224 位元雜湊的過程保持了強大的安全性，同時確保了實用性。剩餘的簽名組件被 Merklized，以保留完整的安全模型。
+
+### 設置量子安全的 PDA
+
+由於傳統的區塊鏈簽名仍然容易受到量子攻擊的威脅，此實現利用程式派生地址 (PDAs) 來實現量子安全。
+
+PDA 沒有關聯的私鑰，因此不會受到密碼學攻擊的影響。
+
+以下是如何從 Winternitz 公鑰創建 PDA 的方法：
+
+```rust
+pub struct CreateWinternitzPDA {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl CreateWinternitzPDA {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        let data: [u8; 33] = bytes
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+        let (hash, bump) = array_refs![&data, 32, 1];
+        Ok(Self {
+            hash: *hash,
+            bump: *bump,
+        })
+    }
+
+    pub fn create_pda(&self, accounts: &CreatePDAAccounts) -> ProgramResult {
+        let seeds = [Seed::from(&self.hash), Seed::from(&self.bump)];
+        let signers = [Signer::from(&seeds)];
+        
+        // Create the quantum-secure PDA
+        CreateAccount {
+            from: accounts.payer,
+            to: accounts.vault,
+            lamports: accounts.lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+> PDA 衍生中使用的雜湊值是一個由公鑰的 32 個組件中的 28 個組件生成的 Merkle 根。這是因為如前所述，我們只能容納截斷的簽名。
+
+Winternitz 驗證的核心涉及從簽名和消息中恢復公鑰，然後驗證其是否與預期的 PDA 匹配。以下是完整的驗證流程：
+
+```rust
+pub struct VerifyWinternitzSignature {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl VerifyWinternitzSignature {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        if bytes.len() != 897 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        let (signature_bytes, bump) = bytes.split_at(896);
+        Ok(Self {
+            signature: WinternitzSignature::from(signature_bytes.try_into().unwrap()),
+            bump: [bump[0]],
+        })
+    }
+
+    pub fn verify_and_execute(&self, accounts: &VerifyAccounts, message: &[u8]) -> ProgramResult {
+        // Recover the public key from signature and message
+        let recovered_pubkey = self.signature.recover_pubkey(message);
+        let hash = recovered_pubkey.merklize();
+        
+        // Verify PDA ownership
+        let expected_pda = solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ]);
+        
+        if expected_pda.ne(accounts.pda.key()) {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        
+        // Execute the protected operation
+        self.execute_protected_operation(accounts)
+    }
+
+    fn execute_protected_operation(&self, accounts: &VerifyAccounts) -> ProgramResult {
+        // Your quantum-secure operation logic here
+        Ok(())
+    }
+}
+```
+
+`recover_pubkey()` 函數通過將已簽名的消息轉換為摘要值來重建原始公鑰，這些摘要值指定每個組件需要多少額外的雜湊，並生成 28 個只能用正確私鑰生成的公鑰組件。
+
+`merklize()` 函數隨後從 28 個公鑰組件構建一個二叉樹，生成一個唯一代表所有 28 個組件的 32 字節根。
+
+<ArticleSection name="安全考量" id="security-considerations" level="h2" />
+
+始終在已簽名的消息中包含關鍵參數以防止被篡改：
+
+```rust
+// Construct message with security parameters
+let message = [
+    accounts.recipient.key().as_ref(),     // Prevent recipient substitution
+    &amount.to_le_bytes(),                 // Prevent amount manipulation
+    &expiry_timestamp.to_le_bytes(),       // Prevent replay attacks
+].concat();
+```
+
+### 到期檢查
+
+由於 Winternitz 簽名無限期有效，請實施基於時間的到期機制：
+
+```rust
+// Verify signature hasn't expired
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(
+    message[40..48].try_into()
+    .map_err(|_| ProgramError::InvalidInstructionData)?
+);
+
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+### 公鑰檢查
+
+確保只有授權方能從簽名中受益：
+
+```rust
+// Verify the recipient is authorized
+let intended_recipient = &message[0..32];
+if accounts.recipient.key().as_ref().ne(intended_recipient) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```

@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Solana Pay
+
+![Solana Pay](/graphics/course-banners/solana-pay.png)
+
+Solana Pay 是一個開源支付框架，能夠在 Solana 上實現即時、接近零手續費的交易。
+
+已通過 Shopify 集成獲得數百萬商家的信任，它通過完全消除傳統支付中介來徹底改變商業模式。
+
+> Solana Pay 通過 URL 標準化支付。無需複雜的錢包集成，您只需創建簡單的鏈接，這些鏈接可自動兼容所有 Solana 錢包。
+
+<ArticleSection name="核心功能" id="core-functionalities" level="h2" />
+
+Solana Pay 的特點包括：
+- **直接結算：** 支付直接從客戶錢包到商家錢包，支持 SOL 或任何 SPL 代幣。無需銀行、處理器或中介抽取費用。
+- **即時最終性：** 得益於 Solana 的亞秒級結算，資金在確認後立即到賬。
+- **通用兼容性：** 一次實現即可兼容所有 Solana 錢包和應用程式。
+
+所有功能通過兩種基本請求類型實現：
+
+### 轉賬請求（簡單支付）
+
+非互動式 URL，用於預定義的交易。所有內容都編碼在 URL 中。
+
+```
+solana:mvines9iiHiQTysrwkJjGf2gb9Ex9jXJX8ns3qwf2kN?amount=0.01&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+```
+
+> 適用於：電子商務結帳、捐款、訂閱、任何簡單的代幣轉賬。
+
+### 交易請求（動態支付）
+
+互動式 URL，可在服務器端組合複雜交易。
+
+錢包向您的服務器發送 HTTP 請求，服務器返回基於實時數據構建的自定義交易。
+
+> 適用於：具有動態定價的 NFT、DeFi 互動、忠誠度計劃、複雜的業務邏輯。
+
+### 集成選項
+
+Solana Pay 提供：
+- **二維碼：** 即時的面對面支付
+- **可分享的鏈接：** 適用於任何平台
+- **嵌入式按鈕：** 無縫的結帳體驗
+- **自定義流程：** 多方交易、條件訪問、部分簽名
+
+<ArticleSection name="為什麼重要" id="why-it-matters" level="h2" />
+
+Solana Pay 用簡單的 URL 替代了整個傳統支付堆棧。無需與多個錢包集成或處理複雜的交易流程，您只需創建標準化的鏈接，這些鏈接可自動在任何地方使用。
+
+**傳統支付流程：** 客戶 → 銀行 → 支付處理器 → 您的銀行 → 您（幾天後，扣除手續費）
+
+**Solana Pay 流程：** 客戶 → 您（即時，幾乎零手續費）
+
+> Solana Pay 規範從根本上改變了區塊鏈支付方式，通過用簡單、標準化的 URL 替代複雜的錢包整合，實現了無處不在的兼容性。
+
+<ArticleSection name="Reference" id="reference" level="h2" />
+
+參考是 Solana Pay 堆疊中最重要的部分之一。由於您的後端不會向網絡提交交易，而僅返回錢包簽署的交易響應，因此沒有交易簽名可用於確定支付是否完成。
+
+`reference` 是一個獨特的公鑰，作為非簽署者、非可寫賬戶包含在交易中。它不會影響交易行為，但作為一個追蹤標識符。
+
+以下是流程：
+1. 為每個支付請求生成一個唯一的參考（公鑰）
+2. 將其作為參數包含在您的交易請求 URL 中
+3. 將其作為非簽署賬戶添加到您的交易指令中
+4. 使用該參考追蹤交易
+
+您可以使用 Solana 的 `getSignaturesForAddress` RPC 方法或 `@solana/pay` 庫的 `findReference` 幫助程序來定位包含您參考的交易，如下所示：
+
+```ts
+useEffect(() => {
+    // Poll the network for transactions that include the reference address
+    const interval = setInterval(async () => {
+        try {
+            // Find transactions that include the reference address
+            const signatureInfo = await findReference(connection, reference, {
+                until: mostRecentNotifiedTransaction.current, // Only look for transactions after the most recent one we've found
+                finality: "confirmed",
+            });
+            // Update the most recent transaction with the transaction we just found
+            mostRecentNotifiedTransaction.current = signatureInfo.signature;
+            // Toast notification
+            displayToast(signatureInfo.signature);
+        } catch (e) {
+            if (e instanceof FindReferenceError) {
+                // No transaction found yet, ignore this error
+                return;
+            }
+            console.error("Unknown error", e);
+        }
+    }, 1000); // Check for new transactions every second
+    
+    return () => {
+        clearInterval(interval);
+    };
+}, [reference]);
+```
+
+<ArticleSection name="QR Code Generation" id="qr-code-generation" level="h2" />
+
+使用 `@solana/pay` 庫將任何交易請求轉換為可掃描的 QR 碼：
+
+```ts
+import { createQR, encodeURL, TransactionRequestURLFields } from '@solana/pay'; 
+
+const urlParams: TransactionRequestURLFields = {
+  link: new URL("https://yourapi.com/pay"),
+};
+const solanaUrl = encodeURL(urlParams);
+
+const qr = createQR(
+  solanaUrl,
+  400,
+  "transparent"
+);
+```

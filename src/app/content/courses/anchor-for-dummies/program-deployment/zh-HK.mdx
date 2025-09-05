@@ -1,0 +1,176 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 程式部署
+
+完成程式後，將其部署到 devnet 或 mainnet，以便用戶進行互動。
+
+<ArticleSection name="程式部署" id="program-deployment" level="h2" />
+
+構建您的程式以生成必要的部署檔案：
+
+```
+anchor build
+```
+
+這將創建一個 `target/deploy` 資料夾，其中包含：
+- `<project-name>.so`：您的程式位元碼
+- `<project-name>-keypair.json`：用於部署的生成密鑰對
+
+> 您可以通過替換 `<project-name>-keypair.json` 檔案中的密鑰對來使用自定義地址。
+
+檢索程式地址：
+
+```
+solana address -k target/deploy/<project-name>-keypair.json
+```
+
+在 `lib.rs` 中更新 `declare_id!()` 函數，然後使用正確的目標叢集和程式 ID 配置您的 `Anchor.toml`：
+
+```
+[provider]
+cluster = "devnet"
+
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
+```
+
+部署您的程式：
+
+```
+anchor deploy
+```
+
+這將使用 `Anchor.toml` 中指定的地址、叢集和錢包作為支付費用的帳戶進行部署。
+
+### 部署失敗
+
+部署失敗會創建包含 lamports 的中間緩衝帳戶。您將看到如下的恢復指示：
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+要恢復您的餘額：
+
+- **恢復部署**，通過恢復密鑰對：
+
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+
+    當提示時輸入 12 字種子短語，然後使用緩衝區進行部署：
+
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- **關閉**緩衝區以回收 lamports：
+
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### 通過 Solana CLI 部署
+
+您可以直接使用 Solana CLI 而非 Anchor 來部署您的程式：
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+在網絡擁堵期間，使用以下參數可以提高部署成功率：
+- `--with-compute-unit-price`：以微 lamports 設定計算單位價格
+- `--use-rpc`：將交易發送到 RPC 而非驗證器 TPU
+- `--max-sign-attempts`：在區塊哈希過期後的最大重試次數
+
+<ArticleSection name="Program Upgrade" id="program-upgrade" level="h2" />
+
+默認情況下，`anchor deploy` 會創建一個新的程式 ID。若要在保留地址及相關帳戶的情況下升級現有程式：
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+如果新的可執行檔案比已部署的版本更大，請先擴展程式帳戶：
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### 通過 Solana CLI 升級
+
+過程保持不變：如有需要，先擴展，然後部署：
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### 使程式不可變
+
+您可以移除升級權限，使您的程式不可變：
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> 此操作不可逆。一旦設置，程式將無法更新。
+
+### 遷移程式
+
+遷移將程式從一個地址轉移到另一個地址。CLI 會關閉舊程式並重新部署到新位置：
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> 遷移會破壞所有現有的 PDA，因為它們是從舊的程式 ID 派生的。用戶必須更新其應用程式以使用新地址，並更改任何權限為 PDA 的代幣帳戶的權限。
+
+<ArticleSection name="Uploading an IDL" id="uploading-an-idl" level="h2" />
+
+介面描述語言（IDL）文件提供了程式指令和帳戶的標準化 JSON 描述，從而使客戶端集成更加容易。
+
+將 IDL 上傳到鏈上，幫助開發者集成您的程式：
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### 升級 IDL
+
+重新部署程式後，請更新鏈上 IDL：
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+<ArticleSection name="Verified Builds" id="verified-builds" level="h2" />
+
+已驗證的構建確保部署在 Solana 上的可執行程式與您存儲庫中的原始碼相匹配。此驗證使開發者和用戶能夠確認鏈上程式與公開的代碼庫完全一致。
+
+驗證過程會將鏈上程式的雜湊值與從原始碼本地構建的程式進行比較，以檢測版本之間的任何差異。
+
+使用 Solana CLI 構建程式可能會將特定於機器的代碼嵌入到二進制文件中。在不同的機器上編譯相同的程式可能會生成不同的可執行文件。為了解決這個問題，請在具有固定依賴項的 Docker 容器中進行構建，以獲得可重現的結果。
+
+Anchor 提供了處理構建和 Docker 配置的 CLI 命令：
+
+```
+anchor build --verifiable
+```
+
+驗證已部署在主網上的程式構建：
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+> `<lib-name>` 對應於您程式的 `Cargo.toml` 文件中定義的名稱。

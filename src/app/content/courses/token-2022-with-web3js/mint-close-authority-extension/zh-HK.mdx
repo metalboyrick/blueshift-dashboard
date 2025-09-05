@@ -1,0 +1,93 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 鑄幣關閉權限擴展
+
+`MintCloseAuthority` 擴展是一個 `Mint` 擴展，允許權限關閉並回收來自供應量為 0 的 `Mint` 帳戶的租金。
+
+此擴展對於清理未使用的鑄幣並回收用於支付帳戶租金豁免的 SOL 非常有用。只有當沒有代幣在流通時，鑄幣才可以被關閉。
+
+<ArticleSection name="初始化鑄幣帳戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `Mint` 帳戶上初始化 `MintCloseAuthority` 擴展，我們需要使用 `initializeMintCloseAuthority()` 函數。
+
+以下是如何使用鑄幣關閉擴展創建鑄幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeMintCloseAuthorityInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Mint Close Authority extension
+const mintLen = getMintLen([ExtensionType.MintCloseAuthority]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Mint Close Authority extension
+const initializeMintCloseAuthority = createInitializeMintCloseAuthorityInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintCloseAuthority,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="關閉鑄幣帳戶" id="closing-the-mint-account" level="h2" />
+
+如果 `Mint` 帳戶的供應量為零，`CloseMint Authority` 可以使用 `closeAccount` 指令回收該帳戶的租金，如下所示：
+
+```ts
+const closeMintInstruction = createCloseAccountInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(closeMintInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: false});
+
+console.log(`Mint closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

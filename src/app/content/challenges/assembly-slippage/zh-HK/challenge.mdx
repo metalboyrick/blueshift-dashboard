@@ -1,0 +1,110 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+![Assembly Slippage Challenge](/graphics/challenge-banners/assembly-slippage.png)
+
+# Assembly Slippage
+
+在本單元中，我們將使用 sBPF Assembly 來創建一個基本的滑點檢查指令。通過將此指令包含在指令數組的最後一個索引中，我們可以為智能合約漏洞或惡意位翻轉合約提供一種最後的保護措施。
+
+滑點檢查具有以下幾個特性，使其成為使用 Assembly 的理想候選：
+
+- 單一且受限的使用場景
+- 無需執行簽名者/賬戶檢查
+- 只能提高安全性
+
+如果你不熟悉如何編寫 Assembly 程式，請參考[Assembly 入門課程](/zh-HK/courses/introduction-to-assembly)
+
+<ArticleSection name="Program Design" id="program-design" level="h2" />
+
+我們的程式實現了一個簡單但至關重要的操作：在進行交易之前驗證代幣賬戶是否有足夠的餘額。這種模式在 DeFi 中隨處可見——從 AMM 交換到借貸協議。
+
+程式的預期：
+- 賬戶數組中包含一個單一的 SPL 代幣賬戶
+- 指令數據中包含一個 8 字節的金額
+- 如果餘額 ≥ 金額，則返回成功，否則返回錯誤
+
+<ArticleSection name="Memory Offsets" id="memory-offsets" level="h2" />
+
+sBPF 程式將賬戶數據作為連續的記憶體區域接收。這些常數定義了字節偏移量。假設我們的程式只接收一個賬戶，並且該賬戶是 SPL 代幣賬戶，那麼可以靜態地推導出這些偏移量如下：
+
+```sbpf
+.equ TOKEN_ACCOUNT_BALANCE, 0x00a0
+.equ MINIMUM_BALANCE, 0x2918
+```
+
+- `TOKEN_ACCOUNT_BALANCE (0x00a0)`：指向 SPL 代幣賬戶數據中的餘額字段。代幣賬戶遵循標準佈局，其中餘額（8 字節，小端序）位於偏移量 160。
+
+- `MINIMUM_BALANCE (0x2918)`：定位 Solana 放置指令數據有效負載的位置。此偏移量是運行時賬戶信息結構的一部分。
+
+> 你可以使用我們的工具在 [sbpf.xyz](https://sbpf.xyz) 生成偏移量。
+
+與抽象記憶體佈局的高級語言不同，組合語言要求你精確知道每個數據的位置。
+
+<ArticleSection name="入口點與初始驗證" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
+    ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
+```
+
+每個 sBPF 程式都從一個全域性的 `.entrypoint` 符號開始。Solana 執行環境通過暫存器 `r1` 提供帳戶和指令數據。
+
+`ldxdw` 指令從記憶體中載入 (`ldx`) 一個 8 字節（雙字，`dx`）的值到暫存器。以下是執行過程：
+- `ldxdw r3, [r1+MINIMUM_BALANCE]`：計算包含所需數值的記憶體地址。該值被載入到 `r3`。
+- `ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE]`：指向代幣帳戶的餘額欄位。這個 64 位的值被載入到 `r4`。
+
+這兩個操作都是零拷貝的：我們直接從帳戶數據中讀取，無需反序列化的開銷。
+
+<ArticleSection name="條件邏輯與分支" id="conditional-logic-and-branching" level="h2" />
+
+```sbpf
+jge r3, r4, end         // Skip to exit if balance is valid
+```
+
+`jge`（大於或等於時跳轉）指令將 `r3`（所需數值）與 `r4`（可用餘額）進行比較。如果 `r3 >= r4`，則跳轉到 `end` 標籤；就像提前返回一樣。
+
+如果條件不成立，執行將繼續進入錯誤處理路徑。這種基於條件的分支模式是組合語言實現 if/else 邏輯的方式。
+
+<ArticleSection name="錯誤處理與日誌記錄" id="error-handling-and-logging" level="h2" />
+
+```sbpf
+lddw r1, e              // Load error message address
+lddw r2, 17             // Load length of error message  
+call sol_log_           // Log out error message
+lddw r0, 1              // Return error code 1
+```
+
+當驗證失敗時，我們會在終止前記錄一條可讀的錯誤信息：
+- `lddw` 載入立即值，在此例中為錯誤字串的地址（位於 `.rodata` 區段）及其長度（"Slippage exceeded" 的 17 字節）。
+- `call sol_log_` 調用 Solana 的日誌系統呼叫。執行環境從記憶體中讀取消息並將其添加到交易日誌中。
+- 然後我們將 `1` 載入到 `r0`，以表示程式失敗。執行環境將中止交易並返回此錯誤代碼。
+
+<ArticleSection name="程式終止" id="program-termination" level="h2" />
+
+```sbpf
+end:
+    exit
+```
+
+`exit` 指令會終止程式執行，並將控制權返回給 Solana 執行環境。`r0` 中的值將成為程式的退出代碼（0 表示成功，非零表示錯誤）。
+
+與具有自動清理功能的高級語言不同，組合語言程式必須明確退出。程式碼執行到結尾而未明確退出會導致未定義的行為。
+
+## 只讀數據
+
+```sbpf
+.rodata
+    e: .ascii "Slippage exceeded"
+```
+
+`.rodata`（只讀數據）部分包含我們的錯誤訊息字串。
+
+<ArticleSection name="結論" id="conclusion" level="h2" />
+  
+這個小程式在成功情況下僅使用 `4 CUs`，在失敗情況下使用 `6 CUs`，或者在記錄錯誤訊息的失敗情況下使用 `106 CUs`，完成了可能需要 Rust 花費數十個 CUs 的工作。
+
+代價是我們必須在最低層次上理解記憶體佈局、調用約定和錯誤處理。但對於性能至關重要的操作，這種努力通常是值得的。
+
+> 此程式碼單獨使用並非「安全」。我們未檢查傳入帳戶的任何內容。但這旨在作為一個附加指令，意味著它應該在誠信的情況下執行。

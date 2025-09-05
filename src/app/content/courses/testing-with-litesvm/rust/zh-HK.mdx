@@ -1,0 +1,300 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 使用 Rust 的 LiteSVM
+
+`litesvm` 套件提供了核心測試基礎設施，用於創建一個輕量級的 Solana 環境，您可以直接操作帳戶狀態並對您的程序執行交易。
+
+<ArticleSection name="第一步" id="first-steps" level="h2" />
+
+將 LiteSVM 添加到您的項目中：
+
+```bash
+cargo add --dev litesvm
+```
+
+<ArticleSection name="LiteSVM 基礎" id="basics" level="h2" />
+
+首先聲明您的程序 ID 並創建一個 LiteSVM 實例。
+
+使用您在程序中定義的完全相同的程序 ID，以確保交易正確執行，並且在測試期間不會拋出 `ProgramMismatch` 錯誤：
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::{pubkey, Pubkey};
+
+const program_id: Pubkey = pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Load the program with the right publickey
+    svm.add_program_from_file(program_id, "target/deploy/program.so");
+}
+```
+
+要執行測試，請創建一個交易對象並使用 `.send_transaction(tx)` 函數：
+
+```rust
+use litesvm::LiteSVM;
+use solana_transaction::Transaction;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Transaction
+    let mut tx = Transaction::new_signed_with_payer(
+        &[...ixs],
+        Some(&payer.pubkey()),
+        &[...signersKeypair],
+        svm.latest_blockhash(),
+    );
+
+    // Send the Transaction
+    let result = svm.send_transaction(tx).unwrap();
+}
+```
+
+<ArticleSection name="帳戶" id="accounts" level="h2" />
+
+在使用 LiteSVM 測試 Solana 程序時，您將處理多種類型的帳戶，這些帳戶模擬了真實世界的程序執行場景。
+
+正確構建這些帳戶對於有效測試至關重要。
+
+### 系統帳戶
+
+最基本的帳戶類型是系統帳戶，主要有兩種變體：
+- **付款帳戶**：擁有 lamports 的帳戶，用於資助程序帳戶創建或 lamport 轉移
+- **未初始化帳戶**：沒有 lamports 的空帳戶，通常用於表示等待初始化的程序帳戶
+
+系統帳戶不包含數據，並由系統程序擁有。付款帳戶和未初始化帳戶的主要區別在於它們的 lamport 餘額：付款帳戶有資金，而未初始化帳戶從空開始。
+
+以下是在 LiteSVM 中創建 `payer` 帳戶的方法：
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports: 100_000_000,
+            data: [],
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+> 未初始化帳戶只是普通生成的帳戶，具有 `Keypair.generate()` - 無需額外設置。
+
+### 程序帳戶
+
+對於包含自定義數據結構的程序帳戶，您可以使用類似的方法。
+您還需要將帳戶數據序列化為字節數組，可以手動完成，也可以使用例如 `borsh`、`bincode` 或 `solana_program_pack` 的庫來完成。
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
+
+    // Serialize the account data into the byte array defined above
+    // ...
+
+    let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports,
+            data: account_data,
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> 在測試中，您無需計算準確的租金。您可以將 lamports 設置為一個較大的值，例如 `100_000_000_000`，並跳過租金計算，因為這些並不是真實的資金。
+
+### 代幣帳戶
+
+要序列化 SPL 代幣帳戶的數據，您可以使用 `spl_token::Mint` 和 `spl_token::Account`，它們實現了 `solana_program_pack::Pack`。
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_account::Account;
+use spl_token::{ID as TOKEN_PROGRAM_ID, state::{Mint, Account as TokenAccount}};
+use solana_program_pack::Pack;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Mint Account
+    let mint = Keypair::new();
+
+    // Populate the data of the Mint Account
+    let mint_data = Mint {
+        mint_authority: None.into(),
+        supply: 0,
+        decimals: 6,
+        is_initialized: true,
+        freeze_authority: None.into(),
+    };
+
+    let mut mint_account_data = vec![0; Mint::LEN];
+    Mint::pack(mint_data, &mut mint_account_data).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(Mint::LEN);
+
+    // Add the Mint Account
+    svm.set_account(
+        mint.pubkey(),
+        Account {
+            lamports,
+            data: mint_account_data,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+
+    // Create a new Token Account
+    let token_account = Keypair::new();
+    let owner = Keypair::new();
+
+    // Populate the data of the Token Account
+    let token_account_data = TokenAccount {
+        mint: mint.pubkey(),
+        owner: owner.pubkey(),
+        amount: 0,
+        delegate: None.into(),
+        state: spl_token::state::AccountState::Initialized,
+        is_native: None.into(),
+        delegated_amount: 0,
+        close_authority: None.into(),
+    };
+
+    let mut token_account_data_bytes = vec![0; TokenAccount::LEN];
+    TokenAccount::pack(token_account_data, &mut token_account_data_bytes).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(TokenAccount::LEN);
+
+    // Add the Token Account
+    svm.set_account(
+        token_account.pubkey(),
+        Account {
+            lamports,
+            data: token_account_data_bytes,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+<ArticleSection name="Execution" id="execution" level="h2" />
+
+在創建帳戶並將其添加到您的 LiteSVM 實例後，您現在可以發送交易並驗證您的程序邏輯。
+
+在發送交易之前，您可以模擬結果：
+
+```rust
+let simulated_result = svm.simulate_transaction(tx);
+```
+
+然後發送交易並檢查其日誌：
+
+```rust
+let result = svm.send_transaction(tx);
+let logs = result.logs;
+```
+
+### 高級功能
+
+在執行之前和之後，您 LiteSVM 實例中包含的整個分類帳都是可讀和可自定義的。
+
+您可以操作系統變量的值，例如時鐘：
+
+```rust
+// Change the Clock
+let mut new_clock = svm.get_sysvar::<Clock>();
+new_clock.unix_timestamp = 1735689600;
+svm.set_sysvar::<Clock>(&new_clock);
+
+// Jump to a certain Slot
+svm.warp_to_slot(500);
+
+// Expire the current blockhash
+svm.expire_blockhash();
+```
+
+您還可以讀取帳戶和協議數據：
+
+```rust
+// Get all the information about an account (data, lamports, owner, ...)
+svm.get_account(&account.publickey);
+
+// Get the lamport balance of an account
+svm.get_balance(&account.publickey);
+
+// Get the number of Compute Unit used till now
+svm.get_compute_budget();
+```
+
+或者配置運行時的行為：
+
+```rust
+// Sets the compute budget
+let compute_budget = ComputeBudget::default();
+compute_budget.compute_unit_limit = 2_000_000;
+svm.with_compute_budget(compute_budget);
+
+// Sets Sigverify as active
+svm.with_sigverify(true);
+
+// Sets the Blockhash check as active
+svm.with_blockhash_check(true);
+
+// Sets the default Sysvars
+svm.with_sysvars();
+
+// Set the FeatureSet to use
+svm.with_feature_set(FeatureSet::default())
+```

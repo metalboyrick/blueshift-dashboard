@@ -1,0 +1,168 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 進階功能
+
+Surfnet 不僅僅是將主網複製到本地網，它還允許您通過更改帳戶、系統變量和區塊鏈狀態來增強和修改 Solana 的核心功能。
+
+這些修改是通過對 Surfnet 的 RPC 調用實現的，既可以通過程式化方式（用於自動化測試環境）進行更改，也可以通過終端命令（用於一次性操作）進行更改。
+
+要在您的代碼中執行 RPC 調用，請使用：
+
+```ts
+const surfnetCall = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "<surfnet-method>",
+    "params": [<surfnet-method-params]
+}
+
+await fetch(connection.rpcEndpoint, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(surfnetCall)
+});
+```
+
+要在您的終端中執行 RPC 調用，請使用：
+
+```bash
+curl -X POST \
+    -H "Content-Type: application/json" \
+    -d '{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "<surfnet-method>",
+        "params": [<surfnet-method-params]
+    }' \
+    http://localhost:8899
+```
+
+<ArticleSection name="自定義系統變量" id="customize-system-variables" level="h2" />
+
+### 時間旅行
+
+使用 `surfnet_timeTravel` 方法跳轉到區塊鏈歷史中的任何時間點。這對於測試您的程式在不同網絡狀態下的行為或重現特定時間發生的錯誤非常有價值。
+
+指定以下之一：`absoluteEpoch`、`absoluteSlot` 或 `absoluteTimestamp`，如下所示：
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_timeTravel",
+  "params": [
+    {
+      "absoluteEpoch": 0
+    }
+  ]
+}
+```
+
+### 暫停和恢復區塊生成
+
+控制區塊進程以逐步調試交易或測試時間敏感的邏輯。使用 `surfnet_pauseClock` 暫停區塊生成，並使用 `surfnet_resumeClock` 繼續：
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_pauseClock", // or "surfnet_resumeClock"
+  "params": []
+}
+```
+
+<ArticleSection name="修改帳戶數據" id="modify-account-data" level="h2" />
+
+### 設置 SOL 參數
+
+配置 SOL 供應參數以測試經濟場景或邊界情況。
+
+`surfnet_setSupply` 方法接受 `circulating`、`nonCirculating`、`nonCirculatingAccounts` 和 `total` 參數：
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setSupply",
+  "params": [
+    {
+      "circulating": 1000000000,
+      "nonCirculating": 1000000000,
+      "nonCirculatingAccounts": [],
+      "total": 1000000000
+    }
+  ]
+}
+```
+
+### 在程式之間轉移帳戶
+
+使用 `surfnet_cloneProgramAccount` 從一個程式克隆程式帳戶到另一個程式。這對於測試程式升級或在不同程式版本之間遷移狀態非常有用。
+
+需要同時具備 `destinationProgramId` 和 `sourceProgramId`：
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_cloneProgramAccount",
+  "params": [
+    {
+      "destinationProgramId": "string",
+      "sourceProgramId": "string"
+    }
+  ]
+}
+```
+
+### 更新帳戶數據
+
+> 使用以下方法更新已存在的帳戶將會覆蓋帳戶狀態
+
+使用`surfnet_setAccount`修改任何帳戶的屬性，包括 lamports、數據、擁有者和可執行狀態。
+
+此方法需要`pubkey`，並接受以下可選字段：`data`、`executable`、`lamports`、`owner` 和 `rentEpoch`：
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setAccount",
+  "params": [
+    "1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM",
+    {
+      "data": "0x123456",
+      "executable": false,
+      "lamports": 1000000000,
+      "owner": "11111111111111111111111111111111",
+      "rentEpoch": 0
+    }
+  ]
+}
+```
+
+此外，對於代幣帳戶的修改，請使用專門的`surfnet_setTokenAccount`方法，該方法簡化了代幣帳戶數據的更改。
+
+需要`owner`和`mint`參數，並接受以下可選字段：`amount`、`closeAuthority`、`delegate`、`delegateAmount`、`state` 和 `tokenProgram`：
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setTokenAccount",
+  "params": [
+    "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
+    "11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3",
+    {
+      "amount": 1000000000,
+      "closeAuthority": "111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj",
+      "delegate": "11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP",
+      "delegatedAmount": 1000000000,
+      "state": "initialized"
+    },
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  ]
+}
+```

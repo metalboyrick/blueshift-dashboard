@@ -1,0 +1,706 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 帳戶
+
+正如我們在上一節中所見，使用 Pinocchio 進行帳戶驗證與 Anchor 不同，因為我們無法使用自動執行擁有者、簽署者和識別符檢查的帳戶類型。
+
+在原生 Rust 中，我們需要手動執行這些驗證。雖然這需要更多的細節關注，但實現起來相對簡單：
+
+```rust
+// SignerAccount type
+if !account.is_signer() {
+    return Err(PinocchioError::NotSigner.into());
+}
+```
+
+或者進行擁有者檢查：
+
+```rust
+// SystemAccount type
+if !account.is_owned_by(&pinocchio_system::ID) {
+    return Err(PinocchioError::InvalidOwner.into());
+}
+```
+
+通過將所有驗證包裹在我們之前提到的 `TryFrom` 實現中，我們可以輕鬆識別缺失的檢查，並確保我們編寫的是安全的代碼。
+
+然而，為每個指令編寫這些檢查可能會變得重複。為了解決這個問題，我們創建了一個 `helper.rs` 文件，定義了類似於 Anchor 的類型，以簡化這些驗證。
+
+### 常見介面和特徵
+
+對於我們的 `helper.rs` 文件，我們利用了兩個基本的 Rust 概念：**常見介面** 和 **特徵**。
+
+我們選擇這種方法而不是基於宏的解決方案（如 Anchor 的）有幾個關鍵原因：
+- 特徵和介面提供了清晰、明確的代碼，讀者無需在腦中“展開”宏即可理解
+- 編譯器可以驗證特徵實現，從而實現更好的錯誤檢測、類型推斷、自動完成和重構工具
+- 特徵允許通用實現，可以重複使用而不需要代碼重複，而程序化宏會為每次使用重複代碼
+- 這些特徵可以打包成可重用的 crate，而宏生成的 API 通常僅限於定義它們的 crate
+
+現在您已了解我們的設計決策，讓我們來探索這些概念的語法和功能。
+
+**什麼是特徵和常見介面？**
+
+如果您熟悉其他編程語言，您可能會發現特徵類似於“介面”；它們定義了類型必須實現的方法的契約。
+
+在 Rust 中，trait 是一種藍圖，聲明「任何實現此 trait 的類型必須提供這些特定的函數。」
+
+以下是一個簡單的例子：
+
+```rust
+// Define a Trait
+pub trait AccountCheck {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError>;
+}
+
+// Define a Type
+pub struct SignerAccount;
+
+// Implement the trait for different Types
+impl AccountCheck for SignerAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_signer() {
+            return Err(PinocchioError::NotSigner.into());
+        }
+        Ok(())
+    }
+}
+
+pub struct SystemAccount;
+
+impl AccountCheck for SystemAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_system::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        Ok(())
+    }
+}
+```
+
+這裡的妙處在於，現在任何實現了 `AccountCheck` 的帳戶類型都可以以相同的方式使用；我們可以對它們中的任何一個調用 `.check()`，而每個類型都會處理適合其的驗證邏輯。
+
+這就是我們所說的「通用介面」：不同的類型共享相同的方法簽名。
+
+現在讓我們看看如何將這應用於我們的帳戶安全檢查：
+
+<ArticleSection name="簽署者與系統帳戶" id="signer-and-system-account" level="h2" />
+
+正如我們在之前的例子中所見，`SystemAccount` 和 `SignerAccount` 的檢查非常簡單，不需要任何額外的驗證，因此我們將以下內容添加到 `helper.rs`：
+
+```rust
+pub trait AccountCheck {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError>;
+}
+
+pub struct SignerAccount;
+
+impl AccountCheck for SignerAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_signer() {
+            return Err(PinocchioError::NotSigner.into());
+        }
+        Ok(())
+    }
+}
+
+pub struct SystemAccount;
+
+impl AccountCheck for SystemAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_system::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        Ok(())
+    }
+}
+```
+
+在這裡，我們只是檢查帳戶是否為簽署者或是否由系統程序擁有。注意，這兩個結構都提供了相同的檢查方法，為我們提供了之前提到的通用介面。
+
+<ArticleSection name="鑄幣與代幣帳戶" id="mint-and-token-accounts" level="h2" />
+
+現在事情變得更有趣了。我們從常見的 `AccountCheck` trait 開始，但我們還添加了其他特定的 traits，以提供類似於 Anchor 宏的額外輔助功能，例如 `init` 和 `init_if_needed`。
+
+```rust
+pub struct MintAccount;
+
+impl AccountCheck for MintAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_token::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        if account.data_len() != pinocchio_token::state::Mint::LEN {
+            return Err(PinocchioError::InvalidAccountData.into());
+        }
+
+        Ok(())
+    }
+}
+```
+
+針對 `init` 和 `init_if_needed` 的功能，我們創建了一個名為 `MintInit` 的 trait，專門用於此目的，因為它需要獨特的字段。然後我們使用 `CreateAccount` 和 `InitializeMint2` CPI 來初始化 `Mint` 帳戶：
+
+```rust
+pub trait MintInit {
+    fn init(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult;
+    fn init_if_needed(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult;
+}
+
+impl MintInit for MintAccount {
+    fn init(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::Mint::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::Mint::LEN as u64,
+            owner: &pinocchio_token::ID,
+        }.invoke()?;
+
+        InitializeMint2 {
+            mint: account,
+            decimals,
+            mint_authority,
+            freeze_authority,
+        }.invoke()
+    }
+
+    fn init_if_needed(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, payer, decimals, mint_authority, freeze_authority),
+        }
+    }
+}
+```
+
+然後我們對 `TokenAccount` 做完全相同的操作：
+
+```rust
+pub struct TokenAccount;
+
+impl AccountCheck for TokenAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_token::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        if account.data_len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+            return Err(PinocchioError::InvalidAccountData.into());
+        }
+
+        Ok(())
+    }
+}
+
+pub trait AccountInit {
+    fn init(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &[u8; 32]) -> ProgramResult;
+    fn init_if_needed(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &[u8; 32]) -> ProgramResult;
+}
+
+impl AccountInit for TokenAccount {
+    fn init(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &[u8; 32]) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::TokenAccount::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::TokenAccount::LEN as u64,
+            owner: &pinocchio_token::ID,
+        }.invoke()?;
+
+        // Initialize the Token Account
+        InitializeAccount3 {
+            account,
+            mint,
+            owner,
+        }.invoke()
+    }
+
+    fn init_if_needed(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &[u8; 32]) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, mint, payer, owner),
+        }
+    }
+}
+```
+
+### Token2022
+
+你可能已經注意到，對於舊版 SPL Token 程式，我們僅對 `Mint` 和 `TokenAccount` 進行了長度檢查。這種方法之所以有效，是因為當你只有兩種類型且大小固定的帳戶時，可以僅通過長度來區分它們。
+
+對於 Token2022，這種簡單的方法不再適用。當直接將代幣擴展添加到 `Mint` 資料時，其大小可能會增長，甚至超過 `TokenAccount` 的大小。這意味著我們不能僅依賴大小來區分帳戶類型。
+
+對於 Token2022，我們可以通過以下兩種方式區分 `Mint` 和 `TokenAccount`：
+- **通過大小**：類似於舊版 Token 程式（當帳戶具有標準大小時）
+- **通過識別碼**：一個位於位置 165 的特殊位元組（比舊版 TokenAccount 多一個位元組，以避免衝突）
+
+這導致了修改後的驗證檢查：
+
+```rust
+// TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
+pub const TOKEN_2022_PROGRAM_ID: [u8; 32] = [
+    0x06, 0xdd, 0xf6, 0xe1, 0xee, 0x75, 0x8f, 0xde, 0x18, 0x42, 0x5d, 0xbc, 0xe4, 0x6c, 0xcd, 0xda,
+    0xb6, 0x1a, 0xfc, 0x4d, 0x83, 0xb9, 0x0d, 0x27, 0xfe, 0xbd, 0xf9, 0x28, 0xd8, 0xa1, 0x8b, 0xfc,
+];
+
+const TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET: usize = 165;
+pub const TOKEN_2022_MINT_DISCRIMINATOR: u8 = 0x01;
+pub const TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR: u8 = 0x02;
+
+pub struct Mint2022Account;
+
+impl AccountCheck for Mint2022Account {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        let data = account.try_borrow_data()?;
+
+        if data.len().ne(&pinocchio_token::state::Mint::LEN) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+            if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl MintInit for Mint2022Account {
+    fn init(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::Mint::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::Mint::LEN as u64,
+            owner: &TOKEN_2022_PROGRAM_ID,
+        }.invoke()?;
+
+        InitializeMint2 {
+            mint: account,
+            decimals,
+            mint_authority,
+            freeze_authority,
+        }.invoke()
+    }
+
+    fn init_if_needed(account: &AccountInfo, payer: &AccountInfo, decimals: u8, mint_authority: &[u8; 32], freeze_authority: Option<&[u8; 32]>) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, payer, decimals, mint_authority, freeze_authority),
+        }
+    }
+}
+pub struct TokenAccount2022Account;
+
+impl AccountCheck for TokenAccount2022Account {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        let data = account.try_borrow_data()?;
+
+        if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+            if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl AccountInit for TokenAccount2022Account {
+    fn init(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &[u8; 32]) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::TokenAccount::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::TokenAccount::LEN as u64,
+            owner: &TOKEN_2022_PROGRAM_ID,
+        }.invoke()?;
+
+        InitializeAccount3 {
+            account,
+            mint,
+            owner,
+        }.invoke()
+    }
+
+    fn init_if_needed(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &[u8; 32]) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, mint, payer, owner),
+        }
+    }
+}
+```
+
+### Token 介面
+
+由於我們希望能夠輕鬆處理 Token2022 和舊版 Token 程式，而無需在它們之間進行區分，我們創建了一個遵循相同基本原則的輔助工具：
+
+```rust
+pub struct MintInterface;
+
+impl AccountCheck for MintInterface {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            if !account.is_owned_by(&pinocchio_token::ID) {
+                return Err(PinocchioError::InvalidOwner.into());
+            } else {
+                if account.data_len().ne(&pinocchio_token::state::Mint::LEN) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        } else {
+            let data = account.try_borrow_data()?;
+
+            if data.len().ne(&pinocchio_token::state::Mint::LEN) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+                if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub struct TokenAccountInterface;
+
+impl AccountCheck for TokenAccountInterface {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            if !account.is_owned_by(&pinocchio_token::ID) {
+                return Err(PinocchioError::InvalidOwner.into());
+            } else {
+                if account.data_len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        } else {
+            let data = account.try_borrow_data()?;
+
+            if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+                if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET]
+                    .ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR)
+                {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+```
+
+### 關聯代幣帳戶
+
+我們可以為關聯代幣程式創建一些檢查。這些檢查與普通代幣程式的檢查非常相似，但它們包括一個額外的推導檢查，以確保帳戶被正確推導。
+
+```rust
+pub struct AssociatedTokenAccount;
+
+impl AssociatedTokenAccountCheck for AssociatedTokenAccount {
+    fn check(
+        account: &AccountInfo,
+        authority: &AccountInfo,
+        mint: &AccountInfo,
+        token_program: &AccountInfo,
+    ) -> Result<(), ProgramError> {
+        TokenAccount::check(account)?;
+
+        if find_program_address(
+            &[authority.key(), token_program.key(), mint.key()],
+            &pinocchio_associated_token_account::ID,
+        )
+        .0
+        .ne(account.key())
+        {
+            return Err(PinocchioError::InvalidAddress.into());
+        }
+
+        Ok(())
+    }
+}
+
+impl AssociatedTokenAccountInit for AssociatedTokenAccount {
+    fn init(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &AccountInfo, system_program: &AccountInfo, token_program: &AccountInfo) -> ProgramResult {
+        Create {
+            funding_account: payer,
+            account,
+            wallet: owner,
+            mint,
+            system_program,
+            token_program,
+        }.invoke()
+    }
+
+    fn init_if_needed(account: &AccountInfo, mint: &AccountInfo, payer: &AccountInfo, owner: &AccountInfo, system_program: &AccountInfo, token_program: &AccountInfo) -> ProgramResult {
+        match Self::check(account, payer, mint) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, mint, payer, owner, system_program, token_program),
+        }
+    }
+}
+```
+
+<ArticleSection name="程式帳戶" id="program-accounts" level="h2" />
+
+最後，我們為程式帳戶實現了檢查和輔助工具，包括 `init` 和 `close` 功能。
+
+你可能會在我們的 `close` 實現中注意到一些有趣的地方：我們將帳戶大小調整到幾乎為零，只保留第一個位元組並將其設置為 255。這是一種安全措施，用於防止重新初始化攻擊。
+
+重新初始化攻擊是指攻擊者嘗試通過使用惡意數據重新初始化已關閉的帳戶來重複利用該帳戶。通過將第一個字節設置為255並將帳戶縮小到接近零的大小，我們可以確保該帳戶未來不會被誤認為任何有效的帳戶類型。這是Solana程序中常見的安全模式。
+
+  ```rust
+  pub struct ProgramAccount;
+
+  impl AccountCheck for ProgramAccount {
+      fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+          if !account.is_owned_by(&crate::ID) {
+              return Err(PinocchioError::InvalidOwner.into());
+          }
+
+          if account.data_len().ne(&crate::state::ProgramAccount::LEN) {
+              return Err(PinocchioError::InvalidAccountData.into());
+          }
+
+          Ok(())
+      }
+  }
+
+  pub trait ProgramAccountInit {
+      fn init<'a, T: Sized>(
+          payer: &AccountInfo,
+          account: &AccountInfo,
+          seeds: &[Seed<'a>],
+          space: usize,
+      ) -> ProgramResult;
+  }
+
+  impl ProgramAccountInit for ProgramAccount {
+      fn init<'a, T: Sized>(
+          payer: &AccountInfo,
+          account: &AccountInfo,
+          seeds: &[Seed<'a>],
+          space: usize,
+      ) -> ProgramResult {
+          // Get required lamports for rent
+          let lamports = Rent::get()?.minimum_balance(space);
+
+          // Create signer with seeds slice
+          let signer = [Signer::from(seeds)];
+
+          // Create the account
+          CreateAccount {
+              from: payer,
+              to: account,
+              lamports,
+              space: space as u64,
+              owner: &crate::ID,
+          }
+          .invoke_signed(&signer)?;
+
+          Ok(())
+      }
+  }
+
+  pub trait AccountClose {
+      fn close(account: &AccountInfo, destination: &AccountInfo) -> ProgramResult;
+  }
+
+  impl AccountClose for ProgramAccount {
+      fn close(account: &AccountInfo, destination: &AccountInfo) -> ProgramResult {
+          {
+              let mut data = account.try_borrow_mut_data()?;
+              data[0] = 0xff;
+          }
+
+          *destination.try_borrow_mut_lamports()? += *account.try_borrow_lamports()?;
+          account.realloc(1, true)?;
+          account.close()
+      }
+  }
+  ```
+
+### 優化帳戶數據訪問
+
+雖然我們可以實現一個通用的`Trait`來從`ProgramAccount`中讀取數據，但創建特定的`readers`和`setters`來僅訪問所需字段，而不是反序列化整個帳戶，會更高效。這種方法可以減少計算開銷和Gas成本。
+
+以下是一個實現此優化的示例：
+
+```rust
+#[repr(C)]
+pub struct AccountExample {
+    pub seed: u64,
+    pub bump: [u8; 1]
+}
+
+impl AccountExample {
+    /// The length of the `AccountExample` account data.
+    pub const LEN: usize = size_of::<u64>() + size_of::<[u8; 1]>();
+
+    /// Return an `AccountExample` from the given account info.
+    ///
+    /// This method performs owner and length validation on `AccountInfo`, safe borrowing
+    /// the account data.
+    #[inline]
+    pub fn from_account_info(account_info: &AccountInfo) -> Result<Ref<AccountExample>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes(data)
+        }))
+    }
+
+    /// Return a `AccountExample` from the given account info.
+    ///
+    /// This method performs owner and length validation on `AccountInfo`, but does not
+    /// perform the borrow check.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that it is safe to borrow the account data – e.g., there are
+    /// no mutable borrows of the account data.
+    #[inline]
+    pub unsafe fn from_account_info_unchecked(
+        account_info: &AccountInfo,
+    ) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Self::from_bytes(account_info.borrow_data_unchecked()))
+    }
+
+    /// Return a `AccountExample` from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `AccountExample`.
+    #[inline(always)]
+    pub unsafe fn from_bytes(bytes: &[u8]) -> &Self {
+        &*(bytes.as_ptr() as *const AccountExample)
+    }
+}
+```
+
+此實現提供了三種訪問帳戶數據的方法：
+1. `from_account_info`：一種安全的方法，執行完整的驗證和借用檢查
+2. `from_account_info_unchecked`：一種不安全的方法，跳過借用檢查但仍然驗證帳戶屬性
+3. `from_bytes`：一種直接字節訪問的不安全方法，由其他方法內部使用
+
+我們還可以實現一個`set_inner`助手來更新帳戶數據：
+
+```rust
+#[inline(always)]
+pub fn set_inner(&mut self, seed: u64, bump: [u8;1]) {
+    self.seed = seed;
+    self.bump = bump;
+}
+```
+
+為了更細粒度的控制和效率，我們可以使用固定偏移量實現特定的getter和setter：
+
+```rust
+const SEED_OFFSET: usize = 0;
+
+#[inline(always)]
+pub fn check_program_id_and_discriminator(
+    account_info: &AccountInfo,
+) -> Result<(), ProgramError> {
+    // Check Program ID
+    if unsafe { account_info.owner().ne(&crate::ID) } {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    // Check length
+    if account_info.data_len().ne(Self::LEN) {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
+    Ok(())
+}
+
+#[inline(always)]
+pub fn get_seeds(account_info: &AccountInfo) -> Result<u64, ProgramError> {
+    Self::check_program_id_and_discriminator(account_info);
+
+    let data = account_info.try_borrow_data()?;
+    Ok(u64::from_le_bytes(data[SEED_OFFSET..SEED_OFFSET + size_of::<u64>()].try_into().unwrap()))
+}
+
+#[inline(always)]
+pub unsafe fn get_seeds_unchecked(account_info: &AccountInfo) -> Result<u64, ProgramError> {
+    let data = account_info.try_borrow_data()?;
+    Ok(u64::from_le_bytes(data[SEED_OFFSET..SEED_OFFSET + size_of::<u64>()].try_into().unwrap()))
+}
+
+#[inline(always)]
+pub fn set_seeds(account_info: &AccountInfo, seed: u64) -> Result<(), ProgramError> {
+    Self::check_program_id_and_discriminator(account_info);
+
+    let data = account_info.try_borrow_mut_data()?;
+    Ok(unsafe {
+        *(data.as_mut_ptr() as *mut [u8; 8]) = seed.to_le_bytes();
+    })
+}
+
+#[inline(always)]
+pub fn set_seeds_unchecked(account_info: &AccountInfo, seed: u64) -> Result<(), ProgramError> {
+    let data = account_info.try_borrow_mut_data()?;
+    Ok(unsafe {
+        *(data.as_mut_ptr() as *mut [u8; 8]) = seed.to_le_bytes();
+    })
+}
+```
+
+此實現提供了：
+1. 一個常量`SEED_OFFSET`來跟蹤種子數據的位置
+2. 一個驗證函數`check_program_id_and_discriminator`
+3. 安全和不安全版本的getter和setter
+4. 用於更高性能的內聯優化
+
+不安全版本跳過驗證檢查，以便在您確定帳戶有效時提高性能，而安全版本則在訪問數據之前確保適當的驗證。

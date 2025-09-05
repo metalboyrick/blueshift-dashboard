@@ -1,0 +1,86 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 錯誤
+
+在使用 Pinocchio 構建的 Solana 程式中，清晰且具描述性的錯誤類型至關重要。它們能讓除錯更容易，並為與您的程式互動的用戶和客戶提供有意義的反饋。
+
+### PinocchioError 枚舉
+
+在 Rust 中定義自訂錯誤類型時，您有多種選擇，例如 `thiserror`、`anyhow` 和 `failure`。對於 Pinocchio 程式，`thiserror` 是首選，因為：
+- 它允許您使用 `#[error("...")]` 屬性為每個錯誤變體添加人類可讀的訊息。
+- 它自動實現 `core::error::Error` 和 `Display` 特性，使您的錯誤易於打印和除錯。
+- 所有錯誤訊息和格式在編譯時檢查，減少了運行時問題的風險。
+- 最重要的是，`thiserror` 支援在禁用其預設功能時的 `no_std` 環境，這是 Pinocchio 程式所需的。
+
+要在 Pinocchio 程式中使用 thiserror，請將其添加到您的 `Cargo.toml` 中，如下所示：
+
+```
+[dependencies]
+thiserror = { version = "1.0", default-features = false }
+```
+
+以下是如何為您的 Pinocchio 程式定義自訂錯誤類型：
+
+```rust
+use {
+    num_derive::FromPrimitive,
+    pinocchio::program_error::{ProgramError, ToStr},
+    thiserror::Error,
+};
+
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum PinocchioError {
+    // 0
+    /// Lamport balance below rent-exempt threshold.
+    #[error("Lamport balance below rent-exempt threshold")]
+    NotRentExempt,
+}
+```
+
+每個變體都附有一條訊息，當錯誤發生時會顯示該訊息。
+
+要從 Solana 指令中返回您的自訂錯誤，為 `ProgramError` 實現 `From<PinocchioError>`：
+
+```rust
+impl From<PinocchioError> for ProgramError {
+    fn from(e: PinocchioError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+```
+
+這允許您使用 `?` 運算符，無縫地返回您的自訂錯誤。
+
+### 從原始值反序列化錯誤
+
+如果您需要將原始錯誤代碼（例如來自日誌或跨程式調用的代碼）轉換回您的錯誤枚舉，請實現 `TryFrom<u32>`：
+
+```rust
+impl TryFrom<u32> for PinocchioError {
+    type Error = ProgramError;
+    fn try_from(error: u32) -> Result<Self, Self::Error> {
+        match error {
+            0 => Ok(PinocchioError::NotRentExempt),
+            _ => Err(ProgramError::InvalidArgument),
+        }
+    }
+}
+```
+
+> 這是可選的，但對於高級錯誤處理和測試非常有用。
+
+### 人類可讀的錯誤
+
+為了記錄和調試，您可能需要為錯誤提供字串表示。實現 `ToStr` trait 可以幫助您做到這一點：
+
+```rust
+impl ToStr for PinocchioError {
+    fn to_str<E>(&self) -> &'static str {
+        match self {
+            PinocchioError::NotRentExempt => "Error: Lamport balance below rent-exempt threshold",
+        }
+    }
+}
+```
+
+> 此步驟也是可選的，但它可以使錯誤報告對用戶更友善。

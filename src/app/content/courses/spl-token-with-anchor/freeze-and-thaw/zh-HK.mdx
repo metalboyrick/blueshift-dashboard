@@ -1,0 +1,45 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 凍結和解凍指引
+
+凍結會阻止帳戶上的所有代幣操作，直到該帳戶被解凍。只有鑄幣的凍結權限持有人可以執行此操作。
+
+> 完全禁用轉賬、授權和銷毀操作，並且僅影響特定的已凍結帳戶
+
+解凍會重新啟用之前被凍結帳戶上的代幣操作。只有鑄幣的凍結權限持有人可以解凍帳戶。
+
+> 恢復已凍結帳戶的全部功能，並且只能由鑄幣的凍結權限持有人執行
+
+在我們凍結或解凍任何代幣帳戶之前，我們需要已經完成以下準備：
+- 初始化了一個`Mint`帳戶，並且我們持有`freezeAuthority`
+- 初始化了一個`Token`帳戶或`Associated Token`帳戶，這是我們想要凍結或解凍的
+
+以下是對`freeze_account()`指令的CPI操作：
+
+```rust
+freeze_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        FreezeAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```
+
+以下是對`thaw_account()`指令的CPI操作：
+
+```rust
+thaw_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        ThawAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

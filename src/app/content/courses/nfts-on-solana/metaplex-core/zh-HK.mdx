@@ -1,0 +1,192 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex Core 程式
+
+Metaplex Core 程式解決了 Token Metadata 程式多帳戶架構中固有的複雜性和成本問題。雖然 Token Metadata 以 SPL-Token 為基礎，需要為每個 NFT 設置多個帳戶，但這種方法導致了昂貴且笨重的實現方式，對用戶和網絡都造成了負擔。
+
+於 2024 年推出的 Metaplex Core 是一個專為 NFT 操作設計的超輕量級程式。與其前身不同，Core 獨立運行，無需依賴 SPL-Token，並通過其自身的程式邏輯處理鑄造、轉移、銷毀和可自定義的行為。
+
+這個新一代標準採用單一帳戶設計，大幅降低鑄造成本，同時通過靈活的插件系統提升整體網絡性能。
+
+<ArticleSection name="Assets" id="assets" level="h2" />
+
+Metaplex Core 的革命性特點在於其統一的帳戶結構，消除了鑄造帳戶和代幣帳戶之間的傳統分離。
+
+由於 NFT 具有唯一的所有權，且每次僅有一個持有者，該程式直接在資產帳戶內存儲錢包與資產之間的關係。
+
+這種設計直觀合理，因為原始的代幣帳戶系統是為了管理每個鑄造數千名持有者而設計的，而這種情況從未適用於非同質化代幣。
+
+資產結構通過其最低的欄位需求展示了這種以效率為中心的方法：
+
+```rust
+#[derive(Clone, BorshSerialize, BorshDeserialize, Debug, ShankAccount, Eq, PartialEq)]
+pub struct AssetV1 {
+    /// The account discriminator.
+    pub key: Key,
+    /// The owner of the asset.
+    pub owner: Pubkey,
+    /// The update authority of the asset.
+    pub update_authority: UpdateAuthority,
+    /// The name of the asset.
+    pub name: String,
+    /// The URI of the asset that points to the off-chain data.
+    pub uri: String,
+    /// The sequence number used for indexing with compression.
+    pub seq: Option<u64>,
+}
+```
+
+這種結構代表了功能性 NFT 操作所需的絕對最小數據。
+
+傳統的 `Mint` 帳戶欄位在此情境下變得多餘，因為：供應量始終等於 1，小數位始終等於 0，鑄造權限應保持未設置，凍結權限可以與更新權限欄位合併。
+
+同樣，大多數`Token`帳戶功能直接整合到資產結構中。
+
+缺乏明確的凍結機制體現了Core的智能設計理念。
+
+與其為許多資產從未使用的功能保留空間，Core通過其插件系統實現凍結功能，按需添加功能，而不是維護未使用的字段。
+
+這種方法在保留需要凍結功能的資產的完整功能的同時，優化了存儲成本。
+
+集合成員資格通過更新權限枚舉系統同樣得到了深思熟慮的處理：由於分組資產通常共享相同的更新權限，Core利用這種關係來消除冗餘字段存儲：
+
+```rust
+pub enum UpdateAuthority {
+    None,
+    Address(Pubkey),
+    Collection(Pubkey),
+}
+```
+
+更新權限字段具有三重功能，通過`None`指示不可變資產，通過特定地址指示獨立資產，或通過其父集合繼承更新權限的集合成員。
+
+這種優雅的解決方案在減少存儲需求的同時，保持了清晰的權限關係和集合成員資格驗證。
+
+<ArticleSection name="Collections" id="collections" level="h2" />
+
+Metaplex Core中的集合代表共享主題、創意或功能關係的資產組。
+
+與依賴外部驗證系統的傳統NFT集合不同，Core集合通過其集成的權限結構在資產之間建立可驗證的鏈上關係。
+
+創建集合始於建立一個集合資產，該資產作為所有成員資產的權威父帳戶。
+
+此集合資產既是組織中心，也是集合範圍內信息的元數據存儲庫，包括集合名稱、描述和代表性圖像。
+
+集合帳戶還充當適用於所有成員資產的插件的中央控制點，使創作者能夠在整個集合中實現統一的行為。
+
+```rust
+pub struct CollectionV1 {
+    /// The account discriminator.
+    pub key: Key, //1
+    /// The update authority of the collection.
+    pub update_authority: Pubkey, //32
+    /// The name of the collection.
+    pub name: String, //4
+    /// The URI that links to what data to show for the collection.
+    pub uri: String, //4
+    /// The number of assets minted in the collection.
+    pub num_minted: u32, //4
+    /// The number of assets currently in the collection.
+    pub current_size: u32, //4
+}
+```
+
+Collection 結構透過其 `num_minted` 和 `current_size` 欄位維持關鍵統計數據，這些欄位分別追蹤該 Collection 中曾經創建的資產總數以及目前仍然活躍的資產數量。
+
+這些指標使得 Collection 的分析更加準確，並支持例如限量版發行或銷毀追蹤等功能，而無需依賴外部索引服務。
+
+當資產將其 `update_authority` 設置為 `Collection(collection_pubkey)` 時，它會自動繼承 Collection 的權限結構，同時建立可驗證的成員關係。這種設計消除了對單獨驗證帳戶或外部證明系統的需求，創建了完全在鏈上可驗證的不可變 Collection 關係。
+
+<ArticleSection name="Plugins" id="plugins" level="h2" />
+
+插件系統是 Metaplex Core 最具創新性的功能，解決了早期 NFT 標準中僵化、預定義行為的局限性。
+
+雖然傳統的 Token Metadata 程式需要通過可編程 NFT 等複雜的變通方法來實現自定義功能，但 Core 的插件架構能夠在不犧牲簡單性或性能的情況下實現細粒度的自定義。
+
+Core 的革命性方法將鏈上數據視為流動的，而不是將其鎖定在固定結構中。這種設計理念支持靈活的插件系統，滿足多樣化的使用場景，同時保持高效的帳戶管理。
+
+每個插件定義了自己的權限模型，明確規定誰可以執行特定操作，而 Core 的驗證系統則防止不同權限和操作之間的衝突。
+
+帳戶架構分為兩個明確的組件：
+- 包含基本資產信息的核心數據部分，具有可預測的欄位長度
+- 可選的插件元數據部分，提供額外功能和自定義行為。
+
+這種分離確保了基本資產保持輕量化，而複雜功能則可按需擴展。
+
+插件的元數據通過三部分結構進行組織：標頭、單個插件以及協調所有內容的註冊表。
+
+```
+Header | Plugin1 | Plugin2 | Plugin3 | Registry
+```
+
+插件標頭作為入口點，包含一個`plugin_registry_offset`指針，指示註冊表在帳戶中的位置：
+
+```rust
+pub struct PluginHeaderV1 {
+    /// The Discriminator of the header which doubles as a Plugin metadata version.
+    pub key: Key, // 1
+    /// The offset to the plugin registry stored at the end of the account.
+    pub plugin_registry_offset: usize, // 8
+}
+```
+
+插件註冊表作為協調中心，維護內部`RegistryRecord`條目和第三方插件的`ExternalRegistryRecord`條目的向量。
+
+每條記錄包含插件類型、管理機構以及帳戶內的偏移位置：
+
+```rust
+pub struct PluginRegistryV1 {
+    /// The Discriminator of the header which doubles as a plugin metadata version.
+    pub key: Key, // 1
+    /// The registry of all plugins.
+    pub registry: Vec<RegistryRecord>, // 4
+    /// The registry of all adapter, third party, plugins.
+    pub external_registry: Vec<ExternalRegistryRecord>, // 4
+}
+
+pub struct RegistryRecord {
+    /// The type of plugin.
+    pub plugin_type: PluginType, // 2
+    /// The authority who has permission to utilize a plugin.
+    pub authority: Authority, // Variable
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+}
+
+pub struct ExternalRegistryRecord {
+    /// The adapter, third party plugin type.
+    pub plugin_type: ExternalPluginAdapterType,
+    /// The authority of the external plugin adapter.
+    pub authority: Authority,
+    /// The lifecycle events for which the external plugin adapter is active.
+    pub lifecycle_checks: Option<Vec<(HookableLifecycleEvent, ExternalCheckResult)>>,
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+    /// For plugins with data, the offset to the data in the account.
+    pub data_offset: Option<usize>,
+    /// For plugins with data, the length of the data in the account.
+    pub data_len: Option<usize>,
+}
+```
+
+插件檢索遵循一個利用此組織結構的系統化過程。
+
+系統首先加載資產數據以確定插件標頭的位置，然後使用標頭的偏移量定位註冊表，最後遍歷註冊表記錄以編譯完整的插件列表：
+
+```rust
+pub fn list_plugins(account: &AccountInfo) -> Result<Vec<PluginType>, ProgramError> {
+    let asset = AssetV1::load(account, 0)?;
+    if asset.get_size() == account.data_len() {
+        return Err(MplCoreError::PluginNotFound.into());
+    }
+    let header = PluginHeaderV1::load(account, asset.get_size())?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::load(account, header.plugin_registry_offset)?;
+    Ok(registry
+        .iter()
+        .map(|registry_record| registry_record.plugin_type)
+        .collect())
+}
+```
+
+> 如需了解更多有關如何使用`Core`程序的信息，請參閱[官方文檔](https://developers.metaplex.com/core)

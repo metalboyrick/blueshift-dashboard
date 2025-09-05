@@ -1,0 +1,380 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 代幣擴展
+
+原本的代幣程式提供了鑄造、轉移和凍結代幣等基本功能，而代幣擴展則解鎖了一個可編程代幣的新範式。
+
+這個增強的程式在保持與現有 SPL 代幣操作完全相容的同時，新增了高級功能，例如用於執行自定義邏輯的轉移掛鉤、內建費用機制、增強的元數據支持、計算利息的功能以及高級安全控制。
+
+### 擴展相容性
+
+代幣擴展被設計為可組合的，允許您結合多個擴展來創建完全符合您項目需求的代幣。
+
+然而，由於功能衝突或邏輯矛盾，某些組合是不相容的，例如：
+- 不可轉移 + 轉移掛鉤 / 轉移費用 / 機密轉移
+- 機密轉移 + 轉移費用（直到 1.18）
+- 機密轉移 + 轉移掛鉤（這些轉移只能看到來源 / 目標帳戶，因此無法對轉移的金額進行操作）
+- 機密轉移 + 永久代理
+
+<ArticleSection name="轉移費用擴展" id="transfer-fee-config" level="h2" />
+
+`TransferFee` 擴展是一個 `Mint` 擴展，允許創建者為代幣設置一個“稅”，每次有人進行交換時都會收取。
+
+為了確保每次有人進行交換時，費用接收者不會被寫鎖，並確保我們可以並行處理包含此擴展的鑄幣交易，費用會被存放在接收者的代幣帳戶中，只有 `Withdraw Authority` 可以提取。
+
+正因如此，要使用 `TransferFee` 擴展，我們需要兩種類型的擴展：一種直接應用於 `Mint` 帳戶，稱為 `TransferFeeConfig`，它包含執行交換所需的所有數據；另一種應用於 `Token` 帳戶，稱為 `TransferFeeAmount`，用於“註冊”代幣帳戶扣留了多少代幣。
+
+以下是 `TransferFee` 擴展數據的外觀：
+
+```rust
+/// TransferFeeConfig Extension
+pub const transfer_fee_config_header: [u8; 4] = [1, 0, 108, 0];
+
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+需要注意的一些事項：
+- `config_authority` 可能與實際能從 `Token` 賬戶中提取代幣的人不同。
+- 我們同時擁有 `older` 和 `newer` 的轉賬費結構。
+
+最後一點是因為當我們設置新的 `TransferFee` 時，有一個“冷卻”期為兩個時期，以避免在時期結束時發生欺詐行為。這意味著在新的 `TransferFee` 的前兩個時期，舊的 `TransferFee` 是實際生效的。
+
+此外，你可以看到 `TransferFeeConfig` 擁有一個 `withheld_amount` 欄位。這可能聽起來很奇怪，因為我們剛剛提到代幣費用累積到 `Token Account` 中，但實際上提取這些費用是一個兩步驟的過程：
+- 從 `Token Account` 提取費用到 `Mint`。這可以無需許可地完成。
+- 從 `Mint` 提取費用到目標賬戶。這是一個需要許可的操作，只有 `Withdraw Authority` 可以執行。
+
+對於此擴展，我們需要一個兩步驟的過程，以應對某些人希望關閉仍有費用的 `Token Account` 的邊緣情況。由於這些費用的目標可能與 `Withdraw Authority` 不同，我們需要考慮在關閉 `Token Account` 之前，這些費用需要被轉移到某個地方。
+
+以下是 `TransferFeeAmount` 擴展數據的外觀
+
+```rust
+/// TransferFeeAmount Extension
+pub const transfer_amount_config_header: [u8; 4] = [2, 0, 8, 0];
+
+pub struct TransferFeeAmount {
+    pub withheld_amount: u64,
+}
+```
+
+<ArticleSection name="Mint Close Authority Extension" id="mint-close-authority-config" level="h2" />
+
+`MintCloseAuthority` 擴展是一個 `Mint` 擴展，允許權限關閉並從當前供應量為 0 的 `Mint` 賬戶中檢索租金。
+
+此擴展功能對清理未使用的鑄幣（mints）以及回收用於支付帳戶租金豁免的 SOL 非常有用。只有當沒有代幣在流通時，鑄幣才可以被關閉。
+
+以下是 `MintCloseAuthority` 擴展數據的樣子：
+
+```rust
+/// MintCloseAuthority Extension
+pub const mint_close_authority_extension_header: [u8; 4] = [3, 0, 32, 0];
+
+pub struct MintCloseAuthority {
+    pub close_authority: Pubkey,
+}
+```
+
+<ArticleSection name="預設帳戶狀態擴展" id="default-account-state-extension" level="h2" />
+
+`DefaultAccountState` 擴展是一個 `Mint` 擴展，允許所有為特定鑄幣新創建的代幣帳戶默認為凍結狀態。然後，鑄幣的 `Freeze Authority` 可以解凍（unfreeze）這些 `Token` 帳戶，使其可用。
+
+此功能使代幣創建者能夠更好地控制代幣的分發，通過限制誰可以持有代幣來實現。這對於合規場景、KYC/AML 要求或基於允許名單的代幣分發特別有用，在這些情況下，帳戶必須明確獲批才能接收或轉移代幣。
+
+以下是 `DefaultAccountState` 擴展數據的樣子：
+
+```rust
+/// DefaultAccountState Extension
+pub const default_account_state_extension_header: [u8; 4] = [6, 0, 1, 0];
+
+pub struct DefaultAccountState {
+    pub account_state: AccountState,
+}
+
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+```
+
+<ArticleSection name="不可變擁有者擴展" id="immutable-owner-extension" level="h2" />
+
+`ImmutableOwner` 擴展是一個 `Token` 帳戶擴展，防止代幣帳戶的所有權發生任何變更。這可以保護帳戶免受未經授權的訪問和轉移嘗試。
+
+此擴展對於關聯代幣帳戶（ATAs）和其他所有權不應更改的帳戶特別有價值。它可以防止惡意程序試圖竊取代幣帳戶的所有權，並為用戶和應用程序提供額外的安全保障。
+
+> 所有代幣擴展程序的 ATAs 默認啟用了不可變擁有者功能
+
+以下是 `ImmutableOwner` 擴展數據的樣子：
+
+```rust
+/// ImmutableOwner Extension
+pub const immutable_owner_extension_header: [u8; 4] = [7, 0, 0, 0];
+```
+
+<ArticleSection name="備註轉移擴展" id="memo-transfer-extension" level="h2" />
+
+`MemoTranfer Extension` 是一個 `Token` 帳戶擴展，要求所有進入該代幣帳戶的轉賬必須包含備註，從而促進更高效的交易追蹤和用戶識別。
+
+此擴展對於交易所、受監管機構以及需要追蹤轉賬目的或來源以滿足合規、會計或客戶服務需求的應用特別有用。啟用後，任何轉賬到該帳戶的操作都會失敗，除非在同一筆交易中包含備註指令。
+
+以下是 `MemoTranfer` 擴展數據的樣子：
+
+```rust
+/// MemoTranfer Extension
+pub const memo_transfer_extension_header: [u8; 4] = [8, 0, 1, 0];
+
+pub struct MemoTranfer {
+    pub require_incoming_transfer_memos: bool,
+}
+```
+
+<ArticleSection name="不可轉讓擴展" id="non-transferable-extension" level="h2" />
+
+`NonTransferable` 擴展是一個 `Mint` 帳戶擴展，防止代幣在帳戶之間轉移，使其永久綁定於當前持有人。
+
+此擴展適用於創建靈魂綁定代幣、成就徽章、證書或任何代表不可轉讓權利或身份的代幣。一旦鑄造到帳戶，這些代幣將無法移動、出售或轉移到其他錢包，確保它們永久與原始接收者相關聯。
+
+此外，與 `Mint` 相關聯並具有 `NonTransferable` 擴展的 `Token` 帳戶將附帶 `NonTransferableAccount` 擴展。
+
+以下是 `NonTransferable` 和 `NonTransferableAccount` 擴展數據的樣子：
+
+```rust
+/// NonTransferable Extension
+pub const non_transferable_extension_header: [u8; 4] = [9, 0, 0, 0];
+
+/// NonTransferableAccount Extension
+pub const non_transferable_account_extension_header: [u8; 4] = [13, 0, 0, 0];
+```
+
+這兩個擴展只是標誌；僅其存在就能強制執行限制。
+
+<ArticleSection name="計息擴展" id="interest-bearing-extension" level="h2" />
+
+`InterestBearing` 擴展是一個 `Mint` 帳戶擴展，允許用戶對其代幣應用利率，並在任何時候檢索包括利息在內的更新總額。
+
+> 此機制不會生成新代幣；顯示的金額僅通過 `amount_to_ui_amount` 函數包含累積的利息，這種變化純粹是外觀上的。儘管如此，這是一個存儲在鑄幣帳戶中的值，程序可以利用這一點來創建超越純粹外觀的功能。
+
+以下是 `InterestBearing` 擴展數據的外觀：
+
+```rust
+/// InterestBearing Extension
+pub const interest_bearing_extension_header: [u8; 4] = [10, 0, 52, 0];
+
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+由於匯率可能會更新，為了確保計算正確，計算時會使用一個 `pre_update_average_rate` 欄位，以確定在匯率更新的情況下如何處理。
+
+<ArticleSection name="Cpi Guard Extension" id="cpi-guard-extension" level="h2" />
+
+`CpiGuard` 擴展是一個 `Token` 賬戶擴展，它禁止在跨程序調用中執行某些操作，保護用戶免受惡意程序試圖在未經明確同意的情況下操縱其代幣賬戶的行為。
+
+在與 DeFi 協議、去中心化交易所 (DEX) 或任何請求代幣賬戶訪問的程序交互時，此擴展對於安全性至關重要。它防止程序在跨程序調用期間執行未經授權的操作，例如更改所有權、設置不需要的代理或將資金重定向到非預期的接收者。
+
+啟用 `CpiGuard` 擴展後，以下 CPI 的行為如下所述：
+- 轉賬：簽署權限必須是所有者或先前設立的賬戶代理
+- 燒毀：簽署權限必須是所有者或先前設立的賬戶代理
+- 批准：禁止 - 在 CPI 中不能批准任何代理
+- 關閉賬戶：Lamport 的接收方必須是賬戶所有者
+- 設置關閉權限：除非取消設置，否則禁止
+- 設置所有者：始終禁止，包括在 CPI 外部
+
+以下是 `CpiGuard` 擴展數據的外觀：
+
+```rust
+/// CpiGuard Extension
+pub const cpi_guard_extension_header: [u8; 4] = [11, 0, 1, 0];
+
+pub struct CpiGuard {
+    pub lock_cpi: bool,
+}
+```
+
+<ArticleSection name="Permanent Delegate Extension" id="permanent-delegate-extension" level="h2" />
+
+`PermanentDelegate` 擴展是一個 `Mint` 賬戶擴展，它允許為該鑄幣的所有代幣設置永久代理，該代理能夠從任何代幣賬戶中轉移或燒毀該鑄幣的任何代幣。
+
+此擴展功能適用於創建內置管理控制的代幣，例如需要緊急凍結功能的穩定幣、需要集中管理的遊戲代幣，或需要監管機構永久監督的合規代幣。
+
+與可以被撤銷的普通代理不同，此代理權限是永久且不可更改的。
+
+以下是 `PermanentDelegate` 擴展數據的樣子：
+
+```rust
+/// PermanentDelegate Extension
+pub const permanent_delegate_extension_header: [u8; 4] = [12, 0, 32, 0];
+
+pub struct PermanentDelegate {
+    delegate: Pubkey,
+}
+```
+
+<ArticleSection name="轉移掛鉤擴展" id="transfer-hook-extension" level="h2" />
+
+`TransferHook` 擴展是一個 `Mint` 賬戶擴展，提供了創建 `Mint` 賬戶的能力，這些賬戶在每次代幣轉移時執行自定義指令邏輯。
+
+此擴展支持強大的應用場景，例如自動稅收徵收、版稅支付、基於自定義邏輯的轉移限制、合規檢查，或任何其他應在轉移期間發生的可編程行為。每當發生轉移時，擴展程序會自動調用掛鉤程序。
+
+為實現此功能，開發者必須構建一個實現 [Transfer Hook Interface](https://github.com/solana-program/transfer-hook/tree/main/program) 的程序，並初始化一個啟用了 `Transfer Hook` 擴展的 `Mint` 賬戶。
+
+此外，與啟用了 `TransferHook` 擴展的 `Mint` 賬戶相關聯的代幣賬戶將附帶 `TransferHookAccount` 擴展。
+
+以下是 `TransferHook` 和 `TransferHookAccount` 擴展數據的樣子：
+
+```rust
+/// TransferHook Extension
+pub const transfer_hook_extension_header: [u8; 4] = [14, 0, 64, 0];
+
+pub struct TransferHook {
+    // The transfer hook update authority
+    authority: Pubkey,
+    // The transfer hook program account
+    programId: Pubkey,
+}
+
+/// TransferHookAccount Extension
+pub const transfer_hook_account_extension_header: [u8; 4] = [15, 0, 1, 0];
+
+pub struct TransferHookAccount {
+    // Whether or not this account is currently transferring tokens
+    transferring: bool,
+}
+```
+
+<ArticleSection name="元數據擴展" id="metadata-extension" level="h2" />
+
+`Metadata` 擴展是一個 `Mint` 賬戶擴展，提供了將元數據直接嵌入鑄幣賬戶的能力，無需使用其他程序。
+
+此擴展對於需要鏈上元數據（如名稱、符號、圖像和自定義屬性）的 NFT、代幣和其他資產特別有用。通過將元數據直接嵌入鑄幣賬戶，消除了對外部元數據程序的需求，並確保元數據永久與代幣相關聯。
+
+`Metadata` 擴展由兩個不同的擴展組成，這兩個擴展都位於 Mint 帳戶上：
+- 包含所有元數據信息（如名稱、符號、uri 和其他帳戶）的 `Metadata` 擴展。
+- 參考 `Mint` 帳戶的 `MetadataPointer` 擴展，該帳戶中存放著 `Metadata` 擴展。
+
+通常情況下，這兩個擴展會位於同一個 `Mint` 帳戶上。但也可能出現同一元數據被不同資產使用的情況，為此將這兩個擴展分開並通過 `Metadata` 擴展引用 `Mint` 會更便宜。
+
+> 與其他擴展不同，要創建 `Metadata` 擴展，我們需要使用 [Token Metadata Interface](https://github.com/solana-program/token-metadata/tree/main)。元數據指針擴展使用經典的 Token2022 程式。
+
+這次我們無法為 `Metadata` 擴展創建一個固定的擴展標頭，因為它內部包含可變數據，這意味著其長度會根據字段而有所不同。
+
+以下是 `Metadata` 和 `MetadataPointer` 擴展數據的樣子：
+
+```rust
+/// Metadata Pointer Extension
+pub const metadata_pointer_extension_header: [u8; 4] = [18, 0, 64, 0]
+
+pub struct MetadataPointer {
+    // Authority that can set the metadata address
+    authority: Pubkey;
+    // Account Address that holds the metadata
+    metadata_address: Pubkey;
+}
+
+/// Metadata Extension (Discriminator: 19)
+pub struct TokenMetadata {
+    /// The authority that can sign to update the metadata
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that metadata
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The longer name of the token
+    pub name: String,
+    /// The shortened symbol for the token
+    pub symbol: String,
+    /// The URI pointing to richer metadata
+    pub uri: String,
+    /// Any additional metadata about the token as key-value pairs. The program
+    /// must avoid storing the same key twice.
+    pub additional_metadata: Vec<(String, String)>,
+}
+```
+
+<ArticleSection name="群組與成員擴展" id="group-and-member-extension" level="h2" />
+
+`Group` 和 `Member` 擴展是 `Mint` 帳戶擴展，提供了創建群組（如 NFT 集合）功能，這些群組與多個資產相關聯。
+
+這個擴展系統非常適合用於創建 NFT 集合、代幣家族或任何需要跟蹤成員資格並強制執行集合限制的相關資產分組。群組可以表示集合，而成員則表示這些集合中的單個項目。
+
+群組和成員擴展都由兩個不同的擴展組成，這兩個擴展都位於 `Mint` 帳戶上，就像 `Metadata` 擴展一樣：
+- 包含有關群組或成員的所有信息的 `Extension`。
+- 參考 `Group` 或 `Member` 擴展所在 Mint 帳戶的 `Pointer Extension`。
+
+群組與成員之間的關係是，群組可以有多個成員，但成員不能有多個群組。
+
+與 Metadata 擴展一樣，我們通常將 `Extension` 和 `Pointer` 放在同一個 `Mint` 帳戶中，並且要創建 `Group` 和 `Member` 擴展，我們需要使用 [Token Group Interface](https://github.com/solana-program/token-group/tree/main)。
+
+> 我們不能在有 `Member` 擴展的 `Mint` 帳戶中添加 `Group` 擴展。
+
+以下是 `Group` 和 `GroupPointer` 擴展數據的樣子：
+
+```rust
+/// GroupPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [20, 0, 64, 0]
+
+pub struct GroupPointer {
+    // Authority that can set the group address
+    authority: Pubkey;
+    // Account Address that holds the group
+    group_address: Pubkey;
+}
+
+/// Group Extension
+pub const group_extension_header: [u8; 4] = [21, 0, 80, 0]
+
+pub struct TokenGroup {
+    /// The authority that can sign to update the group
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that group
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The current number of group members
+    pub size: u64,
+    /// The maximum number of group members
+    pub max_size: u64,
+}
+```
+
+以下是 `Member` 和 `MemberPointer` 擴展數據的樣子：
+
+```rust
+/// MemberPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [22, 0, 64, 0]
+
+pub struct MemberPointer {
+    // Authority that can set the member address
+    authority: Pubkey;
+    // Account Address that holds the member
+    member_address: Pubkey;
+}
+
+/// Member Extension
+pub const group_extension_header: [u8; 4] = [23, 0, 72, 0]
+
+pub struct TokenGroupMember {
+    /// The associated mint, used to counter spoofing to be sure that member
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The pubkey of the `TokenGroup`
+    pub group: Pubkey,
+    /// The member number
+    pub member_number: u64,
+}
+```

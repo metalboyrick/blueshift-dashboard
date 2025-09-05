@@ -1,0 +1,147 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Make" id="make" level="h2" />
+
+我們現在可以進入 `make` 指令，該指令位於 `make.rs`，並將執行以下操作：
+- 初始化托管記錄並存儲所有條款。
+- 創建保管庫（由 `escrow` 擁有的 `mint_a` 的 ATA）。
+- 使用 CPI 將創建者的 Token A 移入該保管庫，並調用 SPL-Token 程式。
+
+### 帳戶 
+
+在此情境中需要的帳戶包括：
+- `maker`：決定條款並將 `mint_a` 存入 `Escrow` 的用戶
+- `escrow`：持有交換條款（創建者、鑄幣、數量）的帳戶
+- `mint_a`：`maker` 存入的代幣
+- `mint_b`：`maker` 想要交換的代幣
+- `maker_ata_a`：與 `maker` 和 `mint_a` 關聯的代幣帳戶，用於將代幣存入 `vault`
+- `vault`：與 `escrow` 和 `mint_a` 關聯的代幣帳戶，用於存放存入的代幣
+- `associated_token_program`：用於創建關聯代幣帳戶的關聯代幣程式
+- `token_program`：用於 CPI 轉移的代幣程式
+- `system_program`：用於創建 `Escrow` 的系統程式
+
+結合所有約束條件後，它看起來會像這樣：
+
+```rust
+#[derive(Accounts)]
+#[instruction(seed: u64)]
+pub struct Make<'info> {
+    #[account(mut)]
+    pub maker: Signer<'info>,
+    #[account(
+        init,
+        payer = maker,
+        space = Escrow::INIT_SPACE + Escrow::DISCRIMINATOR.len(),
+        seeds = [b"escrow", maker.key().as_ref(), seed.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub escrow: Account<'info, Escrow>,
+
+    /// Token Accounts
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint_a: InterfaceAccount<'info, Mint>,
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint_b: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint_a,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_a: InterfaceAccount<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = maker,
+        associated_token::mint = mint_a,
+        associated_token::authority = escrow,
+        associated_token::token_program = token_program
+    )]
+    pub vault: InterfaceAccount<'info, TokenAccount>,
+
+    /// Programs
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+**注意**：此指令僅傳遞一個 token_program。由於 take 會轉移兩個鑄幣，因此我們必須確保這兩個鑄幣都由同一程式（SPL Token 或 Token-2022）擁有，否則 CPI 將失敗。
+
+### 邏輯 
+
+初始化帳戶後，我們最終可以通過創建較小的輔助函數作為帳戶結構的實現來處理邏輯。
+
+我們首先使用 `Escrow` 和 `set_inner()` 幫助器來填充，然後通過 `transfer` CPI 進行代幣存入，如下所示：
+
+```rust
+impl<'info> Make<'info> {
+    /// # Create the Escrow
+    fn populate_escrow(&mut self, seed: u64, amount: u64, bump: u8) -> Result<()> {
+        self.escrow.set_inner(Escrow {
+            seed,
+            maker: self.maker.key(),
+            mint_a: self.mint_a.key(),
+            mint_b: self.mint_b.key(),
+            receive: amount,
+            bump,
+        });
+
+        Ok(())
+    }
+
+    /// # Deposit the tokens
+    fn deposit_tokens(&self, amount: u64) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.maker_ata_a.to_account_info(),
+                    mint: self.mint_a.to_account_info(),
+                    to: self.vault.to_account_info(),
+                    authority: self.maker.to_account_info(),
+                },
+            ),
+            amount,
+            self.mint_a.decimals,
+        )?;
+
+        Ok(())
+    }
+}
+```
+
+我們可以看到 Anchor 在多方面為我們提供幫助：
+- `set_inner()`：保證每個欄位都已填充。
+- `transfer_checked`：像我們之前使用的系統幫助器一樣，封裝了 Token CPI。
+
+現在我們可以繼續創建一個 `handler` 函數，在使用幫助器之前執行一些檢查，如下所示：
+
+```rust
+pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+    // Validate the amount
+    require_gt!(receive, 0, EscrowError::InvalidAmount);
+    require_gt!(amount, 0, EscrowError::InvalidAmount);
+
+    // Save the Escrow Data
+    ctx.accounts.populate_escrow(seed, receive, ctx.bumps.escrow)?;
+
+    // Deposit Tokens
+    ctx.accounts.deposit_tokens(amount)?;
+
+    Ok(())
+}
+  ```
+
+在這裡，我們添加了兩個驗證檢查；一個針對 `amount`，另一個針對 `receive` 參數，以確保我們不會為任一項傳遞零值。
+
+### 警告
+
+某些來自 SPL Token-2022 的擴展功能，例如轉移掛鉤、保密轉移、默認賬戶狀態，可能會引入漏洞，例如阻止轉移、鎖定資金以及在托管邏輯、保險庫或 CPI 中導致 rug pull。
+
+- 確保 `mint_a` 和 `mint_b` 由相同的代幣程序擁有，以防止 CPI 失敗。
+- 使用經過良好審核的代幣（例如 USDC、wSOL）來自標準 SPL Token 程序。
+- 避免未經驗證或複雜的 Token-2022 鑄幣。
