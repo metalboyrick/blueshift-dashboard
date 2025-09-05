@@ -280,9 +280,9 @@ impl AnchorField {
 }
 ```
 
-> As you can see we always need to make sure that the account is rent exempt this is why we make all the calculation about rent at the start and transfer additional lamports if needed.
+> 如您所见，我们始终需要确保账户是免租的，这就是为什么我们在开始时进行所有关于租金的计算，并在需要时转移额外的 lamports。 
 
-We can remove `Field` in the `additionalMetadata` struct as well using the `removeKey` instruction like so:
+我们也可以使用 `removeKey` 指令从 `additionalMetadata` 结构中移除 `Field`，如下所示：
 
 ```rust
 use anchor_lang::prelude::*;
