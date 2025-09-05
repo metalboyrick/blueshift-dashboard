@@ -1,0 +1,27 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mint Token SPL
+
+![Tantangan Mint Token SPL](/graphics/challenge-banners/typescript-mint-an-spl-token.png)
+
+Program token SPL, dan khususnya minting beberapa token menggunakan TypeScript, seharusnya menjadi titik awal pertama dalam perjalanan Anda sebagai pengembang Solana.
+
+Jika Anda baru mengenal program Token SPL, ikuti [kursus ini](/id/courses/spl-token-with-web3js) terlebih dahulu!
+
+Dalam tantangan ini, kita akan mengimplementasikan empat instruksi sederhana:
+
+- **Membuat Mint**: Membuat `Mint Account` menggunakan instruksi mentah atau instruksi yang diabstraksikan oleh SDK.
+- **Menginisialisasi Mint**: Menginisialisasi `Mint Account` yang dibuat menggunakan instruksi mentah atau instruksi yang diabstraksikan oleh SDK. *Mint harus memiliki 6 desimal, dengan otoritas mint diatur ke dompet yang menjalankan kode, dan tanpa otoritas pembekuan*.
+- **Membuat Associated Token Account**: Membuat dan menginisialisasi `Associated Token Account` menggunakan instruksi mentah atau instruksi yang diabstraksikan oleh SDK.
+- **Minting 21 juta Token**: Minting 21 juta (21.000.000) token yang baru dibuat ke `Associated Token Account` yang baru dibuat.
+
+**Catatan**: Jika Anda tidak familiar dengan cara menggunakan program SPL-Token dengan TypeScript, Anda sebaiknya mulai dengan membaca [SPL Token dengan Web3.js](/id/courses/spl-token-with-web3js) untuk membiasakan diri dengan SDK yang akan kita butuhkan dalam tantangan ini.
+
+<ArticleSection name="Lingkungan Sandbox Blueshift" id="blueshift-sandbox-environment" level="h2" />
+
+Tantangan ini dirancang untuk diselesaikan di **Lingkungan Sandbox Blueshift**.
+
+Sandbox tanpa konfigurasi ini dilengkapi dengan semua yang Anda butuhkan untuk menyelesaikan tantangan. Anda memiliki akses ke editor bawaan
+dengan dukungan tipe, pustaka yang sudah dikemas, dompet, dan node RPC dalam lingkungan yang terisolasi.
+
+Siap untuk mulai coding? Klik tombol di bawah untuk membuka sandbox dan mulai tantangan Anda.

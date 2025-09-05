@@ -1,0 +1,82 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Token di Solana
+
+![Token di Solana](/graphics/course-banners/tokens-on-solana.png)
+
+Token adalah aset digital yang mewakili kepemilikan, hak akses, atau nilai pada jaringan blockchain. Anggap saja sebagai sertifikat yang dapat diprogram yang sepenuhnya ada dalam bentuk digital: mereka dapat mewakili apa saja mulai dari uang dan kepemilikan saham hingga hak suara dan akses masuk.
+
+Pada tingkat paling dasar, token adalah entri dalam buku besar blockchain yang mengatakan "alamat ini memiliki sejumlah X dari aset ini." Tidak seperti aset tradisional yang memerlukan sertifikat fisik atau database terpusat untuk melacak kepemilikan, token menggunakan teknologi blockchain untuk membuat catatan kepemilikan yang transparan dan tahan terhadap manipulasi.
+
+<ArticleSection name="Mengapa Token Penting" id="why-token-matters" level="h2" />
+
+Token memungkinkan kepemilikan yang dapat diprogram: siapa pun dapat membuat aset digital dengan aturan khusus tentang bagaimana mereka dapat ditransfer, hak apa yang mereka berikan, atau bagaimana mereka berinteraksi dengan sistem lain.
+
+Ini membuka kemungkinan seperti distribusi dividen otomatis, transfer bersyarat, atau instrumen keuangan kompleks yang dijalankan secara otomatis berdasarkan kondisi yang telah ditentukan sebelumnya.
+
+Inovasi utamanya adalah token dapat ditransfer secara instan ke seluruh dunia tanpa perantara, transparan (siapa pun dapat memverifikasi kepemilikan), dan dapat diprogram dengan logika canggih sambil mempertahankan jaminan keamanan dari blockchain yang mendasarinya.
+
+<ArticleSection name="Berbagai jenis Token" id="different-types-of-tokens" level="h2" />
+
+Token dapat dikategorikan berdasarkan kelas yang berbeda, seperti berdasarkan utilitas yang mereka layani atau berdasarkan karakteristik intrinsik mereka.
+
+### Berdasarkan karakteristik
+
+Ada 2 kelompok token berdasarkan karakteristik "teknis" mereka: Fungible dan Non-Fungible.
+
+- Token Fungible: berarti dapat dipertukarkan; terdiri dari beberapa unit identik yang dapat digantikan oleh unit lain dari token yang sama dan dapat dibagi menjadi unit pecahan (seperti memiliki 0,5 token).
+- Token Non-Fungible: berarti unik dan tidak dapat dipertukarkan; setiap token bersifat unik, tidak dapat dibagi, dan memiliki properti berbeda yang membuatnya berbeda dari yang lain.
+
+### Berdasarkan utilitas
+
+Berdasarkan apa yang dapat dilakukan token ini, kita memiliki beberapa kelompok berbeda:
+
+- Token Utilitas: memberikan akses ke produk atau layanan. Misalnya, memegang token tertentu mungkin memberi Anda akses ke platform, biaya diskon, atau fitur khusus.
+- Token Tata Kelola: memberikan hak suara kepada pemegang token dalam organisasi terdesentralisasi. Pemegang token dapat memberikan suara pada perubahan protokol, pengeluaran dana, atau keputusan lainnya.
+- Token Sekuritas: mewakili kepemilikan aset dunia nyata seperti saham perusahaan, real estate, atau komoditas, tetapi dalam bentuk digital.
+- Stablecoin: adalah token yang dirancang untuk mempertahankan nilai yang stabil, biasanya dipatok ke mata uang seperti dolar AS (USDC, USDT).
+- Token Meme/Komunitas: ada terutama untuk spekulasi, pembangunan komunitas, atau nilai hiburan.
+
+<ArticleSection name="Perbedaan dengan Blockchain lainnya" id="difference-between-other-blockchains" level="h2" />
+
+Di Solana, semua hal terkait token ditangani oleh [Program SPL Token](https://github.com/solana-program/token) dan [Program Token2022](/id/courses/token-2022-program): kerangka token asli Solana yang mendefinisikan bagaimana semua token dibuat, dikelola, dan ditransfer.
+
+Ini adalah program tunggal dan terpadu yang menangani semua operasi token di seluruh jaringan, memastikan konsistensi dan interoperabilitas.
+
+> Keputusan untuk memiliki antarmuka tunggal dan terpadu untuk semua token di Solana menciptakan implementasi yang mudah yang dapat direplikasi di semua dApp (aplikasi terdesentralisasi) dan integrasi (seperti dompet, ...)
+
+Tidak seperti sistem blockchain yang melacak transaksi, Solana memiliki Model Berbasis Akun; ini berarti bahwa Solana melacak status akun. Untuk setiap kepemilikan token ada akun spesifik yang menyimpan saldo dan kepemilikan token tersebut.
+
+Hubungan antara semua akun ini adalah sebagai berikut:
+- `Mint`: Setiap jenis token memiliki akun "mint" unik yang berisi konfigurasi token: total `supply`, `decimal`, `mintAuthority`, dan `freezeAuthority`. Ini berfungsi sebagai "akta kelahiran" token di Solana.
+- `Token`: Akun yang menyimpan saldo token tertentu untuk setiap pemilik. Tidak seperti alamat dompet utama Anda (yang menyimpan SOL), Anda memerlukan akun token terpisah untuk setiap jenis token berbeda yang ingin Anda simpan. Anggap saja seperti memiliki kantong terpisah untuk mata uang yang berbeda.
+- `Associated Token`: Cara standar untuk menyimpan token di Solana. Ini adalah akun `Token` normal yang "terkait" karena mereka secara permanen terhubung ke alamat dompet utama Anda melalui pembuatan alamat deterministik yang menggabungkan alamat `owner` dan `Mint`
+
+### Perbedaan dengan Ethereum
+
+Untuk setiap token, Ethereum memerlukan penerapan kontrak pintar lengkap yang berisi semua logika token, manajemen status, dan aturan transfer.
+
+Setiap token pada dasarnya adalah mini-program sendiri dengan kode kustom, meskipun kebanyakan mengikuti standar `ERC-20` untuk kompatibilitas.
+
+Alamat kontrak menjadi pengidentifikasi token, dan semua saldo disimpan dalam status kontrak tersebut yang memiliki pemetaan internal saldo.
+
+> Ini adalah berkah sekaligus kutukan; ini memberi pengembang kemungkinan untuk membuat komponen kustom tanpa harus bergantung pada implementasi standar yang tidak menyelesaikan semua kebutuhan mereka, tetapi pada saat yang sama dapat berpotensi memperkenalkan bug dan menyajikan antarmuka berbeda yang mempersulit integrasi dan interaksi.
+
+Di Ethereum konsep `Token Factory` sangat populer: kontrak pintar atau program yang membuat token lain. Alih-alih menerapkan kontrak token individual secara manual atau membuat akun mint satu per satu, token factory mengotomatisasi proses pembuatan token melalui antarmuka yang terstandarisasi.
+
+Ini dilakukan dengan:
+- Pembuatan Berbasis Template: Factory berisi template kode yang sudah ditulis atau prosedur standar untuk membuat token. Ketika Anda menginginkan token baru, Anda memberikan parameter ke factory (nama, simbol, jumlah, dll.) dan factory akan menghasilkan token untuk Anda.
+- Pemrosesan Batch: Factory dapat membuat beberapa token dalam satu transaksi atau proses, membuatnya lebih efisien daripada pembuatan individual.
+- Output Terstandarisasi: Semua token yang dibuat oleh factory yang sama mengikuti pola dan standar yang identik, memastikan konsistensi dan kompatibilitas.
+
+Ini tidak diperlukan di Solana karena `Token Factory` adalah program SPL Token itu sendiri.
+
+### Perbedaan dengan Bitcoin
+
+Bitcoin tidak memiliki mekanisme pembuatan token bawaan. Token harus dibangun di atas Bitcoin menggunakan protokol overlay atau pendekatan yang lebih baru seperti `Ordinals` dan `BRC-20`. Metode-metode ini baik menanamkan data token dalam transaksi Bitcoin menggunakan output `OP_RETURN` atau menginskripsikan data langsung ke satoshi.
+
+> Jaringan Bitcoin sendiri tidak mengenali ini sebagai token; ia hanya melihat transaksi Bitcoin dengan data tambahan.
+
+Transfer memerlukan pembuatan transaksi Bitcoin yang mencakup biaya jaringan Bitcoin dan data tambahan yang menunjukkan transfer token. Untuk protokol overlay, pada dasarnya Anda mengirim sejumlah kecil Bitcoin sambil menanamkan instruksi transfer token dalam data transaksi.
+
+Jaringan Bitcoin memproses ini sebagai transaksi Bitcoin biasa, sementara perangkat lunak khusus menafsirkan data token yang tertanam.

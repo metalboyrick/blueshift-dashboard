@@ -1,0 +1,27 @@
+# Pengembalian Dana
+
+Instruksi `refund` memungkinkan pembuat untuk membatalkan penawaran yang masih terbuka:
+  - Menutup PDA escrow dan mengirimkan lamport sewanya kembali ke pembuat.
+- Memindahkan seluruh saldo Token A dari vault kembali ke pembuat, kemudian menutup akun vault.
+
+<ArticleSection name="Akun yang Diperlukan" id="required-account" level="h2" />
+
+Berikut adalah akun-akun yang diperlukan:
+
+- maker: pembuat escrow. Harus menjadi penandatangan dan dapat diubah
+- escrow: akun escrow yang kita inisialisasi. Harus dapat diubah
+- mint_a: token yang kita setorkan ke dalam escrow
+- vault: akun token terkait yang dimiliki oleh escrow. Harus dapat diubah
+- maker_ata_a: akun token terkait yang dimiliki oleh pembuat. Harus dapat diubah
+- system_program: program sistem. Harus dapat dieksekusi
+- token_program: program token. Harus dapat dieksekusi
+
+Kami akan membiarkan Anda membuat struct akun Anda sendiri karena sekarang Anda seharusnya sudah familiar dengan prosesnya.
+
+<ArticleSection name="Data Instruksi" id="instruction-data" level="h2" />
+
+Semua data yang kita butuhkan untuk melakukan logika sudah ada di akun Escrow atau pada akun-akun yang kita deserialisasi. Karena alasan ini, kita tidak memerlukan `instruction_data` untuk instruksi ini.
+
+<ArticleSection name="Logika" id="logic" level="h2" />
+
+Di sini lagi, kami akan membiarkan Anda mengembangkan sayap dan membuat logika Anda sendiri untuk ini! Jangan takut untuk kembali ke bagian sebelumnya untuk melihat bagaimana kami mengimplementasikan instruksi make dan take, atau hubungi kami di Discord jika Anda mengalami kesulitan.

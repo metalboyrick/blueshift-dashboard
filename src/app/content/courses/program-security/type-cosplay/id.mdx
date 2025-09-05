@@ -1,0 +1,135 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Type Cosplay
+
+Serangan type cosplay mengeksploitasi program yang gagal memverifikasi tipe akun, memungkinkan penyerang mengganti akun dengan struktur data yang identik tetapi tujuan yang berbeda. Karena Solana menyimpan semua data akun sebagai byte mentah, program yang tidak memeriksa tipe akun dapat ditipu untuk memperlakukan `VaultConfig` sebagai `AdminSettings` dengan hasil yang berpotensi katastrofik.
+
+Kerentanan ini berasal dari ambiguitas struktural. Ketika beberapa tipe akun berbagi tata letak data yang sama (seperti keduanya memiliki bidang `owner: Pubkey`), pemeriksaan pemilik dan validasi data saja tidak cukup untuk membedakan di antara mereka. Penyerang yang mengendalikan satu tipe akun dapat menyamar sebagai pemilik tipe akun yang benar-benar berbeda, melewati logika otorisasi yang dirancang untuk tujuan akun tertentu.
+
+Tanpa diskriminator (pengidentifikasi unik yang membedakan tipe akun), program Anda menjadi rentan terhadap serangan peniruan canggih di mana aktor jahat dapat mengeksploitasi kesenjangan antara kemiripan struktural dan maksud logis.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Pertimbangkan instruksi rentan ini yang melakukan operasi admin berdasarkan kepemilikan akun:
+
+```rust
+#[program]
+pub mod insecure_check{
+    use super::*;
+    //..
+
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let program_account_one = ctx.accounts.program_account_one.to_account_info();
+        if program_account_one.owner != ctx.program_id {
+            return Err(ProgramError::IllegalOwner.into());
+        }
+        if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
+            return Err(ProgramError::InvalidAccountData.into());
+        }
+
+        //..do something
+    
+        Ok(())
+
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub admin: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_one: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_two: UncheckedAccount<'info>,
+
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub struct ProgramAccountOne {
+    owner: Pubkey,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub struct ProgramAccountTwo {
+    owner: Pubkey,
+}
+```
+
+Kode ini tampak aman: memeriksa kepemilikan program dan memvalidasi otoritas admin. Tetapi ada kelemahan fatal: kode ini tidak pernah memverifikasi bahwa `program_account_one` benar-benar sebuah `ProgramAccountOne` dan bukan tipe akun lain dengan struktur data yang sama.
+
+Penyerang dapat mengeksploitasi ini dengan:
+- Membuat atau mengendalikan akun `ProgramAccountTwo`
+- Menetapkan diri mereka sebagai pemilik dalam data akun tersebut
+- Meneruskan `ProgramAccountTwo` mereka sebagai parameter `program_account_one`
+- Karena kedua tipe akun memiliki struktur `owner: Pubkey` yang identik, deserialisasi berhasil
+- Penyerang menjadi "admin" untuk operasi yang seharusnya hanya untuk pemilik `ProgramAccountOne`
+
+Solana menggunakan diskriminator untuk menyelesaikan masalah ini:
+- Diskriminator 8-byte Anchor (default): Diturunkan dari nama akun, secara otomatis ditambahkan ke akun yang ditandai dengan #[account]. (dari anchor `0.31.0` dimungkinkan untuk mengimplementasikan diskriminator "kustom")
+- Diskriminasi berbasis panjang: Digunakan oleh Token Program untuk membedakan antara akun Token dan Mint (meskipun Token2022 sekarang menggunakan diskriminator eksplisit)
+
+Perbaikan paling sederhana adalah menggunakan validasi tipe bawaan Anchor:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub admin: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_one: Account<'info, ProgramAccountOne>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account_two: Account<'info, ProgramAccountTwo>,
+
+}
+
+#[account]
+pub struct ProgramAccountOne {
+    owner: Pubkey,
+}
+
+#[account]
+pub struct ProgramAccountTwo {
+    owner: Pubkey,
+}
+```
+
+Atau untuk validasi kustom, Anda dapat menambahkan pemeriksaan diskriminator eksplisit:
+
+```rust
+pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+    let program_account_one = ctx.accounts.program_account_one.to_account_info();
+    if program_account_one.owner != ctx.program_id {
+        return Err(ProgramError::IllegalOwner.into());
+    }
+    if ctx.accounts.program_account_one.owner != ctx.accounts.admin.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+    let data = program_account_one.data.borrow();
+    // Assume ProgramAccountOne has a discriminator of 8 bytes
+    let discriminator = &data[..8];
+    if discriminator != ProgramAccountOne::DISCRIMINATOR {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    //..do something
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dalam Pinocchio, implementasikan pemeriksaan diskriminator secara manual:
+
+```rust
+let account_data = self.accounts.program_account.try_borrow_data()?;
+
+if account_data[0] != DISCRIMINATOR {
+    return Err(ProgramError::AccountAlreadyInitialized.into());
+}
+```

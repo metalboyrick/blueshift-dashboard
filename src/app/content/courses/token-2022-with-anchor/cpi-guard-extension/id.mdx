@@ -1,0 +1,7 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Cpi Guard
+
+Ekstensi `CpiGuard` adalah ekstensi akun `Token` yang melarang tindakan tertentu di dalam cross-program invocations, melindungi pengguna dari program berbahaya yang mungkin mencoba memanipulasi akun token mereka tanpa persetujuan eksplisit.
+
+> Sayangnya tidak mungkin untuk menginisialisasi atau memperbarui ekstensi CpiGuard melalui CPI, untuk informasi lebih lanjut baca [ini](https://github.com/solana-labs/solana-program-library/blob/6968859e2ee0a1764da572de340cdb58e2b4586f/token/program-2022/src/extension/cpi_guard/processor.rs#L44-L46)

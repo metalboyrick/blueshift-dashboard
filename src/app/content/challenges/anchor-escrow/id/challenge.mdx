@@ -1,0 +1,155 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
+
+# The Escrow
+
+Escrow adalah alat finansial yang ampuh yang memungkinkan pertukaran token yang aman antara dua pihak.
+
+Anggap saja seperti kotak penyimpanan digital di mana satu pengguna dapat mengunci Token A, menunggu pengguna lain menyetor Token B sebelum pertukaran selesai.
+
+Ini menciptakan lingkungan tanpa kepercayaan di mana kedua belah pihak tidak perlu khawatir tentang pihak lain yang membatalkan kesepakatan.
+
+Dalam tantangan ini, kita akan mengimplementasikan konsep ini melalui tiga instruksi sederhana namun ampuh:
+- **Make**: Pembuat (pengguna pertama) menentukan persyaratan perdagangan dan menyetor jumlah Token A yang disepakati ke dalam vault yang aman. Ini seperti menempatkan barang Anda di kotak penyimpanan dan menetapkan persyaratan pertukaran.
+- **Take**: Pengambil (pengguna kedua) menerima tawaran dengan mentransfer jumlah Token B yang dijanjikan kepada pembuat, dan sebagai gantinya, menerima Token A yang terkunci. Ini adalah saat ketika kedua belah pihak menyelesaikan bagian mereka dalam kesepakatan.
+- **Refund**: Jika pembuat berubah pikiran atau tidak ada pengambil yang cocok, mereka dapat membatalkan tawaran dan mengambil kembali Token A mereka. Ini seperti mendapatkan kembali barang Anda dari kotak penyimpanan jika kesepakatan gagal.
+
+**Catatan**: Jika Anda tidak familiar dengan Anchor, Anda sebaiknya mulai dengan membaca [Anchor for Dummies](/id/courses/anchor-for-dummies) untuk membiasakan diri dengan konsep inti yang akan kita gunakan dalam program ini.
+
+<ArticleSection name="Instalasi" id="installation" level="h2" />
+
+Mari mulai dengan membuat workspace Anchor baru:
+
+```bash
+anchor init blueshift_anchor_escrow
+cd blueshift_anchor_escrow
+```
+
+Kemudian kita lanjutkan dengan mengaktifkan `init-if-needed` pada crate `anchor-lang` dan dengan menambahkan crate `anchor-spl` juga:
+
+```bash
+cargo add anchor-lang --features init-if-needed
+cargo add anchor-spl
+```
+
+Karena kita menggunakan `anchor-spl`, kita juga perlu memperbarui file `programs/blueshift_anchor_escrow/Cargo.toml` untuk menyertakan `anchor-spl/idl-build` dalam fitur `idl-build`.
+
+Buka `Cargo.toml` dan Anda akan melihat baris `idl-build` yang sudah ada seperti ini:
+
+```toml
+idl-build = ["anchor-lang/idl-build"]
+```
+
+Modifikasi untuk menambahkan `anchor-spl/idl-build` juga:
+
+```toml
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+```
+
+Sekarang Anda dapat membuka folder yang baru dibuat, dan Anda siap untuk mulai coding!
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Kali ini, karena programnya cukup kompleks, kita akan membaginya menjadi modul-modul kecil yang terfokus alih-alih memadatkan semuanya ke dalam `lib.rs`.
+
+Struktur folder akan terlihat kurang lebih seperti ini:
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+Dengan `lib.rs` yang akan terlihat kurang lebih seperti ini:
+
+```rust
+use anchor_lang::prelude::*;
+
+mod state;
+mod errors;
+mod instructions;
+use instructions::*;
+
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    #[instruction(discriminator = 0)]
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        //...
+    }
+
+    #[instruction(discriminator = 1)]
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        //...
+    }
+
+    #[instruction(discriminator = 2)]
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        //...
+    }
+}
+```
+
+Seperti yang Anda lihat, kami mengimplementasikan discriminator kustom untuk instruksi. Jadi pastikan untuk menggunakan anchor versi 0.31.0 atau yang lebih baru.
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Kita akan beralih ke `state.rs` di mana semua data untuk `Escrow` kita berada. Untuk melakukannya, kita akan memberikannya discriminator kustom dan membungkus struct ke dalam macro `#[account]` seperti ini:
+
+```rust
+use anchor_lang::prelude::*;
+
+#[derive(InitSpace)]
+#[account(discriminator = 1)]
+pub struct Escrow {
+    pub seed: u64,
+    pub maker: Pubkey,
+    pub mint_a: Pubkey,
+    pub mint_b: Pubkey,
+    pub receive: u64,
+    pub bump: u8,
+}
+  ```
+
+Fungsi masing-masing field:
+- **seed**: Angka acak yang digunakan selama derivasi seed sehingga satu maker dapat membuka beberapa escrow dengan pasangan token yang sama; disimpan on-chain agar kita selalu dapat menurunkan kembali PDA.
+- **maker**: Dompet yang membuat escrow; diperlukan untuk pengembalian dana dan untuk menerima pembayaran.
+- **mint_a** & **mint_b**: Alamat SPL mints untuk sisi "give" dan "get" dari swap.
+- **receive**: Berapa banyak token B yang diinginkan maker. (Saldo vault itu sendiri menunjukkan berapa banyak token A yang disetor, jadi kita tidak menyimpannya.)
+- **bump**: Byte bump yang di-cache; menurunkannya secara langsung membutuhkan komputasi, jadi kita menyimpannya sekali.
+
+Kita bisa memasukkan lebih banyak informasi, tetapi byte tambahan berarti sewa tambahan. Menyimpan hanya hal-hal penting membuat deposit tetap murah sambil tetap memungkinkan program menerapkan setiap aturan yang dibutuhkan.
+
+Kita selesaikan dengan menambahkan makro `#[derive(InitSpace)]` sehingga kita tidak perlu menghitung sewa struktur ini secara manual.
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+Kita sekarang dapat beralih ke file `errors.rs` di mana kita akan menambahkan beberapa error yang akan kita gunakan nanti seperti ini:
+
+```rust
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum EscrowError {
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Invalid maker")]
+    InvalidMaker,
+    #[msg("Invalid mint a")]
+    InvalidMintA,
+    #[msg("Invalid mint b")]
+    InvalidMintB,
+}
+```
+
+Setiap enum memetakan ke pesan yang jelas dan mudah dibaca manusia yang akan ditampilkan Anchor setiap kali constraint atau `require!()` gagal.

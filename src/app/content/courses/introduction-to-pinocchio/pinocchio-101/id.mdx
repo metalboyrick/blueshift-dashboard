@@ -1,0 +1,197 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Pinocchio 101
+
+![Pengenalan Pinocchio](/graphics/course-banners/introduction-to-pinocchio.png)
+
+<ArticleSection name="Apa itu Pinocchio" id="what-is-pinocchio" level="h2" />
+
+Meskipun sebagian besar pengembang Solana mengandalkan Anchor, ada banyak alasan bagus untuk menulis program tanpa menggunakannya. Mungkin Anda membutuhkan kontrol yang lebih detail atas setiap bidang akun, atau Anda mengejar performa maksimal, atau Anda hanya ingin menghindari makro.
+
+Menulis program Solana tanpa framework seperti Anchor dikenal sebagai **pengembangan native**. Ini lebih menantang, namun dalam kursus ini Anda akan belajar membuat program Solana dari awal dengan Pinocchio; sebuah library ringan yang memungkinkan Anda melewati framework eksternal dan menguasai setiap byte kode Anda.
+
+Pinocchio adalah library Rust minimalis yang memungkinkan Anda membuat program Solana tanpa perlu mengimpor crate `solana-program` yang berat. Cara kerjanya adalah dengan memperlakukan payload transaksi yang masuk (akun, data instruksi, semuanya) sebagai satu slice byte tunggal dan membacanya langsung melalui teknik zero-copy.
+
+### Keunggulan utama
+
+Desain minimalis ini memberikan tiga manfaat besar:
+- Lebih sedikit unit komputasi. Tidak ada deserialisasi tambahan atau penyalinan memori.
+- Binary yang lebih kecil. Jalur kode yang lebih ramping berarti `.so` yang lebih ringan di on-chain.
+- Tidak ada hambatan dependensi. Tidak ada crate eksternal yang perlu diperbarui (atau rusak).
+
+Proyek ini dimulai oleh [Febo](https://x.com/0x_febo) di [Anza](https://www.anza.xyz) dengan kontribusi inti dari ekosistem Solana dan tim Blueshift, dan berada [di sini](https://github.com/anza-xyz/pinocchio).
+
+Selain crate inti, Anda akan menemukan `pinocchio-system` dan `pinocchio-token`, yang menyediakan helper zero-copy dan utilitas CPI untuk program System dan SPL-Token native Solana.
+
+### Pengembangan Native
+
+Pengembangan native mungkin terdengar menakutkan, tetapi justru itulah alasan bab ini ada. Pada akhirnya Anda akan memahami setiap byte yang melintasi batas program dan bagaimana menjaga logika Anda tetap ketat, aman, dan cepat.
+
+Anchor menggunakan **Procedural and Derive Macros** untuk menyederhanakan boilerplate dalam menangani akun, data instruksi, dan penanganan kesalahan yang menjadi inti dari pembangunan Program Solana.
+
+Beralih ke Native berarti kita tidak lagi memiliki kemudahan tersebut dan kita perlu:
+- Membuat Discriminator dan Entrypoint sendiri untuk berbagai Instruksi
+- Membuat logika Akun, Instruksi, dan deserialisasi sendiri
+- Mengimplementasikan semua pemeriksaan keamanan yang sebelumnya dilakukan Anchor untuk kita
+
+**Catatan**: Belum ada "framework" untuk membangun program Pinocchio. Karena itu, kami akan menyajikan apa yang kami yakini sebagai cara terbaik untuk menulis program pinocchio berdasarkan pengalaman kami.
+
+<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+
+Dalam Anchor, makro `#[program]` menyembunyikan banyak pengkabelan. Di balik layar, ia membangun discriminator 8-byte (ukuran dapat disesuaikan sejak versi 0.31) untuk setiap instruksi dan struct akun.
+
+<AnchorDiscriminatorCalculator value={"Test"} />
+
+Program native biasanya menjaga agar semuanya lebih ramping. Discriminator satu byte (nilai 0x01…0xFF) sudah cukup untuk hingga 255 instruksi, yang memadai untuk kebanyakan kasus penggunaan. Jika Anda membutuhkan lebih banyak, Anda dapat beralih ke varian dua byte, memperluas hingga 65.535 varian yang mungkin.
+
+Makro `entrypoint!` adalah tempat eksekusi program dimulai. Ia menyediakan tiga slice mentah:
+- **program_id**: kunci publik dari program yang di-deploy
+- **accounts**: setiap akun yang dilewatkan dalam instruksi
+- **instruction_data**: array byte yang tidak transparan berisi discriminator Anda plus data yang disediakan pengguna
+
+Ini berarti bahwa setelah entrypoint kita dapat membuat pola yang mengeksekusi semua instruksi yang berbeda melalui handler yang sesuai, yang akan kita sebut `process_instruction`. Berikut adalah bagaimana biasanya terlihat:
+
+```rust
+entrypoint!(process_instruction);
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((Instruction1::DISCRIMINATOR, data)) => Instruction1::try_from((data, accounts))?.process(),
+        Some((Instruction2::DISCRIMINATOR, _)) => Instruction2::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+Di balik layar, handler ini:
+1. Menggunakan `split_first()` untuk mengekstrak byte diskriminator
+2. Menggunakan `match` untuk menentukan struct instruksi mana yang akan diinisiasi
+3. Implementasi `try_from` dari setiap instruksi memvalidasi dan mendeserialkan inputnya
+4. Panggilan ke `process()` menjalankan logika bisnis
+
+### Perbedaan antara `solana-program` dan `pinocchio`
+
+Perbedaan utama dan optimisasinya terletak pada bagaimana `entrypoint()` berperilaku. 
+- Entrypoint Solana Standar menggunakan pola serialisasi tradisional di mana runtime mendeserialkan data input di awal, menciptakan struktur data yang dimiliki dalam memori. Pendekatan ini menggunakan serialisasi Borsh secara ekstensif, menyalin data selama deserialisasi, dan mengalokasikan memori untuk tipe data terstruktur.
+- Entrypoint Pinocchio mengimplementasikan operasi zero-copy dengan membaca data langsung dari array byte input tanpa menyalin. Framework ini mendefinisikan tipe zero-copy yang mereferensikan data asli, menghilangkan overhead serialisasi/deserialisasi, dan menggunakan akses memori langsung untuk menghindari lapisan abstraksi.
+
+<ArticleSection name="Accounts and Instructions" id="accounts-and-instructions" level="h2" />
+
+Karena kita tidak memiliki makro, dan kita ingin menghindarinya untuk menjaga program tetap ramping dan efisien, setiap byte dari data instruksi dan akun harus divalidasi secara manual.
+
+Untuk menjaga proses ini terorganisir, kita menggunakan pola yang menyediakan ergonomi gaya Anchor tanpa makro, menjaga metode `process()` yang sebenarnya hampir bebas dari boilerplate dengan mengimplementasikan trait Rust `TryFrom`.
+
+### Trait `TryFrom`
+
+`TryFrom` adalah bagian dari keluarga konversi standar Rust. Tidak seperti `From`, yang mengasumsikan konversi tidak dapat gagal, `TryFrom` mengembalikan `Result`, memungkinkan Anda menampilkan error lebih awal - sempurna untuk validasi on-chain.
+
+Trait ini didefinisikan seperti ini:
+
+```rust
+pub trait TryFrom<T>: Sized {
+    type Error;
+    fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+```
+
+Dalam program Solana, kita mengimplementasikan `TryFrom` untuk mengkonversi slice akun mentah (dan, jika diperlukan, byte instruksi) menjadi struct bertipe kuat sambil menerapkan setiap batasan.
+
+<ArticleSection name="Accounts Validation" id="accounts-validation" level="h2" />
+
+Kami biasanya menangani semua pemeriksaan spesifik yang tidak memerlukan double borrow (meminjam baik dalam validasi akun maupun dalam proses) di setiap implementasi `TryFrom`. Ini menjaga fungsi `process()`, tempat semua logika instruksi terjadi, tetap sebersih mungkin.
+
+Kami mulai dengan mengimplementasikan struct akun yang diperlukan untuk instruksi, mirip dengan `Context` Anchor.
+
+**Catatan**: Tidak seperti Anchor, dalam struct akun ini kami hanya menyertakan akun yang ingin kami gunakan dalam proses, dan kami menandai sebagai `_` akun-akun lain yang diperlukan dalam instruksi tetapi tidak akan digunakan (seperti `SystemProgram`).
+
+Untuk sesuatu seperti `Vault`, tampilannya akan seperti ini:
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub owner: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+```
+
+Sekarang setelah kita tahu akun mana yang ingin kita gunakan dalam instruksi, kita dapat menggunakan trait `TryFrom` untuk mendeserialkan dan melakukan semua pemeriksaan yang diperlukan:
+
+```rust
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        // 1. Destructure the slice
+        let [owner, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // 2. Custom checks
+        if !owner.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // 3. Return the validated struct
+        Ok(Self { owner, vault })
+    }
+}
+```
+
+Seperti yang Anda lihat, dalam instruksi ini kita akan menggunakan CPI `SystemProgram` untuk mentransfer lamport dari pemilik ke vault, tetapi kita tidak perlu menggunakan SystemProgram dalam instruksi itu sendiri. Program hanya perlu disertakan dalam instruksi, jadi kita dapat meneruskannya sebagai `_`.
+
+Kemudian kita melakukan pemeriksaan khusus pada akun, mirip dengan pemeriksaan `Signer` dan `SystemAccount` Anchor, dan mengembalikan struct yang telah divalidasi.
+
+<ArticleSection name="Instruction Validation" id="instruction-validation" level="h2" />
+
+Validasi instruksi mengikuti pola yang mirip dengan validasi akun. Kami menggunakan trait `TryFrom` untuk memvalidasi dan mendeserialkan data instruksi menjadi struct yang bertipe kuat, menjaga logika bisnis di `process()` tetap bersih dan terfokus.
+
+Mari mulai dengan mendefinisikan struct yang merepresentasikan data instruksi kita:
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+}
+```
+
+Kemudian kita mengimplementasikan `TryFrom` untuk memvalidasi data instruksi dan mengubahnya menjadi tipe terstruktur kita. Ini melibatkan:
+1. Memverifikasi panjang data sesuai dengan ukuran yang diharapkan
+2. Mengkonversi slice byte menjadi tipe konkret kita
+3. Melakukan pemeriksaan validasi yang diperlukan
+
+Berikut adalah implementasinya:
+
+```rust
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // 1. Verify the data length matches a u64 (8 bytes)
+        if data.len() != core::mem::size_of::<u64>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // 2. Convert the byte slice to a u64
+        let amount = u64::from_le_bytes(data.try_into().unwrap());
+
+        // 3. Validate the amount (e.g., ensure it's not zero)
+        if amount == 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self { amount })
+    }
+}
+```
+
+Pola ini memungkinkan kita untuk:
+- Memvalidasi data instruksi sebelum mencapai logika bisnis
+- Menjaga logika validasi terpisah dari fungsionalitas inti
+- Memberikan pesan kesalahan yang jelas ketika validasi gagal
+- Mempertahankan keamanan tipe di seluruh program

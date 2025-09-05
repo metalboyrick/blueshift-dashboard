@@ -1,0 +1,186 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Perbarui IDL Codama Anda
+
+Sistem visitor Codama memungkinkan Anda untuk mentransformasi dan meningkatkan IDL Anda secara terprogram setelah pembuatan.
+
+Baik Anda memulai dari IDL Anchor atau membangun dari awal, visitor memungkinkan Anda meningkatkan dan menyesuaikan IDL Codama lebih lanjut sebelum menghasilkan klien untuk, misalnya, mengoptimalkan pengalaman pengembang
+
+<ArticleSection name="Visitor Penting" id="essential-visitors" level="h2" />
+
+Visitor mengikuti pola visitor, menelusuri node IDL Anda dan menerapkan transformasi.
+
+Mari kita jelajahi visitor yang paling berdampak untuk membuat SDK yang siap produksi:
+
+### Visitor Tambah PDA
+
+Untuk menambahkan definisi PDA ke program Anda, kita menggunakan `addPdasVisitor`. Visitor ini penting ketika IDL Anchor Anda tidak menyertakan informasi PDA, tetapi logika program Anda bergantung pada Program Derived Addresses tertentu.
+
+Visitor ini menerima objek di mana kunci adalah nama program dan nilai adalah array definisi PDA yang akan ditambahkan.
+
+```ts
+codama.update(
+    addPdasVisitor({
+        // Add a PDA to the 'token' program.
+        token: [
+            {
+                name: 'associatedToken',
+                seeds: [
+                    variablePdaSeedNode('mint', publicKeyTypeNode()),
+                    constantPdaSeedNode(
+                        publicKeyTypeNode(),
+                        publicKeyValueNode('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+                    ),
+                    variablePdaSeedNode('owner', publicKeyTypeNode()),
+                ],
+            },
+        ],
+        // Add two PDAs to the 'counter' program.
+        counter: [
+            {
+                name: 'counter',
+                seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+            },
+            {
+                name: 'counterConfig',
+                seeds: [variablePdaSeedNode('counter', publicKeyTypeNode())],
+            },
+        ],
+    }),
+);
+```
+
+### Visitor Perbarui Akun
+
+Untuk memodifikasi definisi akun yang ada atau menghapus yang tidak diinginkan, kita menggunakan `updateAccountsVisitor`. Visitor ini sangat penting untuk mengganti nama akun agar sesuai dengan konvensi penamaan yang Anda inginkan atau menambahkan asosiasi PDA yang hilang.
+
+Anda sebaiknya menggunakan ini ketika nama akun yang dihasilkan Anchor tidak sesuai dengan preferensi penamaan klien Anda, atau ketika Anda perlu mengaitkan PDA dengan akun tertentu untuk menghasilkan kode yang lebih baik.
+
+```ts
+codama.update(
+    updateAccountsVisitor({
+        vault: {
+            // Rename the 'vault' account to 'safe'.
+            name: 'safe',
+            // Rename the 'owner' field to 'authority'.
+            data: { owner: 'authority' },
+            // Create a new PDA node and link it to this account.
+            seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+        },
+        counter: {
+            // Delete the 'counter' account.
+            delete: true,
+        },
+    }),
+);
+```
+
+### Visitor Perbarui Instruksi
+
+Untuk meningkatkan definisi instruksi dengan default yang lebih baik, penamaan, atau konfigurasi akun, kita menggunakan `updateInstructionsVisitor`. Ini adalah salah satu visitor paling kuat untuk meningkatkan pengalaman pengembang dari klien yang Anda hasilkan.
+
+Anda sebaiknya menggunakan ini ketika Anda ingin menyediakan default yang masuk akal untuk argumen instruksi, mengganti nama instruksi atau akun untuk kejelasan, atau menandai akun sebagai opsional untuk menyederhanakan penggunaan klien.
+
+```ts
+codama.update(
+    updateInstructionsVisitor({
+        send: {
+            // Rename the 'send' instruction to 'transfer'.
+            name: 'transfer',
+            accounts: {
+                // Rename the 'owner' instruction account to 'authority'.
+                owner: { name: 'authority' },
+                // Set a default value for the 'associatedToken' instruction account.
+                associatedToken: { defaultValue: pdaValueNode('associatedToken') },
+                // Update the signer status of the 'payer' instruction account to `true`.
+                payer: { isSigner: true },
+                // Mark the 'mint' instruction account as optional.
+                mint: { isOptional: true },
+            },
+            arguments: {
+                // Set a default value for the 'amount' instruction argument to 1.
+                amount: { defaultValue: numberValueNode(1) },
+                // Rename the 'decimals' instruction argument to 'mintDecimals'.
+                decimals: { name: 'mintDecimals' },
+            },
+        },
+        burn: {
+            // Delete the 'burn' instruction.
+            delete: true,
+        },
+    }),
+);
+```
+
+### Update Defined Types Visitor
+
+Untuk memodifikasi definisi tipe kustom atau membersihkan tipe yang tidak digunakan, kita menggunakan `updateDefinedTypesVisitor`. Visitor ini membantu menjaga tipe yang bersih dan diberi nama dengan baik dalam klien yang dihasilkan.
+
+Anda sebaiknya menggunakan ini ketika Anchor menghasilkan nama tipe yang tidak sesuai dengan konvensi yang Anda inginkan, atau ketika Anda perlu menghapus tipe yang sudah tidak digunakan dari IDL Anda.
+
+```ts
+codama.update(
+    updateDefinedTypesVisitor({
+        options: {
+            // Rename the 'options' type to 'configs'.
+            name: 'configs',
+            // Rename the 'sol' field to 'lamports'.
+            data: { sol: 'lamports' },
+        },
+        player: {
+            // Delete the 'player' type.
+            delete: true,
+        },
+    }),
+);
+```
+
+### Update Errors Visitor
+
+Untuk meningkatkan definisi kesalahan dengan nama, pesan, atau kode yang lebih jelas, kita menggunakan `updateErrorsVisitor`. Visitor ini memastikan penanganan kesalahan Anda deskriptif dan mengikuti pola yang konsisten.
+
+Anda sebaiknya menggunakan ini ketika Anda menginginkan nama atau pesan kesalahan yang lebih deskriptif daripada yang dihasilkan Anchor, atau ketika Anda perlu menstandarisasi kode kesalahan di seluruh rangkaian program Anda.
+
+```ts
+codama.update(
+    updateErrorsVisitor({
+        invalidPda: {
+            // Rename the 'invalidPda' error to 'invalidProgramDerivedAddress'.
+            name: 'invalidProgramDerivedAddress',
+            // Change the error message.
+            message: 'The program-derived address is invalid.',
+            // Change the error code.
+            code: 123,
+        },
+        accountMismatch: {
+            // Delete the 'accountMismatch' error.
+            delete: true,
+        },
+    }),
+);
+```
+
+### Update Programs Visitor
+
+Untuk memodifikasi informasi tingkat program seperti nama, versi, atau kunci publik, kita menggunakan `updateProgramsVisitor`. Visitor ini penting untuk memelihara metadata program yang akurat.
+
+Anda sebaiknya menggunakan ini ketika Anda perlu memperbarui versi program, menstandarisasi nama program di berbagai lingkungan, atau menghapus program yang sudah tidak digunakan dari IDL Anda.
+
+```ts
+codama.update(
+    updateProgramsVisitor({
+        splToken: {
+            // Rename the 'splToken' program to 'token'.
+            name: 'token',
+            // Change the program version.
+            version: '3.0.0',
+            // Change the program's public key.
+            publicKey: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+        },
+        splAssociatedToken: {
+            // Delete the 'splAssociatedToken' program.
+            delete: true,
+        },
+    }),
+);
+```

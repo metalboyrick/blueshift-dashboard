@@ -1,0 +1,438 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Vault Secp256r1
+
+![Tantangan Vault Secp256r1 Pinocchio](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
+
+Vault adalah blok bangunan fundamental dalam DeFi yang menyediakan cara aman bagi pengguna untuk menyimpan aset mereka.
+
+Dalam tantangan ini, kita akan membangun vault yang menggunakan tanda tangan Secp256r1 untuk verifikasi transaksi. Ini sangat menarik karena Secp256r1 adalah kurva eliptik yang sama yang digunakan oleh metode autentikasi modern seperti passkey, yang memungkinkan pengguna menandatangani transaksi menggunakan autentikasi biometrik (seperti Face ID atau Touch ID) alih-alih tanda tangan berbasis dompet tradisional.
+
+Inovasi utama di sini adalah kita memisahkan pembayaran biaya transaksi dari autentikasi pengguna yang sebenarnya. Ini berarti bahwa sementara pengguna dapat mengautentikasi transaksi menggunakan tanda tangan Secp256r1 mereka (yang dapat dihasilkan melalui metode autentikasi modern), biaya transaksi sebenarnya dapat dibayar oleh penyedia layanan. Ini menciptakan pengalaman pengguna yang lebih mulus sambil tetap menjaga keamanan.
+
+Dalam tantangan ini, kita akan memperbarui vault lamport sederhana yang kita bangun di [Tantangan Vault Pinocchio](/id/challenges/pinocchio-vault) untuk memungkinkan tanda tangan Secp256r1 sebagai metode verifikasi untuk transaksi.
+
+<ArticleSection name="Instalasi" id="installation" level="h2" />
+
+Sebelum memulai, pastikan Rust dan Pinocchio sudah terpasang. Kemudian di terminal Anda jalankan:
+
+```bash
+# create workspace
+cargo new blueshift_secp256r1_vault --lib --edition 2021
+cd blueshift_secp256r1_vault
+```
+
+Tambahkan Pinocchio dan crate yang kompatibel dengan Pinocchio `Secp256r1`
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
+```
+
+Deklarasikan tipe crate di `Cargo.toml` untuk menghasilkan artefak deployment di `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Mari mulai dengan struktur program dasar. Kita akan mengimplementasikan semuanya di `lib.rs` karena ini adalah program yang sederhana. Berikut adalah template awal dengan komponen inti yang kita butuhkan:
+
+```rust
+#![no_std]
+
+use pinocchio::{account_info::AccountInfo, entrypoint, nostd_panic_handler, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+
+entrypoint!(process_instruction);
+nostd_panic_handler!();
+
+pub mod instructions;
+pub use instructions::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, _)) => Withdraw::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="Deposit" id="deposit" level="h2" />
+
+Instruksi deposit melakukan langkah-langkah berikut:
+1. Memverifikasi bahwa vault kosong (memiliki nol lamport) untuk mencegah deposit ganda
+2. Memastikan jumlah deposit melebihi minimum bebas sewa untuk akun dasar
+3. Mentransfer lamport dari pembayar ke vault menggunakan CPI ke Program Sistem
+
+Perbedaan utama antara vault normal dan vault Secp256r1 adalah cara kita menurunkan PDA dan siapa yang dianggap sebagai "pemilik".
+
+Karena dengan tanda tangan Secp256r1, pemilik dompet sebenarnya tidak perlu membayar biaya transaksi, kita mengubah akun `owner` menjadi konvensi penamaan yang lebih umum seperti `payer`.
+
+Jadi struktur akun untuk `deposit` akan terlihat seperti ini:
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // Accounts Checks
+        if !payer.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Return the accounts
+        Ok(Self { payer, vault })
+    }
+}
+```
+
+Mari kita uraikan setiap pemeriksaan akun:
+1. `payer`: Harus menjadi penandatangan karena mereka perlu mengotorisasi transfer lamport
+2. `vault`: 
+   - Harus dimiliki oleh Program Sistem
+   - Harus memiliki nol lamport (memastikan deposit "baru")
+
+Untuk `vault` kita akan memeriksa apakah:
+- Diturunkan dari seed yang benar
+- Cocok dengan alamat PDA yang diharapkan
+Karena sebagian dari seed ada di `instruction_data` yang tidak kita miliki aksesnya saat ini.
+
+Sekarang mari kita implementasikan struktur data instruksi:
+
+```rust
+#[repr(C, packed)]
+pub struct DepositInstructionData {
+    pub pubkey: Secp256r1Pubkey,
+    pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let (pubkey_bytes, amount_bytes) = data.split_at(size_of::<Secp256r1Pubkey>());
+
+        Ok(Self {
+            pubkey: pubkey_bytes.try_into().unwrap(),
+            amount: u64::from_le_bytes(amount_bytes.try_into().unwrap()),
+      })
+    }
+}
+```
+
+Kita mendeserialkan data instruksi menjadi struktur `DepositInstructionData` yang berisi:
+- `pubkey`: Kunci publik Secp256r1 dari pengguna yang melakukan deposit
+- `amount`: Jumlah lamport yang akan didepositkan
+
+Meskipun unwrap umumnya tidak dianjurkan dalam kode produksi, dalam kasus ini, digunakan dengan aman karena kita sudah memvalidasi panjang data dalam metode `try_from`. Jika panjang data tidak cocok, akan mengembalikan error sebelum mencapai titik ini.
+
+Akhirnya, mari kita implementasikan instruksi deposit:
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_data: DepositInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_data = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Check vault address
+        let (vault_key, _) = find_program_address(
+            &[
+                b"vault",
+                &self.instruction_data.pubkey[..1],
+                &self.instruction_data.pubkey[1..33]
+            ],
+            &crate::ID
+        );
+        if vault_key.ne(self.accounts.vault.key()) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        Transfer {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports: self.instruction_data.amount,
+        }
+        .invoke()
+    }
+}
+```
+
+Seperti yang disebutkan sebelumnya, kita perlu memverifikasi bahwa PDA vault berasal dari seeds yang benar. Dalam vault berbasis Secp256r1 ini, kita menggunakan `Secp256r1Pubkey` sebagai bagian dari seeds alih-alih public key pemilik yang tradisional. Ini adalah langkah keamanan penting yang memastikan hanya pemegang kunci Secp256r1 yang sesuai yang dapat mengakses vault.
+
+`Secp256r1Pubkey` memiliki panjang 33 byte karena menggunakan representasi titik terkompresi untuk kunci publik kurva eliptik. Format ini terdiri dari:
+- 1 byte untuk paritas titik (menunjukkan apakah koordinat y genap atau ganjil)
+- 32 byte untuk koordinat x
+
+Karena fungsi `find_program_address` Solana memiliki batas 32 byte untuk setiap seed, kita perlu membagi `Secp256r1Pubkey` menjadi dua bagian:
+1. Byte paritas (`pubkey[..1]`)
+2. Byte koordinat x (`pubkey[1..33]`)
+
+<ArticleSection name="Withdraw" id="withdraw" level="h2" />
+
+Instruksi withdraw melakukan langkah-langkah berikut:
+1. Memverifikasi vault berisi lamports (tidak kosong)
+2. Menggunakan PDA vault untuk menandatangani transfer atas namanya sendiri
+3. Mentransfer semua lamports dari vault kembali ke pemilik
+
+Pertama, mari kita definisikan struct akun untuk withdraw:
+
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+    pub instructions: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, instructions, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        if !payer.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self { payer, vault, instructions })
+    }
+}
+```
+
+Sekarang mari kita implementasikan struct data instruksi:
+
+```rust
+pub struct WithdrawInstructionData {
+    pub bump: [u8;1]
+}
+
+impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bump: [*data.first().ok_or(ProgramError::InvalidInstructionData)?],
+        })
+    }
+}
+```
+
+Seperti yang Anda lihat, untuk tujuan optimasi kita meneruskan bump sebagai data instruksi agar tidak perlu menurunkannya di `process()` yang sudah "berat" karena semua pemeriksaan lain yang diperlukan.
+
+Akhirnya, mari kita implementasikan instruksi `withdraw`:
+
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+    pub instruction_data: WithdrawInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+        let instruction_data = WithdrawInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Deserialize our instructions
+        let instructions: Instructions<Ref<[u8]>> = Instructions::try_from(self.accounts.instructions)?;
+        // Get instruction directly after this one
+        let ix: IntrospectedInstruction = instructions.get_instruction_relative(1)?;
+        // Get Secp256r1 instruction
+        let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+        // Enforce that we only have one signature
+        if secp256r1_ix.num_signatures() != 1 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        // Enforce that the signer of the first signature is our PDA owner
+        let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+
+        // Check that our fee payer is the correct 
+        let (payer, expiry) = secp256r1_ix
+            .get_message_data(0)?
+            .split_at_checked(32)
+            .ok_or(ProgramError::InvalidInstructionData)?;
+
+        if self.accounts.payer.key().ne(payer) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // Get current timestamp
+        let now = Clock::get()?.unix_timestamp;
+        // Get signature expiry timestamp
+        let expiry = i64::from_le_bytes(
+            expiry
+                .try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+        );
+        if now > expiry {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        
+        // Create signer seeds for our CPI
+        let seeds = [
+            Seed::from(b"vault"),
+            Seed::from(signer[..1].as_ref()),
+            Seed::from(signer[1..].as_ref()),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signers = [Signer::from(&seeds)];
+
+        Transfer {
+            from: self.accounts.vault,
+            to: self.accounts.payer,
+            lamports: self.accounts.vault.lamports(),
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+Proses penarikan melibatkan beberapa pemeriksaan keamanan untuk memastikan transaksi sah. Mari kita uraikan bagaimana kita memverifikasi tanda tangan Secp256r1 dan melindungi dari potensi serangan:
+
+1. **Introspeksi Instruksi**
+- Kami menggunakan sysvar instruksi untuk memeriksa instruksi berikutnya dalam transaksi
+- Ini memungkinkan kami memverifikasi tanda tangan Secp256r1 yang membuktikan kepemilikan kunci penandatanganan
+- Verifikasi tanda tangan untuk Secp256r1 selalu terjadi dalam instruksi terpisah
+
+2. **Verifikasi Tanda Tangan**
+
+```rust
+let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+if secp256r1_ix.num_signatures() != 1 {
+    return Err(ProgramError::InvalidInstructionData);
+}
+let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+```
+
+- Kami memverifikasi bahwa hanya ada satu tanda tangan
+- Kami mengekstrak kunci publik penandatangan, yang harus cocok dengan yang digunakan untuk membuat PDA vault untuk tujuan verifikasi
+
+3. **Validasi Pesan**
+
+```rust
+let (payer, expiry) = secp256r1_ix.get_message_data(0)?.split_at_checked(32)?;
+if self.accounts.payer.key().ne(payer) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```
+
+- Pesan yang ditandatangani berisi dua informasi penting:
+    - Alamat penerima yang dituju (32 byte)
+    - Stempel waktu untuk kapan tanda tangan kedaluwarsa (8 byte)
+- Ini mencegah serangan MEV di mana seseorang dapat menangkap dan menggunakan kembali tanda tangan yang valid dengan meneruskan `payer` lain dan mengklaim jumlah yang ada di vault
+
+4. **Pemeriksaan Kedaluwarsa**
+
+```rust
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(expiry.try_into()?);
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+- Kami memverifikasi bahwa tanda tangan belum kedaluwarsa
+- Ini menambahkan lapisan keamanan berbasis waktu untuk mencegah penggunaan kembali tanda tangan
+- Waktu kedaluwarsa harus dianggap sebagai "periode refrakter"; tidak ada vault baru yang dapat dibuat sampai kedaluwarsa atau bisa digunakan kembali tanpa sepengetahuan pemilik sebenarnya.
+
+5. **Penandatanganan PDA**
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(signer[..1].as_ref()),
+    Seed::from(signer[1..].as_ref()),
+    Seed::from(&self.instruction_data.bump),
+];
+```
+
+- Akhirnya, kami menggunakan kunci publik yang telah diverifikasi untuk membuat seed PDA
+- Ini memastikan hanya pemegang kunci Secp256r1 yang sah yang dapat menandatangani transaksi penarikan
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Sekarang Anda dapat menguji program Anda dengan unit test kami dan mengklaim NFT Anda!
+
+Mulailah dengan membangun program Anda menggunakan perintah berikut di terminal Anda:
+
+```bash
+cargo build-sbf
+```
+
+Ini menghasilkan file `.so` langsung di folder `target/deploy` Anda.
+
+Sekarang klik tombol `take challenge` dan letakkan file tersebut di sana!

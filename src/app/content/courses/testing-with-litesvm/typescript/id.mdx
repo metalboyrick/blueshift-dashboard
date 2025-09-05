@@ -1,0 +1,283 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM dengan TypeScript
+
+Paket `litesvm` menyediakan infrastruktur pengujian inti untuk membuat lingkungan Solana ringan di mana Anda dapat memanipulasi status akun secara langsung dan mengeksekusi transaksi terhadap program Anda.
+
+<ArticleSection name="Langkah Pertama" id="first-steps" level="h2" />
+
+Tambahkan LiteSVM ke proyek Anda:
+
+```bash
+npm i --save-dev litesvm
+```
+
+<ArticleSection name="Dasar-dasar LiteSVM" id="basics" level="h2" />
+
+Mulailah dengan mendeklarasikan ID program Anda dan membuat instance LiteSVM.
+
+Gunakan ID program yang sama persis dengan yang Anda definisikan dalam program Anda untuk memastikan transaksi dieksekusi dengan benar dan tidak memunculkan error `ProgramMismatch` selama pengujian:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { PublicKey } from "@solana/web3.js";
+
+const programId = new PublicKey("22222222222222222222222222222222222222222222");
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Load the program with the right public key
+    svm.addProgramFromFile(programId, "target/deploy/program.so");
+})
+```
+
+Untuk menjalankan pengujian, buat objek transaksi dan gunakan fungsi `.sendTransaction(tx)`:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Transaction } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Transaction
+    const tx = new Transaction();
+
+    // Add the latest blockhash
+    tx.recentBlockhash = svm.latestBlockhash();
+
+    // Add the instructions and the signers
+    // tx.add(...ixs);
+    // tx.sign(...signersKeypair);
+
+    // Send the transaction
+    svm.sendTransaction(tx);
+})
+```
+
+<ArticleSection name="Akun" id="accounts" level="h2" />
+
+Saat menguji program Solana dengan LiteSVM, Anda akan bekerja dengan beberapa jenis akun yang mencerminkan skenario eksekusi program dunia nyata.
+
+Memahami cara mengonstruksi akun-akun ini dengan benar sangat penting untuk pengujian yang efektif.
+
+### Akun Sistem
+
+Jenis akun yang paling mendasar adalah akun sistem, yang hadir dalam dua varian utama:
+- **Akun pembayar**: Akun dengan lamport yang mendanai pembuatan akun program atau transfer lamport
+- **Akun yang belum diinisialisasi**: Akun kosong tanpa lamport, biasanya digunakan untuk merepresentasikan akun program yang menunggu inisialisasi
+
+Akun sistem tidak berisi data dan dimiliki oleh Program Sistem. Perbedaan utama antara pembayar dan akun yang belum diinisialisasi adalah saldo lamport mereka: pembayar memiliki dana, sementara akun yang belum diinisialisasi mulai kosong.
+
+Berikut cara membuat akun `payer` di LiteSVM:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair, SystemProgram } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports: 100_000_000,
+        data: Buffer.alloc(0),
+        owner: SystemProgram.programId,
+        executable: false,
+    }); 
+})
+```
+
+> Akun yang belum diinisialisasi hanyalah akun normal yang dibuat dengan `Keypair.generate()` - tidak diperlukan pengaturan tambahan.
+
+### Akun Program
+
+Untuk akun program yang berisi struktur data kustom, Anda dapat menggunakan pendekatan serupa.
+Anda juga perlu menserialkan data akun ke dalam buffer, yang dapat dilakukan baik secara manual atau menggunakan pustaka seperti `@coral-xyz/borsh` (lihat contoh [di sini](https://solana.com/developers/courses/native-onchain-development/serialize-instruction-data-frontend)).
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Populate the data of the Account
+    const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
+
+    // Serialize the account data into the byte buffer defined above
+    // ...
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports,
+        data: accountData,
+        owner: PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+> Dalam pengujian, Anda tidak perlu menghitung sewa yang tepat. Anda dapat mengatur lamports ke nilai yang besar seperti `100_000_000_000` dan melewati perhitungan sewa karena ini bukan dana nyata.
+
+### Akun Token
+
+Untuk menserialkan data untuk akun SPL Token, Anda dapat menggunakan `AccountLayout` dan `MintLayout` dari `@solana/spl-token`.
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    const owner = Keypair.generate();
+
+    // Create a new Mint Account
+    const mint = Keypair.generate();
+
+    // Populate the data of the Mint Account
+    let mintData = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+        {
+          mintAuthorityOption: 1,
+          mintAuthority: owner.publicKey,
+          supply: BigInt(0),
+          decimals: 0,
+          isInitialized: true,
+          freezeAuthorityOption: 0,
+          freezeAuthority: PublicKey.default,
+        },
+        mintData
+    )
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(mint.publicKey, {
+        lamports,
+        data: mintData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+
+    // Create a new Token Account
+    const tokenAccount = Keypair.generate();
+
+    // Populate the data of the Token Account
+    const tokenAccountData = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(
+        {
+            mint: mint.publicKey,
+            owner: owner.publicKey,
+            amount: BigInt(100),
+            delegateOption: 0,
+            delegate: PublicKey.default,
+            delegatedAmount: BigInt(0),
+            state: 1,
+            isNativeOption: 0,
+            isNative: BigInt(0),
+            closeAuthorityOption: 0,
+            closeAuthority: PublicKey.default,
+        },
+        tokenAccountData,
+    );
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(tokenAccount.publicKey, {
+        lamports,
+        data: tokenAccountData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+<ArticleSection name="Eksekusi" id="execution" level="h2" />
+
+Dengan akun yang telah dibuat dan ditambahkan ke instans LiteSVM Anda, sekarang Anda dapat mengirim transaksi dan memvalidasi logika program Anda.
+
+Sebelum mengirim transaksi, Anda dapat mensimulasikan hasilnya:
+
+```ts
+// Simulate before executing
+const simulatedResult = svm.simulateTransaction(tx);
+```
+
+Kemudian kirim transaksi dan periksa lognya:
+
+```ts
+// Execute and inspect logs
+const result = svm.sendTransaction(tx);
+console.log(result.logs);
+```
+
+### Fitur Lanjutan
+
+Sebelum dan sesudah eksekusi, seluruh buku besar yang terdapat dalam instans LiteSVM Anda dapat dibaca dan disesuaikan.
+
+Anda dapat memanipulasi nilai sysvar seperti clock:
+
+```ts
+// Change the Clock
+const newClock = svm.getClock();
+newClock.unixTimestamp = 50n;
+svm.setClock(newClock);
+
+// Jump to a certain Slot
+svm.warpToSlot(500);
+
+// Expire the current blockhash
+svm.expireBlockhash();
+```
+
+Anda juga dapat membaca data akun dan protokol:
+
+```ts
+// Get all the information about an account (data, lamports, owner, ...)
+svm.getAccount(account.publicKey);
+
+// Get the lamport balance of an account
+svm.getBalance(account.publicKey);
+```
+
+Atau mengonfigurasi bagaimana runtime berperilaku:
+
+```ts
+// Sets the compute budget
+const computeBudget = new ComputeBudget();
+computeBudget.computeUnitLimit = 2_000_000n;
+svm.withComputeBudget(computeBudget);
+
+// Sets Sigverify as active
+svm.withSigverify(true);
+
+// Sets the Blockhash check as active
+svm.withBlockhashCheck(true);
+
+// Sets the default Sysvars
+svm.withSysvars();
+
+// Set the FeatureSet to use
+svm.withFeatureSet(new FeatureSet(...))
+```

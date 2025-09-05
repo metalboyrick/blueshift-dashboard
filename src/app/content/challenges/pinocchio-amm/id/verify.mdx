@@ -1,0 +1,25 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Pinocchio AMM</ChallengeTitle>
+
+Sekarang saatnya untuk menguji apa yang telah Anda pelajari. Dengan menggunakan apa yang telah Anda pelajari dari pelajaran ini, bangun program amm menggunakan framework Pinocchio yang memenuhi persyaratan berikut:
+
+<RequirementList>
+  <Requirement title="Tantangan 1: Membuat akun `Config` ">
+    Program Anda harus memungkinkan `initializer` untuk membuat akun `config` dan membuat akun `Mint` untuk token LP Anda. Tentukan instruksi untuk melakukan ini menggunakan diskriminator instruksi dengan nilai `0`.
+  </Requirement>
+
+  <Requirement title="Tantangan 2: Menyetor ke dalam Amm">
+    Program Anda harus memungkinkan pengguna untuk menyetor ke dalam pool likuiditas Amm dan menghitung jumlah token LP yang akan mereka terima untuk kontribusi mereka. Tentukan instruksi untuk melakukan ini menggunakan nilai diskriminator instruksi `1`.
+  </Requirement>
+
+  <Requirement title="Tantangan 3: Menarik dari Amm">
+    Program Anda harus memungkinkan pengguna untuk menarik dari pool likuiditas Amm dan menghitung jumlah token LP yang akan dibakar untuk itu. Tentukan instruksi untuk melakukan ini menggunakan nilai diskriminator instruksi `2`.
+  </Requirement>
+
+  <Requirement title="Tantangan 4: Swap di dalam Amm">
+    Program Anda harus memungkinkan pengguna untuk melakukan swap dari pool likuiditas Amm. Tentukan instruksi untuk melakukan ini menggunakan nilai diskriminator instruksi `3`.
+  </Requirement>
+</RequirementList>

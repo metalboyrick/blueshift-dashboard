@@ -1,0 +1,102 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Akun Mint dan Token
+
+Seperti yang telah kami sebutkan di bagian sebelumnya, blok pembangun program `SPL Token` adalah akun: akun mint yang mewakili semua informasi tentang token dan akun token yang mewakili semua informasi tentang kepemilikan token tersebut.
+
+Untuk setiap mint yang unik, terdapat ribuan akun token berbeda yang mewakili berapa banyak pemegang token tersebut dalam buku besar.
+
+Pada bagian ini kita akan membahas lebih dalam tentang akun-akun yang berbeda ini:
+
+<ArticleSection name="Akun Mint" id="the-mint-account" level="h2" />
+
+Token di Solana diidentifikasi secara unik oleh alamat Akun Mint yang dimiliki oleh Program Token. Akun ini bertindak sebagai penghitung global untuk token tertentu dan menyimpan data seperti:
+- Supply: Total pasokan token
+- Decimals: Presisi desimal token
+- Mint authority: Akun yang berwenang untuk membuat unit baru token, meningkatkan pasokan
+- Freeze authority: Akun yang berwenang untuk membekukan token dalam Akun Token, mencegahnya ditransfer atau dibakar
+
+Beginilah tampilan data tersebut di blockchain:
+
+```rust
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+```
+
+### Metadata
+
+Di explorer dan dompet, token biasanya muncul dengan nama dan gambar yang dapat dikenali dan mudah dibaca oleh manusia.
+
+Kita menyebut nama, simbol, dan gambar tersebut sebagai `Metadata` dari token. Karena dalam bentuk aslinya, akun `Mint` hanyalah kunci publik sepanjang 32 byte tanpa informasi yang dapat dibaca manusia.
+
+Secara alami, dalam program SPL Token asli, tidak mungkin untuk menetapkan metadata langsung pada token. Karena alasan ini, protokol seperti [Metaplex](https://www.metaplex.com/) mengembangkan program [MPL-token-metadata](https://github.com/metaplex-foundation/mpl-token-metadata) untuk menawarkan cara agar setiap token memiliki metadata terkait.
+
+> Dengan Token Extensions dan [program Token2022](/id/courses/token-2022-program), ini berubah sepenuhnya. Ekstensi Metadata memungkinkan Anda untuk menyematkan metadata langsung ke dalam akun mint itu sendiri, menghilangkan kebutuhan untuk program eksternal.
+
+### Token Non-fungible
+
+Sementara utilitas token secara khusus didelegasikan kepada pembuat, yang dapat memutuskan untuk menjadikan token tersebut sebagai token tata kelola, token utilitas, atau token komunitas, ada beberapa karakteristik yang dapat kita ikuti untuk membedakan antara token fungible dan non-fungible:
+
+Token non-fungible harus memiliki:
+- Pasokan sebanyak 1 karena mereka unik
+- 0 desimal karena mereka tidak dapat dibagi
+- Tidak ada otoritas mint karena kita tidak ingin menambahkan lebih banyak token dengan karakteristik yang sama, karena akan "menghancurkan" keunikan token tersebut
+
+Secara alami tidak mungkin untuk memaksakan karakteristik ini dalam program Token. Karena alasan ini, program seperti `MPL-token-metadata` tidak hanya menawarkan implementasi untuk metadata tetapi juga menawarkan implementasi untuk memaksakan batasan ini dan dengan mudah membuat NFT.
+
+<ArticleSection name="Akun Token" id="the-token-account" level="h2" />
+
+Program Token membuat Akun Token untuk melacak kepemilikan individual dari setiap unit token. Akun Token menyimpan data seperti:
+- Mint: Token yang unit-unitnya disimpan oleh Akun Token
+- Pemilik: Akun yang berwenang untuk mentransfer token dari Akun Token
+- Jumlah: Jumlah token yang saat ini disimpan oleh Akun Token
+
+Beginilah tampilan data tersebut di blockchain:
+
+```rust
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If is_native.is_some, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Setiap dompet perlu memiliki akun token untuk setiap token (mint) yang ingin disimpannya, dengan alamat dompet ditetapkan sebagai pemilik akun token. Setiap dompet dapat memiliki beberapa akun token untuk token (mint) yang sama, tetapi akun token hanya dapat memiliki satu pemilik dan menyimpan unit dari satu token (mint).
+
+<ArticleSection name="Akun Token Terkait" id="the-associated-token-account" level="h2" />
+
+Akun Token Terkait menyederhanakan proses pencarian alamat akun token untuk mint dan pemilik tertentu. Anggap Akun Token Terkait sebagai akun token "default" untuk mint dan pemilik tertentu.
+
+Akun Token Terkait dibuat dengan alamat yang diturunkan dari alamat pemilik dan alamat akun mint. Penting untuk dipahami bahwa Akun Token Terkait hanyalah akun token dengan alamat tertentu.
+
+Ini memperkenalkan konsep kunci dalam pengembangan Solana: [Program Derived Address](https://solana.com/docs/core/pda) (PDA). PDA menurunkan alamat secara deterministik menggunakan input yang telah ditentukan, sehingga memudahkan pencarian alamat sebuah akun.

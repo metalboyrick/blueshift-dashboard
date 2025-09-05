@@ -1,0 +1,49 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruksi Burn
+
+Secara permanen menghancurkan token dengan menghapusnya dari peredaran. Ini mengurangi total persediaan token.
+
+Sebelum kita dapat membakar token, kita perlu sudah memiliki:
+- Akun `Mint` yang sudah diinisialisasi.
+- Akun `Token` atau akun `Associated Token` yang sudah memiliki setidaknya jumlah yang ingin kita bakar.
+
+> Jumlah token yang kita bakar "dinormalisasi" untuk desimal. Ini berarti jika kita ingin membakar 1 token yang memiliki 6 desimal, kita perlu memasukkan `1e6` sebagai jumlahnya
+
+<ArticleSection name="Instruksi Mentah" id="raw-instruction" level="h2" />
+
+Dengan menggunakan instruksi "mentah" tanpa abstraksi, beginilah cara membakar token:
+
+```ts
+// Burn tokens to ATA 
+const burnInstruction = createBurnInstruction(
+    tokenAccount, // token account
+    mint, // mint
+    keypair.publicKey // owner
+    1e6, // amount
+);
+
+const transaction = new Transaction().add(burnInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Tokens Burned! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Instruksi Terabstraksi" id="abstracted-instruction" level="h2" />
+
+Beginilah instruksi yang sama akan terlihat jika diabstraksikan dengan instruksi `burn()`:
+
+```ts  
+let tx = await burn(
+    connection, // connection
+    keypair, // payer
+    tokenAccount, // token account
+    keypair.publicKey, // owner of the token account
+    1e6, // amount to transfer
+);
+
+console.log(`Succesfully Burned!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+<ArticleSection name="Instruksi Terverifikasi" id="checked-instruction" level="h2" />

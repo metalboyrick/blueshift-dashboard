@@ -1,0 +1,47 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruksi Approve dan Revoke
+
+Approve memberikan delegasi wewenang untuk mentransfer sejumlah token tertentu atas nama pemilik akun. Ini memungkinkan transfer token secara terprogram tanpa memberikan kontrol penuh atas akun.
+
+> Kita menetapkan jumlah "disetujui", dan delegasi hanya dapat mentransfer hingga jumlah tersebut
+
+Revoke menghapus wewenang delegasi saat ini atas akun, mengembalikan kontrol penuh kepada pemilik akun.
+
+> Segera membatalkan delegasi yang ada dan hanya pemilik akun yang dapat mencabut delegasi (bukan delegasi itu sendiri)
+
+Sebelum kita dapat mendelegasikan atau mencabut akun token apa pun, kita perlu sudah memiliki:
+- Akun `Mint` yang sudah diinisialisasi.
+- Akun `Token` atau akun `Associated Token` yang sudah diinisialisasi yang akan kita kendalikan
+
+> Jumlah token yang kita mint "dinormalisasi" untuk desimal. Ini berarti jika kita ingin mencetak 1 token yang memiliki 6 desimal, kita perlu memasukkan `1_000_000` sebagai jumlahnya
+
+Beginilah tampilan CPI untuk instruksi `approve()`: 
+
+```rust
+approve(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Approve {
+            to: ctx.accounts.token_account.to_account_info(),
+            delegate: ctx.accounts.delegate.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```
+
+Dan beginilah tampilan CPI untuk instruksi `revoke()`: 
+
+```rust
+revoke(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Revoke {
+            pub source: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

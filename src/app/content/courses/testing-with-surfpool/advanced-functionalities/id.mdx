@@ -1,0 +1,168 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Fungsionalitas Lanjutan
+
+Surfnet tidak hanya mereplikasi mainnet pada localnet—tetapi juga memungkinkan Anda meningkatkan dan memodifikasi fitur inti Solana dengan mengubah akun, variabel sistem, dan status blockchain.
+
+Modifikasi ini terjadi melalui panggilan RPC ke Surfnet, memungkinkan perubahan baik secara terprogram (untuk lingkungan pengujian otomatis) maupun melalui perintah terminal (untuk operasi sekali pakai).
+
+Untuk menjalankan panggilan RPC dalam kode Anda, gunakan:
+
+```ts
+const surfnetCall = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "<surfnet-method>",
+    "params": [<surfnet-method-params]
+}
+
+await fetch(connection.rpcEndpoint, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(surfnetCall)
+});
+```
+
+Untuk menjalankan panggilan RPC di terminal Anda, gunakan:
+
+```bash
+curl -X POST \
+    -H "Content-Type: application/json" \
+    -d '{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "<surfnet-method>",
+        "params": [<surfnet-method-params]
+    }' \
+    http://localhost:8899
+```
+
+<ArticleSection name="Customize System Variables" id="customize-system-variables" level="h2" />
+
+### Perjalanan Waktu
+
+Lompat ke titik mana pun dalam sejarah blockchain menggunakan metode `surfnet_timeTravel`. Ini sangat berharga untuk menguji bagaimana program Anda berperilaku pada status jaringan yang berbeda atau mereproduksi bug yang terjadi pada waktu tertentu.
+
+Tentukan salah satu: `absoluteEpoch`, `absoluteSlot`, atau `absoluteTimestamp` seperti ini:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_timeTravel",
+  "params": [
+    {
+      "absoluteEpoch": 0
+    }
+  ]
+}
+```
+
+### Jeda dan Lanjutkan Produksi Blok
+
+Kontrol perkembangan blok untuk men-debug transaksi langkah demi langkah atau menguji logika yang sensitif terhadap waktu. Gunakan `surfnet_pauseClock` untuk menghentikan produksi blok dan `surfnet_resumeClock` untuk melanjutkan:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_pauseClock", // or "surfnet_resumeClock"
+  "params": []
+}
+```
+
+<ArticleSection name="Modify Account Data" id="modify-account-data" level="h2" />
+
+### Mengatur Parameter SOL
+
+Konfigurasikan parameter pasokan SOL untuk menguji skenario ekonomi atau kasus-kasus khusus.
+
+Metode `surfnet_setSupply` menerima parameter `circulating`, `nonCirculating`, `nonCirculatingAccounts`, dan `total`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setSupply",
+  "params": [
+    {
+      "circulating": 1000000000,
+      "nonCirculating": 1000000000,
+      "nonCirculatingAccounts": [],
+      "total": 1000000000
+    }
+  ]
+}
+```
+
+### Transfer Akun Antar Program
+
+Kloning akun program dari satu program ke program lain menggunakan `surfnet_cloneProgramAccount`. Berguna untuk menguji upgrade program atau migrasi status antara versi program yang berbeda.
+
+Memerlukan baik `destinationProgramId` maupun `sourceProgramId`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_cloneProgramAccount",
+  "params": [
+    {
+      "destinationProgramId": "string",
+      "sourceProgramId": "string"
+    }
+  ]
+}
+```
+
+### Memperbarui Data Akun
+
+> Memperbarui akun yang sudah ada dengan metode berikut akan menimpa status akun
+
+Ubah properti akun apa pun termasuk lamports, data, pemilik, dan status executable menggunakan `surfnet_setAccount`. 
+
+Metode ini memerlukan `pubkey` dan menerima bidang opsional untuk `data`, `executable`, `lamports`, `owner`, dan `rentEpoch`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setAccount",
+  "params": [
+    "1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM",
+    {
+      "data": "0x123456",
+      "executable": false,
+      "lamports": 1000000000,
+      "owner": "11111111111111111111111111111111",
+      "rentEpoch": 0
+    }
+  ]
+}
+```
+
+Selain itu, untuk modifikasi akun token, gunakan metode khusus `surfnet_setTokenAccount`, yang menyederhanakan perubahan data untuk Akun Token.
+
+Memerlukan parameter `owner` dan `mint`, dengan bidang opsional untuk `amount`, `closeAuthority`, `delegate`, `delegateAmount`, `state`, dan `tokenProgram`:
+
+```ts
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "surfnet_setTokenAccount",
+  "params": [
+    "1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh",
+    "11111112D1oxKts8YPdTJRG5FzxTNpMtWmq8hkVx3",
+    {
+      "amount": 1000000000,
+      "closeAuthority": "111111131h1vYVSYuKP6AhS86fbRdMw9XHiZAvAaj",
+      "delegate": "11111112cMQwSC9qirWGjZM6gLGwW69X22mqwLLGP",
+      "delegatedAmount": 1000000000,
+      "state": "initialized"
+    },
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  ]
+}
+```

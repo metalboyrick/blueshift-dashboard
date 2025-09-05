@@ -1,0 +1,128 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Program Token2022
+
+![Token 2022 with Anchor](/graphics/course-banners/token-2022-with-anchor.png)
+
+Program Token2022, juga dikenal sebagai Token Extensions, adalah superset dari fungsionalitas yang disediakan oleh Program Token.
+
+Jika Anda ingin mempelajari lebih lanjut tentang fungsionalitas tambahan yang tersedia dan apa perbedaannya dengan program token Legacy, ikuti [kursus ini](/id/courses/token-2022-program)
+
+> Jika Anda belum familiar dengan anchor, kami sarankan Anda mempelajari [Anchor for Dummies](/id/courses/anchor-for-dummies) sebelum melanjutkan.
+
+Untuk anchor, semua yang terkait dengan token dapat ditemukan di crate `anchor-spl`. Karena alasan ini, setelah menginisialisasi workspace `Anchor` kita bisa langsung melakukan:
+
+```bash
+cargo add anchor-spl
+```
+
+> Versi `anchor-spl` harus sama dengan crate `anchor-lang` kita. Dan ekstensi token2022 hanya tersedia dari versi 0.30.0 ke atas.
+
+Jangan lupa untuk memperbarui fitur `idl-build` yang dapat ditemukan di bagian `[features]` dari file `Cargo.toml` program kita dengan `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
+
+<ArticleSection name="Akun Mint dan Token" id="mint-and-token-accounts" level="h2" />
+
+Jika Anda familiar dengan `Anchor`, Anda akan tahu bahwa mereka memiliki serangkaian makro yang membantu pengguna mengabstraksikan banyak kompleksitas terkait inisialisasi akun.
+
+Hal yang sama berlaku di sini untuk akun `Mint`, `Token` dan `Associated Token`.
+
+### Akun Mint dengan Ekstensi
+
+Karena akun `Mint` dengan ekstensi memiliki ukuran yang berbeda dan dimiliki oleh program yang berbeda, `Anchor` membuat jenis akun baru yang bekerja secara independen jika akun `Mint` berasal dari Token Legacy atau dari program Token2022.
+
+Untuk menggunakannya, kita hanya perlu mengimpor baik `TokenInterface` dan `Mint` dari `anchor_spl::token_interface` seperti ini:
+
+```rust
+use anchor_spl::token_interface::{TokenInterface, Mint};
+```
+
+Setelah itu kita bisa langsung melakukan `pub mint: InterfaceAccount<'info, Mint>,` dan menentukan bahwa kita ingin mint menggunakan akun token_program yang kita miliki dalam struct akun seperti ini: `mint::token_program = token_program` dan selesai!
+
+> Antarmuka token menyediakan cara umum untuk berinteraksi dengan kedua jenis akun tanpa perlu menangani perbedaan dalam logika deserialisasi mereka sambil mempertahankan keamanan tipe dan validasi yang tepat.
+
+Sebelum membahas cara menambahkan ekstensi ke akun mint, berikut cara membuat mint dengan program Token2022:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+Sekarang, untungnya, `Anchor` mendukung kita, dan membuat beberapa makro untuk menambahkan ekstensi yang paling populer langsung dalam langkah inisialisasi seperti ini:
+
+```rust
+#[account(
+    // ...init
+    extensions::metadata_pointer::authority = <target_account>,
+    extensions::metadata_pointer::metadata_address = <target_account>,
+    extensions::group_pointer::authority = <target_account>,
+    extensions::group_pointer::group_address = <target_account>,
+    extensions::group_member_pointer::authority = <target_account>,
+    extensions::group_member_pointer::member_address = <target_account>,
+    extensions::transfer_hook::authority = <target_account>,
+    extensions::transfer_hook::program_id = <target_pubkey>
+    extensions::close_authority::authority = <target_account>,
+    extensions::permanent_delegate::delegate = <target_account>,
+)]
+pub mint: InterfaceAccount<'info, Mint>,
+```
+
+### Associated Token Account dengan Ekstensi
+
+Akun `Associated Token` dilengkapi dengan ekstensi `ImmutableOwner` secara default. Jadi satu-satunya perbedaan antara pembuatan `Token Account` Legacy atau Token2022 hanyalah penggunaan `Interface Account`.
+
+Berikut cara membuat associated token account:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateAssociatedToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program,
+    )]
+    pub associated_token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+### Token Account dengan Ekstensi
+
+Akun `Token` tidak dilengkapi dengan ekstensi apa pun secara default dan tidak memiliki makro yang membantu kita. Jadi dengan menggunakan makro kita hanya dapat membuat akun `Token` Token2022 normal.
+
+Berikut cara membuat token account:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+        token::token_program = token_program,
+    )]
+    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```

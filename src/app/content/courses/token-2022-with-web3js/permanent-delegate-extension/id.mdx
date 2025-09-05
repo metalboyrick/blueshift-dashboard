@@ -1,0 +1,99 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Delegasi Permanen
+
+Ekstensi `PermanentDelegate` adalah ekstensi akun Mint yang memungkinkan adanya delegasi permanen untuk semua token dari mint tersebut yang mampu mentransfer atau membakar token apa pun dari mint tersebut, dari akun token mana pun.
+
+<ArticleSection name="Menginisialisasi Akun Mint" id="initializing-the-mint-account" level="h2" />
+
+Untuk menginisialisasi ekstensi `PermanentDelegate` pada akun `Mint` kita akan membutuhkan fungsi `initializePermanentDelegate()`.
+
+Berikut cara membuat mint dengan ekstensi Delegasi Permanen:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializePermanentDelegateInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Permanent Delegate extension
+const mintLen = getMintLen([ExtensionType.PermanentDelegate]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Permanent Delegate extension
+const initializePermanentDelegate = createInitializePermanentDelegateInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializePermanentDelegate,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Menutup Akun Mint" id="closing-the-mint-account" level="h2" />
+
+Jika akun `Mint` memiliki suplai nol, `CloseMint Authority` dapat mengklaim kembali biaya sewa pada akun tersebut dengan menggunakan instruksi `closeAccount` seperti ini:
+
+```ts
+const closeMintInstruction = createCloseAccountInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(closeMintInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: false});
+
+console.log(`Mint closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Tindakan yang Diizinkan" id="permissioned-actions" level="h2" />
+
+Tidak seperti delegasi biasa yang dapat dicabut, otoritas delegasi ini bersifat permanen dan tidak dapat diubah.
+
+Ini berarti bahwa setiap tindakan normal seperti `transfer()`, `burn()`, `approve()` dan `freeze()` dapat dieksekusi kapan pun diperlukan langsung oleh otoritas tanpa memerlukan tanda tangan dari pemilik sebenarnya.
+
+Ini berarti kita dapat menggunakan instruksi normal seperti `transferChecked()`, `burnChecked()`, ... dan memasukkan otoritas `PermanetDelegate` di kolom `authority`.

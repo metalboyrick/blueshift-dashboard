@@ -1,0 +1,353 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# The Amm
+
+![Pinocchio Amm Challenge](/graphics/challenge-banners/pinocchio-amm.png)
+
+Automated Market Maker (AMM) adalah blok dasar fundamental dalam keuangan terdesentralisasi, memungkinkan pengguna untuk menukar token langsung dengan kontrak pintar tanpa bergantung pada buku pesanan tradisional atau pertukaran terpusat.
+
+Bayangkan AMM sebagai kumpulan likuiditas yang beroperasi sendiri: pengguna menyetor pasangan token, dan AMM menggunakan rumus matematika untuk menentukan harga dan memfasilitasi pertukaran di antara mereka. Ini memungkinkan siapa pun untuk memperdagangkan token secara instan, kapan saja, tanpa memerlukan pihak lawan.
+
+Jika Anda perhatikan dengan seksama, Anda akan menyadari bahwa AMM tidak lain adalah Escrow dengan langkah-langkah, perhitungan, dan logika tambahan. Jadi jika Anda melewatkannya, silakan pelajari [Pinocchio Escrow Challenge](/id/challenges/pinocchio-escrow) sebelum mengikuti kursus ini.
+
+Dalam tantangan ini, Anda akan mengimplementasikan AMM sederhana dengan empat instruksi inti:
+- **Initialize**: Menyiapkan AMM dengan membuat akun konfigurasinya dan mencetak token LP (liquidity provider) yang mewakili saham dalam pool.
+- **Deposit**: Memungkinkan pengguna untuk menyediakan baik `token_x` dan `token_y` ke dalam pool. Sebagai imbalannya, mereka akan menerima jumlah token LP yang proporsional, yang mewakili bagian mereka dari likuiditas.
+- **Withdraw**: Memungkinkan pengguna untuk menukarkan token LP mereka untuk menarik bagian mereka dari `token_x` dan `token_y` dari pool, secara efektif menghapus likuiditas.
+- **Swap**: Memungkinkan siapa pun untuk menukar token_x dengan `token_y` (atau sebaliknya) menggunakan pool, dengan biaya kecil yang dibayarkan kepada penyedia likuiditas.
+
+**Catatan**: Jika Anda tidak familiar dengan Pinocchio, Anda sebaiknya mulai dengan membaca [Pengantar Pinocchio](/id/courses/introduction-to-pinocchio) untuk membiasakan diri dengan konsep inti yang akan kita gunakan dalam program ini.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Mari mulai dengan membuat lingkungan Rust yang baru:
+
+```bash
+# create workspace
+cargo new blueshift_native_amm --lib --edition 2021
+cd blueshift_native_amm
+```
+
+Tambahkan `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` dan `constant-product-curve` yang dibuat oleh [Dean](https://x.com/deanmlittle) untuk menangani semua perhitungan untuk Amm kita:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
+```
+
+Deklarasikan tipe crate di `Cargo.toml` untuk menghasilkan artefak deployment di `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Sekarang kamu siap untuk menulis program amm kamu.
+
+<ArticleSection name="Constant Product Curve" id="constant-product-curve" level="h2" />
+
+Inti dari sebagian besar AMM adalah formula sederhana namun kuat yang dikenal sebagai constant product curve. Formula ini memastikan bahwa hasil perkalian dari dua token reserve dalam pool selalu tetap konstan, bahkan ketika pengguna melakukan trading atau menyediakan likuiditas.
+
+### Formulanya
+
+Formula AMM yang paling umum adalah: `x * y = k` di mana:
+- `x` = jumlah token X dalam pool
+- `y` = jumlah token Y dalam pool
+- `k` = konstanta (tidak pernah berubah)
+
+Setiap kali seseorang menukar satu token dengan token lainnya, pool menyesuaikan cadangan sehingga produk `k` tetap tidak berubah. Ini menciptakan kurva harga yang secara otomatis menyesuaikan berdasarkan penawaran dan permintaan.
+
+### Contoh
+
+Misalkan pool dimulai dengan 100 token X dan 100 token Y: `100 * 100 = 10,000`.
+
+Jika pengguna ingin menukar 10 token X dengan token Y, pool harus menjaga `k = 10,000`. Jadi, jika `x_new` = 110 (setelah deposit), cari nilai `y_new`: `110 * y_new = 10,000` sehingga `y_new = 10,000 / 110 ≈ 90.91`.
+
+Pengguna akan menerima `100 - 90.91 = 9.09` token Y (dikurangi biaya apa pun).
+
+### Penyediaan Likuiditas
+
+Ketika pengguna menyetor kedua token ke dalam pool, mereka menjadi penyedia likuiditas (LP). Sebagai imbalannya, mereka menerima token LP yang mewakili bagian mereka dari pool.
+- Token LP dicetak sebanding dengan seberapa banyak likuiditas yang kamu tambahkan.
+- Ketika kamu menarik, kamu membakar token LP untuk mengklaim kembali bagianmu dari kedua token (ditambah bagian dari biaya yang dikumpulkan dari swap).
+
+Penyedia likuiditas pertama menetapkan rasio awal. Misalnya, jika Anda menyetor 100 X dan 100 Y, Anda mungkin menerima 100 token LP.
+
+Setelah itu, jika pool sudah memiliki 100 X dan 100 Y, dan Anda menambahkan 10 X dan 10 Y, Anda mendapatkan token LP yang proporsional dengan kontribusi Anda: `share = deposit_x / total_x = 10 / 100 = 10%` sehingga Amm akan mencetak ke dompet pengguna, 10% dari total pasokan LP.
+
+### Biaya
+
+Setiap swap biasanya dikenakan biaya kecil (misalnya, 0,3%), yang ditambahkan ke pool. Ini berarti LP mendapatkan bagian dari biaya perdagangan, meningkatkan nilai token LP mereka seiring waktu dan mendorong orang untuk menyediakan likuiditas.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Kali ini kita akan membagi program menjadi modul-modul kecil yang terfokus alih-alih memasukkan semuanya ke dalam `lib.rs`. Struktur folder akan terlihat kurang lebih seperti ini:
+
+```
+src
+├── instructions
+│       ├── deposit.rs
+│       ├── initialize.rs
+│       ├── mod.rs
+│       ├── swap.rs
+│       └── withdraw.rs
+├── lib.rs
+└── state.rs
+```
+
+Entrypoint, yang berada di `lib.rs` selalu terlihat sama:
+
+```rust
+use pinocchio::{
+    account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
+    ProgramResult,
+};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Initialize::DISCRIMINATOR, data)) => {
+            Initialize::try_from((data, accounts))?.process()
+        }
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, data)) => Withdraw::try_from((data, accounts))?.process(),
+        Some((Swap::DISCRIMINATOR, data)) => Swap::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Kita akan pindah ke `state.rs` di mana semua data untuk `AMM` kita berada.
+
+Mari kita bagi ini menjadi tiga bagian: definisi struct, helper untuk membaca, dan helper untuk menulis
+
+Pertama, mari kita lihat definisi struct:
+
+```rust
+use core::mem::size_of;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+
+#[repr(C)]
+pub struct Config {
+    state: u8,
+    seed: [u8; 8],
+    authority: Pubkey,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    fee: [u8; 2],
+    config_bump: [u8; 1],
+}
+
+#[repr(u8)]
+pub enum AmmState {
+    Uninitialized = 0u8,
+    Initialized = 1u8,
+    Disabled = 2u8,
+    WithdrawOnly = 3u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<Config>();
+
+    //...
+}
+```
+
+Atribut `#[repr(C)]` memastikan struct kita memiliki tata letak memori yang dapat diprediksi, kompatibel dengan C yang tetap konsisten di berbagai platform dan versi kompiler Rust. Ini sangat penting untuk program on-chain di mana data harus diserialisasi dan dideserialisasi dengan andal.
+
+Kita menyimpan `seed` (u64) dan `fee` (u16) sebagai array byte alih-alih tipe aslinya untuk memastikan deserialisasi yang aman. Ketika data dibaca dari penyimpanan akun, tidak ada jaminan tentang penyelarasan memori dan membaca `u64` dari alamat memori yang tidak selaras adalah perilaku yang tidak terdefinisi. Dengan menggunakan array byte dan mengkonversi dengan `from_le_bytes()`, kita memastikan data dapat dibaca dengan aman terlepas dari penyelarasan, sekaligus menjamin pengurutan byte little-endian yang konsisten di semua platform.
+
+Setiap field dalam struct `Config` memiliki tujuan spesifik:
+- **state**: Melacak status saat ini dari AMM (misalnya, belum diinisialisasi, sudah diinisialisasi, dinonaktifkan, atau hanya-penarikan).
+- **seed**: Nilai unik yang digunakan untuk pembuatan program-derived address (PDA), memungkinkan beberapa AMM ada dengan konfigurasi berbeda.
+- **authority**: Kunci publik dengan kontrol administratif atas AMM (misalnya, untuk menjeda atau meningkatkan pool). Dapat diatur menjadi tidak dapat diubah dengan meneruskan `[0u8; 32]`.
+- **mint_x**: Alamat SPL token mint untuk token X dalam pool.
+- **mint_y**: Alamat SPL token mint untuk token Y dalam pool.
+- **fee**: Biaya swap, dinyatakan dalam basis poin (1 basis poin = 0,01%), yang dikumpulkan pada setiap perdagangan dan didistribusikan ke penyedia likuiditas.
+- **config_bump**: Bump seed yang digunakan dalam derivasi PDA untuk memastikan alamat akun konfigurasi valid dan unik. Disimpan untuk membuat derivasi PDA lebih efisien.
+
+Enum `AmmState` mendefinisikan kemungkinan status untuk AMM, memudahkan pengelolaan siklus hidup pool dan membatasi tindakan tertentu berdasarkan statusnya.
+
+### Helper pembacaan
+
+Helper pembacaan menyediakan akses yang aman dan efisien ke data `Config` dengan validasi dan peminjaman yang tepat:
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load(account_info: &AccountInfo) -> Result<Ref<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes_unchecked(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub unsafe fn load_unchecked(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Self::from_bytes_unchecked(
+            account_info.borrow_data_unchecked(),
+        ))
+    }
+
+    /// Return a `Config` from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`, and
+    /// it is properly aligned to be interpreted as an instance of `Config`.
+    /// At the moment `Config` has an alignment of 1 byte.
+    /// This method does not perform a length validation.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> &Self {
+        &*(bytes.as_ptr() as *const Config)
+    }
+
+    /// Return a mutable `Config` reference from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked_mut(bytes: &mut [u8]) -> &mut Self {
+        &mut *(bytes.as_mut_ptr() as *mut Config)
+    }
+
+    // Getter methods for safe field access
+    #[inline(always)]
+    pub fn state(&self) -> u8 { self.state }
+
+    #[inline(always)]
+    pub fn seed(&self) -> u64 { u64::from_le_bytes(self.seed) }
+
+    #[inline(always)]
+    pub fn authority(&self) -> &Pubkey { &self.authority }
+
+    #[inline(always)]
+    pub fn mint_x(&self) -> &Pubkey { &self.mint_x }
+
+    #[inline(always)]
+    pub fn mint_y(&self) -> &Pubkey { &self.mint_y }
+
+    #[inline(always)]
+    pub fn fee(&self) -> u16 { u16::from_le_bytes(self.fee) }
+
+    #[inline(always)]
+    pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
+}
+```
+
+Fitur utama dari helper pembacaan:
+- Peminjaman Aman: Metode `load` mengembalikan `Ref<Self>` yang dengan aman mengelola peminjaman dari data akun, mencegah data race dan memastikan keamanan memori.
+- Validasi: Baik `load` maupun `load_unchecked` memvalidasi panjang data akun dan pemiliknya sebelum mengizinkan akses ke struct.
+- Metode Getter: Semua field diakses melalui metode getter yang menangani konversi dari array byte ke tipe yang sesuai (misalnya, `u64::from_le_bytes` untuk `seed`).
+- Performa: Atribut `#[inline(always)]` memastikan metode-metode yang sering dipanggil ini di-inline untuk performa optimal.
+
+### Pembantu penulisan
+
+Pembantu penulisan menyediakan metode yang aman dan tervalidasi untuk memodifikasi data `Config`:
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load_mut(account_info: &AccountInfo) -> Result<RefMut<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
+            Self::from_bytes_unchecked_mut(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub fn set_state(&mut self, state: u8) -> Result<(), ProgramError> {
+        if state.ge(&(AmmState::WithdrawOnly as u8)) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.state = state as u8;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_fee(&mut self, fee: u16) -> Result<(), ProgramError> {
+        if fee.ge(&10_000) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.fee = fee.to_le_bytes();
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_inner(
+        &mut self,
+        seed: u64,
+        authority: Pubkey,
+        mint_x: Pubkey,
+        mint_y: Pubkey,
+        fee: u16,
+        config_bump: [u8; 1],
+    ) -> Result<(), ProgramError> {
+        self.set_state(AmmState::Initialized as u8)?;
+        self.set_seed(seed);
+        self.set_authority(authority);
+        self.set_mint_x(mint_x);
+        self.set_mint_y(mint_y);
+        self.set_fee(fee)?;
+        self.set_config_bump(config_bump);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn has_authority(&self) -> Option<Pubkey> {
+        let bytes = self.authority();
+        let chunks: &[u64; 4] = unsafe { &*(bytes.as_ptr() as *const [u64; 4]) };
+        if chunks.iter().any(|&x| x != 0) {
+            Some(self.authority)
+        } else {
+            None
+        }
+    }
+}
+```
+
+Fitur utama dari pembantu penulisan:
+- Peminjaman yang Dapat Diubah: Metode `load_mut` mengembalikan `RefMut<Self>` yang dengan aman mengelola peminjaman yang dapat diubah dari data akun.
+- Validasi Input: Metode seperti `set_state` dan `set_fee` mencakup validasi untuk memastikan hanya nilai yang valid yang disimpan (misalnya, biaya tidak dapat melebihi 10.000 basis poin).
+- Pembaruan Atomik: Metode `set_inner` memungkinkan pembaruan yang efisien dan atomik untuk semua bidang struktur sekaligus, meminimalkan risiko keadaan yang tidak konsisten.
+- Pemeriksaan Otoritas: Metode `has_authority` menyediakan cara yang efisien untuk memeriksa apakah otoritas diatur (bukan nol) atau jika AMM tidak dapat diubah (semua nol).
+- Konversi Byte: Nilai multi-byte dikonversi dengan benar ke array byte little-endian menggunakan metode seperti `to_le_bytes()` untuk memastikan perilaku lintas platform yang konsisten.

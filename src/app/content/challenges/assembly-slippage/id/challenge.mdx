@@ -1,0 +1,110 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+![Assembly Slippage Challenge](/graphics/challenge-banners/assembly-slippage.png)
+
+# Assembly Slippage
+
+Dalam unit ini kita akan menggunakan sBPF Assembly untuk membuat instruksi pemeriksaan slippage dasar. Dengan menyertakan instruksi tersebut pada indeks terakhir dalam array instruksi kita, kita dapat membuat perlindungan tambahan sebagai pertahanan terakhir terhadap bug kontrak pintar, atau kontrak bit flip yang berbahaya.
+
+Ada beberapa properti pemeriksaan slippage yang menjadikannya kandidat ideal untuk assembly:
+
+- Kasus penggunaan tunggal dan terbatas
+- Tidak perlu melakukan pemeriksaan penandatangan/akun
+- Hanya dapat meningkatkan keamanan
+
+Jika Anda belum familiar dengan cara menulis program assembly, ikuti [kursus pengantar Assembly](/id/courses/introduction-to-assembly)
+
+<ArticleSection name="Desain Program" id="program-design" level="h2" />
+
+Program kita mengimplementasikan operasi sederhana namun penting: memvalidasi bahwa akun token memiliki saldo yang cukup sebelum melanjutkan transaksi. Pola ini muncul di mana-mana dalam DeFi—dari pertukaran AMM hingga protokol peminjaman.
+
+Program ini mengharapkan:
+- Satu akun SPL token dalam array akun
+- Jumlah 8-byte dalam data instruksi
+- Mengembalikan sukses jika saldo ≥ jumlah, error jika tidak
+
+<ArticleSection name="Offset Memori" id="memory-offsets" level="h2" />
+
+Program sBPF menerima data akun sebagai region memori yang berdekatan. Konstanta ini mendefinisikan offset byte. Dengan mengasumsikan bahwa program kita hanya akan menerima satu akun, dan itu akan menjadi Akun Token SPL, dimungkinkan untuk secara statis menurunkan offset ini sebagai:
+
+```sbpf
+.equ TOKEN_ACCOUNT_BALANCE, 0x00a0
+.equ MINIMUM_BALANCE, 0x2918
+```
+
+- `TOKEN_ACCOUNT_BALANCE (0x00a0)`: menunjuk ke field saldo dalam data akun SPL Token. Akun token mengikuti tata letak standar di mana saldo (8 byte, little-endian) berada pada offset 160.
+
+- `MINIMUM_BALANCE (0x2918)`: menentukan lokasi di mana Solana menempatkan payload data instruksi Anda. Offset ini adalah bagian dari struktur info akun runtime.
+
+> Anda dapat menghasilkan offset menggunakan alat kami di [sbpf.xyz](https://sbpf.xyz)
+
+Tidak seperti bahasa tingkat tinggi yang mengabstraksi tata letak memori, assembly mengharuskan Anda mengetahui persis di mana setiap bagian data berada.
+
+<ArticleSection name="Entrypoint dan Validasi Awal" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
+    ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
+```
+
+Setiap program sBPF dimulai pada simbol global `.entrypoint`. Runtime Solana menyediakan data akun dan instruksi melalui register `r1`.
+
+Instruksi `ldxdw` memuat (`ldx`) nilai 8-byte (double word, `dx`) dari memori ke dalam register. Berikut yang terjadi:
+- `ldxdw r3, [r1+MINIMUM_BALANCE]`: menghitung alamat memori yang berisi jumlah yang kita butuhkan. Nilai tersebut dimuat ke dalam `r3`.
+- `ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE]`: menunjuk ke bidang saldo akun token. Nilai 64-bit ini masuk ke `r4`.
+
+Kedua operasi tersebut adalah zero-copy: kita membaca langsung dari data akun tanpa overhead deserialisasi.
+
+<ArticleSection name="Logika Kondisional dan Percabangan" id="conditional-logic-and-branching" level="h2" />
+
+```sbpf
+jge r3, r4, end         // Skip to exit if balance is valid
+```
+
+Instruksi `jge` (jump if greater or equal) membandingkan `r3` (jumlah yang dibutuhkan) dengan `r4` (saldo yang tersedia). Jika `r3 >= r4`, kita melompat ke label `end`; seperti early return.
+
+Jika kondisi gagal, eksekusi berlanjut ke jalur penanganan kesalahan. Pola branch-on-condition ini adalah cara assembly mengimplementasikan logika if/else.
+
+<ArticleSection name="Penanganan Kesalahan dan Logging" id="error-handling-and-logging" level="h2" />
+
+```sbpf
+lddw r1, e              // Load error message address
+lddw r2, 17             // Load length of error message  
+call sol_log_           // Log out error message
+lddw r0, 1              // Return error code 1
+```
+
+Ketika validasi gagal, kita mencatat pesan kesalahan yang dapat dibaca manusia sebelum mengakhiri:
+- `lddw` memuat nilai langsung, dalam hal ini alamat string kesalahan kita, yang berada di bagian `.rodata`, dan panjangnya (17 byte untuk "Slippage exceeded").
+- `call sol_log_` memanggil syscall logging Solana. Runtime membaca pesan dari memori dan menambahkannya ke log transaksi.
+- Kemudian kita memuat `1` ke dalam `r0` untuk menandakan kegagalan program. Runtime akan membatalkan transaksi dan mengembalikan kode kesalahan ini.
+
+<ArticleSection name="Program Termination" id="program-termination" level="h2" />
+
+```sbpf
+end:
+    exit
+```
+
+Instruksi `exit` menghentikan eksekusi program dan mengembalikan kontrol ke runtime Solana. Nilai dalam `r0` menjadi kode keluar program (0 untuk sukses, bukan nol untuk kesalahan).
+
+Tidak seperti bahasa tingkat tinggi dengan pembersihan otomatis, program assembly harus keluar secara eksplisit. Jatuh dari akhir kode Anda adalah perilaku yang tidak terdefinisi.
+
+## Data hanya-baca
+
+```sbpf
+.rodata
+    e: .ascii "Slippage exceeded"
+```
+
+Bagian `.rodata` (data hanya-baca) berisi string pesan kesalahan kita.
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+  
+Program kecil ini menyelesaikan apa yang mungkin membutuhkan puluhan CU dengan Rust hanya dengan `4 CUs` dalam kasus berhasil, `6 CUs` dalam kasus gagal, atau `106 CUs` dalam kasus gagal yang mencatat pesan kesalahan.
+
+Timbal baliknya adalah kita harus memahami tata letak memori, konvensi pemanggilan, dan penanganan kesalahan pada tingkat terendah. Tetapi untuk operasi yang kritis terhadap kinerja, manfaatnya sering kali membenarkan upaya tersebut.
+
+> Kode ini tidak "aman" jika berdiri sendiri. Kita tidak memeriksa apa pun tentang akun yang diberikan. Tetapi ini bertujuan untuk menjadi instruksi tambahan yang berarti harus dijalankan dengan itikad baik.

@@ -1,0 +1,300 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM dengan Rust
+
+Paket `litesvm` menyediakan infrastruktur pengujian inti untuk membuat lingkungan Solana ringan di mana Anda dapat memanipulasi status akun secara langsung dan mengeksekusi transaksi terhadap program Anda.
+
+<ArticleSection name="Langkah Pertama" id="first-steps" level="h2" />
+
+Tambahkan LiteSVM ke proyek Anda:
+
+```bash
+cargo add --dev litesvm
+```
+
+<ArticleSection name="Dasar-dasar LiteSVM" id="basics" level="h2" />
+
+Mulailah dengan mendeklarasikan ID program Anda dan membuat instance LiteSVM.
+
+Gunakan ID program yang sama persis dengan yang Anda definisikan dalam program Anda untuk memastikan transaksi dieksekusi dengan benar dan tidak memunculkan error `ProgramMismatch` selama pengujian:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::{pubkey, Pubkey};
+
+const program_id: Pubkey = pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Load the program with the right publickey
+    svm.add_program_from_file(program_id, "target/deploy/program.so");
+}
+```
+
+Untuk menjalankan pengujian, buat objek transaksi dan gunakan fungsi `.send_transaction(tx)`:
+
+```rust
+use litesvm::LiteSVM;
+use solana_transaction::Transaction;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Transaction
+    let mut tx = Transaction::new_signed_with_payer(
+        &[...ixs],
+        Some(&payer.pubkey()),
+        &[...signersKeypair],
+        svm.latest_blockhash(),
+    );
+
+    // Send the Transaction
+    let result = svm.send_transaction(tx).unwrap();
+}
+```
+
+<ArticleSection name="Akun" id="accounts" level="h2" />
+
+Saat menguji program Solana dengan LiteSVM, Anda akan bekerja dengan beberapa jenis akun yang mencerminkan skenario eksekusi program dunia nyata.
+
+Memahami cara mengonstruksi akun-akun ini dengan benar sangat penting untuk pengujian yang efektif.
+
+### Akun Sistem
+
+Jenis akun yang paling mendasar adalah akun sistem, yang hadir dalam dua varian utama:
+- **Akun pembayar**: Akun dengan lamport yang mendanai pembuatan akun program atau transfer lamport
+- **Akun yang belum diinisialisasi**: Akun kosong tanpa lamport, biasanya digunakan untuk merepresentasikan akun program yang menunggu inisialisasi
+
+Akun sistem tidak berisi data dan dimiliki oleh Program Sistem. Perbedaan utama antara pembayar dan akun yang belum diinisialisasi adalah saldo lamport mereka: pembayar memiliki dana, sementara akun yang belum diinisialisasi dimulai kosong.
+
+Berikut cara membuat akun `payer` di LiteSVM:
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports: 100_000_000,
+            data: [],
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+> Akun yang belum diinisialisasi hanyalah akun normal yang dibuat dengan `Keypair.generate()` - tidak diperlukan pengaturan tambahan.
+
+### Akun Program
+
+Untuk akun program yang berisi struktur data kustom, Anda dapat menggunakan pendekatan serupa.
+Anda juga perlu menserialkan data akun menjadi array byte, yang dapat dilakukan baik secara manual atau dengan menggunakan pustaka seperti `borsh`, `bincode`, atau `solana_program_pack`.
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
+
+    // Serialize the account data into the byte array defined above
+    // ...
+
+    let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports,
+            data: account_data,
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> Dalam pengujian, Anda tidak perlu menghitung sewa yang tepat. Anda dapat mengatur lamports ke nilai yang besar seperti `100_000_000_000` dan melewati perhitungan sewa karena ini bukan dana nyata.
+
+### Akun Token
+
+Untuk menserialkan data untuk akun SPL Token, Anda dapat menggunakan `spl_token::Mint` dan `spl_token::Account`, yang mengimplementasikan `solana_program_pack::Pack`.
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_account::Account;
+use spl_token::{ID as TOKEN_PROGRAM_ID, state::{Mint, Account as TokenAccount}};
+use solana_program_pack::Pack;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Mint Account
+    let mint = Keypair::new();
+
+    // Populate the data of the Mint Account
+    let mint_data = Mint {
+        mint_authority: None.into(),
+        supply: 0,
+        decimals: 6,
+        is_initialized: true,
+        freeze_authority: None.into(),
+    };
+
+    let mut mint_account_data = vec![0; Mint::LEN];
+    Mint::pack(mint_data, &mut mint_account_data).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(Mint::LEN);
+
+    // Add the Mint Account
+    svm.set_account(
+        mint.pubkey(),
+        Account {
+            lamports,
+            data: mint_account_data,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+
+    // Create a new Token Account
+    let token_account = Keypair::new();
+    let owner = Keypair::new();
+
+    // Populate the data of the Token Account
+    let token_account_data = TokenAccount {
+        mint: mint.pubkey(),
+        owner: owner.pubkey(),
+        amount: 0,
+        delegate: None.into(),
+        state: spl_token::state::AccountState::Initialized,
+        is_native: None.into(),
+        delegated_amount: 0,
+        close_authority: None.into(),
+    };
+
+    let mut token_account_data_bytes = vec![0; TokenAccount::LEN];
+    TokenAccount::pack(token_account_data, &mut token_account_data_bytes).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(TokenAccount::LEN);
+
+    // Add the Token Account
+    svm.set_account(
+        token_account.pubkey(),
+        Account {
+            lamports,
+            data: token_account_data_bytes,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+<ArticleSection name="Execution" id="execution" level="h2" />
+
+Dengan akun yang dibuat dan ditambahkan ke instans LiteSVM Anda, sekarang Anda dapat mengirim transaksi dan memvalidasi logika program Anda.
+
+Sebelum mengirim transaksi, Anda dapat mensimulasikan hasilnya:
+
+```rust
+let simulated_result = svm.simulate_transaction(tx);
+```
+
+Kemudian kirim transaksi dan periksa lognya:
+
+```rust
+let result = svm.send_transaction(tx);
+let logs = result.logs;
+```
+
+### Fitur Lanjutan
+
+Sebelum dan sesudah eksekusi, seluruh buku besar yang terdapat dalam instans LiteSVM Anda dapat dibaca dan disesuaikan.
+
+Anda dapat memanipulasi nilai sysvar seperti clock:
+
+```rust
+// Change the Clock
+let mut new_clock = svm.get_sysvar::<Clock>();
+new_clock.unix_timestamp = 1735689600;
+svm.set_sysvar::<Clock>(&new_clock);
+
+// Jump to a certain Slot
+svm.warp_to_slot(500);
+
+// Expire the current blockhash
+svm.expire_blockhash();
+```
+
+Anda juga dapat membaca data akun dan protokol:
+
+```rust
+// Get all the information about an account (data, lamports, owner, ...)
+svm.get_account(&account.publickey);
+
+// Get the lamport balance of an account
+svm.get_balance(&account.publickey);
+
+// Get the number of Compute Unit used till now
+svm.get_compute_budget();
+```
+
+Atau mengonfigurasi bagaimana runtime berperilaku:
+
+```rust
+// Sets the compute budget
+let compute_budget = ComputeBudget::default();
+compute_budget.compute_unit_limit = 2_000_000;
+svm.with_compute_budget(compute_budget);
+
+// Sets Sigverify as active
+svm.with_sigverify(true);
+
+// Sets the Blockhash check as active
+svm.with_blockhash_check(true);
+
+// Sets the default Sysvars
+svm.with_sysvars();
+
+// Set the FeatureSet to use
+svm.with_feature_set(FeatureSet::default())
+```

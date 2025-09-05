@@ -1,0 +1,123 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Program Token2022
+
+![Program Token 2022](/graphics/course-banners/token-2022-program.png)
+
+Program Token2022, juga dikenal sebagai Token Extensions, adalah superset dari fungsionalitas yang disediakan oleh Program Token.
+
+Program Token Lama melayani sebagian besar kebutuhan untuk token fungible dan non-fungible melalui serangkaian antarmuka dan struktur yang sederhana dan agnostik. Namun, program ini kekurangan fitur dan implementasi yang lebih opinionated yang dapat membantu pengembang membuat perilaku kustom dengan antarmuka umum, sehingga membuat pengembangan lebih cepat dan aman.
+
+Untuk alasan inilah, sebuah Program Token baru yang disebut `Token2022` dibuat dengan serangkaian fitur baru yang disebut `Token Extensions`. Ekstensi ini menyediakan perilaku spesifik dan dapat disesuaikan yang dapat dilampirkan ke `Token Account` atau `Mint Account`.
+
+> `SPL-Token Program` (umumnya disebut oleh pengembang sebagai `Tokenkeg`, karena alamat programnya: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) dan `Token2022 Program` adalah dua program yang benar-benar berbeda yang berbagi "titik awal" yang sama. Ini berarti bahwa token `Tokenkeg` dapat dideserialkan dengan `Token2022` tetapi tidak dapat digunakan di dalam program tersebut untuk menambahkan ekstensi, misalnya.
+
+<ArticleSection name="Akun Mint dan Token" id="mint-and-token-accounts" level="h2" />
+
+Pada bagian sebelumnya, kita membahas bahwa perbedaan utama antara program `Tokenkeg` dan `Token2022` adalah **Token Extensions**.
+
+Agar dapat diterapkan, ekstensi ini perlu berada langsung di dalam akun `Mint` dan `Token`, karena ini adalah satu-satunya cara untuk memastikan bahwa aturan diterapkan saat beroperasi langsung pada program token.
+
+Untuk alasan ini, mari kita lihat perbedaan utama antara program token lama dan baru pada akun-akun ini.
+
+**Akun Token Lama**
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If `is_native.is_some`, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Seperti yang Anda lihat, untuk akun-akun ini tidak ada diskriminator tertulis. Ini karena semua bidangnya memiliki panjang tetap dan perbedaan ruangnya cukup besar untuk membedakan antara berbagai jenis akun hanya dengan membandingkan panjangnya yang berbeda.
+
+Masalah dengan Program Ekstensi Token adalah bahwa data tambahan yang diperlukan untuk ekstensi ditambahkan di akhir akun `Mint` dan `Token` yang sudah kita kenal.
+
+Ini berarti diskriminasi berdasarkan panjang akan kurang efektif karena kita bisa memiliki `Mint` dengan 3-4 ekstensi yang terpasang padanya yang melebihi panjang Akun `Token`. Karena alasan ini, ketika akun `Mint` dan `Token` memiliki ekstensi, diskriminator ditambahkan seperti ini:
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Legacy Token Program data
+    /// ...
+    /// Padding (83 empty bytes)
+    pub padding: [u8; 83]
+    /// Discriminator (1)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// Legacy Token Program data
+    /// ...
+    /// Discriminator (2)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+```
+
+Untuk mempertahankan struktur lama, diskriminator tidak berada di byte pertama seperti biasanya, tetapi berada di byte `166`.
+
+Ini karena panjang akun `Token` adalah 165 byte, yang berarti diskriminator ditambahkan setelah panjang dasar. Untuk akun `Mint`, ini berarti kita harus menambahkan 83 byte padding untuk memastikan bahwa kedua akun memiliki panjang dasar yang sama.
+
+Jadi untuk membedakan antara kedua akun, kita hanya perlu memeriksa byte ke-166 (data[165] jika Anda menghitung dari 0) dan bergerak sesuai dengan itu.
+
+<ArticleSection name="Ekstensi Token" id="token-extensions" level="h2" />
+
+Di bagian berikutnya kita akan membahas tentang manfaat dan berbagai Ekstensi Token yang saat ini ada di Solana, tetapi dalam paragraf pengantar ini kita hanya akan membahas tentang bagaimana mereka diserialisasi dan ditambahkan ke dua akun state yang telah kita bicarakan sebelumnya.
+
+Setiap ekstensi memiliki diskriminator yang disimpan dengan ukuran ekstensi tersebut langsung pada akun. Kita akan menyebut ini sebagai "header" dari ekstensi dan tampilannya seperti ini:
+
+```rust
+pub struct ExtensionHeader {
+    /// Extension Discriminator
+    pub discriminator: u16
+    /// Length of the Disriminator
+    pub length: u16
+}
+```
+
+Ini membuat sangat mudah untuk mengetahui ekstensi apa saja yang ada pada token dan mendeserialkan data hanya dari yang kita butuhkan, karena kita dapat mengambil diskriminator dan kemudian melompat ke ekstensi berikutnya untuk memeriksa apa yang ada atau tidak ada.

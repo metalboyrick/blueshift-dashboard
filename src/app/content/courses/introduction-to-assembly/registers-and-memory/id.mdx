@@ -1,0 +1,111 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Register sBPF dan Model Memori
+
+Ketika program sBPF Anda dieksekusi, program tersebut beroperasi dengan dua mekanisme penyimpanan utama: 11 register berkecepatan tinggi yang terintegrasi ke dalam prosesor dan region memori terorganisir yang menyimpan semua hal lainnya.
+
+<ArticleSection name="Registers" id="registers" level="h2" />
+
+Register seperti 11 slot penyimpanan bernomor (`r0` hingga `r10`) yang dibangun langsung ke dalam prosesor. Masing-masing menyimpan nilai 64-bit tunggal dan memberikan akses instan tanpa penundaan. Ketika Anda mengeksekusi `add64 r1, r2`, prosesor segera mengambil nilai dari kedua register dan melakukan perhitungan.
+
+Pertimbangannya sederhana: Anda hanya mendapatkan total 11 kotak, jadi Anda perlu menggunakannya secara strategis untuk nilai-nilai yang sedang aktif Anda kerjakan.
+
+sBPF menetapkan peran spesifik untuk setiap register:
+
+| Register | Peran                 | Callee-saved?  | Catatan Penggunaan                           |
+|----------|----------------------|----------------|---------------------------------------------|
+| `r0`     | Nilai pengembalian    | Tidak          | Hasil fungsi, nilai pengembalian syscall    |
+| `r1`     | Pointer buffer input  | Tidak          | Menunjuk ke 0x400000000 saat masuk           |
+| `r2-r5`  | Scratch/argumen       | Tidak          | Argumen fungsi pembantu, nilai sementara    |
+| `r6-r9`  | Tujuan umum           | Ya             | Harus dipertahankan selama pemanggilan      |
+| `r10`    | Pointer frame         | Ya, hanya-baca | Basis stack, tidak dapat dimodifikasi langsung |
+
+Register `r6` hingga `r9` adalah _callee-saved_, artinya nilai-nilainya tetap ada selama pemanggilan fungsi. Gunakan ini untuk data penting yang harus bertahan selama pemanggilan fungsi.
+
+Register yang tersisa (`r0`-`r5`) akan ditimpa selama syscall dan pemanggilan fungsi.
+
+Register `r10` adalah "khusus" karena berfungsi sebagai pointer frame Anda, menunjuk ke basis ruang stack Anda dan tetap hanya-baca. Anda mengakses variabel stack menggunakan offset negatif seperti `[r10 - 8]` dan `[r10 - 16]`.
+
+<ArticleSection name="Memory" id="memory" level="h2" />
+
+Sementara register menyimpan nilai yang aktif digunakan, memori menyimpan semua hal lainnya. sBPF mengatur memori ke dalam region tetap dengan tata letak yang identik di semua program:
+
+| Region | Alamat Awal   | Tujuan                  | Ukuran/Catatan                                          |
+|--------|---------------|-------------------------|--------------------------------------------------------|
+| Text   | 0x100000000   | Kode dan data read-only | Program biner                                          |
+| Stack  | 0x200000000   | Variabel lokal          | 4 KiB per frame stack, dengan kedalaman panggilan maksimum 64 |
+| Heap   | 0x300000000   | Alokasi dinamis         | 32 KiB                                                 |
+| Input  | 0x400000000   | Parameter program       | Akun dan data instruksi yang diserialisasi             |
+
+- **Region text** berisi kode yang dapat dieksekusi dan data read-only seperti konstanta string. Data yang didefinisikan dengan direktif `.quad` biasanya berada di sini.
+- **Region stack** menampung variabel lokal. Dengan `r10` yang menunjuk ke dasar stack, Anda mengakses variabel lokal menggunakan offset negatif: `[r10 - 16]`, `[r10 - 24]`, dll.
+- **Region input** berisi parameter program Anda. Pada saat masuk, `r1` menunjuk ke region ini (`0x400000000`), memungkinkan Anda membaca data akun yang diserialisasi dan parameter instruksi yang diteruskan ke program Anda.
+
+Tata letak tetap ini memberikan tiga manfaat utama: keamanan melalui isolasi memori antar program, determinisme dengan alamat yang identik di semua validator, dan performa melalui optimasi kompiler untuk lokasi yang sudah diketahui.
+
+> Upaya mengakses alamat yang tidak dipetakan akan memicu AccessViolation dan transaksi akan gagal.
+
+<ArticleSection name="Using Registers and Memory" id="using-registers-and-memory" level="h2" />
+
+Berikut cara register dan memori bekerja bersama dalam praktiknya:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    // On entry: r1 points to input data at 0x400000000
+    
+    ldxdw r0, [r1 + 0]      // Load first 8 bytes from input into r0
+    mov64 r2, 42            // Put 42 in register r2
+    add64 r0, r2            // Add them: r0 = r0 + r2
+    
+    stxdw [r10 - 8], r0     // Store result on stack
+    mov64 r0, 0             // Return success
+    exit
+```
+
+Program ini menunjukkan pola yang umum:
+- Menggunakan register `r1` (pointer input) untuk membaca dari memori
+- Menggunakan register `r0` dan `r2` untuk perhitungan
+- Menggunakan register `r10` (pointer frame) untuk mengakses memori stack
+- Mengembalikan hasil di register `r0`
+
+Alur kerja mengikuti pola yang konsisten: memuat data dari memori ke register, melakukan perhitungan dengan register, kemudian menyimpan hasil kembali ke memori saat diperlukan.
+
+### Penggunaan Stack
+
+Stack beroperasi dengan `r10` sebagai pointer frame, yang menunjuk ke dasar frame stack saat ini (alamat tertinggi). Variabel lokal menggunakan offset negatif:
+
+```sbpf
+// Store a value on the stack
+mov64 r0, 42
+stxdw [r10 - 8], r0         // Store at first stack slot
+
+// Load it back
+ldxdw r1, [r10 - 8]         // Load from first stack slot
+```
+
+Slot stack biasanya memiliki lebar 8 byte, sehingga variabel yang berurutan menggunakan offset seperti `[r10 - 8]`, `[r10 - 16]`, `[r10 - 24]`, dan seterusnya.
+
+### Entri dan Keluar Program
+
+Program Anda mulai dieksekusi pada simbol yang ditandai dengan `.globl` (biasanya entrypoint). Keadaan register awal minimal dan dapat diprediksi:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    // On entry:
+    // r1 = 0x400000000 (input buffer pointer)
+    // r10 = 0x200001000 (0x200000000 stack start + 0x1000 4KiB frame size)
+    // r0, r2-r9 = 0 (all other registers zeroed)
+
+    // Your program logic here
+
+    mov64 r0, 0     // Success code (0 = SUCCESS)
+    exit            // Return to runtime
+```
+
+Perilaku keluar bergantung pada kedalaman panggilan:
+- Pada kedalaman panggilan 0, exit mengakhiri program dengan `r0` sebagai kode hasil. 
+- Pada level panggilan yang lebih dalam, exit bertindak seperti pernyataan return, mengembalikan register yang disimpan pemanggil (`r6`-`r9`) dan pointer frame pemanggil (`r10`) sebelum melanjutkan eksekusi di alamat return.
+
+Runtime secara otomatis menangani setup dan teardown melalui kode prolog dan epilog implisit, termasuk konfigurasi keadaan register awal dan pemrosesan return akhir.

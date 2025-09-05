@@ -1,0 +1,264 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mollusk 101
+
+![Testing dengan Mollusk](/graphics/course-banners/testing-with-mollusk.png)
+
+Pengujian program Solana secara efisien membutuhkan kerangka kerja yang menyeimbangkan kecepatan, presisi, dan wawasan. Saat mengembangkan logika program yang kompleks, Anda memerlukan lingkungan yang memungkinkan iterasi cepat tanpa mengorbankan kemampuan untuk menguji kasus-kasus ekstrem atau mengukur kinerja secara akurat.
+
+Kerangka pengujian Solana yang ideal harus menyediakan tiga kemampuan penting: 
+- Eksekusi cepat untuk siklus pengembangan yang singkat, 
+- Manipulasi status akun yang fleksibel untuk pengujian kasus ekstrem yang komprehensif, 
+- Metrik kinerja terperinci untuk wawasan optimasi.
+
+Mollusk memenuhi persyaratan ini dengan menyediakan lingkungan pengujian yang efisien yang dirancang khusus untuk pengembangan program Solana.
+
+<ArticleSection name="Apa itu Mollusk" id="what-is-mollusk" level="h2" />
+
+[Mollusk](https://github.com/anza-xyz/mollusk), dibuat dan dikelola oleh [Joe Caulfield](https://x.com/realbuffalojoe) dari tim [Anza](https://x.com/anza_xyz), adalah alat pengujian ringan untuk program Solana yang menyediakan antarmuka langsung ke eksekusi program tanpa beban runtime validator penuh.
+
+Alih-alih mensimulasikan lingkungan validator lengkap, Mollusk membangun pipeline eksekusi program menggunakan komponen Solana Virtual Machine (SVM) tingkat rendah. Pendekatan ini menghilangkan overhead yang tidak perlu sambil mempertahankan fungsionalitas penting yang diperlukan untuk pengujian program yang menyeluruh.
+
+Kerangka kerja ini mencapai kinerja luar biasa dengan mengecualikan komponen berat seperti `AccountsDB` dan `Bank` dari implementasi validator Agave. Pilihan desain ini memerlukan penyediaan akun secara eksplisit, yang sebenarnya menjadi keuntungan karena memberikan kontrol yang tepat atas status akun dan memungkinkan pengujian skenario yang sulit direproduksi dalam lingkungan validator penuh.
+
+Alat pengujian Mollusk mendukung opsi konfigurasi komprehensif, termasuk penyesuaian anggaran komputasi, modifikasi set fitur, dan kustomisasi sysvar. Konfigurasi ini dikelola langsung melalui struct `Mollusk` dan dapat dimodifikasi menggunakan fungsi pembantu bawaan.
+
+<ArticleSection name="Langkah Pertama" id="first-steps" level="h2" />
+
+Crate utama `mollusk-svm` menyediakan infrastruktur pengujian fundamental, sementara crate tambahan menawarkan pembantu khusus untuk program Solana umum seperti program `Token` dan `Memo`.
+
+### Persiapan
+
+Tambahkan crate utama Mollusk ke proyek Anda:
+
+```
+cargo add mollusk-svm --dev
+```
+
+Sertakan pembantu khusus program sesuai kebutuhan:
+
+```
+cargo add mollusk-svm-programs-memo mollusk-svm-programs-token --dev
+```
+
+Crate tambahan ini menyediakan pembantu yang telah dikonfigurasi sebelumnya untuk program Solana standar. Ini mengurangi kode boilerplate dan menyederhanakan pengaturan skenario pengujian umum yang melibatkan operasi token atau instruksi memo.
+
+> Flag `--dev` dalam `cargo add <crate-name> --dev` digunakan untuk menjaga program biner Anda tetap ringan dengan menambahkannya di bawah bagian `[dev-dependencies]` dalam `Cargo.toml` Anda
+> Konfigurasi ini memastikan bahwa utilitas pengujian tidak meningkatkan ukuran deployment program Anda sambil menyediakan akses ke semua tipe dan fungsi pembantu Solana yang diperlukan selama pengembangan.
+
+### Dependensi Tambahan
+
+Beberapa crate Solana meningkatkan pengalaman pengujian dengan menyediakan tipe dan utilitas penting:
+
+```
+cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk --dev
+```
+
+<ArticleSection name="Dasar-dasar Mollusk" id="mollusk-basics" level="h2" />
+
+Mulailah dengan mendeklarasikan `program_id` dan membuat instance `Mollusk` dengan alamat yang Anda gunakan dalam program Anda sehingga dipanggil dengan benar dan tidak memunculkan error "ProgramMismatch" selama pengujian, dan jalur ke program yang telah dibangun seperti ini:
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+// Alternative using an Array of bytes
+// pub const ID: [u8; 32] = [
+//    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+//    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+//    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+//    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+// ];
+
+#[test]
+fn test() {
+    // Omit the `.so` file extension for the program name since
+    // it is automatically added when Mollusk is loading the file.
+    let mollusk = Mollusk::new(&ID, "target/deploy/program");
+
+    // Alternative using an Array of bytes
+    // let mollusk = Mollusk::new(&Pubkey::new_from_array(ID), "target/deploy/program")
+}
+```
+
+Untuk pengujian, kita kemudian dapat menggunakan salah satu dari empat metode API utama yang ditawarkan:
+
+- `process_instruction`: Memproses instruksi dan mengembalikan hasilnya.
+- `process_and_validate_instruction`: Memproses instruksi dan melakukan serangkaian pemeriksaan pada hasilnya, panik jika ada pemeriksaan yang gagal.
+- `process_instruction_chain`: Memproses rangkaian instruksi dan mengembalikan hasilnya.
+- `process_and_validate_instruction_chain`: Memproses rangkaian instruksi dan melakukan serangkaian pemeriksaan pada setiap hasil, panik jika ada pemeriksaan yang gagal.
+
+Tetapi sebelum dapat menggunakan metode ini, kita perlu membuat akun dan struktur instruksi untuk dimasukkan:
+
+### Akun
+
+Saat menguji program Solana dengan Mollusk, Anda akan bekerja dengan beberapa jenis akun yang mencerminkan skenario eksekusi program dunia nyata. Memahami cara membangun akun-akun ini dengan benar sangat penting untuk pengujian yang efektif.
+
+Jenis akun yang paling mendasar adalah `SystemAccount`, yang hadir dalam dua varian utama:
+- Pembayar: Akun dengan lamport yang mendanai pembuatan akun program atau transfer lamport
+- Akun Default: Akun kosong dan tanpa lamport, biasanya digunakan untuk mewakili akun program yang menunggu inisialisasi dalam instruksi
+
+Akun sistem tidak berisi data dan dimiliki oleh Program Sistem. Perbedaan utama antara akun pembayar dan akun yang belum diinisialisasi adalah saldo lamport mereka: pembayar memiliki dana, sementara akun yang belum diinisialisasi mulai kosong.
+
+Berikut cara membuat akun dasar ini di Mollusk:
+
+```rust
+use solana_sdk::{
+    account::Account,
+    system_program
+};
+
+// Payer account with lamports for transactions
+let payer = Pubkey::new_unique();
+let payer_account = Account::new(100_000_000, 0, &system_program::id());
+
+// Uninitialized account with no lamports
+let default_account = Account::default();
+```
+
+Untuk `ProgramAccounts` yang berisi data, Anda memiliki dua pendekatan konstruksi:
+
+```rust
+use solana_sdk::account::Account;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let program_account_account = Account {
+    lamports,
+    data,
+    owner: ID, // The program's that owns the account
+    executable: false,
+    rent_epoch: 0,
+};
+```
+
+Setelah Anda membuat akun, kompilasi mereka ke dalam format yang diharapkan Mollusk:
+
+```rust
+let accounts = [
+    (user, user_account),
+    (program_account, program_account_account)
+];
+```
+
+### Instruksi
+
+Membuat instruksi untuk pengujian Mollusk sangat mudah setelah Anda memahami tiga komponen penting: `program_id` yang mengidentifikasi program Anda, `instruction_data` yang berisi diskriminator dan parameter, serta metadata akun yang menentukan akun mana yang terlibat dan izin mereka.
+
+Berikut struktur instruksi dasar:
+
+```rust
+use solana_sdk::instruction::{Instruction, AccountMeta};
+
+let instruction = Instruction::new_with_bytes(
+    ID, // Your program's ID
+    &[0], // Instruction data (discriminator + parameters)
+    vec![AccountMeta::new(payer, true)], // Account metadata
+);
+```
+
+Data instruksi harus menyertakan diskriminator instruksi diikuti oleh parameter apa pun yang diperlukan instruksi Anda. Untuk program Anchor, diskriminator default adalah nilai 8-byte yang berasal dari nama instruksi.
+
+Untuk menyederhanakan pembuatan diskriminator Anchor, gunakan fungsi pembantu ini dan bangun data instruksi Anda dengan menggabungkan diskriminator dengan parameter yang diserialisasi:
+
+```rust
+use sha2::{Sha256, Digest};
+
+let instruction_data = &[
+    &get_anchor_discriminator_from_name("deposit"),
+    &1_000_000u64.to_le_bytes()[..],
+]
+.concat();
+
+pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("global:{}", name));
+    let result = hasher.finalize();
+
+    [
+        result[0], result[1], result[2], result[3],
+        result[4], result[5], result[6], result[7],
+    ]
+}
+```
+
+Untuk struct `AccountMeta` kita perlu menggunakan konstruktor yang sesuai berdasarkan izin akun:
+
+- `AccountMeta::new(pubkey, is_signer)`: Untuk akun yang dapat diubah
+- `AccountMeta::new_readonly(pubkey, is_signer)`: Untuk akun hanya-baca
+
+Parameter boolean menunjukkan apakah akun harus menandatangani transaksi. Sebagian besar akun adalah non-penandatangan (false), kecuali untuk pembayar dan otoritas yang perlu mengotorisasi operasi.
+
+### Eksekusi
+
+Dengan akun dan instruksi yang telah disiapkan, Anda sekarang dapat mengeksekusi dan memvalidasi logika program menggunakan API eksekusi Mollusk. Mollusk menyediakan empat metode eksekusi berbeda tergantung pada apakah Anda memerlukan pemeriksaan validasi dan apakah Anda menguji instruksi tunggal atau beberapa instruksi.
+
+Metode eksekusi paling sederhana memproses satu instruksi tanpa validasi:
+
+```rust
+mollusk.process_instruction(&instruction, &accounts);
+```
+
+Ini mengembalikan hasil eksekusi yang dapat Anda periksa secara manual, tetapi tidak melakukan validasi otomatis.
+
+Untuk pengujian komprehensif, gunakan metode validasi yang memungkinkan Anda menentukan hasil yang diharapkan:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::success(), // Verify the transaction succeeded
+        Check::compute_units(5_000), // Expect specific compute usage
+        Check::account(&payer).data(&expected_data).build(), // Validate account data
+        Check::account(&payer).owner(&ID).build(), // Validate account owner
+        Check::account(&payer).lamports(expected_lamports).build(), // Check lamport balance
+    ],
+);
+```
+
+> Kita dapat melakukan beberapa pemeriksaan pada akun yang sama dengan "menggabungkan" mereka seperti ini: `Check::account(&payer).data(&expected_data).owner(&ID).build()`
+
+Sistem validasi mendukung berbagai jenis pemeriksaan untuk memverifikasi aspek berbeda dari hasil eksekusi. Untuk pengujian kasus khusus, Anda dapat memverifikasi bahwa instruksi gagal seperti yang diharapkan:
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::err(ProgramError::MissingRequiredSignature), // Expect specific error
+    ],
+);
+```
+
+Untuk menguji alur kerja kompleks yang memerlukan beberapa instruksi, gunakan metode rantai instruksi:
+
+```rust
+mollusk.process_instruction_chain(
+    &[
+        (&instruction, &accounts),
+        (&instruction_2, &accounts_2)
+    ]
+);
+```
+
+Gabungkan beberapa instruksi dengan validasi komprehensif:
+
+```rust
+mollusk.process_and_validate_instruction_chain(&[
+    (&instruction, &accounts, &[Check::success()]),
+    (&instruction_2, &accounts_2, &[
+        Check::success(),
+        Check::account(&target_account).lamports(final_balance).build(),
+    ]),
+]);
+```

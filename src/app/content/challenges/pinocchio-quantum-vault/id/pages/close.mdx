@@ -1,0 +1,132 @@
+# Tutup Vault
+
+Instruksi `close` melakukan penarikan lengkap dari vault tahan-kuantum, mentransfer semua lamport ke satu akun penerima.
+
+Tidak seperti instruksi `split`, ini menyediakan mekanisme penarikan penuh yang lebih sederhana ketika distribusi dana tidak diperlukan.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Instruksi ini memerlukan tiga akun:
+
+- `vault`: Vault sumber yang berisi lamport tersimpan (harus dapat diubah)
+- `refund`: Akun penerima untuk saldo lamport vault (harus dapat diubah)
+
+Berikut tampilannya dalam kode:
+
+```rust
+pub struct CloseVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, refund })
+    }
+}
+
+```
+
+> Validasi akun ditangani oleh runtime. Jika akun tidak memenuhi persyaratan (kemampuan diubah), instruksi akan gagal secara otomatis.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Dua data yang diperlukan:
+- `signature`: Tanda tangan Winternitz yang membuktikan kepemilikan keypair vault
+- `bump`: Bump derivasi PDA untuk optimasi (1 byte)
+
+Berikut tampilannya dalam kode:
+
+```rust
+pub struct CloseVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<CloseVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Proses verifikasi mengikuti langkah-langkah berikut:
+
+1. Penyusunan Pesan: Pesan 32-byte dibuat yang berisi publickey akun `refund`
+
+2. Verifikasi Tanda Tangan: Tanda tangan Winternitz digunakan untuk memulihkan hash kunci publik asli, yang kemudian dibandingkan dengan seed derivasi PDA vault.
+
+3. Validasi PDA: Pemeriksaan kesetaraan cepat memastikan hash yang dipulihkan cocok dengan PDA vault, membuktikan penandatangan memiliki vault tersebut.
+
+4. Distribusi Dana Jika validasi berhasil: seluruh saldo ditransfer ke akun `refund` dan akun `vault` ditutup.
+
+> Karena program memiliki akun `vault`, Anda dapat mentransfer lamport secara langsung tanpa harus memanggil Cross-Program Invocation (CPI).
+
+Berikut tampilannya dalam kode:
+
+```rust
+pub struct CloseVault<'a> {
+    pub accounts: CloseVaultAccounts<'a>,
+    pub instruction_data: CloseVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for CloseVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = CloseVaultInstructionData::try_from(data)?;
+        let accounts = CloseVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> CloseVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+ 
+    pub fn process(&self) -> ProgramResult {
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(self.accounts.refund.key()).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault and refund balance to Refund account
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports();
+        self.accounts.vault.close()
+    }
+}
+```
+
+> Merekonstruksi pesan mencegah serangan replay tanda tangan di mana aktor jahat mengganti akun penerima yang berbeda saat melakukan MEV terhadap tanda tangan valid yang diambil dari mempool.

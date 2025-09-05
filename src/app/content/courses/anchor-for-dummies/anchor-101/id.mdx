@@ -1,0 +1,137 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Anchor 101
+
+![Pengenalan Anchor](/graphics/course-banners/anchor-for-dummies.png)
+
+<ArticleSection name="What is Anchor" id="what-is-anchor" level="h2" />
+
+Anchor adalah framework utama untuk pengembangan smart-contract Solana, menawarkan alur kerja lengkap untuk menulis, menguji, men-deploy, dan berinteraksi dengan program onchain.
+
+### Keunggulan utama
+
+- **Mengurangi boilerplate**: Anchor mengabstraksi pekerjaan berulang dari manajemen akun, serialisasi instruksi, dan penanganan kesalahan sehingga Anda dapat fokus pada logika bisnis inti.
+- **Keamanan bawaan**: Pemeriksaan ketat seperti verifikasi kepemilikan akun dan validasi data berjalan secara otomatis, mengurangi banyak kerentanan umum sebelum muncul.
+
+### Macro Anchor
+
+- `declare_id!()`: Mendeklarasikan alamat onchain tempat program berada.
+- `#[program]`: Menandai modul yang berisi setiap entrypoint instruksi dan fungsi logika bisnis.
+- `#[derive(Accounts)]`: Mencantumkan akun yang dibutuhkan oleh instruksi dan secara otomatis menegakkan batasan-batasannya.
+- `#[error_code]`: Mendefinisikan tipe kesalahan kustom yang dapat dibaca manusia yang membuat debugging lebih jelas dan cepat.
+
+Bersama-sama, macro prosedural ini mengabstraksi manajemen byte tingkat rendah, memungkinkan Anda menghasilkan program Solana yang aman dan berkualitas produksi dengan usaha yang jauh lebih sedikit.
+
+### Struktur Program
+
+Mari kita mulai dengan versi dasar dari sebuah program untuk menjelaskan secara detail apa yang sebenarnya dilakukan oleh setiap macro:
+
+```rust
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_vault {
+    use super::*;
+
+    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
+        // ...
+        Ok(())
+    }
+
+    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
+        // ...
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+    // ...
+}
+
+#[error_code]
+pub enum VaultError {
+    // ...
+}
+```
+
+Ini akan bertransformasi menjadi modul-modul yang terfokus alih-alih menjejalkan semuanya ke dalam `lib.rs` untuk program yang lebih terstruktur. Struktur folder program akan terlihat kurang lebih seperti ini:
+
+```
+src
+├── instructions
+│       ├── instruction1.rs
+│       ├── mod.rs
+│       ├── instruction2.rs
+│       └── instruction3.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+#### `declare_id!()`
+
+Macro `declare_id!()` menetapkan alamat onchain untuk program Anda; sebuah kunci publik unik yang diturunkan dari keypair dalam folder `target` proyek. Keypair tersebut menandatangani dan men-deploy binary `.so` yang terkompilasi yang berisi semua logika dan data program.
+
+**Catatan:** Kami menggunakan placeholder `222222...` dalam contoh Blueshift karena suite pengujian internal kami. Dalam produksi, Anchor akan menghasilkan ID program baru untuk Anda ketika Anda menjalankan perintah build dan deploy standar.
+
+#### `#[program]` & `#[derive(Accounts)]`
+
+Setiap instruksi memiliki struct **Context** sendiri yang mencantumkan semua akun dan, secara opsional, data apa pun yang dibutuhkan instruksi tersebut.
+
+Dalam contoh ini, baik `deposit` maupun `withdraw` berbagi akun yang sama; karena alasan itu, kita akan membuat satu struct akun bernama `VaultAction` untuk membuat semuanya lebih efisien dan mudah.
+
+#### Melihat lebih dekat pada makro `#[derive(Accounts)]`
+
+```rust
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+  #[account(mut)]
+  pub signer: Signer<'info>,
+
+  #[account(
+    mut,
+    seeds = [b"vault", signer.key().as_ref()],
+    bump,
+  )]
+  pub vault: SystemAccount<'info>,
+
+  pub system_program: Program<'info, System>,
+}
+```
+
+Seperti yang kita lihat dari cuplikan kode, makro `#[derive(Accounts)]` memiliki tiga tanggung jawab penting:
+- Mendeklarasikan semua akun yang dibutuhkan oleh instruksi tertentu.
+- Menerapkan pemeriksaan batasan secara otomatis, memblokir banyak bug dan potensi eksploitasi saat runtime.
+- Menghasilkan metode pembantu yang memungkinkan Anda mengakses dan mengubah akun dengan aman.
+
+Ini dicapai melalui kombinasi tipe akun dan atribut inline.
+
+**Tipe akun dalam contoh kita**
+- `Signer<'info>`: Memverifikasi bahwa akun menandatangani transaksi; penting untuk keamanan dan untuk CPI yang membutuhkan tanda tangan.
+- `SystemAccount<'info>`: Mengonfirmasi kepemilikan akun oleh System Program.
+- `Program<'info, System>`: Memastikan akun dapat dieksekusi dan cocok dengan ID System Program, memungkinkan CPI seperti pembuatan akun atau transfer lamport.
+
+**Atribut inline yang akan Anda temui**
+- `mut`: Menandai akun sebagai dapat diubah; wajib setiap kali saldo lamport atau datanya mungkin berubah.
+- `seeds & bump`: Memverifikasi bahwa akun adalah Program-Derived Address (PDA) yang dihasilkan dari seeds yang disediakan ditambah byte bump.
+
+**Catatan** PDA penting karena:
+- Ketika digunakan oleh program yang memilikinya, PDA dapat menandatangani CPI atas nama program tersebut.
+- Mereka memberikan alamat yang deterministik dan dapat diverifikasi untuk menyimpan status program.
+
+#### `#[error_code]`
+
+Makro `#[error_code]` memungkinkan Anda mendefinisikan error kustom yang jelas di dalam program.
+
+```rust
+#[error_code]
+pub enum VaultError {
+    #[msg("Vault already exists")]
+    VaultAlreadyExists,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+}
+```
+
+Setiap varian enum dapat membawa atribut `#[msg(...)]` yang mencatat string deskriptif setiap kali error terjadi; jauh lebih membantu daripada kode numerik mentah selama proses debugging.

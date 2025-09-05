@@ -1,0 +1,164 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Take" id="take" level="h2" />
+
+Sekarang kita dapat beralih ke instruksi `take`, yang berada di `take.rs` dan akan melakukan tindakan-tindakan berikut:
+- Menutup catatan escrow, mengirimkan lamport sewanya kembali ke pembuat.
+- Memindahkan Token A dari vault ke pengambil, kemudian menutup vault.
+- Memindahkan jumlah Token B yang disepakati dari pengambil ke pembuat.
+
+### Akun 
+
+Akun-akun yang dibutuhkan dalam konteks ini adalah:
+- `taker`: pengguna yang menerima persyaratan dari `maker` dan melakukan pertukaran
+- `maker`: pengguna yang awalnya menetapkan persyaratan
+- `escrow`: akun tempat semua persyaratan pertukaran ini berada
+- `mint_a`: token yang telah disimpan oleh `maker`
+- `mint_b`: token yang diinginkan oleh `maker` sebagai pertukaran
+- `vault`: akun token yang terkait dengan `escrow` dan `mint_a` yang akan mengirim token ke `taker`
+- `taker_ata_a`: akun token yang terkait dengan `taker` dan `mint_a` yang akan menerima token dari `vault`
+- `taker_ata_b`: akun token yang terkait dengan `taker` dan `mint_b` yang akan mengirim token ke `maker`
+- `maker_ata_b`: akun token yang terkait dengan `maker` dan `mint_b` yang akan menerima token ke `taker`
+- `associated_token_program`: program token terkait yang digunakan untuk membuat akun token terkait
+- `token_program`: program token yang digunakan untuk CPI transfer
+- `system_program`: program sistem yang digunakan untuk membuat `Escrow`
+
+Dan dengan semua batasan, ini akan terlihat seperti berikut:
+
+  ```rust
+#[derive(Accounts)]
+pub struct Take<'info> {
+    #[account(mut)]
+    pub taker: Signer<'info>,
+    #[account(mut)]
+    pub maker: SystemAccount<'info>,
+    #[account(
+        mut,
+        close = maker,
+        seeds = [b"escrow", maker.key().as_ref(), escrow.seed.to_le_bytes().as_ref()],
+        bump = escrow.bump,
+        has_one = maker @ EscrowError::InvalidMaker,
+        has_one = mint_a @ EscrowError::InvalidMintA,
+        has_one = mint_b @ EscrowError::InvalidMintB,
+    )]
+    pub escrow: Box<Account<'info, Escrow>>,
+
+    /// Token Accounts
+    pub mint_a: Box<InterfaceAccount<'info, Mint>>,
+    pub mint_b: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        mut,
+        associated_token::mint = mint_a,
+        associated_token::authority = escrow,
+        associated_token::token_program = token_program
+    )]
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        payer = taker,
+        associated_token::mint = mint_a,
+        associated_token::authority = taker,
+        associated_token::token_program = token_program
+    )]
+    pub taker_ata_a: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        associated_token::mint = mint_b,
+        associated_token::authority = taker,
+        associated_token::token_program = token_program
+    )]
+    pub taker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        payer = taker,
+        associated_token::mint = mint_b,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Programs
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+  ```
+
+### Logika 
+
+Dalam logika, kita mulai dengan mentransfer token dari `taker_ata_b` ke `maker_ata_b`; kemudian kita melanjutkan untuk mentransfer token dari `vault` ke `taker_ata_a` sebelum menutup vault yang sekarang kosong seperti ini:
+
+```rust
+impl<'info> Take<'info> {
+    fn transfer_to_maker(&mut self) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.taker_ata_b.to_account_info(),
+                    to: self.maker_ata_b.to_account_info(),
+                    mint: self.mint_b.to_account_info(),
+                    authority: self.taker.to_account_info(),
+                },
+            ),
+            self.escrow.receive,
+            self.mint_b.decimals,
+        )?;
+
+        Ok(())
+    }
+
+    fn withdraw_and_close_vault(&mut self) -> Result<()> {
+        // Create the signer seeds for the Vault
+        let signer_seeds: [&[&[u8]]; 1] = [&[
+            b"escrow",
+            self.maker.to_account_info().key.as_ref(),
+            &self.escrow.seed.to_le_bytes()[..],
+            &[self.escrow.bump],
+        ]];
+
+        // Transfer Token A (Vault -> Taker)
+        transfer_checked(
+            CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.vault.to_account_info(),
+                    to: self.taker_ata_a.to_account_info(),
+                    mint: self.mint_a.to_account_info(),
+                    authority: self.escrow.to_account_info(),
+                },
+                &signer_seeds,
+            ),
+            self.vault.amount,
+            self.mint_a.decimals,
+        )?;
+
+        // Close the Vault
+        close_account(CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            CloseAccount {
+                account: self.vault.to_account_info(),
+                authority: self.escrow.to_account_info(),
+                destination: self.maker.to_account_info(),
+            },
+            &signer_seeds,
+        ))?;
+
+        Ok(())
+    }
+}
+```
+
+Sekarang kita membuat fungsi `handler` dan kali ini untungnya kita tidak perlu melakukan pemeriksaan tambahan sehingga akan terlihat seperti ini:
+
+```rust
+pub fn handler(ctx: Context<Take>) -> Result<()> {
+    // Transfer Token B to Maker
+    ctx.accounts.transfer_to_maker()?;
+
+    // Withdraw and close the Vault
+    ctx.accounts.withdraw_and_close_vault()?;
+
+    Ok(())
+}
+```

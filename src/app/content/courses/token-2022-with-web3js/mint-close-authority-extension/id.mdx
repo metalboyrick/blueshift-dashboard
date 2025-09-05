@@ -1,0 +1,93 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Mint Close Authority
+
+Ekstensi `MintCloseAuthority` adalah ekstensi `Mint` yang memungkinkan otoritas untuk menutup dan mengambil kembali rent dari akun `Mint` yang memiliki suplai saat ini sebesar 0.
+
+Ekstensi ini berguna untuk membersihkan mint yang tidak digunakan dan mengklaim kembali SOL yang digunakan untuk membayar rent exemption akun. Mint hanya dapat ditutup ketika tidak ada token yang beredar.
+
+<ArticleSection name="Menginisialisasi Akun Mint" id="initializing-the-mint-account" level="h2" />
+
+Untuk menginisialisasi ekstensi `MintCloseAuthority` pada akun `Mint`, kita akan membutuhkan fungsi `initializeMintCloseAuthority()`.
+
+Berikut cara membuat mint dengan ekstensi Mint Close:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeMintCloseAuthorityInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Mint Close Authority extension
+const mintLen = getMintLen([ExtensionType.MintCloseAuthority]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Mint Close Authority extension
+const initializeMintCloseAuthority = createInitializeMintCloseAuthorityInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintCloseAuthority,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Menutup Akun Mint" id="closing-the-mint-account" level="h2" />
+
+Jika akun `Mint` memiliki suplai nol, `CloseMint Authority` dapat mengklaim kembali rent pada akun tersebut dengan menggunakan instruksi `closeAccount` seperti ini:
+
+```ts
+const closeMintInstruction = createCloseAccountInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(closeMintInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: false});
+
+console.log(`Mint closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

@@ -1,0 +1,328 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Metadata
+
+Ekstensi `Metadata` adalah ekstensi akun `Mint` yang memperkenalkan kemampuan untuk menyematkan metadata langsung ke dalam akun mint secara native dan tanpa harus menggunakan program lain.
+
+<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+
+Ekstensi `Metadata` sedikit berbeda dari yang biasa kita lakukan karena terdiri dari 2 ekstensi berbeda yang keduanya ada pada akun `Mint`:
+- Ekstensi `Metadata` yang berisi semua informasi metadata seperti nama, simbol, uri, dan akun tambahan.
+- Ekstensi `MetadataPointer` yang mereferensikan akun `Mint` tempat ekstensi `Metadata` berada.
+
+Biasanya, ketika digunakan, kedua ekstensi ini berada pada akun `Mint` yang sama; dan kita akan melakukan hal yang sama untuk contoh ini.
+
+Mari mulai dengan beberapa dasar sebelum mendalami kodenya:
+
+Sementara ekstensi `MetadataPointer` berada dalam crate `anchor-spl`, untuk menginisialisasi `Metadata` kita perlu menggunakan crate `spl_token_metadata_interface`.
+
+Jadi mari kita instal paket yang diperlukan:
+
+```
+cargo add spl_token_metadata_interface
+```
+
+Selain itu, ekstensi `Metadata` adalah salah satu ekstensi "satu-satunya" yang mengharuskan Anda menginisialisasi ekstensi setelah menginisialisasi akun `Mint`. 
+
+Ini karena instruksi inisialisasi metadata secara dinamis mengalokasikan ruang yang diperlukan untuk konten metadata yang panjangnya bervariasi.
+
+Pada saat yang sama, ini berarti kita akan perlu menginisialisasi akun `Mint` dengan cukup lamport agar bebas sewa dengan ekstensi `Metadata` yang disertakan, tetapi mengalokasikan ruang yang cukup hanya untuk ekstensi `MetadataPointer` karena instruksi `initializeMetadata()` sebenarnya meningkatkan ruang dengan benar.
+
+Dalam kode, ini terlihat seperti ini:
+
+```ts
+// Metadata struct
+const metadata: TokenMetadata = {
+    mint: mint.publicKey,
+    name: "Test Token",
+    symbol: "TST",
+    uri: "https://example.com/metadata.json",
+    additionalMetadata: [["customField", "customValue"]],
+};
+
+// Size of Mint Account with extensions
+const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+
+// Size of the Metadata Extension
+const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
+
+// Minimum lamports required for Mint Account
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
+```
+
+Sekarang setelah kita memahami konsep-konsep ini, mari kita bahas tentang penambahan ekstensi `MetadataPointer` dan `Metadata` pada akun mint.
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::rent::{
+    DEFAULT_EXEMPTION_THRESHOLD, DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+};
+use anchor_lang::system_program::{transfer, Transfer};
+use anchor_spl::token_interface::{
+    token_metadata_initialize, Mint, Token2022, TokenMetadataInitialize,
+};
+use spl_token_metadata_interface::state::TokenMetadata;
+use spl_type_length_value::variable_len_pack::VariableLenPack;
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = 2,
+        mint::authority = payer,
+        extensions::metadata_pointer::authority = payer,
+        extensions::metadata_pointer::metadata_address = mint_account,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn process_initialize(ctx: Context<Initialize>, args: TokenMetadataArgs) -> Result<()> {
+    let TokenMetadataArgs { name, symbol, uri } = args;
+
+    // Define token metadata
+    let token_metadata = TokenMetadata {
+        name: name.clone(),
+        symbol: symbol.clone(),
+        uri: uri.clone(),
+        ..Default::default()
+    };
+
+    // Add 4 extra bytes for size of MetadataExtension (2 bytes for the discriminator, 2 bytes for length)
+    let data_len = 4 + token_metadata.get_packed_len()?;
+
+    // Calculate lamports required for the additional metadata
+    let lamports =
+        data_len as u64 * DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64;
+
+    // Transfer additional lamports to mint account
+    transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.payer.to_account_info(),
+                to: ctx.accounts.mint_account.to_account_info(),
+            },
+        ),
+        lamports,
+    )?;
+
+    // Initialize token metadata
+    token_metadata_initialize(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TokenMetadataInitialize {
+                token_program_id: ctx.accounts.token_program.to_account_info(),
+                mint: ctx.accounts.mint_account.to_account_info(),
+                metadata: ctx.accounts.mint_account.to_account_info(),
+                mint_authority: ctx.accounts.payer.to_account_info(),
+                update_authority: ctx.accounts.payer.to_account_info(),
+            },
+        ),
+        name,
+        symbol,
+        uri,
+    )?;
+    Ok(())
+}
+
+#[derive(AnchorDeserialize, AnchorSerialize)]
+pub struct TokenMetadataArgs {
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+}
+```
+
+> Instruksi `initialize` untuk `metadata-interface` tidak mengizinkan `additionalMetdata` karena alasan ini jika kita ingin membuat `asset` yang memilikinya, kita perlu menggunakan instruksi `updateField` seperti yang kita lakukan dalam contoh ini
+
+<ArticleSection name="Updating the Metadata" id="updating-the-metadata" level="h2" />
+
+Dimungkinkan untuk memperbarui semua bidang metadata menggunakan instruksi yang sama `updateField()`.
+
+Untuk `additionalMetadata` ini bekerja sedikit berbeda karena kita dapat memperbarui bidang yang ada dengan hanya memasukkan `Field` yang sama dengan nilai baru atau hanya menambahkan bidang baru ke `Metadata`.
+
+Di balik layar, program menggunakan instruksi yang sama dengan flag berbeda berdasarkan apa yang ingin kita ubah, ini berarti kita dapat mengubah semua bidang seperti ini:
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
+use anchor_spl::{
+    token_2022::spl_token_2022::{
+        extension::{BaseStateWithExtensions, PodStateWithExtensions},
+        pod::PodMint,
+    },
+    token_interface::{token_metadata_update_field, Mint, Token2022, TokenMetadataUpdateField},
+};
+use spl_token_metadata_interface::state::{Field, TokenMetadata};
+
+#[derive(Accounts)]
+pub struct UpdateField<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        extensions::metadata_pointer::metadata_address = mint_account,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn process_update_field(ctx: Context<UpdateField>, args: UpdateFieldArgs) -> Result<()> {
+    let UpdateFieldArgs { field, value } = args;
+
+    // Convert to Field type from spl_token_metadata_interface
+    let field = field.to_spl_field();
+    msg!("Field: {:?}, Value: {}", field, value);
+
+    let (current_lamports, required_lamports) = {
+        // Get the current state of the mint account
+        let mint = &ctx.accounts.mint_account.to_account_info();
+        let buffer = mint.try_borrow_data()?;
+        let state = PodStateWithExtensions::<PodMint>::unpack(&buffer)?;
+
+        // Get and update the token metadata
+        let mut token_metadata = state.get_variable_len_extension::<TokenMetadata>()?;
+        token_metadata.update(field.clone(), value.clone());
+        msg!("Updated TokenMetadata: {:?}", token_metadata);
+
+        // Calculate the new account length with the updated metadata
+        let new_account_len =
+            state.try_get_new_account_len_for_variable_len_extension(&token_metadata)?;
+
+        // Calculate the required lamports for the new account length
+        let required_lamports = Rent::get()?.minimum_balance(new_account_len);
+        // Get the current lamports of the mint account
+        let current_lamports = mint.lamports();
+
+        msg!("Required lamports: {}", required_lamports);
+        msg!("Current lamports: {}", current_lamports);
+
+        (current_lamports, required_lamports)
+    };
+
+    // Transfer lamports to mint account for the additional metadata if needed
+    if required_lamports > current_lamports {
+        let lamport_difference = required_lamports - current_lamports;
+        transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.authority.to_account_info(),
+                    to: ctx.accounts.mint_account.to_account_info(),
+                },
+            ),
+            lamport_difference,
+        )?;
+        
+        msg!(
+            "Transferring {} lamports to metadata account",
+            lamport_difference
+        );
+    }
+
+    // Update token metadata
+    token_metadata_update_field(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TokenMetadataUpdateField {
+                token_program_id: ctx.accounts.token_program.to_account_info(),
+                metadata: ctx.accounts.mint_account.to_account_info(),
+                update_authority: ctx.accounts.authority.to_account_info(),
+            },
+        ),
+        field,
+        value,
+    )?;
+    Ok(())
+}
+
+// Custom struct to implement AnchorSerialize and AnchorDeserialize
+// This is required to pass the struct as an argument to the instruction
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct UpdateFieldArgs {
+    /// Field to update in the metadata
+    pub field: AnchorField,
+    /// Value to write for the field
+    pub value: String,
+}
+
+// Need to do this so the enum shows up in the IDL
+#[derive(AnchorSerialize, AnchorDeserialize, Debug)]
+pub enum AnchorField {
+    /// The name field, corresponding to `TokenMetadata.name`
+    Name,
+    /// The symbol field, corresponding to `TokenMetadata.symbol`
+    Symbol,
+    /// The uri field, corresponding to `TokenMetadata.uri`
+    Uri,
+    /// A custom field, whose key is given by the associated string
+    Key(String),
+}
+
+// Convert AnchorField to Field from spl_token_metadata_interface
+impl AnchorField {
+    fn to_spl_field(&self) -> Field {
+        match self {
+            AnchorField::Name => Field::Name,
+            AnchorField::Symbol => Field::Symbol,
+            AnchorField::Uri => Field::Uri,
+            AnchorField::Key(s) => Field::Key(s.clone()),
+        }
+    }
+}
+```
+
+> Seperti yang Anda lihat, kita selalu perlu memastikan bahwa akun memiliki rent exempt, inilah mengapa kita melakukan semua perhitungan tentang rent di awal dan mentransfer lamport tambahan jika diperlukan.
+
+Kita juga dapat menghapus `Field` dalam struct `additionalMetadata` menggunakan instruksi `removeKey` seperti ini:
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
+use anchor_spl::token_interface::{Mint, Token2022};
+use spl_token_metadata_interface::instruction::remove_key;
+
+#[derive(Accounts)]
+pub struct RemoveKey<'info> {
+    #[account(mut)]
+    pub update_authority: Signer<'info>,
+
+    #[account(
+        mut,
+        extensions::metadata_pointer::metadata_address = mint_account,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+
+// Invoke the remove_key instruction from spl_token_metadata_interface directly
+// There is not an anchor CpiContext for this instruction
+pub fn process_remove_key(ctx: Context<RemoveKey>, key: String) -> Result<()> {
+    invoke(
+        &remove_key(
+            &ctx.accounts.token_program.key(),    // token program id
+            &ctx.accounts.mint_account.key(),     // "metadata" account
+            &ctx.accounts.update_authority.key(), // update authority
+            key,                                  // key to remove
+            true, // idempotent flag, if true transaction will not fail if key does not exist
+        ),
+        &[
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.mint_account.to_account_info(),
+            ctx.accounts.update_authority.to_account_info(),
+        ],
+    )?;
+    Ok(())
+}
+```
+
+> Kita memanggil instruksi `remove_key` dari `spl_token_metadata_interface` secara langsung karena tidak ada `CpiContext` anchor untuk instruksi ini

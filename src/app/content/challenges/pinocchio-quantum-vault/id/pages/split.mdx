@@ -1,0 +1,148 @@
+# Split Vault
+
+Instruksi `split` memungkinkan penarikan sebagian dari vault tahan-kuantum dengan mendistribusikan lamport ke beberapa akun. Ini sangat penting untuk skema tanda tangan Winternitz, yang hanya dapat digunakan sekali dengan aman.
+
+Tidak seperti kriptografi tradisional, tanda tangan Winternitz menjadi rentan setelah digunakan satu kali. Instruksi split memungkinkan Anda untuk:
+- Mendistribusikan pembayaran ke beberapa penerima dalam satu transaksi
+- Mengalihkan dana yang tersisa ke vault kuantum baru dengan keypair baru (dengan memasukkan vault kuantum sebagai akun `refund`)
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Instruksi ini memerlukan tiga akun:
+
+- `vault`: Vault sumber yang berisi lamport tersimpan (harus dapat diubah)
+- `split`: Akun penerima untuk jumlah yang ditentukan (harus dapat diubah)  
+- `refund`: Akun penerima untuk sisa saldo vault (harus dapat diubah)
+
+Akun `refund` sering kali merupakan vault kuantum baru dengan keypair Winternitz yang baru, memastikan keamanan berkelanjutan untuk dana yang tersisa.
+
+Berikut adalah bagaimana hal itu terlihat dalam kode:
+
+```rust
+pub struct SplitVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub split: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for SplitVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, split, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, split, refund })
+    }
+}
+```
+
+> Validasi akun ditangani oleh runtime. Jika akun tidak memenuhi persyaratan (kemampuan untuk diubah), instruksi akan gagal secara otomatis.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Tiga bagian data diperlukan:
+- `signature`: Tanda tangan Winternitz yang membuktikan kepemilikan keypair vault
+- `amount`: Lamport yang akan ditransfer ke akun split (8 byte, little-endian)
+- `bump`: Bump derivasi PDA untuk optimasi (1 byte)
+
+Berikut adalah bagaimana hal itu terlihat dalam kode:
+
+```rust
+pub struct SplitVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub amount: [u8; 8],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for SplitVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<SplitVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+            amount: data[897..905].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Proses verifikasi mengikuti langkah-langkah berikut:
+
+1. Penyusunan Pesan: Pesan 72-byte dibuat yang berisi: Jumlah yang akan dibagi, publickey akun `split` dan publickey akun `refund`
+
+2. Verifikasi Tanda Tangan: Tanda tangan Winternitz digunakan untuk memulihkan hash kunci publik asli, yang kemudian dibandingkan dengan seed derivasi PDA vault.
+
+3. Validasi PDA: Pemeriksaan kesetaraan cepat memastikan hash yang dipulihkan cocok dengan PDA vault, membuktikan bahwa penandatangan memiliki vault tersebut.
+
+4. Distribusi Dana Jika validasi berhasil: jumlah yang ditentukan ditransfer ke akun `split`, sisa saldo ditransfer ke akun `refund` dan akun `vault` ditutup.
+
+> Karena program memiliki akun `vault`, Anda dapat mentransfer lamport secara langsung tanpa harus memanggil Cross-Program Invocation (CPI).
+
+Berikut tampilannya dalam kode:
+
+```rust
+pub struct SplitVault<'a> {
+    pub accounts: SplitVaultAccounts<'a>,
+    pub instruction_data: SplitVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for SplitVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = SplitVaultInstructionData::try_from(data)?;
+        let accounts = SplitVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> SplitVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&self) -> ProgramResult {
+        // Assemble our Split message
+        let mut message = [0u8; 72];
+        message[0..8].clone_from_slice(&self.instruction_data.amount);
+        message[8..40].clone_from_slice(self.accounts.split.key());
+        message[40..].clone_from_slice(self.accounts.refund.key());
+
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(&message).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault, send split balance to Split account, refund remainder to Refund account
+        *self.accounts.split.try_borrow_mut_lamports()? += u64::from_le_bytes(self.instruction_data.amount);
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports().saturating_sub(u64::from_le_bytes(self.instruction_data.amount));
+
+        self.accounts.vault.close()
+    }
+}
+```
+
+> Merekonstruksi pesan mencegah serangan pengulangan tanda tangan di mana aktor jahat mengganti akun penerima yang berbeda sambil melakukan MEV terhadap tanda tangan valid yang diambil dari mempool.

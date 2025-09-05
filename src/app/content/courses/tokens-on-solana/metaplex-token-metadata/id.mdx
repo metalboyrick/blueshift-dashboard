@@ -1,0 +1,44 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Program Metadata Token Metaplex
+
+Bayangkan meluncurkan token di Solana, namun token tersebut muncul di setiap dompet hanya sebagai rangkaian karakter yang tidak bermakna seperti "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU". 
+
+Pengguna tidak akan tahu apa yang mereka miliki, dan proyek yang telah Anda rancang dengan hati-hati akan sulit dibedakan dari ribuan token anonim lainnya yang membanjiri jaringan.
+
+Program Metadata Token Metaplex menyelesaikan masalah kritis ini dengan mengubah entri blockchain anonim menjadi aset digital bermerek yang mudah dikenali. 
+
+Sementara program SPL-Token unggul dalam mekanisme teknis—melacak kepemilikan, mengelola pasokan, dan memfasilitasi transfer—program ini membuat token hanya sebagai struktur data dasar tanpa konteks yang dapat dibaca manusia.
+
+Di sinilah Metaplex bekerja dengan ajaib, menjembatani kesenjangan antara fungsionalitas blockchain mentah dan pengalaman pengguna. Alih-alih alamat yang rumit, pengguna melihat "Solana (SOL)" dengan logo yang familiar, deskripsi yang jelas, dan semua informasi kontekstual yang membuat token benar-benar dapat digunakan di dunia nyata.
+
+<ArticleSection name="Akun Metadata" id="metadata-account" level="h2" />
+
+Akun `Metadata` berfungsi sebagai kartu identitas digital token Anda, menyimpan semua informasi yang mengubah alamat mint biasa menjadi aset yang dapat dikenali. 
+
+Ini bukan hanya tentang nama dan gambar yang menarik: ini tentang menciptakan fondasi untuk bagaimana token Anda muncul di seluruh ekosistem Solana.
+
+Menggunakan sistem Program Derived Address Solana, setiap token mendapatkan tepat satu akun metadata yang secara matematis terhubung dengan mint-nya. Ini menciptakan ikatan yang tidak dapat dipatahkan antara token teknis dan informasi deskriptifnya, memastikan konsistensi di semua aplikasi dan mencegah konflik identitas:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+
+let (metadata, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+    ], 
+    &ID  
+);
+```
+
+Akun metadata menjadi paspor universal token Anda, berisi semua yang dibutuhkan aplikasi untuk menampilkan aset Anda dengan benar. 
+
+Nama token menggantikan alamat yang sulit dipahami, simbol memberikan pengenalan instan (bayangkan "SOL" alih-alih rangkaian panjang di atas), dan referensi URI mengarah ke media kaya seperti logo dan deskripsi detail.
+
+Hasilnya? Token Anda tidak hanya ada di blockchain—tetapi juga berkembang di dompet, muncul secara profesional di explorer, dan terintegrasi dengan mulus dengan aplikasi di seluruh ekosistem Solana.
+
+> Untuk mempelajari lebih lanjut tentang cara menggunakan program `Token Metadata`, lihat [dokumentasi resmi](https://developers.metaplex.com/token-metadata)

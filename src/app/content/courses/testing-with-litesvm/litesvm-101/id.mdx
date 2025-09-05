@@ -1,0 +1,22 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM 101
+
+![Testing dengan LiteSVM](/graphics/course-banners/testing-with-litesvm.png)
+
+Pengujian program Solana secara tradisional memaksa Anda untuk memilih antara kecepatan dan akurasi. LiteSVM menghilangkan trade-off ini dengan menyediakan lingkungan pengujian dalam proses yang sangat cepat dan lengkap fiturnya.
+
+LiteSVM memberikan tiga keunggulan penting bagi pengembang Solana:
+- **Eksekusi lebih cepat** dibandingkan dengan `solana-program-test` dan `solana-test-validator`
+- **Manipulasi status akun secara langsung** untuk menguji kasus-kasus edge yang kompleks
+- **Profiling performa bawaan** untuk mengidentifikasi optimasi dan perbaikan
+
+<ArticleSection name="Apa itu LiteSVM" id="what-is-litesvm" level="h2" />
+
+[LiteSVM](https://github.com/LiteSVM/litesvm) adalah Solana Virtual Machine ringan yang berjalan langsung dalam proses pengujian Anda. Dibuat oleh [Aursen](https://x.com/exoaursen) dari [Exotic Markets](https://x.com/exotic_markets_), LiteSVM menghilangkan overhead validator eksternal sambil tetap mempertahankan kompatibilitas penuh dengan runtime Solana.
+
+Tidak seperti pendekatan pengujian tradisional yang menjalankan proses validator terpisah, LiteSVM menanamkan VM langsung dalam pengujian Anda. Arsitektur ini memberikan waktu kompilasi dan eksekusi yang jauh lebih cepat tanpa mengorbankan akurasi pengujian.
+
+Pustaka ini menawarkan API yang intuitif dengan pengaturan default yang cerdas untuk setup cepat, plus opsi konfigurasi ekstensif untuk skenario pengujian lanjutan.
+
+> LiteSVM mendukung Rust, TypeScript/JavaScript, dan Python (melalui `solders`).

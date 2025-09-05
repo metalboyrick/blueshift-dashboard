@@ -1,0 +1,71 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Fungsionalitas
+
+Program Token beroperasi melalui serangkaian instruksi yang memungkinkan Anda membuat token mint, menginisialisasi akun token, mentransfer token antar akun, dan mengelola otoritas.
+
+Program ini juga mendukung akun multisignature untuk keamanan yang lebih baik dan menyediakan mekanisme untuk membekukan akun dan mendelegasikan otoritas token.
+
+<ArticleSection name="Menginisialisasi Akun" id="intializing-an-account" level="h2" />
+
+Program token memiliki berbagai instruksi dan helper yang menyederhanakan kompleksitas inisialisasi akun baru.
+
+Ada instruksi berbeda jika kita ingin menginisialisasi akun `Mint` atau akun `Token`, dalam kasus akun `Associated Token`, program token terkait menggunakan instruksi `initializeAccount` di balik layar setelah menurunkan alamat program derived yang benar.
+
+> Fungsi ini hanya menginisialisasi akun, jadi kita perlu memastikan bahwa kita menggunakan instruksi `createAccount()` dari Program Sistem sebelumnya, dan mengatur owner (program token), space, dan lamports yang benar untuk membuatnya rent exempt.
+
+<ArticleSection name="Transfer" id="transfer" level="h2" />
+
+Memindahkan token dari satu akun ke akun lainnya. Ini adalah operasi dasar untuk mengirim token antar pengguna.
+
+Pemilik akun token perlu menjadi `Signer` dari transaksi tersebut, dan tujuan transfer tersebut harus berupa akun token lainnya.
+
+> Jumlah yang kita putuskan untuk ditransfer adalah tanpa desimal. Jadi jika kita ingin mengirim 1 token yang memiliki 6 desimal, kita perlu menggunakan notasi `1e6`.
+
+<ArticleSection name="Approve" id="approve" level="h2" />
+
+Memberikan delegasi otoritas untuk mentransfer jumlah token tertentu atas nama pemilik akun. Ini memungkinkan transfer token secara terprogram tanpa memberikan kontrol penuh atas akun.
+
+> Kita menetapkan jumlah "disetujui", dan delegasi hanya dapat mentransfer hingga jumlah tersebut
+
+<ArticleSection name="Revoke" id="revoke" level="h2" />
+
+Menghapus wewenang delegasi saat ini atas akun, mengembalikan kendali penuh kepada pemilik akun.
+
+> Segera membatalkan delegasi yang ada dan hanya pemilik akun yang dapat mencabut delegasi (bukan delegasi itu sendiri)
+
+<ArticleSection name="Set Authority" id="set-authority" level="h2" />
+
+Mengubah otoritas dari mint atau akun. Ini memungkinkan transfer kepemilikan atau memperbarui jenis otoritas tertentu.
+
+> Dapat mengubah otoritas mint, otoritas pembekuan, atau pemilik akun dan mengatur otoritas ke `None` adalah tindakan yang tidak dapat dibalik yang secara permanen menghapus kemampuan tersebut
+
+<ArticleSection name="Mint To" id="mint-to" level="h2" />
+
+Membuat token baru dan menyimpannya ke dalam akun yang ditentukan. Hanya otoritas mint yang dapat melakukan operasi ini.
+
+> Meningkatkan total pasokan token dan jumlahnya menghormati konfigurasi desimal mint
+
+<ArticleSection name="Burn" id="burn" level="h2" />
+
+Secara permanen menghancurkan token dengan menghapusnya dari peredaran. Ini mengurangi total pasokan token.
+
+> Secara permanen mengurangi total pasokan token dan tindakan ini dapat dilakukan oleh pemilik akun atau delegasi
+
+<ArticleSection name="Close Account" id="close-account" level="h2" />
+
+Menutup akun token dan mentransfer sisa SOL rent ke akun tujuan. Akun token harus memiliki saldo nol kecuali itu adalah akun SOL native.
+
+> Dari Token2022 dimungkinkan untuk menutup akun `Mint` yang memiliki pasokan 0
+
+<ArticleSection name="Freeze Account" id="set-mint-to" level="h2" />
+
+Mencegah semua operasi token pada akun sampai dicairkan. Hanya otoritas pembekuan mint yang dapat melakukan operasi ini.
+
+> Sepenuhnya menonaktifkan transfer, persetujuan, dan pembakaran dan hanya mempengaruhi akun yang dibekukan secara spesifik
+
+<ArticleSection name="Mencairkan Akun" id="thaw-account" level="h2" />
+
+Mengaktifkan kembali operasi token pada akun yang sebelumnya dibekukan. Hanya otoritas pembekuan mint yang dapat mencairkan akun.
+
+> Mengembalikan fungsionalitas penuh ke akun yang dibekukan dan hanya dapat dilakukan oleh otoritas pembekuan mint

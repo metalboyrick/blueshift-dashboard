@@ -1,0 +1,23 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Anchor Escrow</ChallengeTitle>
+
+Sekarang saatnya untuk menguji apa yang telah Anda pelajari. Dengan menggunakan apa yang telah Anda pelajari dari pelajaran ini, buatlah program escrow menggunakan framework Anchor yang memenuhi persyaratan berikut:
+
+> Akun state Anda harus didefinisikan menggunakan diskriminator akun dengan nilai `1`.
+
+<RequirementList>
+  <Requirement title="Tantangan 1: Membuat penawaran escrow">
+    Program Anda harus memungkinkan pembuat untuk membuat penawaran escrow. Definisikan instruksi untuk melakukan ini menggunakan diskriminator instruksi dengan nilai `0`.
+  </Requirement>
+
+  <Requirement title="Tantangan 2: Mengambil penawaran escrow">
+    Program Anda harus memungkinkan pengambil untuk mengambil penawaran escrow. Definisikan instruksi untuk melakukan ini menggunakan nilai diskriminator instruksi `1`.
+  </Requirement>
+
+  <Requirement title="Tantangan 3: Membatalkan penawaran escrow">
+    Program Anda harus memungkinkan pembuat untuk membatalkan penawaran escrow dan mengembalikan dana yang di-escrow. Pastikan instruksi Anda didefinisikan dengan nilai diskriminator instruksi `2`.
+  </Requirement>
+</RequirementList>
