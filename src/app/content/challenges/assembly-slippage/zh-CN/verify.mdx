@@ -1,0 +1,41 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF 汇编滑点</ChallengeTitle>
+
+现在您应该已经开始熟悉编写汇编代码了。与仅使用普通账户不同，您的滑点检查应适用于 SPL-Token 和 Token2022 账户。
+
+> `amount` 将以与示例相同的常量存储在内存中。主要区别在于，由于账户的 `data_len` 是动态的（指令数据位于最后一个账户数据的末尾），我们无法使用常量获取指令数据。
+
+创建一个仅包含一个指令的程序。它必须：
+- 接收一个单一的 SPL 或 Token2022 Token 账户
+- 在指令数据中接收一个 u64（8 字节）的最低余额
+- 动态计算最低余额的偏移量
+- 如果滑点超出，记录字符串 `Slippage exceeded` 并返回错误代码 1
+
+> 要获取正确的指令数据偏移量，您可以使用我们的[工具](https://sbpf.xyz)。但我们会帮您一把：token 账户的 `data_len` 位于 `.equ TOKEN_ACCOUNT_DATA_LEN, 0x0058`
+
+首先按照汇编课程[工具部分](/en/courses/introduction-to-assembly/tooling)中解释的方式安装 sBPF 包，并在终端中使用以下命令构建您的程序：
+
+```
+sbpf build
+```
+
+这将在您的 `target/deploy` 文件夹中生成一个 `.so` 文件。
+
+现在点击 `take challenge` 按钮并将文件拖放到那里！
+
+<RequirementList>
+  <Requirement title="挑战 1：使用 SPL-Token 测试滑点">
+    当 SPL-Token 账户中的代币数量高于传入的数量时，您的程序应成功运行。
+  </Requirement>
+
+  <Requirement title="挑战 2：测试滑点失败">
+    当代币账户中的代币数量低于传入的数量时，您的程序应失败。
+  </Requirement>
+
+  <Requirement title="挑战 3：使用 Token2022 测试滑点">
+    当 Token2022 账户中的代币数量高于传入的数量时，您的程序应成功。
+  </Requirement>
+</RequirementList>

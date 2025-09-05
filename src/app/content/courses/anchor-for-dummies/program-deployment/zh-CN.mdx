@@ -1,0 +1,176 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 程序部署
+
+完成程序后，将其部署到 devnet 或 mainnet，以便用户可以进行交互。
+
+<ArticleSection name="程序部署" id="program-deployment" level="h2" />
+
+构建您的程序以生成必要的部署文件：
+
+```
+anchor build
+```
+
+这将创建一个 `target/deploy` 文件夹，其中包含：
+- `<project-name>.so`：程序的字节码
+- `<project-name>-keypair.json`：用于部署的生成密钥对
+
+> 您可以通过替换 `<project-name>-keypair.json` 文件中的密钥对来使用自定义地址。
+
+获取程序地址：
+
+```
+solana address -k target/deploy/<project-name>-keypair.json
+```
+
+在 `lib.rs` 中更新 `declare_id!()` 函数为此地址，然后配置您的 `Anchor.toml`，以使用正确的目标集群和程序 ID：
+
+```
+[provider]
+cluster = "devnet"
+
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
+```
+
+部署您的程序：
+
+```
+anchor deploy
+```
+
+这将使用 `Anchor.toml` 中指定的地址、集群和钱包作为费用支付者进行部署。
+
+### 部署失败
+
+失败的部署会创建持有 lamports 的中间缓冲账户。您将看到类似以下的恢复指令：
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+要恢复您的余额：
+
+- **恢复部署** 通过恢复密钥对：
+
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+
+    按提示输入 12 个单词的助记词，然后使用缓冲区进行部署：
+
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- **关闭** 缓冲区以回收 lamports：
+
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### 通过 Solana CLI 部署
+
+您可以直接使用 Solana CLI 而不是 Anchor 来部署您的程序：
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+在网络拥堵期间，使用以下标志可以提高部署成功率：
+- `--with-compute-unit-price`：以微 lamports 设置计算单元价格
+- `--use-rpc`：将交易发送到 RPC 而不是验证器 TPU
+- `--max-sign-attempts`：在区块哈希过期后最大重试次数
+
+<ArticleSection name="Program Upgrade" id="program-upgrade" level="h2" />
+
+默认情况下，`anchor deploy` 会创建一个新的程序 ID。要在保留地址和关联账户的同时升级现有程序：
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+如果新的可执行文件比已部署版本更大，请先扩展程序账户：
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### 通过 Solana CLI 升级
+
+流程保持不变：如有需要先扩展，然后部署：
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### 使程序不可变
+
+您可以移除升级权限，使您的程序不可变：
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> 此操作不可逆。一旦设置，程序将无法更新。
+
+### 迁移程序
+
+迁移将程序从一个地址转移到另一个地址。CLI 会关闭旧程序并重新部署到新位置：
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> 迁移会破坏所有现有的 PDA，因为它们是从旧的程序 ID 派生的。用户必须更新其应用程序以使用新地址，并更改任何以 PDA 为权限的代币账户的权限。
+
+<ArticleSection name="Uploading an IDL" id="uploading-an-idl" level="h2" />
+
+接口描述语言（IDL）文件提供了程序指令和账户的标准化 JSON 描述，从而简化了客户端集成。
+
+将 IDL 上传到链上，以帮助开发者集成您的程序：
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### 升级 IDL
+
+重新部署程序后，更新链上 IDL：
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+<ArticleSection name="已验证的构建" id="verified-builds" level="h2" />
+
+已验证的构建确保部署在 Solana 上的可执行程序与您代码库中的源代码一致。此验证使开发者和用户能够确认链上程序与公共代码库完全匹配。
+
+验证过程将链上程序的哈希值与从源代码本地构建的程序进行比较，以检测版本之间的任何差异。
+
+使用 Solana CLI 构建程序可能会将特定于机器的代码嵌入到二进制文件中。在不同机器上编译相同的程序可能会生成不同的可执行文件。为了解决这个问题，请在固定依赖项的 Docker 容器中进行构建，以获得可重复的结果。
+
+Anchor 提供了处理构建和 Docker 配置的 CLI 命令：
+
+```
+anchor build --verifiable
+```
+
+验证主网部署的程序构建：
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+> `<lib-name>` 对应于程序的 `Cargo.toml` 文件中定义的名称。

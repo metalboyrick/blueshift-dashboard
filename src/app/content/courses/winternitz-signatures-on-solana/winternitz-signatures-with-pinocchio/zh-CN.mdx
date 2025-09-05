@@ -1,0 +1,221 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 使用 Pinocchio 的 Winternitz 签名
+
+Blueshift 团队的 [Dean](https://x.com/deanmlittle) 发布了首个支持创建和验证 Winternitz 签名的 Pinocchio 兼容库。
+
+此实现对于为区块链应用提供抗量子攻击的安全性尤为重要。
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+此实现使用 `w = 8` 来平衡 Solana 的限制：交易大小限制和计算单元限制。
+
+Winternitz 参数 `w` 在签名大小和计算需求之间创造了一个基本的权衡：
+- 较高的 w 值意味着较小的签名，但需要更多计算，因为验证每个签名组件需要更多的哈希操作。
+- 较低的 w 值意味着较大的签名，但需要较少计算，因为验证每个签名组件需要较少的哈希操作。
+
+Solana 施加了两个关键限制，这些限制决定了参数的选择：
+- 交易大小限制（1024 字节）：使用 `w = 8`，完整实现会生成正好 1024 字节的签名，使用 256 位哈希（32 字节 × 32 个组件）。这会占用整个交易空间，无法留出交易开销和额外数据的空间。
+- 计算单元限制：切换到 `w = 16` 会将签名大小减半，但在验证时会超出 Solana 的计算单元（CU）限制，因为每个签名组件需要显著更多的哈希操作。
+
+由于计算单元限制无法通过参数调整解决，签名大小问题通过将签名截断至 896 字节并对剩余组件进行 Merkle 化来解决。这种方法在保留安全性的同时，为交易开销创造了必要的空间。
+
+这就是为什么最终选择了 `w = 8`：它代表了计算需求可控且签名截断为大小限制提供了实用解决方案的最佳平衡点。
+
+### 密钥生成
+
+使用SDK生成私钥并派生其对应的公钥：
+
+```rust
+use winternitz::{hash::WinternitzKeccak, privkey::WinternitzPrivkey};
+
+// Generate a new random private key
+let privkey = WinternitzPrivkey::generate();
+
+// Derive the corresponding public key
+let pubkey = privkey.pubkey::<WinternitzKeccak>();
+```
+
+公钥通过对私钥组件多次应用哈希函数派生而来，这是一种单向转换，确保了安全性。
+
+### 签名消息
+
+```rust
+// Sign a message
+let message = b"Hello, World!";
+let signature = privkey.sign::<WinternitzKeccak>(message);
+```
+
+签名过程基于消息摘要生成签名组件，每个组件需要根据相应的消息位数执行特定数量的哈希操作。
+
+### 签名验证
+
+```rust
+// Recover public key from signature and message
+let recovered_pubkey = signature.recover_pubkey::<WinternitzKeccak>(message);
+
+// Verify by comparing public keys
+assert_eq!(recovered_pubkey, pubkey);
+```
+
+验证通过从签名和消息重建公钥，然后将其与预期的公钥进行比较以确认真实性。
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+要在您的Pinocchio程序中实现Winternitz签名验证，您需要：
+1. `solana-winternitz` crate：提供核心的Winternitz签名功能
+2. 使用量子安全地址派生进行PDA创建和验证
+
+让我们从添加`solana-winternitz` crate开始
+
+```
+cargo add solana-winternitz
+```
+
+### 签名大小优化
+
+该实现使用截断方法以适应Solana的交易限制：
+- 完整签名（`WinternitzSignature`）：1024字节（32字节 × 32个组件）。
+- 截断签名（`WinternitzCommitmentSignature`）：896字节（32字节 × 28个组件）。
+- 可用空间：剩余128字节用于交易开销
+
+从256位哈希截断到224位哈希在保持强安全性的同时确保了实用性。剩余的签名组件通过Merkle化来保留完整的安全模型。
+
+### 设置量子安全的PDA
+
+由于传统区块链签名仍然容易受到量子攻击的威胁，此实现利用程序派生地址（PDA）实现量子安全。
+
+PDA没有关联的私钥，因此免受密码学攻击。
+
+以下是如何从Winternitz公钥创建PDA的方法：
+
+```rust
+pub struct CreateWinternitzPDA {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl CreateWinternitzPDA {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        let data: [u8; 33] = bytes
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+        let (hash, bump) = array_refs![&data, 32, 1];
+        Ok(Self {
+            hash: *hash,
+            bump: *bump,
+        })
+    }
+
+    pub fn create_pda(&self, accounts: &CreatePDAAccounts) -> ProgramResult {
+        let seeds = [Seed::from(&self.hash), Seed::from(&self.bump)];
+        let signers = [Signer::from(&seeds)];
+        
+        // Create the quantum-secure PDA
+        CreateAccount {
+            from: accounts.payer,
+            to: accounts.vault,
+            lamports: accounts.lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+> PDA 的派生中使用的哈希是由公钥的 32 个组成部分中的 28 个创建的 Merkle 根。这是因为如前所述，我们只能容纳截断的签名。
+
+Winternitz 验证的核心涉及从签名和消息中恢复公钥，然后验证其是否与预期的 PDA 匹配。以下是完整的验证流程：
+
+```rust
+pub struct VerifyWinternitzSignature {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl VerifyWinternitzSignature {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        if bytes.len() != 897 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        let (signature_bytes, bump) = bytes.split_at(896);
+        Ok(Self {
+            signature: WinternitzSignature::from(signature_bytes.try_into().unwrap()),
+            bump: [bump[0]],
+        })
+    }
+
+    pub fn verify_and_execute(&self, accounts: &VerifyAccounts, message: &[u8]) -> ProgramResult {
+        // Recover the public key from signature and message
+        let recovered_pubkey = self.signature.recover_pubkey(message);
+        let hash = recovered_pubkey.merklize();
+        
+        // Verify PDA ownership
+        let expected_pda = solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ]);
+        
+        if expected_pda.ne(accounts.pda.key()) {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        
+        // Execute the protected operation
+        self.execute_protected_operation(accounts)
+    }
+
+    fn execute_protected_operation(&self, accounts: &VerifyAccounts) -> ProgramResult {
+        // Your quantum-secure operation logic here
+        Ok(())
+    }
+}
+```
+
+`recover_pubkey()` 函数通过将签名消息转换为摘要值来重建原始公钥，这些摘要值指定每个组件需要的额外哈希次数，并生成 28 个只能通过正确的私钥生成的公钥组件。
+
+`merklize()` 函数随后从 28 个公钥组件构建一个二叉树，生成一个唯一表示所有 28 个组件的 32 字节根。
+
+<ArticleSection name="安全注意事项" id="security-considerations" level="h2" />
+
+始终在签名消息中包含关键参数以防止篡改：
+
+```rust
+// Construct message with security parameters
+let message = [
+    accounts.recipient.key().as_ref(),     // Prevent recipient substitution
+    &amount.to_le_bytes(),                 // Prevent amount manipulation
+    &expiry_timestamp.to_le_bytes(),       // Prevent replay attacks
+].concat();
+```
+
+### 过期检查
+
+由于 Winternitz 签名始终有效，请实施基于时间的过期机制：
+
+```rust
+// Verify signature hasn't expired
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(
+    message[40..48].try_into()
+    .map_err(|_| ProgramError::InvalidInstructionData)?
+);
+
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+### 公钥检查
+
+确保只有授权方可以从签名中受益：
+
+```rust
+// Verify the recipient is authorized
+let intended_recipient = &message[0..32];
+if accounts.recipient.key().as_ref().ne(intended_recipient) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```

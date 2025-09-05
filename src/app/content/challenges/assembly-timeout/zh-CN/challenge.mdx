@@ -1,0 +1,99 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Assembly Timeout
+
+![Assembly Timeout Challenge](/graphics/challenge-banners/assembly-timeout.png)
+
+在本单元中，我们将使用 sBPF 汇编创建一个基于时间的验证指令，用于强制执行槽高度的截止时间。
+
+通过在交易中包含此指令，您可以创建一个安全机制，在指定的区块链时间之后阻止执行，从而防止延迟的交易执行或过时的指令重放。
+
+超时检查具有以下几个特点，使其非常适合汇编：
+- 单一且受限的使用场景
+- 高效利用系统变量
+- 无需复杂的账户验证
+- 仅提升交易安全性
+
+如果您不熟悉汇编编程，请参考[汇编入门课程](/en/courses/introduction-to-assembly)。
+
+<ArticleSection name="程序设计" id="program-design" level="h2" />
+
+我们的程序实现了一个关键的时间操作：验证当前区块链槽高度是否未超过预定的截止时间。这种模式对于时间敏感的 DeFi 操作至关重要——从防止过时的套利尝试到强制执行拍卖截止时间。
+
+程序的预期行为：
+- 指令数据中包含一个 8 字节的最大槽高度。
+- 通过 `sol_get_clock_sysvar` 访问 Solana 的 Clock 系统变量。
+- 如果当前槽高度 ≤ 最大槽高度，则返回成功，否则返回错误。
+
+<ArticleSection name="内存偏移" id="memory-offsets" level="h2" />
+
+sBPF 程序将账户数据作为连续的内存区域接收。这些常量定义了内存中字节偏移的位置。
+
+由于我们的程序不接受任何账户，我们可以计算 `MAX_SLOT_HEIGHT`（作为指令数据传递）的位置。我们还将在堆栈上存储 `Clock` 系统变量数据，因此 `CURRENT_SLOT_HEIGHT` 将为负值。
+
+这些常量定义了我们的内存布局：
+
+```sbpf
+.equ NUM_ACCOUNTS, 0x0000
+.equ MAX_SLOT_HEIGHT, 0x0010
+.equ CURRENT_SLOT_HEIGHT, -0x0028
+```
+
+- `NUM_ACCOUNTS` (0x0000)：指向指令数据头中的账户计数，用于验证
+- `MAX_SLOT_HEIGHT` (0x0010)：定位指令数据负载中的 8 字节截止槽高度
+- `CURRENT_SLOT_HEIGHT` (-0x0028)：堆栈偏移，用于存储 Clock 系统变量的槽字段。由于槽是 Clock 结构中的第一个字段，此偏移量直接指向它
+
+与抽象内存布局的高级语言不同，汇编语言需要准确了解每一块数据的位置。
+
+<ArticleSection name="入口点和初始验证" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+  ldxdw r0, [r1+NUM_ACCOUNTS]       // Veto if any accounts are included
+  ldxdw r2, [r1+MAX_SLOT_HEIGHT]    // Store target slot height
+```
+
+每个 sBPF 程序都从一个全局 `.entrypoint` 符号开始。Solana 运行时通过寄存器 `r1` 提供账户和指令数据。
+
+`ldxdw` 指令从内存中加载 (`ldx`) 一个 8 字节（双字，`dx`）的值到寄存器中。以下是具体过程：
+- `ldxdw r0, [r1+NUM_ACCOUNTS]`：将账户数量加载到 `r0` 中。由于 `r0` 是虚拟机在退出时读取的寄存器，任何非零值都会自动导致程序失败（如果传递了账户，这正是我们想要的）。
+- `ldxdw r2, [r1+MAX_SLOT_HEIGHT]`：指向我们在指令数据中传递的最大允许槽高度。这个 64 位值存储在 `r2` 中。
+
+这两种操作都是零拷贝的：我们直接从账户数据中读取，而无需反序列化的开销。
+
+<ArticleSection name="时钟系统变量" id="the-clock-sysvar" level="h2" />
+
+```sbpf
+mov64 r1, r10
+add64 r1, CURRENT_SLOT_HEIGHT
+call sol_get_clock_sysvar
+ldxdw r1, [r1+0x0000]
+```
+
+`sol_get_clock_sysvar` 系统调用将当前 `Clock` 数据写入 `r1`。
+
+由于 Clock 结构体为 40 字节（对于仅能容纳 8 字节的寄存器来说太大），我们使用堆栈进行快速、无分配的存储，并自动清理。
+
+由于 `r10` 是只读的，要在堆栈上操作，我们需要将其内存地址复制到一个寄存器中：`mov64 r1, r10`
+
+然后我们将 `CURRENT_SLOT_HEIGHT` (-0x0028) 加到 `r1` 上。由于这个常量是负数，实际上是减法：`r1 = r10 - 40 bytes`，在堆栈上分配 40 字节。
+
+调用 `sol_get_clock_sysvar` 函数后，`r1` 包含写入 Clock 数据的内存地址，而不是槽值本身。因此，我们继续使用 `ldxdw r1, [r1+0x0000]` 加载实际的槽值。
+
+<ArticleSection name="时间比较逻辑" id="temporal-comparison-logic" level="h2" />
+
+```sbpf
+jle r1, r2, end    // If current slot <= max slot, success
+lddw r0, 1         // Otherwise, set error code
+```
+
+核心超时逻辑使用了一个条件跳转：
+- 时间验证：`jle`（如果小于或等于则跳转）将当前槽位（`r1`）与我们的截止时间（`r2`）进行比较。如果我们在时间窗口内，则跳转到 `exit`
+- 超时处理：如果截止时间已过，执行将继续加载（`lddw`）错误代码1到返回寄存器 `r0`
+
+<ArticleSection name="结论" id="conclusion" level="h2" />
+
+这个紧凑的程序以最小的计算单元消耗实现了时间验证。
+
+权衡之处在于需要理解系统调用接口、堆栈管理以及 `Clock` 系统变量的二进制布局。但对于性能关键的时间验证，汇编提供了无与伦比的效率。

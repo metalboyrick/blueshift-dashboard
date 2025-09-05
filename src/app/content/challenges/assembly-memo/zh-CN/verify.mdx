@@ -1,0 +1,30 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF 汇编备忘录</ChallengeTitle>
+
+创建一个仅包含一条指令的程序。它必须：
+- 如果指令数据包含任何账户，则应失败（可以通过将 `r0` 设置为账户数量来实现）
+- 将 `r2` 设置为指令数据的长度，将 `r1` 设置为指令数据的偏移量，
+- 调用 `sol_log_` 系统调用。
+
+首先按照 [工具部分](/en/courses/introduction-to-assembly/tooling) 中的说明安装 sBPF 包，并在终端中使用以下命令构建您的程序：
+
+```
+sbpf build
+```
+
+这将在您的 `target/deploy` 文件夹中生成一个 `.so` 文件。
+
+现在点击 `take challenge` 按钮并将文件拖放到那里！
+
+<RequirementList>
+  <Requirement title="挑战 1：测试备忘录">
+    您的程序应成功运行并记录 `Hello, Solana!`
+  </Requirement>
+
+  <Requirement title="挑战 2：使用不同输入测试备忘录">
+    为确保您没有硬编码 `Hello, Solana!` 字符串，我们将使用另一个输入再次测试：`Hello, Solana, but different!`
+  </Requirement>
+</RequirementList>

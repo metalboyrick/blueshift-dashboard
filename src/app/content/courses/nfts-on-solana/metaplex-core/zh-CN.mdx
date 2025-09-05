@@ -1,0 +1,192 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex Core 程序
+
+Metaplex Core 程序解决了 Token Metadata 程序多账户架构中固有的复杂性和成本问题。虽然 Token Metadata 依赖于 SPL-Token 作为其基础，需要为每个 NFT 设置多个账户，但这种方法导致了昂贵且笨重的实现，给用户和网络带来了负担。
+
+Metaplex Core 于 2024 年发布，是一个专为 NFT 操作设计的超轻量级程序。与其前身不同，Core 独立运行，无需依赖 SPL-Token，通过其自身的程序逻辑处理铸造、转移、销毁和可定制的行为。
+
+这一下一代标准采用单账户设计，大幅降低了铸造成本，同时通过其灵活的插件系统提升了整体网络性能。
+
+<ArticleSection name="Assets" id="assets" level="h2" />
+
+Metaplex Core 的革命性特点在于其统一的账户结构，消除了传统的铸造账户和代币账户之间的分离。
+
+由于 NFT 具有唯一的所有权且仅有一个持有者，该程序将钱包与资产之间的关系直接存储在资产账户中。
+
+这种设计在考虑到原始代币账户系统是为每个铸造管理数千个所有者而创建时显得合乎逻辑，而这种情况从未适用于非同质化代币。
+
+资产结构通过其最低字段要求展示了这种以效率为中心的方法：
+
+```rust
+#[derive(Clone, BorshSerialize, BorshDeserialize, Debug, ShankAccount, Eq, PartialEq)]
+pub struct AssetV1 {
+    /// The account discriminator.
+    pub key: Key,
+    /// The owner of the asset.
+    pub owner: Pubkey,
+    /// The update authority of the asset.
+    pub update_authority: UpdateAuthority,
+    /// The name of the asset.
+    pub name: String,
+    /// The URI of the asset that points to the off-chain data.
+    pub uri: String,
+    /// The sequence number used for indexing with compression.
+    pub seq: Option<u64>,
+}
+```
+
+这种结构代表了功能性 NFT 操作所需的绝对最小数据。
+
+传统的 `Mint` 账户字段在这种情况下变得多余，因为：供应量始终等于 1，小数位始终等于 0，铸造权限应保持未设置，冻结权限可以与更新权限字段合并。
+
+同样，大多数`Token`账户功能直接集成到资产结构中。
+
+缺乏显式冻结机制体现了Core的智能设计理念。
+
+与其为许多资产从未使用的功能预留空间，Core通过其插件系统实现冻结功能，根据需求添加功能，而不是维护未使用的字段。
+
+这种方法优化了存储成本，同时保留了需要冻结功能的资产的完整功能。
+
+集合成员资格通过更新权限枚举系统得到了同样周到的处理：由于分组资产通常共享相同的更新权限，Core利用这种关系消除了冗余字段存储：
+
+```rust
+pub enum UpdateAuthority {
+    None,
+    Address(Pubkey),
+    Collection(Pubkey),
+}
+```
+
+更新权限字段具有三重功能，通过`None`指示不可变资产，通过特定地址指示独立资产，或通过其父集合继承更新权限的集合成员。
+
+这一优雅的解决方案减少了存储需求，同时保持了清晰的权限关系和集合成员资格验证。
+
+<ArticleSection name="Collections" id="collections" level="h2" />
+
+Metaplex Core中的集合代表共享主题、创意或功能关系的资产组。
+
+与依赖外部验证系统的传统NFT集合不同，Core集合通过其集成的权限结构在链上建立了可验证的资产关系。
+
+创建集合的第一步是建立一个集合资产，该资产作为所有成员资产的权威父账户。
+
+此集合资产既是组织中心，也是集合范围内信息的元数据存储库，包括集合名称、描述和代表性图像。
+
+集合账户还充当适用于所有成员资产的插件的中央控制点，使创作者能够在整个集合中实现统一的行为。
+
+```rust
+pub struct CollectionV1 {
+    /// The account discriminator.
+    pub key: Key, //1
+    /// The update authority of the collection.
+    pub update_authority: Pubkey, //32
+    /// The name of the collection.
+    pub name: String, //4
+    /// The URI that links to what data to show for the collection.
+    pub uri: String, //4
+    /// The number of assets minted in the collection.
+    pub num_minted: u32, //4
+    /// The number of assets currently in the collection.
+    pub current_size: u32, //4
+}
+```
+
+Collection 结构通过其 `num_minted` 和 `current_size` 字段维护关键统计数据，这些字段分别跟踪集合中曾创建的资产总数以及当前仍然活跃的资产数量。
+
+这些指标支持精确的集合分析，并支持诸如限量版发布或销毁跟踪等功能，而无需依赖外部索引服务。
+
+当资产将其 `update_authority` 设置为 `Collection(collection_pubkey)` 时，它会自动继承集合的权限结构，同时建立可验证的成员关系。此设计无需单独的验证账户或外部证明系统，从而创建完全在链上验证的不可变集合关系。
+
+<ArticleSection name="Plugins" id="plugins" level="h2" />
+
+插件系统是 Metaplex Core 最具创新性的功能，解决了早期 NFT 标准中僵化、预定义行为的局限性。
+
+传统的 Token Metadata 程序需要通过可编程 NFT 等复杂的变通方法来实现自定义功能，而 Core 的插件架构则在不牺牲简单性或性能的情况下实现了细粒度的自定义。
+
+Core 的革命性方法将链上数据视为流动的，而不是将其锁定在固定结构中。这种设计理念支持灵活的插件系统，能够满足多样化的使用场景，同时保持高效的账户管理。
+
+每个插件定义了自己的权限模型，明确规定了谁可以执行特定操作，而 Core 的验证系统则防止了不同权限和权限之间的冲突。
+
+账户架构分为两个独立的部分：
+- 核心数据部分，包含具有可预测字段长度的基本资产信息
+- 可选的插件元数据部分，其中包含额外的功能和自定义行为。
+
+这种分离确保了基本资产保持轻量化，而复杂功能则按需扩展。
+
+插件元数据通过三部分结构进行组织：头部、单个插件以及协调所有内容的注册表。
+
+```
+Header | Plugin1 | Plugin2 | Plugin3 | Registry
+```
+
+插件头部作为入口点，包含一个`plugin_registry_offset`指针，用于指示注册表在账户中的位置：
+
+```rust
+pub struct PluginHeaderV1 {
+    /// The Discriminator of the header which doubles as a Plugin metadata version.
+    pub key: Key, // 1
+    /// The offset to the plugin registry stored at the end of the account.
+    pub plugin_registry_offset: usize, // 8
+}
+```
+
+插件注册表作为协调中心，维护内部`RegistryRecord`条目和第三方插件的`ExternalRegistryRecord`条目的向量。
+
+每条记录包含插件类型、管理权限以及在账户中的偏移位置：
+
+```rust
+pub struct PluginRegistryV1 {
+    /// The Discriminator of the header which doubles as a plugin metadata version.
+    pub key: Key, // 1
+    /// The registry of all plugins.
+    pub registry: Vec<RegistryRecord>, // 4
+    /// The registry of all adapter, third party, plugins.
+    pub external_registry: Vec<ExternalRegistryRecord>, // 4
+}
+
+pub struct RegistryRecord {
+    /// The type of plugin.
+    pub plugin_type: PluginType, // 2
+    /// The authority who has permission to utilize a plugin.
+    pub authority: Authority, // Variable
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+}
+
+pub struct ExternalRegistryRecord {
+    /// The adapter, third party plugin type.
+    pub plugin_type: ExternalPluginAdapterType,
+    /// The authority of the external plugin adapter.
+    pub authority: Authority,
+    /// The lifecycle events for which the external plugin adapter is active.
+    pub lifecycle_checks: Option<Vec<(HookableLifecycleEvent, ExternalCheckResult)>>,
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+    /// For plugins with data, the offset to the data in the account.
+    pub data_offset: Option<usize>,
+    /// For plugins with data, the length of the data in the account.
+    pub data_len: Option<usize>,
+}
+```
+
+插件检索遵循一个利用这种组织结构的系统化流程。
+
+系统首先加载资产数据以确定插件头部的位置，然后使用头部的偏移量定位注册表，最后遍历注册表记录以编译完整的插件列表：
+
+```rust
+pub fn list_plugins(account: &AccountInfo) -> Result<Vec<PluginType>, ProgramError> {
+    let asset = AssetV1::load(account, 0)?;
+    if asset.get_size() == account.data_len() {
+        return Err(MplCoreError::PluginNotFound.into());
+    }
+    let header = PluginHeaderV1::load(account, asset.get_size())?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::load(account, header.plugin_registry_offset)?;
+    Ok(registry
+        .iter()
+        .map(|registry_record| registry_record.plugin_type)
+        .collect())
+}
+```
+
+> 要了解更多关于如何使用`Core`程序的信息，请参考[官方文档](https://developers.metaplex.com/core)

@@ -1,0 +1,144 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Codama 101
+
+![使用 Codama 创建您的 SDK](/graphics/course-banners/create-your-sdk-with-codama.png)
+
+Codama 是为 Solana 程序生成多语言和多框架类型安全客户端、创建 CLI 工具以及为探索器提供丰富程序信息的最快方式。
+
+一切都始于 Codama IDL——一种标准化格式，用于描述任何 Solana 程序，并作为生成所有程序相关工具的基础。
+
+通过单个 Codama IDL，您可以生成：
+- JavaScript、Rust、Python 等语言的类型安全客户端
+- 与您的程序交互的 CLI 工具
+- 与您的代码保持同步的文档
+- 理解您程序结构的探索器集成
+- 了解您程序接口的测试工具
+
+Codama 消除了在多语言和多框架中维护客户端的繁琐工作。
+
+您无需在每次程序更改时手动编写和更新客户端代码，只需在 Codama IDL 格式中描述一次您的程序，使用访问器应用任何必要的转换，然后自动生成其他所有内容。
+
+<ArticleSection name="核心概念" id="core-concept" level="h2" />
+
+Codama 的架构围绕三个基本概念：节点、访问器和渲染器。
+
+### 节点
+
+在 Codama 中，一切都表示为节点树。节点是一个结构化数据对象，用于描述 Solana 程序的一个特定方面。
+
+您的整个程序将成为一个以 `RootNode` 为顶点的分层树。
+
+节点有不同的类型：
+- **结构节点** (`RootNode`, `ProgramNode`, `AccountNode`, `InstructionNode`, ...): 定义程序的骨架
+- **类型节点** (`NumberTypeNode`, `StringTypeNode`, `StructTypeNode`, `ArrayTypeNode`): 描述数据结构和字段类型
+- **值节点** (`NumberValueNode`, `StringValueNode`): 表示默认值和常量
+
+> 每种节点类型都有特定的用途，并提供一致的接口来表示其数据。语言特定的访问器可以遍历并将这些节点转换为适合不同目标语言的表示形式，从而通过组合简单的节点构建复杂的程序描述。
+
+### 访问器
+
+访问器是遍历节点树以分析或转换它的函数。
+
+它们通过“访问”树中的每个节点并对其执行操作来实现访问器模式。
+
+访问器分为两种类型：
+- 分析访问器（只读）：遍历节点并使用`codama.accept()`返回信息
+- 转换访问器：遍历节点并使用`codama.update()`返回修改后的树
+
+> 访问器将程序的内容（节点）与操作（操作）分离。这意味着您可以对任何 Codama IDL 应用相同的转换，而不管它是如何创建的。
+
+### 渲染器
+
+渲染器是将 Codama IDL 转换为特定编程语言客户端代码的访问器函数。
+
+每个渲染器都会遍历 IDL 节点，并为其目标语言生成适当的代码文件、类型和接口。
+
+要使用渲染器，请提供生成文件应保存的基础目录，以及可选的配置以自定义输出：
+
+```ts
+import { createFromRoot, programNode, rootNode } from 'codama';
+import { renderJavaScriptVisitor, renderRustVisitor } from '@codama/renderers';
+
+// Create or import your Codama IDL.
+const codama = createFromRoot(rootNode(programNode({ ... })));
+
+// Render SDKs from your IDL.
+codama.accept(renderJavaScriptVisitor('clients/js/src/generated', { ... }));
+codama.accept(renderRustVisitor('clients/rust/src/generated', { ... }));
+```
+
+> 目前仅支持以下渲染器：`renderJavaScriptVisitor`（兼容`@solana/kit`）、`renderJavaScriptUmiVisitor`（兼容`@metaplex-foundation/umi`和`@solana/web3.js`）以及`renderRustVisitor`。
+
+<ArticleSection name="安装" id="installation" level="h2" />
+
+使用您喜欢的包管理器安装核心 Codama 包：
+
+```
+pnpm install codama
+```
+
+这包括`@codama/visitors`和`@codama/nodes`包，提供创建和操作 IDL 所需的一切。
+
+> 如果您希望对依赖项进行更精细的控制，可以单独安装 `@codama/visitors` 和 `@codama/nodes` 等独立包。
+
+要生成客户端代码，您还需要安装 renderers 包：
+
+```
+pnpm install codama @codama/renderers
+```
+
+renderers 包是单独分发的，因为它需要文件系统访问，并且仅在 Node.js 环境中工作，而核心的 Codama 库可以在任何地方运行（Node.js、浏览器等）。
+
+<ArticleSection name="Set up" id="set-up" level="h2" />
+
+Codama 提供了一个命令行界面 (CLI)，简化了处理 IDL 和生成客户端代码的过程。CLI 负责配置管理和脚本执行，使设置自动化工作流变得简单。
+
+安装 CLI 包并初始化您的项目：
+
+```
+pnpm install @codama/cli
+pnpm codama init
+```
+
+init 命令会提示您输入以下内容：
+- 您的 IDL 文件路径（支持 Codama 和 Anchor IDL）
+- 您想要使用的脚本预设（JavaScript、Rust 等）
+
+这将创建一个配置文件，定义您的 IDL 源和生成脚本，内容如下：
+
+```json
+{
+    "idl": "path/to/your/idl",
+    "before": [
+        "./custom-transforms.js",
+        { "from": "@codama/visitors#removeTypes", "args": [["internal"]] }
+    ],
+    "scripts": {
+        "js": [
+            { "from": "@codama/renderers-js", "args": ["clients/js/src"] }
+        ],
+        "rust": [
+            { "from": "@codama/renderers-rust", "args": ["clients/rust/src"] }
+        ]
+    }
+}
+```
+
+> `before` 包含在每个脚本运行之前执行的 `Visitors`（用于转换、清理等），而 `scripts` 包含用于生成客户端的 `Renderers`
+
+您可以使用 `run` 命令执行配置的脚本：
+
+```
+pnpm codama run              # Run preparation steps only
+pnpm codama run js rust      # Run specific language generators
+pnpm codama run --all        # Run all configured scripts
+```
+
+### 不使用 CLI
+
+如果您不想使用 CLI，可以在您的代码库中创建一个 `codama.ts` 文件，指定您的 Codama IDL 逻辑（导入、访问器和渲染器），然后运行：
+
+```
+pnpx tsx codama.ts
+```

@@ -1,0 +1,91 @@
+# 借款
+
+借款指令是我们闪电贷系统的第一部分。它执行三个关键步骤以确保安全且原子化的借贷：
+1. 转移资金：将请求的`borrow_amount`从协议的资金库转移到借款人的账户
+2. 验证还款：通过指令内省确认交易末尾存在有效的还款指令
+
+<ArticleSection name="资金转移" id="fund-transfer" level="h2" />
+
+首先，我们通过适当的验证实现实际的资金转移：
+
+```rust
+// Make sure we're not sending in an invalid amount that can crash our Protocol
+require!(borrow_amount > 0, ProtocolError::InvalidAmount);
+
+// Derive the Signer Seeds for the Protocol Account
+let seeds = &[
+    b"protocol".as_ref(),
+    &[ctx.bumps.protocol]
+];
+let signer_seeds = &[&seeds[..]];
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(), 
+        Transfer {
+            from: ctx.accounts.protocol_ata.to_account_info(),
+            to: ctx.accounts.borrower_ata.to_account_info(),
+            authority: ctx.accounts.protocol.to_account_info(),
+        }, 
+        signer_seeds
+    ), 
+    borrow_amount
+)?;
+```
+
+此代码确保我们正在转移有效金额，并使用协议的程序派生地址（PDA）授权转移。
+
+<ArticleSection name="指令内省" id="instruction-introspection" level="h2" />
+
+现在是安全性至关重要的部分：使用指令内省来验证交易结构并确保我们的闪电贷将被还清。
+
+我们首先访问`instructions` sysvar，它包含当前交易中所有指令的信息：
+
+```rust
+/*
+    Instruction Introspection
+
+    This is the primary means by which we secure our program,
+    enforce atomicity while making a great UX for our users.
+*/
+
+let ixs = ctx.accounts.instructions.to_account_info();
+```
+
+最后，我们执行最关键的检查：确保交易中的最后一个指令是有效的还款指令：
+- 我们首先检查借款指令的位置以确保它是唯一的
+- 然后我们检查指令的数量并确保我们正在加载交易的最后一个指令
+- 接着我们通过验证指令的程序 ID 和指令的标识符来确认它是还款指令
+- 最后，我们验证还款指令中传递的 ATAs 与我们在`Borrow`指令中传递的 ATAs 一致
+
+```rust
+/*
+    Repay Instruction Check
+
+    Make sure that the last instruction of this transaction is a repay instruction
+*/
+
+// Check if this is the first instruction in the transaction.
+let current_index = load_current_index_checked(&ctx.accounts.sysvar_instructions)?;
+require_eq!(current_index, 0, ProtocolError::InvalidIx); 
+
+// Check how many instruction we have in this transaction
+let instruction_sysvar = ixs.try_borrow_data()?;
+let len = u16::from_le_bytes(instruction_sysvar[0..2].try_into().unwrap());
+
+// Ensure we have a repay ix
+if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
+
+    // Instruction checks
+    require_keys_eq!(repay_ix.program_id, ID, ProtocolError::InvalidProgram);
+    require!(repay_ix.data[0..8].eq(instruction::Repay::DISCRIMINATOR), ProtocolError::InvalidIx);
+
+    // We could check the Wallet and Mint separately but by checking the ATA we do this automatically
+    require_keys_eq!(repay_ix.accounts.get(3).ok_or(ProtocolError::InvalidBorrowerAta)?.pubkey, ctx.accounts.borrower_ata.key(), ProtocolError::InvalidBorrowerAta);
+    require_keys_eq!(repay_ix.accounts.get(4).ok_or(ProtocolError::InvalidProtocolAta)?.pubkey, ctx.accounts.protocol_ata.key(), ProtocolError::InvalidProtocolAta);
+
+} else {
+    return Err(ProtocolError::MissingRepayIx.into());
+}
+```

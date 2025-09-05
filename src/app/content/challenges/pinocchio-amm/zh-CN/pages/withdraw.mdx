@@ -1,0 +1,149 @@
+# 提现
+
+`withdraw` 指令主要执行以下三项任务：
+- 根据用户希望 `burn` 的 LP 数量，提取 `mint_x` 和 `mint_y` 代币。
+- 计算提取金额，并检查金额是否不低于用户指定的 `mint_x` 和 `mint_y`。
+- 从用户的 ata 中销毁相应数量的 `mint_lp`。
+
+> 如 `initialize` 指令部分所述；为了优化目的，我们将所有 `Associated Token Accounts` 初始化在指令之外。
+
+<ArticleSection name="所需账户" id="required-accounts" level="h2" />
+
+以下是此上下文所需的账户：
+- `user`：将代币提取到 AMM 流动性中的用户。必须是 `signer`。
+- `mint_lp`：表示池流动性的 Mint 账户。必须作为 `mutable` 传递。
+- `vault_x`：存储所有存入池中的 X 代币的代币账户。必须作为 `mutable` 传递。
+- `vault_y`：存储所有存入池中的 Y 代币的代币账户。必须作为 `mutable` 传递。
+- `user_x_ata`：用户的 X 代币关联账户。这是用户的 X 代币将从池中转移到的目标账户。必须作为 `mutable` 传递。
+- `user_y_ata`：用户的 Y 代币关联账户。这是用户的 Y 代币将从池中转移到的目标账户。必须作为 `mutable` 传递。
+- `user_lp_ata`：用户的 LP 代币关联账户。这是 LP 代币将被销毁的来源账户。必须作为 `mutable` 传递。
+- `config`：AMM 池的配置账户。存储所有相关的池参数和状态。
+- `token program`：SPL 代币程序账户。这是执行代币操作（如转账和铸造）所需的。必须是 `executable`。
+
+这里，我将再次把实现留给你：
+
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub user: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub vault_x: &'a AccountInfo,
+    pub vault_y: &'a AccountInfo,
+    pub user_x_ata: &'a AccountInfo,
+    pub user_y_ata: &'a AccountInfo,
+    pub user_lp_ata: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+以下是我们需要传入的指令数据：
+- `amount`：用户希望销毁的 LP 代币数量。必须是 `[u64]`。
+- `min_x`：用户愿意提取的最小 Token X 数量。必须是 `[u64]`。
+- `min_y`：用户愿意提取的最小 Token Y 数量。必须是 `[u64]`。
+- `expiration`：此订单的过期时间。确保交易必须在一定时间内完成非常重要。必须是 `[i64]`。
+
+我们将像初始化一样处理 `WithdrawInstructionData` 的实现。所以我将实现留给你：
+
+```rust
+pub struct WithdrawInstructionData {
+    pub amount: u64,
+    pub min_x: u64,
+    pub min_y: u64,
+    pub expiration: i64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+> 确保任何数量，例如 `amount`、`min_y` 和 `min_x` 都大于零，并且订单尚未使用 `Clock` sysvar 过期。
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+我们首先反序列化 `instruction_data` 和 `accounts`。
+
+然后我们需要：
+- 加载 `Config` 账户以获取其中的所有数据。我们可以使用 `Config::load()` 辅助工具来完成。
+- 验证 `AmmState` 是否有效（即它不等于 `AmmState::Disabled`）。
+- 检查 `vault_x` 和 `vault_y` 的派生是否为关联代币账户（Associated Token Accounts）。
+- 反序列化所有涉及的代币账户，并使用其中的数据通过 `constant-product-curve` crate 计算提取的数量，并像这样检查滑点：
+
+```rust
+let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
+let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
+let vault_y = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_y)? };
+
+let (x, y) = match mint_lp.supply() == self.instruction_data.amount {
+    true => (vault_x.amount(), vault_y.amount()),
+    false => {
+        let amounts = ConstantProduct::xy_withdraw_amounts_from_l(
+            vault_x.amount(),
+            vault_y.amount(),
+            mint_lp.supply(),
+            self.instruction_data.amount,
+            6,
+        )
+        .map_err(|_| ProgramError::InvalidArgument)?;
+
+        (amounts.x, amounts.y)
+    }
+};
+
+// Check for slippage
+if !(x >= self.instruction_data.min_x && y >= self.instruction_data.min_y) {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+- 将金额从金库转移到用户的代币账户，并从用户的代币账户中销毁相应数量的 LP 代币
+
+> `authority` 的 `vault_x` 和 `vault_y` 是 `config` 账户
+
+你应该已经足够熟练可以独立完成这项任务，因此我将把实现部分留给你：
+
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+    pub instruction_data: WithdrawInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+        let instruction_data = WithdrawInstructionData::try_from(data)?;
+
+        // Return the initialized struct
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+
+    pub fn process(&mut self) -> ProgramResult {
+        //..
+
+        Ok(())
+    }
+}
+```

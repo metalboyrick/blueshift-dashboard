@@ -1,0 +1,60 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Surfpool 101
+
+![使用 Surfpool 进行测试](/graphics/course-banners/testing-with-surfpool.png)
+
+测试依赖跨程序调用（CPI）的 Solana 程序，传统上需要开发者从主网导出账户和程序，然后将其上传到本地验证器。
+
+这种方法适用于少量账户，但在测试像 Jupiter 这样复杂的程序时完全不可行，因为它可能依赖于 40 多个账户和 8 个以上的程序。
+
+Surfpool 通过以下功能解决了这个问题，使开发者能够使用按需获取的主网账户在本地模拟程序：
+- **自定义系统变量**：时间旅行（在任何历史 slot 或时间戳测试您的程序）、暂停时钟或停止区块生产
+- **修改账户数据**：设置 SOL 供应量（总量、流通量和非流通量）、在程序之间传输账户数据，或更新账户核心数据和代币账户信息
+- **分析链上数据**：分析交易的计算单元、账户变更和执行详情，然后通过签名、UUID 或标签检索详细的分析报告
+
+<ArticleSection name="什么是 Surfpool" id="what-is-surfpool" level="h2" />
+
+[Surfpool](https://docs.surfpool.run/) 是一个全面的 SDK 和工具套件，而 **Surfnet** 是它创建的本地 Solana 网络。可以将 Surfpool 视为您的开发环境，而 Surfnet 则是运行在其中的区块链网络。
+
+Surfnet 是 solana-test-validator 的直接替代品，专为 Solana 开发者提供最佳开发体验而设计。
+
+由 [TxTx](https://x.com/txtx_sol) 团队开发，Surfpool 无缝将基础设施即代码（Infrastructure as Code）集成到基于 Anchor 的项目中，从而实现可复现、可审计且安全的部署，无论是到私有还是公共的 Solana 网络。
+
+<ArticleSection name="第一步" id="first-steps" level="h2" />
+
+运行 Surfnet 所需的一切都包含在 Surfpool SDK 中。由于安装因操作系统而异，请根据您的具体设置，参阅官方的[安装页面](https://docs.surfpool.run/install)。
+
+安装 Surfpool SDK 后，使用以下命令启动 Surfnet：
+
+```bash
+surfpool start
+```
+
+这将在标准本地验证器端口（`http://127.0.0.1:8899`）上启动 Surfnet，并显示一个终端用户界面，其中包括：
+- **槽位和纪元**：当前执行的槽位每 400 毫秒自动处理一次。使用 **Tab** 手动前进到下一个槽位，或使用 **空格键** 暂停/恢复自动区块生产。
+- **交易日志**：带有时间戳的活动流，显示所有执行的交易。
+
+如果需要基于浏览器的体验，请通过[此链接](http://127.0.0.1:8899)连接到 Surfpool Studio。
+
+> Surfpool Studio 包含所有终端用户界面功能，并提供额外的功能，例如时间旅行和为任何铸币账户添加代币。
+
+### 部署程序
+
+设置 Surfnet 后，部署您的程序并开始构建。
+
+**Anchor 程序**：使用 `anchor deploy`，并将您的 `Anchor.toml` 配置为 `[programs.localnet]`。
+
+**Pinocchio 程序**：通过 Solana CLI 部署，并将您的配置设置为 localnet：`solana program deploy ./target/deploy/your_program.so --program-id ./target/deploy/your_program-keypair.json`
+
+> 在 Anchor Workspace 中运行 `surfpool start`，可提示您使用基础设施即代码（Infrastructure as Code），以便在 Surfnet 上无缝自动部署您的程序。
+
+### 测试程序
+
+部署到 localnet 后，通过定位本地验证器连接到 Surfnet：
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```
