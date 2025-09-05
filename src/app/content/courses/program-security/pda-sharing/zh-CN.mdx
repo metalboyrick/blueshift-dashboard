@@ -19,10 +19,15 @@ pub mod insecure_withdraw{
     //..
 
     pub fn withdraw(ctx: Context<WithdrawTokens>) -> Result<()> {
+
+        //..
+        // other conditions/actions...
+        //..
+
         let amount = ctx.accounts.vault.amount;
         
         let seeds = &[
-            ctx.accounts.pool.withdraw_destination.as_ref(),
+            ctx.accounts.pool.mint.as_ref(),
             &[ctx.accounts.pool.bump],
         ];
 
@@ -47,21 +52,23 @@ pub mod insecure_withdraw{
 
 #[derive(Accounts)]
 pub struct WithdrawTokens<'info> {
-    #[account(has_one = vault, has_one = withdraw_destination)]
+    #[account(
+        seeds = [b"pool", pool.mint.as_ref()],
+        bump = pool.bump,                                        
+    )]
     pool: Account<'info, TokenPool>,
     vault: Account<'info, TokenAccount>,
     withdraw_destination: Account<'info, TokenAccount>,
-    /// CHECK: This is the PDA that signs for the transfer
-    authority: UncheckedAccount<'info>,
+    //..
+    // other accounts..
+    //..
     token_program: Program<'info, Token>,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct TokenPool {
-    pub vault: Pubkey,
     pub mint: Pubkey,
-    pub withdraw_destination: Pubkey,
     pub bump: u8,
 }
 ```
@@ -82,16 +89,31 @@ pub struct TokenPool {
 #[derive(Accounts)]
 pub struct WithdrawTokens<'info> {
     #[account(
-        seeds = [withdraw_destination.key().as_ref()],
-        bump = pool.bump,                             
-        has_one = vault,                              
-        has_one = withdraw_destination,              
+        has_one = vault,
+        has_one = withdraw_destination,
+        seeds = [b"pool", vault.key().as_ref(), withdraw_destination.key().as_ref()],
+        bump = pool.bump,                                        
     )]
-    pool: Account<'info, TokenPool>,
+    pool: Account<'info, TokenPool>, // Authority for the vault
     #[account(mut)]
     vault: Account<'info, TokenAccount>,
     #[account(mut)]
     withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
     token_program: Program<'info, Token>,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool{
+    pub vault:Pubkey,
+    pub withdraw_destination:Pubkey,
+    pub bump:u8
+}
 ```
+
+对指令处理程序也进行了相同的更改，其中一个可能的情况是杠杆交易程序允许用户的交易在亏损达到一定金额时被清算。例如，用户自己设置止损，代码会检查是否达到该金额的条件，然后允许任何人停止交易并将剩余资金提取到目标账户，即提款账户。
+
+一个单一的PDA（程序派生地址）控制特定代币的所有资金会导致一种情况：如果多个用户同时满足条件，例如许多用户接近止损/清算，那么任何单个用户都可以为所有这些用户提取资金，可能通过一个或多个包含针对不同用户的多条指令的交易来完成。
