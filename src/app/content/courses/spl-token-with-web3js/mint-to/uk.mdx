@@ -1,0 +1,77 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкція Mint To
+
+Створює нові токени та депонує їх на вказаний рахунок. Цю операцію може виконувати лише орган емісії.
+
+Перш ніж ми зможемо емітувати будь-який токен, нам потрібно вже мати:
+- Ініціалізований рахунок `Mint`, для якого ми маємо `mintAuthority`
+- Ініціалізований рахунок `Token` або рахунок `Associated Token`, на який ми збираємося емітувати токени
+
+> Кількість токенів, які ми емітуємо, "нормалізована" для десяткових знаків. Це означає, що якщо ми хочемо емітувати 1 токен, який має 6 десяткових знаків, нам потрібно буде фактично вказати `1e6` як кількість
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Використовуючи лише "сиру" інструкцію без будь-якої абстракції, емісія токена виглядатиме так:
+
+```ts
+const destination = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    destination.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Mint tokens to ATA 
+const mintToInstruction = createMintToInstruction(
+    mint.publicKey, // mint
+    tokenAccount, // destination
+    keypair.publicKey, // mint authority
+    1_000e6, // amount of tokens
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    mintToInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and tokens minted! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+Ось як ті самі інструкції виглядатимуть з абстракцією за допомогою інструкції `mintTo()`:
+
+```ts
+const destination = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    destination.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await mintTo(
+    connection,
+    keypair,
+    mint,
+    ata.address,
+    keypair.publicKey,
+    1e6,
+);
+
+console.log(`Succesfully Minted!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

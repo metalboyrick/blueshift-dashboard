@@ -1,0 +1,242 @@
+# Позика
+
+Інструкція `loan` є першою половиною нашої системи миттєвих позик. Вона виконує чотири критичні кроки для забезпечення безпечного та атомарного кредитування:
+1. Десеріалізує динамічну кількість рахунків на основі кількості позик, які користувач хоче взяти.
+2. Зберігає всі ці позики в "чернетковому" рахунку `loan` та обчислює кінцевий баланс, який повинен мати `protocol_token_account`.
+3. Перевіряє повернення: використовує інтроспекцію інструкцій для підтвердження того, що дійсна інструкція повернення існує в кінці транзакції.
+4. Переказує кошти: переміщує всі запитані суми позик із скарбниці протоколу на рахунок позичальника.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+- `borrower`: користувач, який запитує миттєву позику. Має бути підписантом.
+- `protocol`: адреса, похідна від програми (PDA), яка володіє пулом ліквідності протоколу для конкретної комісії.
+- `loan`: "чернетковий" рахунок, який використовується для збереження `protocol_token_account` та кінцевого `balance`, який він повинен мати. Має бути змінюваним.
+- `token_program`: програма токенів. Має бути виконуваною.
+
+Ось реалізація:
+
+```rust
+pub struct LoanAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub protocol: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub instruction_sysvar: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, protocol, loan, instruction_sysvar, _token_program, _system_program, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        if instruction_sysvar.key() != &INSTRUCTIONS_ID {
+            return Err(ProgramError::UnsupportedSysvar);
+        }
+
+        // Verify that the number of token accounts is valid
+        if (token_accounts.len() % 2).ne(&0) || token_accounts.len().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        if loan.try_borrow_data()?.len().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self {
+            borrower,
+            protocol,
+            loan,
+            instruction_sysvar,
+            token_accounts,
+        })
+    }
+}
+```
+
+Оскільки `token_accounts` є динамічним масивом рахунків, ми передаємо їх подібно до `remaining_accounts`.
+
+Щоб забезпечити правильність структури, ми додаємо валідацію. Кожна позика потребує `protocol_token_account` та `borrower_token_account`, тому ми повинні перевірити, що масив містить рахунки і що кількість рахунків ділиться на два.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Наша програма миттєвих позик повинна обробляти змінну кількість даних залежно від того, скільки позик користувач хоче взяти одночасно. Ось структура даних, яка нам потрібна:
+- `bump`: один байт, який використовується для отримання PDA протоколу без необхідності використовувати функцію `find_program_address()`.
+- `fee`: ставка комісії (у базисних пунктах), яку користувачі сплачують за позику.
+- `amounts`: динамічний масив сум позик, оскільки користувач може запитати кілька позик в одній транзакції.
+
+Ось реалізація:
+
+```rust
+pub struct LoanInstructionData<'a> {
+    pub bump: [u8; 1],
+    pub fee: u16,
+    pub amounts: &'a [u64],
+}
+
+impl<'a> TryFrom<&'a [u8]> for LoanInstructionData<'a> {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // Get the bump
+        let (bump, data) = data.split_first().ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Get the fee
+        let (fee, data) = data.split_at_checked(size_of::<u16>()).ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Verify that the data is valid
+        if data.len() % size_of::<u64>() != 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // Get the amounts
+        let amounts: &[u64] = unsafe {
+            core::slice::from_raw_parts(
+                data.as_ptr() as *const u64,
+                data.len() / size_of::<u64>()
+            )
+        };
+
+        Ok(Self { bump: [*bump], fee: u16::from_le_bytes(fee.try_into().map_err(|_| ProgramError::InvalidInstructionData)?), amounts })
+    }
+}
+```
+
+Ми використовуємо функції `split_first` та `split_at_checked` для послідовного вилучення `bump` та `fee` з даних інструкції, що дозволяє нам обробляти решту байтів і безпосередньо перетворювати їх у зріз `u64` за допомогою функції `core::slice::from_raw_parts()` для ефективного розбору.
+
+> Отримання адреси програми (PDA) `protocol` з `fee` створює ізольовані пули ліквідності для кожного рівня комісії, усуваючи потребу зберігати дані про комісії в облікових записах. Цей дизайн є безпечним та оптимальним, оскільки кожна PDA з конкретною комісією володіє лише ліквідністю, пов'язаною з цією ставкою комісії. Якщо хтось передає недійсну комісію, відповідний токен-рахунок для цієї категорії комісії буде порожнім, що автоматично призведе до невдачі переказу через недостатність коштів.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Після десеріалізації `instruction_data` та `accounts`, ми перевіряємо, що кількість `amounts` дорівнює кількості `token_accounts` поділеній на два. Це гарантує, що у нас є правильна кількість облікових записів для запитаних позик.
+
+```rust
+pub struct Loan<'a> {
+    pub accounts: LoanAccounts<'a>,
+    pub instruction_data: LoanInstructionData<'a>,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = LoanAccounts::try_from(accounts)?;
+        let instruction_data = LoanInstructionData::try_from(data)?;
+
+        // Verify that the number of amounts matches the number of token accounts
+        if instruction_data.amounts.len() != accounts.token_accounts.len() / 2 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+```
+
+Далі ми створюємо `signer_seeds`, необхідний для переказу токенів позичальнику та створення облікового запису `loan`. Розмір
+цього облікового запису обчислюється за допомогою `size_of::<LoanData>() * self.instruction_data.amounts.len()`, щоб гарантувати, що він може
+зберігати всі дані про позику для транзакції.
+
+```rust
+impl<'a> Loan<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Get the fee
+        let fee = self.instruction_data.fee.to_le_bytes();
+
+        // Get the signer seeds
+        let signer_seeds = [
+            Seed::from("protocol".as_bytes()),
+            Seed::from(&fee),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signer_seeds = [Signer::from(&signer_seeds)];
+
+        // Open the LoanData account and create a mutable slice to push the Loan struct to it
+        let size = size_of::<LoanData>() * self.instruction_data.amounts.len();
+        let lamports = Rent::get()?.minimum_balance(size);
+
+        CreateAccount {
+            from: self.accounts.borrower,
+            to: self.accounts.loan,
+            lamports,
+            space: size as u64,
+            owner: &ID,
+        }.invoke()?;
+
+        //..
+    }
+}
+```
+
+Потім ми створюємо змінюваний зріз із даних облікового запису `loan`. Ми заповнимо цей зріз у циклі `for`, обробляючи кожну позику та відповідний переказ:
+
+```rust
+let mut loan_data = self.accounts.loan.try_borrow_mut_data()?;
+let loan_entries = unsafe {
+    core::slice::from_raw_parts_mut(
+        loan_data.as_mut_ptr() as *mut LoanData,
+        self.instruction_data.amounts.len()
+    )
+};
+```
+
+Нарешті, ми проходимо через усі позики. У кожній ітерації ми отримуємо `protocol_token_account` та `borrower_token_account`, обчислюємо баланс, належний протоколу, зберігаємо ці дані в обліковому записі `loan` і переказуємо токени.
+
+```rust
+for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
+    let protocol_token_account = &self.accounts.token_accounts[i * 2];
+    let borrower_token_account = &self.accounts.token_accounts[i * 2 + 1];
+
+    // Get the balance of the protocol's token account and add the fee to it so we can save it to the loan account
+    let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+    let balance_with_fee = balance.checked_add(
+        amount.checked_mul(self.instruction_data.fee as u64)
+            .and_then(|x| x.checked_div(10_000))
+            .ok_or(ProgramError::InvalidInstructionData)?
+    ).ok_or(ProgramError::InvalidInstructionData)?;
+
+    // Push the Loan struct to the loan account
+    loan_entries[i] = LoanData {
+        protocol_token_account: *protocol_token_account.key(),
+        balance: balance_with_fee,
+    };
+
+    // Transfer the tokens from the protocol to the borrower
+    Transfer {
+        from: protocol_token_account,
+        to: borrower_token_account,
+        authority: self.accounts.protocol,
+        amount: *amount,
+    }.invoke_signed(&signer_seeds)?;
+}
+```
+
+Наприкінці ми використовуємо інтроспекцію інструкцій для виконання необхідних перевірок. Ми перевіряємо, що остання інструкція в транзакції є інструкцією `repay` і що вона використовує той самий обліковий запис `loan`, що й наша поточна інструкція `loan`.
+
+```rust
+// Introspecting the Repay instruction
+let instruction_sysvar = unsafe { Instructions::new_unchecked(self.accounts.instruction_sysvar.try_borrow_data()?) };
+let num_instructions = instruction_sysvar.num_instructions();
+let instruction = instruction_sysvar.load_instruction_at(num_instructions as usize - 1)?;
+
+if instruction.get_program_id() != &crate::ID {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { *(instruction.get_instruction_data().as_ptr()) } != *Repay::DISCRIMINATOR {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts.loan.key() {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+> Використання облікового запису `loan` та структурування інтроспекції інструкцій таким чином гарантує, що нам не потрібно виконувати жодної інтроспекції в інструкції `repay`, оскільки всі перевірки погашення будуть оброблені обліковим записом `loan`.

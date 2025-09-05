@@ -1,0 +1,247 @@
+{
+  "challenges": {
+    "anchor-memo": {
+      "title": "Anchor Memo",
+      "requirements": {
+        "log": {
+          "title": "Завдання 1: Записує `instruction_data` до журналу програми"
+        }
+      }
+    },
+    "anchor-vault": {
+      "title": "Anchor Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Завдання 1: Прийняття депозитів"
+        },
+        "withdraw": {
+          "title": "Завдання 2: Дозвіл на зняття коштів"
+        }
+      }
+    },
+    "anchor-escrow": {
+      "title": "Anchor Escrow",
+      "pages": {
+        "make": {
+          "title": "Створити"
+        },
+        "take": {
+          "title": "Прийняти"
+        },
+        "refund": {
+          "title": "Повернути"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Завдання 1: Створення угоди обміну через escrow"
+        },
+        "take": {
+          "title": "Завдання 2: Прийняття угоди обміну через escrow"
+        },
+        "refund": {
+          "title": "Завдання 3: Скасування угоди обміну через escrow"
+        }
+      }
+    },
+    "anchor-flash-loan": {
+      "title": "Anchor Flash Loan",
+      "pages": {
+        "borrow": {
+          "title": "Позичити"
+        },
+        "repay": {
+          "title": "Повернути"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "Завдання: Позичання та повернення Flash Loan"
+        }
+      }
+    },
+    "pinocchio-memo": {
+      "title": "Pinocchio Memo",
+      "requirements": {
+        "log": {
+          "title": "Завдання 1: Записує дані інструкції до журналу програми"
+        }
+      }
+    },
+    "pinocchio-vault": {
+      "title": "Pinocchio Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Завдання 1: Прийняття депозитів"
+        },
+        "withdraw": {
+          "title": "Завдання 2: Дозвіл на зняття коштів"
+        }
+      }
+    },
+    "pinocchio-escrow": {
+      "title": "Pinocchio Escrow",
+      "pages": {
+        "make": {
+          "title": "Створити"
+        },
+        "take": {
+          "title": "Прийняти"
+        },
+        "refund": {
+          "title": "Повернути"
+        },
+        "conclusion": {
+          "title": "Висновок"
+        }
+      },
+      "requirements": {
+        "make": {
+          "title": "Завдання 1: Створення угоди обміну через escrow"
+        },
+        "take": {
+          "title": "Завдання 2: Прийняття угоди обміну через escrow"
+        },
+        "refund": {
+          "title": "Завдання 3: Скасування угоди обміну через escrow"
+        }
+      }
+    },
+    "pinocchio-amm": {
+      "title": "Pinocchio AMM",
+      "pages": {
+        "initialize": {
+          "title": "Ініціалізація"
+        },
+        "deposit": {
+          "title": "Депозит"
+        },
+        "withdraw": {
+          "title": "Зняття"
+        },
+        "swap": {
+          "title": "Обмін"
+        },
+        "conclusion": {
+          "title": "Висновок"
+        }
+      },
+      "requirements": {
+        "initialize": {
+          "title": "Завдання 1: Ініціалізація Amm"
+        },
+        "deposit": {
+          "title": "Завдання 2: Внесення ліквідності"
+        },
+        "withdraw": {
+          "title": "Завдання 3: Виведення ліквідності"
+        },
+        "swap": {
+          "title": "Завдання 4: Обмін токенів"
+        }
+      }
+    },
+    "pinocchio-secp256r1-vault": {
+      "title": "Pinocchio Secp256r1 Vault",
+      "requirements": {
+        "deposit": {
+          "title": "Завдання 1: Прийняття депозитів"
+        },
+        "withdraw": {
+          "title": "Завдання 2: Дозвіл на зняття коштів"
+        }
+      }
+    },
+    "pinocchio-flash-loan": {
+      "title": "Pinocchio Flash Loan",
+      "pages": {
+        "borrow": {
+          "title": "Позичити"
+        },
+        "repay": {
+          "title": "Повернути"
+        }
+      },
+      "requirements": {
+        "flash_loan": {
+          "title": "Завдання: Позичання та повернення Flash Loan"
+        }
+      }
+    },
+    "assembly-memo": {
+      "title": "Assembly Memo",
+      "requirements": {
+        "log": {
+          "title": "Завдання 1: Тестування Memo"
+        },
+        "log_different": {
+            "title": "Завдання 2: Тестування Memo з різними вхідними даними"
+        }
+      }
+    },
+    "assembly-slippage": {
+      "title": "Assembly Slippage",
+      "requirements": {
+        "slippage": {
+          "title": "Завдання 1: Тестування Slippage з SPL-Token"
+        },
+        "slippage_failure": {
+          "title": "Завдання 2: Тестування невдачі Slippage"
+        },
+        "slippage_token2022": {
+          "title": "Завдання 3: Тестування Slippage з Token2022"
+        }
+      }
+    },
+    "assembly-timeout": {
+      "title": "Assembly Timeout",
+      "requirements": {
+        "timeout": {
+          "title": "Завдання 1: Тестування Timeout"
+        },
+        "timeout_failure": {
+          "title": "Завдання 2: Тестування невдачі Timeout"
+        }
+      }
+    },
+    "typescript-mint-an-spl-token": {
+      "title": "Створення SPL токена",
+      "requirements": {
+        "create_mint_account": {
+          "title": "Завдання 1: Створення токен-мінту"
+        },
+        "initialize_mint": {
+          "title": "Завдання 2: Ініціалізація мінту"
+        },
+        "create_token_account": {
+          "title": "Завдання 3: Створення токен-акаунту"
+        },
+        "mint_to": {
+          "title": "Завдання 4: Карбування токенів"
+        }
+      }
+    },
+    "pinocchio-quantum-vault": {
+      "title": "Pinocchio Quantum Vault",
+      "pages": {
+        "open": {
+          "title": "Відкрити сховище"
+        },
+        "split": {
+          "title": "Розділити сховище"
+        },
+        "close": {
+          "title": "Закрити сховище"
+        }
+      },
+      "requirements": {
+        "open": {
+          "title": "Завдання 1: Відкриття квантового сховища"
+        },
+        "close": {
+          "title": "Завдання 2: Закриття квантового сховища"
+        }
+      }
+    }
+  }
+}

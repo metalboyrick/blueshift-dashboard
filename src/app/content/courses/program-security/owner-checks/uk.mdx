@@ -1,0 +1,115 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Перевірки власника
+
+Перевірки власника є першою лінією захисту в безпеці програм Solana. Вони підтверджують, що обліковий запис, переданий у обробник інструкцій, дійсно належить очікуваній програмі, запобігаючи підміні зловмисниками облікових записів, що виглядають схоже.
+
+Кожен обліковий запис у структурі `AccountInfo` Solana містить поле власника, яке визначає, яка програма контролює цей обліковий запис. Перевірки власника гарантують, що це поле `owner` відповідає очікуваному `program_id` перш ніж ваша програма довірятиме даним облікового запису.
+
+Структура `AccountInfo` містить кілька полів, включаючи власника, який представляє програму, що володіє обліковим записом. Перевірки власника гарантують, що це поле `owner` у `AccountInfo` відповідає очікуваному `program_id`.
+
+Без перевірок власника зловмисник може створити ідеальну "копію" структури даних вашого облікового запису, включаючи правильний дискримінатор та всі потрібні поля, і використовувати її для маніпулювання інструкціями, які покладаються на валідацію даних. Це схоже на створення підробленого посвідчення особи, яке виглядає ідентично справжньому, але контролюється неправильним органом.
+
+> Важливим винятком є випадки, коли ви змінюєте внутрішні дані облікового запису. У таких випадках середовище виконання Solana автоматично запобігає запису іншими програмами в облікові записи, якими вони не володіють. Але для операцій читання та логіки валідації ви відповідаєте самостійно.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньте цю вразливу інструкцію, яка виконує логіку на основі `owner` у `program_account`:
+
+```rust
+#[program]
+pub mod insecure_check{
+    use super::*;
+    //..
+
+    pub fn instruction(ctx: Context<Instruction>) -> Result<()> {
+        let account_data = ctx.accounts.program_account.try_borrow_data()?;
+        let mut account_data_slice: &[u8] = &account_data;
+        let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+        if account_state.owner != ctx.accounts.owner.key() {
+            return Err(ProgramError::InvalidArgument.into());
+        }
+
+        //..do something
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Тип `UncheckedAccount` — це спосіб Anchor сказати "Я нічого не перевіряю, поводьтеся з цим надзвичайно обережно". Хоча дані облікового запису можуть ідеально десеріалізуватися і виглядати легітимно, відсутність перевірки власника створює критичну вразливість.
+
+Зловмисник може створити власний обліковий запис з ідентичною структурою даних і передати його у вашу інструкцію. Ваша програма охоче перевірить поле власності, але оскільки зловмисник контролює обліковий запис, вони можуть робити все, що завгодно, всередині інструкції.
+
+Виправлення просте, але важливе: завжди перевіряйте, що обліковий запис належить вашій програмі, перш ніж довіряти його вмісту.
+
+Це дуже просто з `Anchor`, оскільки можна виконати цю перевірку безпосередньо в структурі облікового запису, просто змінивши `UncheckedAccount` на `ProgramAccount` ось так:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+Або ви можете додати обмеження облікового запису `owner` ось так:
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub owner: Signer<'info>,
+   #[account(mut, owner = ID)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+
+}
+```
+
+Або ви можете просто додати перевірку власника в інструкції, використовуючи перевірку `ctx.accounts.program_account.owner` ось так:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ID {
+        return Err(ProgramError::IncorrectProgramId.into());
+    }
+    
+    //..do something
+
+    Ok(())
+}
+```
+
+Додавши цю перевірку, обробник інструкцій продовжить роботу, лише якщо обліковий запис має правильний `program_id`. Якщо обліковий запис не належить нашій програмі, транзакція завершиться невдачею.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio, оскільки ми не маємо можливості додавати перевірки безпеки безпосередньо всередині структури облікового запису, ми змушені робити це в логіці інструкцій.
+
+Ми можемо зробити це дуже подібно до anchor, використовуючи функцію `is_owned_by()` ось так:
+
+```rust
+if !self.accounts.owner.is_owned_by(ID) {
+    return Err(ProgramError::IncorrectProgramId.into());
+}
+```

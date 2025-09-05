@@ -1,0 +1,112 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкції з надання та скасування дозволів
+
+Надання дозволу (Approve) дає делегату право переказувати певну кількість токенів від імені власника рахунку. Це дозволяє здійснювати програмні перекази токенів без надання повного контролю над рахунком.
+
+> Ми встановлюємо "схвалену" суму, і делегат може переказувати лише до цієї суми
+
+Скасування дозволу (Revoke) видаляє поточні повноваження делегата над рахунком, повертаючи повний контроль власнику рахунку.
+
+> Негайно скасовує будь-яке існуюче делегування, і лише власник рахунку може скасувати делегування (не сам делегат)
+
+Перш ніж ми зможемо делегувати або скасувати делегування для будь-якого токен-рахунку, нам потрібно вже мати:
+- Ініціалізований `Mint` рахунок
+- Ініціалізований `Token` рахунок або `Associated Token` рахунок, над яким ми збираємося отримати контроль
+
+> Кількість токенів, які ми схвалюємо, "нормалізується" для десяткових знаків. Це означає, що якщо ми хочемо схвалити 1 токен, який має 6 десяткових знаків, нам потрібно буде фактично вказати `1e6` як суму
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Використовуючи лише "сиру" інструкцію без будь-якої абстракції, схвалення токена виглядатиме так:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    tokenAccount.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Delegate an ATA 
+const approveInstruction = createApproveInstruction(
+    tokenAccount // account
+    delegate.publicKey, // delegate
+    keypair.publickey // owner
+    1e6, // amount of tokens
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    approveInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and delegated! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Використовуючи лише "сиру" інструкцію без будь-якої абстракції, скасування дозволу на токен виглядатиме так:
+
+```ts
+// Revoke the delegate of an ATA 
+const revokeInstruction = createRevokeInstruction(
+    tokenAccount // account
+    keypair.publickey // owner
+);
+
+const transaction = new Transaction().add(revokeInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token account delegate revoked! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+Ось як ті самі інструкції виглядатимуть з абстракцією за допомогою інструкції `approve()`:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    tokenAccount.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await approve(
+    connection,
+    keypair,
+    ata.address, // token Account
+    delegate-publicKey, // delegate
+    keypair.publicKey, // owner
+    1e6, // amount
+);
+
+console.log(`Succesfully Delegated!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+Ось як ті самі інструкції виглядатимуть з абстракцією за допомогою інструкції `revoke()`:
+
+```ts
+let tx = await revoke(
+    connection,
+    keypair,
+    ata.address, // token Account
+    keypair.publicKey, // owner
+);
+
+console.log(`Succesfully Revoked Delegate!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

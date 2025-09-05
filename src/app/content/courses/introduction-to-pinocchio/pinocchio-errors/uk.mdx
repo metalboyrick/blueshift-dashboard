@@ -1,0 +1,86 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Помилки
+
+Чіткі, описові типи помилок є важливими в програмах Solana, створених за допомогою Pinocchio. Вони полегшують налагодження та надають змістовний зворотний зв'язок користувачам і клієнтам, які взаємодіють з вашою програмою.
+
+### Перелік PinocchioError
+
+При визначенні користувацьких типів помилок у Rust ви маєте кілька варіантів, таких як `thiserror`, `anyhow`, та `failure`. Для програм Pinocchio, `thiserror` є найкращим вибором, тому що:
+- Дозволяє анотувати кожен варіант помилки зрозумілим для людини повідомленням за допомогою атрибута `#[error("...")]`.
+- Автоматично реалізує трейти `core::error::Error` та `Display`, що робить ваші помилки легкими для виведення та налагодження.
+- Усі повідомлення про помилки та форматування перевіряються під час компіляції, зменшуючи ризик проблем під час виконання.
+- Найважливіше, `thiserror` підтримує середовища `no_std` при вимкненні його типових функцій, що необхідно для програм Pinocchio.
+
+Щоб використовувати thiserror у програмі Pinocchio, додайте його до вашого `Cargo.toml` таким чином:
+
+```
+[dependencies]
+thiserror = { version = "1.0", default-features = false }
+```
+
+Ось як ви можете визначити користувацький тип помилки для вашої програми Pinocchio:
+
+```rust
+use {
+    num_derive::FromPrimitive,
+    pinocchio::program_error::{ProgramError, ToStr},
+    thiserror::Error,
+};
+
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum PinocchioError {
+    // 0
+    /// Lamport balance below rent-exempt threshold.
+    #[error("Lamport balance below rent-exempt threshold")]
+    NotRentExempt,
+}
+```
+
+Кожен варіант анотований повідомленням, яке буде відображатися при виникненні помилки.
+
+Щоб повертати ваші користувацькі помилки з інструкцій Solana, реалізуйте `From<PinocchioError>` для `ProgramError`:
+
+```rust
+impl From<PinocchioError> for ProgramError {
+    fn from(e: PinocchioError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+```
+
+Це дозволяє вам використовувати оператор `?` та безперешкодно повертати ваші користувацькі помилки.
+
+### Десеріалізація помилок з необроблених значень
+
+Якщо вам потрібно перетворити необроблені коди помилок (наприклад, з логів або міжпрограмних викликів) назад у ваш перелік помилок, реалізуйте `TryFrom<u32>`:
+
+```rust
+impl TryFrom<u32> for PinocchioError {
+    type Error = ProgramError;
+    fn try_from(error: u32) -> Result<Self, Self::Error> {
+        match error {
+            0 => Ok(PinocchioError::NotRentExempt),
+            _ => Err(ProgramError::InvalidArgument),
+        }
+    }
+}
+```
+
+> Це необов'язково, але корисно для розширеної обробки помилок та тестування.
+
+### Зрозумілі для людини помилки
+
+Для логування та налагодження вам може знадобитися рядкове представлення ваших помилок. Реалізація трейту `ToStr` дозволяє це зробити:
+
+```rust
+impl ToStr for PinocchioError {
+    fn to_str<E>(&self) -> &'static str {
+        match self {
+            PinocchioError::NotRentExempt => "Error: Lamport balance below rent-exempt threshold",
+        }
+    }
+}
+```
+
+> Цей крок також необов'язковий, але він може зробити звітування про помилки більш зручним для користувача.

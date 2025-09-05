@@ -1,0 +1,113 @@
+# Повернення позики
+
+Інструкція `repay` є другою частиною нашої системи флеш-позик. Завдяки дизайну інструкції `loan`, логіка для `repay` досить проста, оскільки вона повинна лише:
+1. Перевірити, що всі баланси були правильно повернуті, використовуючи рахунок `loan`.
+2. Закрити рахунок `loan`, оскільки він більше не потрібен.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+- `borrower`: Користувач, який запитав флеш-позику. Він надає ламports для створення рахунку `loan`. Має бути змінюваним.
+- `loan`: Тимчасовий рахунок, який використовується для зберігання `protocol_token_account` та необхідного кінцевого `balance`. Має бути змінюваним, оскільки він буде закритий наприкінці інструкції.
+
+Ось реалізація:
+
+```rust
+pub struct RepayAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, loan, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self {
+            borrower,
+            loan,
+            token_accounts,
+        })
+    }
+}
+```
+
+Поле `token_accounts` є динамічним масивом рахунків, що представляють токен-рахунки протоколу, пов'язані з позикою позичальника.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Дані інструкції не потрібні, оскільки ми використовуємо поле `balance` у рахунку `loan` для перевірки, чи була позика повернута.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Ми починаємо з розбору рахунків у структуру `RepayAccounts`.
+
+```rust
+pub struct Repay<'a> {
+    pub accounts: RepayAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let accounts = RepayAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts })
+    }
+}
+
+```
+
+Далі ми перевіряємо, чи всі позики були повернуті. Ми робимо це, отримуючи кількість позик з рахунку `loan` та перебираючи їх. Для кожної позики ми перевіряємо, що `protocol_token_account` правильний і що його баланс більший або дорівнює позиченій сумі.
+
+```rust
+impl<'a> Repay<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        let loan_data = self.accounts.loan.try_borrow_data()?;
+        let loan_num = loan_data.len() / size_of::<LoanData>();
+
+        if loan_num.ne(&self.accounts.token_accounts.len()) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Process each pair of token accounts (protocol, borrower) with corresponding amounts
+        for i in 0..loan_num {
+            // Validate that protocol_ata is the same as the one in the loan account
+            let protocol_token_account = &self.accounts.token_accounts[i];
+
+            if unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>()) as *const [u8; 32]) } != *protocol_token_account.key() {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            // Check if the loan is already repaid
+            let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+            let loan_balance = unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>() + size_of::<[u8; 32]>()) as *const u64) };
+
+            if balance < loan_balance {
+                return Err(ProgramError::InvalidAccountData);
+            }
+        }
+
+        //..
+    }
+}
+```
+
+Потім ми можемо закрити рахунок `loan` і повернути орендну плату, оскільки він більше не потрібен:
+
+```rust
+drop(loan_data);
+// Close the loan account and give back the lamports to the borrower
+unsafe {
+    *self.accounts.borrower.borrow_mut_lamports_unchecked() += *self.accounts.loan.borrow_lamports_unchecked();
+    // There is no need to manually zero out lamports in the loan account because it is done in the close_unchecked function
+    self.accounts.loan.close_unchecked();
+}
+```
+
+> Як бачите, з метою оптимізації та за дизайном, погашення не відбувається в цій інструкції. Це тому, що `borrower` може вибрати погашення токен-рахунку в іншій інструкції, наприклад, при виконанні обміну або серії CPI зі своєї програми арбітражу.

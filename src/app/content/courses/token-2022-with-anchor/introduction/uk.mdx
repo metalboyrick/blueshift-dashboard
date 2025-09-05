@@ -1,0 +1,128 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Програма Token2022
+
+![Token 2022 з Anchor](/graphics/course-banners/token-2022-with-anchor.png)
+
+Програма Token2022, також відома як Token Extensions, є розширеним набором функціональності, що надається програмою Token.
+
+Якщо ви хочете дізнатися більше про додаткові функції та відмінності від програми Legacy token, перейдіть до [цього курсу](/uk/courses/token-2022-program)
+
+> Якщо ви не знайомі з anchor, рекомендуємо спочатку пройти наш курс [Anchor для початківців](/uk/courses/anchor-for-dummies).
+
+В anchor все, що пов'язано з токенами, можна знайти у крейті `anchor-spl`. З цієї причини, після ініціалізації робочого простору `Anchor` ми можемо просто зробити:
+
+```bash
+cargo add anchor-spl
+```
+
+> Версія `anchor-spl` повинна бути такою ж, як і версія нашого крейту `anchor-lang`. А розширення token2022 доступні лише починаючи з версії 0.30.0.
+
+Не забудьте також оновити функцію `idl-build`, яку можна знайти в розділі `[features]` файлу `Cargo.toml` нашої програми, на `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`
+
+<ArticleSection name="Mint та Token акаунти" id="mint-and-token-accounts" level="h2" />
+
+Якщо ви знайомі з `Anchor`, то знаєте, що вони мають набір макросів, які допомагають користувачу абстрагуватися від багатьох складнощів, пов'язаних з ініціалізацією акаунтів.
+
+Те саме працює тут для акаунтів `Mint`, `Token` та `Associated Token`.
+
+### Акаунт Mint з розширеннями
+
+Оскільки акаунти `Mint` з розширеннями мають інший розмір і належать іншій програмі, `Anchor` створив новий тип акаунтів, який працює незалежно від того, чи є акаунт `Mint` з програми Legacy Token чи з програми Token2022.
+
+Щоб використовувати їх, нам просто потрібно імпортувати як `TokenInterface`, так і `Mint` з `anchor_spl::token_interface` таким чином:
+
+```rust
+use anchor_spl::token_interface::{TokenInterface, Mint};
+```
+
+Після цього ми можемо просто зробити `pub mint: InterfaceAccount<'info, Mint>,` і вказати, що хочемо, щоб карбування використовувало обліковий запис token_program, який ми маємо в структурі облікового запису, ось так: `mint::token_program = token_program` і все готово!
+
+> Інтерфейс токена надає загальний спосіб взаємодії з обома типами облікових записів без необхідності обробляти відмінності в їхній логіці десеріалізації, зберігаючи при цьому типову безпеку та належну валідацію.
+
+Перш ніж заглиблюватися в те, як додавати розширення до облікового запису карбування, ось як створити карбування за допомогою програми Token2022:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+На щастя, `Anchor` нас підтримує і створив деякі макроси для додавання найпопулярніших розширень безпосередньо на етапі ініціалізації, ось так:
+
+```rust
+#[account(
+    // ...init
+    extensions::metadata_pointer::authority = <target_account>,
+    extensions::metadata_pointer::metadata_address = <target_account>,
+    extensions::group_pointer::authority = <target_account>,
+    extensions::group_pointer::group_address = <target_account>,
+    extensions::group_member_pointer::authority = <target_account>,
+    extensions::group_member_pointer::member_address = <target_account>,
+    extensions::transfer_hook::authority = <target_account>,
+    extensions::transfer_hook::program_id = <target_pubkey>
+    extensions::close_authority::authority = <target_account>,
+    extensions::permanent_delegate::delegate = <target_account>,
+)]
+pub mint: InterfaceAccount<'info, Mint>,
+```
+
+### Асоційований обліковий запис токена з розширеннями
+
+Облікові записи `Associated Token` за замовчуванням мають розширення `ImmutableOwner`. Тому єдина різниця між створенням Legacy або Token2022 `Token Account` - це просто використання `Interface Account`.
+
+Ось як створити асоційований обліковий запис токена:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateAssociatedToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program,
+    )]
+    pub associated_token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+### Обліковий запис токена з розширеннями
+
+Облікові записи `Token` за замовчуванням не мають жодних розширень, і для них немає макросів, які б нам допомогли. Тому, використовуючи макроси, ми можемо створити лише звичайний обліковий запис `Token` Token2022.
+
+Ось як створити обліковий запис токена:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+        token::token_program = token_program,
+    )]
+    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```

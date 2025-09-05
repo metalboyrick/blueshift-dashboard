@@ -1,0 +1,91 @@
+# Запозичення
+
+Інструкція запозичення є першою половиною нашої системи флеш-кредитування. Вона виконує три критичні кроки для забезпечення безпечного та атомарного кредитування:
+1. Переказ коштів: Переміщення запитаних `borrow_amount` з казначейства протоколу на рахунок позичальника
+2. Перевірка погашення: Використання інтроспекції інструкцій для підтвердження того, що дійсна інструкція погашення існує в кінці транзакції
+
+<ArticleSection name="Переказ коштів" id="fund-transfer" level="h2" />
+
+Спочатку ми реалізуємо фактичний переказ коштів з належною валідацією:
+
+```rust
+// Make sure we're not sending in an invalid amount that can crash our Protocol
+require!(borrow_amount > 0, ProtocolError::InvalidAmount);
+
+// Derive the Signer Seeds for the Protocol Account
+let seeds = &[
+    b"protocol".as_ref(),
+    &[ctx.bumps.protocol]
+];
+let signer_seeds = &[&seeds[..]];
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(), 
+        Transfer {
+            from: ctx.accounts.protocol_ata.to_account_info(),
+            to: ctx.accounts.borrower_ata.to_account_info(),
+            authority: ctx.accounts.protocol.to_account_info(),
+        }, 
+        signer_seeds
+    ), 
+    borrow_amount
+)?;
+```
+
+Цей код гарантує, що ми переказуємо дійсну суму та використовуємо програмно похідну адресу (PDA) протоколу для авторизації переказу.
+
+<ArticleSection name="Інтроспекція інструкцій" id="instruction-introspection" level="h2" />
+
+Тепер настає критично важлива для безпеки частина: використання інтроспекції інструкцій для перевірки структури транзакції та забезпечення погашення нашого флеш-кредиту.
+
+Ми починаємо з доступу до системної змінної `instructions`, яка містить інформацію про всі інструкції в поточній транзакції:
+
+```rust
+/*
+    Instruction Introspection
+
+    This is the primary means by which we secure our program,
+    enforce atomicity while making a great UX for our users.
+*/
+
+let ixs = ctx.accounts.instructions.to_account_info();
+```
+
+Нарешті, ми виконуємо найважливішу перевірку: переконуємося, що остання інструкція в транзакції є дійсною інструкцією погашення:
+- Ми починаємо з перевірки позиції інструкції запозичення, щоб переконатися, що вона єдина
+- Потім ми перевіряємо кількість інструкцій і переконуємося, що ми завантажуємо останню інструкцію транзакції
+- Далі ми перевіряємо, що це інструкція погашення, перевіряючи ідентифікатор програми та дискримінатор інструкції
+- Ми завершуємо перевіркою того, що ATA, передані в інструкції погашення, такі ж, як і ті, що ми передаємо в нашій інструкції `Borrow`
+
+```rust
+/*
+    Repay Instruction Check
+
+    Make sure that the last instruction of this transaction is a repay instruction
+*/
+
+// Check if this is the first instruction in the transaction.
+let current_index = load_current_index_checked(&ctx.accounts.sysvar_instructions)?;
+require_eq!(current_index, 0, ProtocolError::InvalidIx); 
+
+// Check how many instruction we have in this transaction
+let instruction_sysvar = ixs.try_borrow_data()?;
+let len = u16::from_le_bytes(instruction_sysvar[0..2].try_into().unwrap());
+
+// Ensure we have a repay ix
+if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
+
+    // Instruction checks
+    require_keys_eq!(repay_ix.program_id, ID, ProtocolError::InvalidProgram);
+    require!(repay_ix.data[0..8].eq(instruction::Repay::DISCRIMINATOR), ProtocolError::InvalidIx);
+
+    // We could check the Wallet and Mint separately but by checking the ATA we do this automatically
+    require_keys_eq!(repay_ix.accounts.get(3).ok_or(ProtocolError::InvalidBorrowerAta)?.pubkey, ctx.accounts.borrower_ata.key(), ProtocolError::InvalidBorrowerAta);
+    require_keys_eq!(repay_ix.accounts.get(4).ok_or(ProtocolError::InvalidProtocolAta)?.pubkey, ctx.accounts.protocol_ata.key(), ProtocolError::InvalidProtocolAta);
+
+} else {
+    return Err(ProtocolError::MissingRepayIx.into());
+}
+```

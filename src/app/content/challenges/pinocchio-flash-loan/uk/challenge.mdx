@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Флеш-позика Піноккіо
+
+![Флеш-позика Піноккіо](/graphics/challenge-banners/pinocchio-flash-loan.png)
+
+Інтроспекція інструкцій — це потужна функція, яка дозволяє програмі блокчейну вивчати та аналізувати інші інструкції в межах одного пакету транзакцій. Це включає інструкції, які ще не були виконані, надаючи вашій програмі можливість "заглядати наперед" і приймати рішення на основі того, що відбудеться пізніше в транзакції.
+
+Уявіть це як рентгенівський зір для транзакцій: ваша програма може бачити крізь усю транзакцію, щоб зрозуміти повну послідовність операцій перед тим, як вирішити, як діяти далі.
+
+Найпереконливішим застосуванням інтроспекції інструкцій є флеш-позики. Це унікальний тип позики, який існує лише в межах однієї транзакції.
+
+Ось як працюють флеш-позики:
+- **Позичання**: На початку транзакції ви можете миттєво позичити велику суму капіталу, використовуючи інструкцію `loan`
+- **Використання**: Ви можете використовувати цей позичений капітал для торгівлі, арбітражу чи інших операцій у межах тієї ж транзакції
+- **Повернення**: Перед завершенням транзакції ви повинні повернути позику плюс невелику комісію, використовуючи інструкцію `repay`
+
+Ключове розуміння полягає в тому, що флеш-позики покладаються на атомарну природу блокчейн-транзакцій. Якщо будь-яка частина транзакції не вдається (включаючи повернення), вся транзакція відкочується, ніби її ніколи не було. Це означає, що кредитор не має жодного ризику: або йому повертають кошти, або позика фактично ніколи не відбувалася.
+
+У цьому завданні ви створите просту програму флеш-позики, яка демонструє інтроспекцію інструкцій у дії. Програма буде аналізувати дані інструкцій та рахунки в різних інструкціях у межах однієї транзакції, щоб забезпечити виконання умов позики.
+
+Якщо ви новачок у інтроспекції інструкцій, рекомендуємо почати з [Курсу інтроспекції інструкцій](/uk/courses/instruction-introspection), щоб зрозуміти фундаментальні концепції, які використовуються в цій програмі.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Перш ніж почати, переконайтеся, що Rust і Pinocchio встановлені. Потім виконайте наступне у вашому терміналі:
+
+```bash
+# create workspace
+cargo new blueshift_pinocchio_flash_loan --lib --edition 2021
+cd blueshift_pinocchio_flash_loan
+```
+
+Додайте `pinocchio`, `pinocchio-system` та `pinocchio-token`:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token
+```
+
+Оголосіть типи крейтів у `Cargo.toml`, щоб згенерувати артефакти розгортання в `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Тепер ви готові написати свою програму флеш-кредитування.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Цього разу ми розділимо програму на невеликі, сфокусовані модулі замість того, щоб розміщувати все в `lib.rs`. Дерево папок виглядатиме приблизно так:
+
+```
+src
+├── instructions
+│       ├── helpers.rs
+│       ├── loan.rs
+│       ├── mod.rs
+│       └── repay.rs
+├── lib.rs
+```
+
+**Примітка**: Не забудьте змінити ідентифікатор програми на `22222222222222222222222222222222222222222222`, оскільки ми використовуємо його під капотом для тестування вашої програми.
+
+Точка входу в `lib.rs` дуже схожа на те, що ми розглядали в [Курсі введення до Pinocchio](/uk/courses/introduction-to-pinocchio).
+
+```rust
+use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee, 
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7, 
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Loan::DISCRIMINATOR, data)) => Loan::try_from((data, accounts))?.process(),
+        Some((Repay::DISCRIMINATOR, _)) => Repay::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+<ArticleSection name="Helpers" id="helpers" level="h2" />
+
+Перш ніж заглиблюватися в інструкції `loan` та `repay`, розглянемо `helpers.rs`:
+
+```rust
+#[repr(C, packed)]
+pub struct LoanData {
+    pub protocol_token_account: [u8; 32],
+    pub balance: u64,
+}
+
+pub fn get_token_amount(data: &[u8]) -> u64 {
+    if !account.is_owned_by(&pinocchio_token::ID) {
+        return Err(PinocchioError::InvalidOwner.into());
+    }
+
+    if account.data_len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+        return Err(PinocchioError::InvalidAccountData.into());
+    }
+    
+    u64::from_le_bytes(data[64..72].try_into().unwrap())
+}
+```
+
+Цей файл простий. Він містить структуру `LoanData`, яку ми використовуватимемо для тимчасового зберігання даних про позику в обліковому записі до повернення позики. Він також надає допоміжну функцію `get_token_amount()` для зчитування кількості токенів з облікового запису.

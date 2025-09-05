@@ -1,0 +1,119 @@
+# Відкриття сховища
+
+Інструкція `open` створює сховище з Програмно Похідною Адресою (PDA), куди будуть безпечно депоновані лампорти. Ця PDA використовує хешований публічний ключ як своє сід-значення, гарантуючи, що лише власник оригінального ключа зможе пізніше вивести кошти.
+
+PDA забезпечують безпечний спосіб зберігання коштів, тому що:
+- Тільки ваша програма може керувати рахунком (приватний ключ не існує)
+- Адреса сховища детерміновано виводиться з хешу користувача
+- Виведення коштів може відбуватися лише через логіку вашої програми
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Інструкція потребує таких рахунків:
+- `payer`: Оплачує створення сховища (має бути підписантом і змінюваним)
+- `vault`: PDA, що ініціалізується (має бути змінюваним)  
+- `system_program`: Необхідний для створення рахунку (має бути виконуваним)
+
+У коді це виглядає так:
+
+```rust
+pub struct OpenVaultAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for OpenVaultAccounts<'a> {
+    type Error = ProgramError;
+ 
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+ 
+        Ok(Self { payer, vault })
+    }
+}
+```
+
+> Валідація рахунків обробляється CPI `CreateAccount`. Якщо рахунки не відповідають вимогам (підписант, змінюваність, виконуваність), інструкція автоматично завершиться невдачею.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Потрібні два елементи даних:
+- `hash`: SHA-256 хеш публічного ключа пари ключів вінтерніца користувача ([u8; 32])
+- `bump`: Бамп деривації PDA, переданий з клієнта (u8)
+
+> Ми передаємо бамп з клієнта, а не виводимо його в мережі, щоб заощадити обчислювальні витрати.
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct OpenVaultInstructionData {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for OpenVaultInstructionData {
+    type Error = ProgramError;
+ 
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<OpenVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let hash = data[0..32].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+        let bump = data[32..33].try_into().map_err(|_| ProgramError::InvalidInstructionData)?;
+ 
+        Ok(Self { hash, bump })
+    }
+}
+```
+
+> І знову, неправильні параметри самокоригуються: передача неправильних хешів блокує сховище, передача неправильних бампів призводить до невдачі деривації PDA.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Інструкція створює порожню PDA, призначену для нашої програми. Хоча рахунок не містить даних, власність програми гарантує, що виведення коштів може відбуватися лише через нашу контрольовану логіку.
+
+> Навіть порожні облікові записи повинні бути звільнені від орендної плати, щоб зберігатися в Solana.
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct OpenVault<'a> {
+    pub accounts: OpenVaultAccounts<'a>,
+    pub instruction_data: OpenVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for OpenVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = OpenVaultInstructionData::try_from(data)?;
+        let accounts = OpenVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> OpenVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+ 
+    pub fn process(&self) -> ProgramResult {
+        let lamports = Rent::get()?.minimum_balance(0);
+        let seeds = [Seed::from(&self.instruction_data.hash), Seed::from(&self.instruction_data.bump)];
+
+        // Create our vault
+        CreateAccount {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&[Signer::from(&seeds)])
+    }
+}
+```
+
+> Ця інструкція лише створює структуру сховища. Депозити обробляються окремо через прості перекази лампортів на рахунок сховища.

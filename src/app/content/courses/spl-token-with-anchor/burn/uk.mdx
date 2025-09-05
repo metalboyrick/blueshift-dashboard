@@ -1,0 +1,27 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкція спалювання
+
+Назавжди знищує токени, вилучаючи їх з обігу. Це зменшує загальну пропозицію токена.
+
+Перш ніж ми зможемо спалити будь-який токен, нам потрібно вже мати:
+- Ініціалізований `Mint` рахунок.
+- Рахунок `Token` або рахунок `Associated Token`, на якому вже є принаймні та кількість, яку ми хочемо спалити.
+
+> Кількість токенів, які ми спалюємо, "нормалізована" для десяткових знаків. Це означає, що якщо ми хочемо спалити 1 токен, який має 6 десяткових знаків, нам потрібно буде фактично вказати `1_000_000` як кількість
+
+Ось як виглядає CPI до інструкції `burn()`: 
+
+```rust
+burn(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Burn {
+            mint: ctx.accounts.mint.to_account_info(),
+            from: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

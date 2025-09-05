@@ -1,0 +1,132 @@
+# Закрити сховище
+
+Інструкція `close` виконує повне виведення коштів із квантово-стійких сховищ, переказуючи всі лампорти на один обліковий запис отримувача.
+
+На відміну від інструкції `split`, це забезпечує простіший механізм повного виведення коштів, коли розподіл коштів не потрібен.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Інструкція потребує трьох облікових записів:
+
+- `vault`: Вихідне сховище, що містить збережені лампорти (має бути змінюваним)
+- `refund`: Обліковий запис отримувача для балансу лампортів сховища (має бути змінюваним)
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct CloseVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, refund })
+    }
+}
+
+```
+
+> Валідація облікових записів обробляється середовищем виконання. Якщо облікові записи не відповідають вимогам (змінюваність), інструкція автоматично завершиться невдачею.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Потрібні два елементи даних:
+- `signature`: Підпис Вінтерніца, що підтверджує володіння ключовою парою сховища
+- `bump`: Параметр відхилення для виведення PDA для оптимізації (1 байт)
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct CloseVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<CloseVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Процес перевірки включає такі кроки:
+
+1. Складання повідомлення: Створюється 32-байтове повідомлення, що містить публічний ключ облікового запису `refund`
+
+2. Перевірка підпису: Підпис Вінтерніца використовується для відновлення хешу оригінального публічного ключа, який потім порівнюється з насінням виведення PDA сховища.
+
+3. Валідація PDA: Швидка перевірка еквівалентності гарантує, що відновлений хеш відповідає PDA сховища, доводячи, що підписувач володіє сховищем.
+
+4. Розподіл коштів: Якщо валідація успішна, весь баланс переказується на обліковий запис `refund`, а обліковий запис `vault` закривається.
+
+> Оскільки програма володіє обліковим записом `vault`, ви можете переказувати лампорти безпосередньо без необхідності викликати міжпрограмне виконання (CPI).
+
+Ось як це виглядає в коді:
+
+```rust
+pub struct CloseVault<'a> {
+    pub accounts: CloseVaultAccounts<'a>,
+    pub instruction_data: CloseVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for CloseVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = CloseVaultInstructionData::try_from(data)?;
+        let accounts = CloseVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> CloseVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+ 
+    pub fn process(&self) -> ProgramResult {
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(self.accounts.refund.key()).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault and refund balance to Refund account
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports();
+        self.accounts.vault.close()
+    }
+}
+```
+
+> Реконструкція повідомлення запобігає атакам повторного відтворення підпису, коли зловмисники підміняють різні облікові записи отримувачів, використовуючи дійсні підписи, захоплені з мемпулу.

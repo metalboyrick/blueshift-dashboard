@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Solana Pay
+
+![Solana Pay](/graphics/course-banners/solana-pay.png)
+
+Solana Pay — це платіжна система з відкритим кодом, яка забезпечує миттєві транзакції з майже нульовою комісією на Solana.
+
+Вже довірена мільйонами підприємств через інтеграцію з Shopify, вона трансформує комерцію, повністю усуваючи традиційних платіжних посередників.
+
+> Solana Pay стандартизує платежі через URL-адреси. Замість складних інтеграцій гаманців ви створюєте прості посилання, які автоматично працюють з кожним гаманцем Solana.
+
+<ArticleSection name="Основні функціональні можливості" id="core-functionalities" level="h2" />
+
+Solana Pay характеризується:
+- **Прямими розрахунками:** Платежі йдуть безпосередньо з гаманця клієнта до гаманця продавця в SOL або будь-якому токені SPL. Без банків, процесорів чи посередників, які беруть комісію.
+- **Миттєвою фінальністю:** Кошти надходять одразу після підтвердження завдяки розрахункам Solana, що тривають менше секунди.
+- **Універсальною сумісністю:** Одна реалізація працює з кожним гаманцем та додатком Solana.
+
+Все через два основні типи запитів:
+
+### Запити на переказ (прості платежі)
+
+Неінтерактивні URL-адреси для заздалегідь визначених транзакцій. Все закодовано в URL.
+
+```
+solana:mvines9iiHiQTysrwkJjGf2gb9Ex9jXJX8ns3qwf2kN?amount=0.01&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+```
+
+> Ідеально для: оформлення замовлень в електронній комерції, пожертв, підписок, будь-яких простих переказів токенів.
+
+### Запити на транзакції (динамічні платежі)
+
+Інтерактивні URL-адреси, які формують складні транзакції на стороні сервера.
+
+Гаманець робить HTTP-запит до вашого сервера, який повертає спеціальну транзакцію, створену з даними в реальному часі.
+
+> Ідеально для: NFT з динамічним ціноутворенням, взаємодій DeFi, програм лояльності, складної бізнес-логіки.
+
+### Варіанти інтеграції
+
+Solana Pay пропонує:
+- **QR-коди:** Миттєві платежі при особистій присутності
+- **Посилання для поширення:** Працюють на будь-якій платформі
+- **Вбудовані кнопки:** Безперебійний досвід оформлення замовлення
+- **Індивідуальні потоки:** Транзакції за участю кількох сторін, умовний доступ, часткове підписання
+
+<ArticleSection name="Чому це важливо" id="why-it-matters" level="h2" />
+
+Solana Pay замінює весь традиційний стек платежів простими URL-адресами. Замість інтеграції з кількома гаманцями та обробки складних потоків транзакцій ви створюєте стандартизовані посилання, які автоматично працюють скрізь.
+
+**Традиційний процес оплати:** Клієнт → Банк → Платіжний процесор → Ваш банк → Ви (через кілька днів, мінус комісії)
+
+**Процес оплати Solana Pay:** Клієнт → Ви (миттєво, майже нульові комісії)
+
+> Специфікація Solana Pay фундаментально трансформує блокчейн-платежі, замінюючи складні інтеграції гаманців простими, стандартизованими URL-адресами, які працюють всюди.
+
+<ArticleSection name="Reference" id="reference" level="h2" />
+
+Посилання (References) є однією з найважливіших частин стеку Solana Pay. Оскільки ваш бекенд не надсилає транзакції в мережу, а лише повертає відповіді транзакцій, які підписують гаманці, немає підписів транзакцій, які допомогли б визначити, чи пройшов платіж.
+
+`reference` — це унікальний публічний ключ, включений як несигнатурний, незаписуваний обліковий запис у транзакціях. Він не впливає на поведінку транзакції, але служить ідентифікатором для відстеження.
+
+Ось як це працює:
+1. Згенеруйте унікальне посилання (публічний ключ) для кожного запиту на оплату
+2. Включіть його в URL-адреси запитів транзакцій як параметр
+3. Додайте його до інструкцій транзакції як несигнатурний обліковий запис
+4. Відстежуйте транзакцію за допомогою посилання
+
+Ви можете використовувати RPC-метод `getSignaturesForAddress` Solana або допоміжну функцію `findReference` бібліотеки `@solana/pay` для пошуку транзакцій, що містять ваше посилання, ось так:
+
+```ts
+useEffect(() => {
+    // Poll the network for transactions that include the reference address
+    const interval = setInterval(async () => {
+        try {
+            // Find transactions that include the reference address
+            const signatureInfo = await findReference(connection, reference, {
+                until: mostRecentNotifiedTransaction.current, // Only look for transactions after the most recent one we've found
+                finality: "confirmed",
+            });
+            // Update the most recent transaction with the transaction we just found
+            mostRecentNotifiedTransaction.current = signatureInfo.signature;
+            // Toast notification
+            displayToast(signatureInfo.signature);
+        } catch (e) {
+            if (e instanceof FindReferenceError) {
+                // No transaction found yet, ignore this error
+                return;
+            }
+            console.error("Unknown error", e);
+        }
+    }, 1000); // Check for new transactions every second
+    
+    return () => {
+        clearInterval(interval);
+    };
+}, [reference]);
+```
+
+<ArticleSection name="QR Code Generation" id="qr-code-generation" level="h2" />
+
+Перетворіть будь-який запит транзакції на QR-код для сканування за допомогою бібліотеки `@solana/pay`:
+
+```ts
+import { createQR, encodeURL, TransactionRequestURLFields } from '@solana/pay'; 
+
+const urlParams: TransactionRequestURLFields = {
+  link: new URL("https://yourapi.com/pay"),
+};
+const solanaUrl = encodeURL(urlParams);
+
+const qr = createQR(
+  solanaUrl,
+  400,
+  "transparent"
+);
+```

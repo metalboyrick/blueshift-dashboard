@@ -1,0 +1,126 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Secp256r1 з Pinocchio
+
+[Dean](https://x.com/deanmlittle) з команди Blueshift випустив перший крейт, який забезпечує сумісність Pinocchio для перевірки інструкцій, що виконують прекомпіляцію `Secp256r1`.
+
+Це особливо корисно для впровадження сучасних методів автентифікації, таких як паролі-ключі (passkeys) у програмах Pinocchio.
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+SDK надає чіткі абстракції через основні структури даних:
+
+```rust
+// 33-byte compressed public key (1 byte parity + 32 byte x-coordinate)
+pub type Secp256r1Pubkey = [u8; 33];
+// 64-byte signature (r,s values)
+pub type Secp256r1Signature = [u8; 64];
+
+// Main instruction parser
+pub struct Secp256r1Instruction<'a> {
+    header: Secp256r1InstructionHeader,    // Number of signatures
+    offsets: &'a [Secp256r1SignatureOffsets], // Data location pointers
+    data: &'a [u8],                        // Raw instruction data
+}
+```
+
+Структура `Secp256r1SignatureOffsets` діє як карта пам'яті, що містить байтові зміщення, які вказують на місце розташування кожного компонента в корисному навантаженні інструкції:
+
+```rust
+pub struct Secp256r1SignatureOffsets {
+    pub signature_offset: u16,
+    pub signature_instruction_index: u16,
+    pub public_key_offset: u16,
+    pub public_key_instruction_index: u16,
+    pub message_data_offset: u16,
+    pub message_data_size: u16,
+    pub message_instruction_index: u16,
+}
+```
+
+У даних ми знаходимо три критичні компоненти, на які посилається структура зміщення:
+- Publickey: 33-байтовий стиснутий відкритий ключ `Secp256r1`. При використанні з сучасними методами автентифікації, такими як паролі-ключі, це представляє криптографічну ідентичність пристрою/користувача, що автентифікується.
+- Signature: 64-байтовий підпис `ECDSA` (значення r,s), згенерований приватним ключем. Це доводить, що власник відповідного приватного ключа авторизував конкретне повідомлення.
+- Message Data: Довільні байти, які були криптографічно підписані. На практиці це містить дані, специфічні для додатку, такі як деталі транзакції, часові мітки або ідентифікатори користувачів, які запобігають атакам повторного відтворення та забезпечують контекстуальну прив'язку підписів.
+
+Як бачите, відкритий ключ має довжину 33 байти, оскільки використовує стиснуте представлення точки; ефективне з точки зору простору кодування точок еліптичної кривої.
+
+На Secp256r1 відкритий ключ математично є точкою (x,y), де обидві координати мають розмір 32 байти (загалом 64 байти).
+
+Однак, для будь-якої x-координати лише дві можливі y-координати задовольняють рівняння кривої.
+
+Стиснутий формат зберігає 32-байтову x-координату плюс один байт парності (0x02 для парного y, 0x03 для непарного y), що дозволяє повну реконструкцію точки з економією 48% пам'яті.
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+Для перевірки підписів `Secp256r1` нам потрібні два основні компоненти:
+1. Системна змінна інструкції: Це дозволяє нам аналізувати підпис `Secp256r1`
+2. Крейт `pinocchio-secp256r1-instruction`: Він надає інструменти для десеріалізації інструкції
+
+Системна змінна інструкції вже включена до крейту Pinocchio, тому додаткова установка не потрібна.
+
+Однак нам потрібно додати крейт `pinocchio-secp256r1-instruction` до нашої програми Pinocchio:
+
+```
+cargo add pinocchio-secp256r1-instruction
+```
+
+Для реалізації перевірки нам потрібно:
+1. Включити програму системної змінної інструкції (`Sysvar1nstructions1111111111111111111111111`, яку ми будемо називати `instructions`)
+2. Розмістити інструкцію `Secp256r1` після нашої поточної інструкції
+
+Ось як отримати доступ та десеріалізувати інструкції:
+
+```rust
+// Deserialize the instructions sysvar
+let instructions: Instructions<Ref<[u8]>> = Instructions::try_from(self.accounts.instructions)?;
+// Get the instruction that follows our current one
+let ix: IntrospectedInstruction = instructions.get_instruction_relative(1)?;
+```
+
+Далі ми десеріалізуємо інструкцію `Secp256r1`:
+
+```rust
+// Deserialize the Secp256r1 instruction
+let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+```
+
+Потім ми виконуємо деякі перевірки безпеки.
+
+Важливо реалізувати кілька перевірок безпеки:
+1. **Перевірка авторизації**: Гарантує, що лише авторизовані отримувачі можуть отримувати кошти з PDA, який обгортає відкритий ключ Secp256r1. Це запобігає атакам MEV, коли хтось може перехопити транзакцію, захопити дійсний підпис і замінити призначеного отримувача.
+2. **Перевірка терміну дії**: Встановлює обмеження часу на дійсність підпису. Оскільки перевірені підписи залишаються дійсними необмежений час, реалізація часової мітки закінчення терміну дії запобігає атакам повторного відтворення.
+
+Ми виконуємо ці перевірки, розміщуючи ці дані в повідомленні підпису.
+
+Ось як реалізувати ці перевірки безпеки:
+
+```rust
+// Verify the fee payer is authorized
+let (receiver, expiry) = secp256r1_ix.get_message_data(0)?.split_at_checked(32).ok_or(ProgramError::InvalidInstructionData)?;
+if self.accounts.payer.key().ne(payer) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+
+// Check signature expiration
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(expiry.try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+Нарешті, ми можемо отримувати програмно похідні адреси (PDA) безпосередньо з відкритих ключів Secp256r1, створюючи детерміновані адреси облікових записів, якими користувачі можуть керувати за допомогою сучасних методів автентифікації:
+
+```rust
+// Verify the first signature matches our PDA owner
+let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+// Create signer seeds for CPI
+let seeds = [
+    Seed::from(signer[..1].as_ref()),
+    Seed::from(signer[1..].as_ref()),
+];
+let signers = [Signer::from(&seeds)];
+```
+
+> Нам потрібно розділити відкритий ключ на 2 різні частини, оскільки seeds приймають максимум 32 байти як довжину.

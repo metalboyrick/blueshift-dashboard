@@ -1,0 +1,463 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Розширені функціональні можливості
+
+Mollusk надає гнучкі варіанти ініціалізації для різних сценаріїв тестування. Ви можете створювати екземпляри, попередньо завантажені вашою програмою, або почати з мінімального середовища та додавати компоненти за потреби.
+
+Під час тестування конкретної програми ініціалізуйте Mollusk з попередньо завантаженою програмою:
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    let mollusk = Mollusk::new(&ID, "target/deploy/program");
+}
+```
+
+Цей підхід автоматично завантажує вашу скомпільовану програму та робить її доступною для тестування, спрощуючи процес налаштування для програмно-специфічних тестових наборів.
+
+Для ширших сценаріїв тестування або коли вам потрібно динамічно додавати програми, почніть із типового екземпляра:
+
+```rust
+use mollusk_svm::Mollusk;
+
+#[test]
+fn test() {
+    // System Program, ...
+    let mollusk = Mollusk::default();
+}
+```
+
+Типовий екземпляр включає основні вбудовані програми, такі як System Program, забезпечуючи основу для більшості операцій Solana без навантаження програмами, які вам не потрібні.
+
+Коли ваші тести потребують System Program, Mollusk надає зручний помічник для створення необхідних посилань на акаунти:
+
+```rust
+let (system_program, system_program_account) = keyed_account_for_system_program();
+```
+
+Щоб відтворити функціональність завантаження програм або завантажити власні програми, які не присутні за замовчуванням, ви можете використовувати ці помічники:
+
+```rust
+use mollusk_svm::Mollusk;
+use mollusk_svm::program::create_program_account_loader_v3;
+
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::default();
+
+    // Get the account that you need
+    let program = &ID; // ID of the program we're trying to load into mollusk
+    let program_account = create_program_account_loader_v3(&ID);
+
+    // Load the program into your mollusk instance
+    mollusk.add_program(
+        &ID, 
+        "target/deploy/program",
+        &mollusk_svm::program::loader_keys::LOADER_V3
+    );
+}
+```
+
+<ArticleSection name="Token Program" id="token-program" level="h2" />
+
+Помічники для роботи з токенами в Mollusk значно спрощують сценарії тестування, що включають SPL токени. Крейт `mollusk-svm-programs-token` надає попередньо налаштовану підтримку для програм `Token`, `Token2022` та `Associated Token`.
+
+### Акаунти програм
+
+Після включення крейту помічника для токенів, додайте конкретні токен-програми, які потрібні для ваших тестів:
+
+```rust
+use mollusk_svm::Mollusk;
+
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::default();
+
+    // Add the SPL Token Program
+    mollusk_svm_programs_token::token::add_program(&mut mollusk);
+
+    // Add the Token2022 Program
+    mollusk_svm_programs_token::token2022::add_program(&mut mollusk);
+
+    // Add the Associated Token Program
+    mollusk_svm_programs_token::associated_token::add_program(&mut mollusk);
+}
+```
+
+І створіть посилання на акаунти, необхідні для ваших тестових сценаріїв:
+
+```rust
+// SPL Token Program
+let (token_program, token_program_account) = 
+    mollusk_svm_programs_token::token::keyed_account();
+
+// Token2022 Program
+let (token2022_program, token2022_program_account) = 
+    mollusk_svm_programs_token::token2022::keyed_account();
+
+// Associated Token Program
+let (associated_token_program, associated_token_program_account) =
+    mollusk_svm_programs_token::associated_token::keyed_account();
+```
+
+Ці помічники забезпечують доступ тестів, пов'язаних з токенами, до правильних акаунтів програм з належною конфігурацією, що дозволяє проводити комплексне тестування операцій з токенами без ручного налаштування програм.
+
+### Акаунти стану
+
+Під час наших тестів нам може знадобитися акаунт `Mint`, `Token` або `Associated Token`, який вже був ініціалізований. На щастя, Mollusk має для нас зручні помічники.
+
+Щоб створити обліковий запис `Mint` ми можемо використати функцію `create_account_for_mint()` таким чином:
+
+```rust
+use spl_token::state::Mint;
+use mollusk_svm_programs_token::token::create_account_for_mint;
+
+let mint_data = Mint {
+    mint_authority: Pubkey::new_unique(),
+    supply: 10_000_000_000,
+    decimals: 6,
+    is_initialized: true,
+    freeze_authority: None,
+};
+
+let mint_account = create_account_for_mint(mint_data)
+```
+
+Щоб створити обліковий запис `Token` ми можемо використати функцію `create_account_for_token_account()` таким чином:
+
+```rust
+use spl_token::state::{TokenAccount, AccountState};
+use mollusk_svm_programs_token::token::create_account_for_token_account;
+
+let token_data = TokenAccount {
+    mint: Pubkey::new_unique(),
+    owner: Pubkey::new_unique(),
+    amount: 1_000_000,
+    delegate: None,
+    state: AccountState::Initialized,
+    is_native: None,
+    delegated_amount: 0,
+    close_authority: None,
+};
+
+let token_account = create_account_for_token_account(token_data)
+```
+
+> Примітка: Ці приклади призначені для програми SPL-Token. Якщо ви хочете створити облікові записи `Mint` та `Token`, що належать програмі Token2022, просто використовуйте `mollusk_svm_programs_token::token2022::...`.
+
+Щоб створити обліковий запис `Associated Token` ми можемо використати функцію `create_account_for_associated_token_account()` таким чином:
+
+```rust
+use spl_token::state::{TokenAccount, AccountState};
+use mollusk_svm_programs_token::associated_token::pub fn create_account_for_associated_token_account;
+
+let token_data = TokenAccount {
+    mint: Pubkey::new_unique(),
+    owner: Pubkey::new_unique(),
+    amount: 1_000_000,
+    delegate: None,
+    state: AccountState::Initialized,
+    is_native: None,
+    delegated_amount: 0,
+    close_authority: None,
+};
+
+let associated_token_account = create_account_for_associated_token_account(token_data)
+```
+
+> Примітка: Цей приклад призначений для програми SPL-Token. Якщо ви хочете створити обліковий запис `Associated Token`, що належить програмі Token2022, просто використовуйте функцію `create_account_for_associated_token_2022_account`.
+
+<ArticleSection name="Benchmarking Compute Units" id="benchmarking-compute-units" level="h2" />
+
+Mollusk включає спеціальну систему тестування обчислювальних одиниць, яка дозволяє точно вимірювати та відстежувати обчислювальну ефективність вашої програми. `MolluskComputeUnitBencher` надає спрощений API для створення комплексних тестів, які відстежують споживання обчислювальних одиниць у різних сценаріях виконання інструкцій.
+
+Ця система тестування особливо цінна для оптимізації продуктивності, оскільки вона генерує детальні звіти, що показують як поточне використання обчислювальних одиниць, так і зміни порівняно з попередніми запусками.
+
+Це дозволяє вам негайно бачити вплив змін у коді на ефективність вашої програми, допомагаючи оптимізувати критичні вузькі місця продуктивності.
+
+Інструмент тестування легко інтегрується з вашим існуючим налаштуванням тестів Mollusk:
+
+```rust
+use {
+    mollusk_svm_bencher::MolluskComputeUnitBencher,
+    mollusk_svm::Mollusk,
+    /* ... */
+};
+
+// Optionally disable logging.
+solana_logger::setup_with("");
+
+/* Instruction & accounts setup ... */
+
+let mollusk = Mollusk::new(&program_id, "my_program");
+
+MolluskComputeUnitBencher::new(mollusk)
+    .bench(("bench0", &instruction0, &accounts0))
+    .bench(("bench1", &instruction1, &accounts1))
+    .bench(("bench2", &instruction2, &accounts2))
+    .bench(("bench3", &instruction3, &accounts3))
+    .must_pass(true)
+    .out_dir("../target/benches")
+    .execute();
+```
+
+### Параметри конфігурації
+
+Інструмент тестування надає кілька параметрів конфігурації:
+- `must_pass(true)`: Викликає паніку, якщо будь-який тест не виконується успішно, забезпечуючи валідність ваших тестів при зміні коду
+- `out_dir("../target/benches")`: Визначає, де буде згенеровано звіт у форматі markdown, що дозволяє інтеграцію з системами CI/CD та робочими процесами документації
+
+### Інтеграція з Cargo
+
+Щоб запустити тести за допомогою `cargo bench`, додайте конфігурацію тестування до вашого `Cargo.toml`:
+
+```
+[[bench]]
+name = "compute_units"
+harness = false
+```
+
+### Звіти про продуктивність
+
+Інструмент bencher генерує звіти у форматі markdown, які надають як поточні показники продуктивності, так і історичне порівняння:
+
+```
+| Name   | CUs   | Delta  |
+|--------|-------|--------|
+| bench0 | 450   | --     |
+| bench1 | 579   | -129   |
+| bench2 | 1,204 | +754   |
+| bench3 | 2,811 | +2,361 |
+```
+
+Формат звіту включає:
+- Name: Ідентифікатор тесту продуктивності, який ви вказали
+- CUs: Поточне споживання обчислювальних одиниць для цього сценарію
+- Delta: Зміна порівняно з попереднім запуском тесту (позитивне значення вказує на збільшення використання, негативне — на оптимізацію)
+
+<ArticleSection name="Custom Syscalls" id="custom-syscalls" level="h2" />
+
+Mollusk підтримує створення та тестування користувацьких системних викликів (syscalls), що дозволяє розширювати віртуальну машину Solana спеціалізованими функціями для тестових сценаріїв.
+
+Ця можливість особливо цінна для тестування створення нових системних викликів, які можна додати через SIMD, імітуючи певну поведінку середовища виконання або створюючи контрольовані середовища для тестування.
+
+> Користувацькі системні виклики працюють на рівні віртуальної машини, надаючи прямий доступ до контексту виклику та середовища виконання.
+
+### Визначення користувацьких системних викликів
+
+Користувацькі системні виклики визначаються за допомогою макросу `declare_builtin_function!`, який створює системний виклик, що може бути зареєстрований у середовищі виконання Mollusk:
+
+```rust
+use {
+    mollusk_svm::{result::Check, Mollusk},
+    solana_instruction::Instruction,
+    solana_program_runtime::{
+        invoke_context::InvokeContext,
+        solana_sbpf::{declare_builtin_function, memory_region::MemoryMapping},
+    },
+    solana_pubkey::Pubkey,
+};
+
+declare_builtin_function!(
+    /// A custom syscall to burn compute units for testing
+    SyscallBurnCus,
+    fn rust(
+        invoke_context: &mut InvokeContext,
+        to_burn: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        _memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        // Consume the specified number of compute units
+        invoke_context.consume_checked(to_burn)?;
+        Ok(0)
+    }
+);
+```
+
+> Це приклад користувацького системного виклику, який просто "спалює" обчислювальні одиниці.
+
+Сигнатура функції системного виклику має певний шаблон:
+- `invoke_context`: Надає доступ до контексту виконання та стану середовища
+- Аргументи 1-5: З програми можна передати до п'яти 64-бітних аргументів
+- memory_mapping: Надає доступ до простору пам'яті програми
+- Повернене значення: `Result<u64, Box<dyn std::error::Error>>`, що вказує на успіх або невдачу
+
+> Саме так створюються всі системні виклики під капотом
+
+### Реєстрація користувацьких системних викликів
+
+Після визначення, користувацькі системні виклики потрібно зареєструвати в середовищі виконання програми Mollusk, перш ніж їх можна буде використовувати:
+
+```rust
+#[test]
+fn test_custom_syscall() {
+    std::env::set_var("SBF_OUT_DIR", "../target/deploy");
+    let program_id = Pubkey::new_unique();
+    
+    let mollusk = {
+        let mut mollusk = Mollusk::default();
+        
+        // Register the custom syscall with a specific name
+        mollusk
+            .program_cache
+            .program_runtime_environment
+            .register_function("sol_burn_cus", SyscallBurnCus::vm)
+            .unwrap();
+            
+        // Add your program that uses the custom syscall
+        mollusk.add_program(
+            &program_id,
+            "test_program_custom_syscall",
+            &mollusk_svm::program::loader_keys::LOADER_V3,
+        );
+        
+        mollusk
+    };
+}
+```
+
+Системний виклик реєструється з ім'ям ("sol_burn_cus" у цьому прикладі), на яке ваша програма може посилатися під час виконання системного виклику.
+
+### Тестування поведінки користувацьких системних викликів
+
+Користувацькі системні виклики можна тестувати як будь-яку іншу функціональність програми, з додатковою перевагою точного контролю над їхньою поведінкою:
+
+```rust
+fn instruction_burn_cus(program_id: &Pubkey, to_burn: u64) -> Instruction {
+    Instruction::new_with_bytes(*program_id, &to_burn.to_le_bytes(), vec![])
+}
+
+#[test]
+fn test_custom_syscall() {
+    // ... mollusk setup ...
+    
+    // Establish baseline compute unit usage
+    let base_cus = mollusk
+        .process_and_validate_instruction(
+            &instruction_burn_cus(&program_id, 0),
+            &[],
+            &[Check::success()],
+        )
+        .compute_units_consumed;
+    
+    // Test different compute unit consumption levels
+    for to_burn in [100, 1_000, 10_000] {
+        mollusk.process_and_validate_instruction(
+            &instruction_burn_cus(&program_id, to_burn),
+            &[],
+            &[
+                Check::success(),
+                Check::compute_units(base_cus + to_burn), // Verify exact CU consumption
+            ],
+        );
+    }
+}
+```
+
+> Цей приклад демонструє тестування системного виклику, який спалює обчислювальні одиниці, перевіряючи, що споживається саме та кількість одиниць, яка була запитана. Можливість перевіряти точні дані робить Mollusk найкращим способом тестування користувацьких системних викликів перед впровадженням.
+
+<ArticleSection name="Configuration Methods" id="configuration-methods" level="h2" />
+
+Mollusk надає комплексні параметри конфігурації, які дозволяють налаштувати середовище виконання відповідно до конкретних вимог тестування, як ми можемо бачити з Mollusk `Context`: 
+
+```rust
+/// Instruction context fixture.
+pub struct Context {
+    /// The compute budget to use for the simulation.
+    pub compute_budget: ComputeBudget,
+    /// The feature set to use for the simulation.
+    pub feature_set: FeatureSet,
+    /// The runtime sysvars to use for the simulation.
+    pub sysvars: Sysvars,
+    /// The program ID of the program being invoked.
+    pub program_id: Pubkey,
+    /// Accounts to pass to the instruction.
+    pub instruction_accounts: Vec<AccountMeta>,
+    /// The instruction data.
+    pub instruction_data: Vec<u8>,
+    /// Input accounts with state.
+    pub accounts: Vec<(Pubkey, Account)>,
+}
+```
+
+Ці методи конфігурації забезпечують точний контроль над обчислювальними бюджетами, доступністю функцій та системними змінними, що дозволяє тестувати програми за різних умов виконання.
+
+### Базове налаштування конфігурації
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::feature_set::FeatureSet;
+
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::new(&program_id, "path/to/program.so");
+    
+    // Configure compute budget for performance testing
+    mollusk.set_compute_budget(200_000);
+    
+    // Configure feature set to enable/disable specific Solana features
+    mollusk.set_feature_set(FeatureSet::all_enabled());
+    
+    // Sysvars are handled automatically but can be customized if needed
+}
+```
+
+Обчислювальний бюджет визначає, скільки обчислювальних одиниць доступно для виконання програми. Це критично важливо для тестування програм, які наближаються до обчислювальних лімітів або перевищують їх:
+
+```rust
+// Test with standard compute budget
+mollusk.set_compute_budget(200_000);
+```
+
+Набір функцій Solana контролює, які функції блокчейну активні під час виконання програми. Mollusk дозволяє налаштовувати ці функції для тестування сумісності з різними станами мережі:
+
+```rust
+use solana_sdk::feature_set::FeatureSet;
+
+// Enable all features (latest functionality)
+mollusk.set_feature_set(FeatureSet::all_enabled());
+
+// All features disabled
+mollusk.set_feature_set(FeatureSet::default());
+```
+
+Для повного списку доступних функцій зверніться до документації крейту `agave-feature-set` [документація](https://docs.rs/agave-feature-set/2.3.6/agave_feature_set/), яка детально описує всі налаштовувані функції блокчейну та їхні наслідки.
+
+Mollusk надає доступ до всіх системних змінних (sysvars), які програми можуть запитувати під час виконання. Хоча вони автоматично налаштовуються з розумними значеннями за замовчуванням, ви можете налаштувати їх для конкретних сценаріїв тестування:
+
+```rust
+/// Mollusk sysvars wrapper for easy manipulation
+pub struct Sysvars {
+    pub clock: Clock,                     // Current slot, epoch, and timestamp
+    pub epoch_rewards: EpochRewards,      // Epoch reward distribution info  
+    pub epoch_schedule: EpochSchedule,    // Epoch timing and slot configuration
+    pub last_restart_slot: LastRestartSlot, // Last validator restart information
+    pub rent: Rent,                       // Rent calculation parameters
+    pub slot_hashes: SlotHashes,          // Recent slot hash history
+    pub stake_history: StakeHistory,      // Historical stake activation data
+}
+```
+
+Ви можете налаштувати конкретні системні змінні для тестування логіки, залежної від часу, розрахунків оренди або інших системно-залежних поведінок, або використовувати деякі з допоміжних функцій:
+
+```rust
+#[test]
+fn test() {
+    let mut mollusk = Mollusk::new(&program_id, "path/to/program.so");
+    
+    // Customize clock for time-based testing
+    mollusk.sysvars.clock.epoch = 10;
+    mollusk.sysvars.clock.unix_timestamp = 1234567890;
+
+    // Jump to Slot 1000
+    warp_to_slot(&mut Mollusk, 1000)
+}
+```

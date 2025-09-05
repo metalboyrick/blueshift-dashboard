@@ -1,0 +1,380 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Розширення токенів
+
+У той час як оригінальна програма Token забезпечувала основні функції, такі як створення, передача та заморожування токенів, розширення токенів відкривають нову парадигму програмованих токенів.
+
+Ця вдосконалена програма повністю сумісна з існуючими операціями SPL Token, додаючи складні функції, такі як хуки передачі для виконання користувацької логіки, вбудовані механізми комісій, розширену підтримку метаданих, розрахунки з нарахуванням відсотків та розширені елементи керування безпекою.
+
+### Сумісність розширень
+
+Розширення токенів розроблені як компонувальні, що дозволяє поєднувати кілька розширень для створення токенів, які ідеально відповідають вимогам вашого проєкту.
+
+Однак певні комбінації несумісні через конфліктуючі функції або логічні протиріччя, такі як:
+- Непередаваний + хуки передачі / комісії за передачу / конфіденційна передача
+- Конфіденційна передача + комісії за передачу (до версії 1.18)
+- Конфіденційна передача + хуки передачі (ці передачі можуть бачити лише вихідні / цільові рахунки, тому не можуть діяти на основі суми переказу)
+- Конфіденційна передача + постійний делегат
+
+<ArticleSection name="Розширення комісії за передачу" id="transfer-fee-config" level="h2" />
+
+Розширення `TransferFee` є розширенням `Mint`, яке дозволяє творцю встановлювати "податок" на токен, який стягується кожного разу, коли хтось виконує обмін.
+
+Щоб переконатися, що одержувач комісії не отримує блокування запису кожного разу, коли хтось виконує обмін, і щоб забезпечити можливість паралелізації транзакцій, що містять Mint з цим розширенням, комісія відкладається на токен-рахунку одержувача, з якого тільки `Withdraw Authority` може зняти кошти.
+
+Саме з цієї причини для використання розширення `TransferFee` нам потрібні 2 різні типи розширень: одне, яке йде безпосередньо на рахунок `Mint`, що називається `TransferFeeConfig`, яке містить усі дані, необхідні для виконання обміну, та інше, яке йде на рахунок `Token`, що називається `TransferFeeAmount`, яке "реєструє", скільки токенів утримується токен-рахунком.
+
+Ось як виглядають дані розширення `TransferFee`:
+
+```rust
+/// TransferFeeConfig Extension
+pub const transfer_fee_config_header: [u8; 4] = [1, 0, 108, 0];
+
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Деякі моменти, на які варто звернути увагу:
+- `config_authority` може відрізнятися від того, хто фактично може вивести токени з рахунків `Token`.
+- У нас є структури комісій за переказ як `older`, так і `newer`.
+
+Останній пункт пов'язаний з тим, що існує період "охолодження" тривалістю 2 епохи, коли ми встановлюємо новий `TransferFee`, щоб уникнути раптових виведень коштів наприкінці епохи. Це означає, що протягом перших 2 епох нового `TransferFee`, активним залишається старий `TransferFee`.
+
+Крім того, ви можете побачити, що `TransferFeeConfig` має поле `withheld_amount`. Це може здатися дивним, оскільки ми щойно сказали, що комісії за токени накопичуються в `Token Account`, але насправді отримання цих комісій — це двоетапний процес:
+- Отримання комісій з `Token Account` до `Mint`. Це можна зробити без дозволу
+- Отримання комісій з `Mint` на цільовий рахунок. Це дія, що потребує дозволу, яку може виконати лише `Withdraw Authority`.
+
+Для цього розширення нам потрібен двоетапний процес, щоб врахувати крайній випадок, коли хтось хоче закрити `Token Account`, в якому все ще є комісії. Оскільки призначення цих комісій може "відрізнятися" від `Withdraw Authority`, нам потрібно врахувати, що ці комісії мають бути кудись надіслані перед закриттям `Token Account`
+
+А ось як виглядають дані розширення `TransferFeeAmount`
+
+```rust
+/// TransferFeeAmount Extension
+pub const transfer_amount_config_header: [u8; 4] = [2, 0, 8, 0];
+
+pub struct TransferFeeAmount {
+    pub withheld_amount: u64,
+}
+```
+
+<ArticleSection name="Розширення повноважень закриття монетного двору" id="mint-close-authority-config" level="h2" />
+
+Розширення `MintCloseAuthority` — це розширення `Mint`, яке дозволяє власнику повноважень закривати та отримувати орендну плату з рахунку `Mint`, який має поточний запас 0.
+
+Це розширення корисне для очищення невикористаних мінтів та повернення SOL, який був використаний для оплати звільнення від оренди рахунку. Мінт можна закрити лише тоді, коли в обігу немає токенів.
+
+Ось як виглядають дані розширення `MintCloseAuthority`:
+
+```rust
+/// MintCloseAuthority Extension
+pub const mint_close_authority_extension_header: [u8; 4] = [3, 0, 32, 0];
+
+pub struct MintCloseAuthority {
+    pub close_authority: Pubkey,
+}
+```
+
+<ArticleSection name="Розширення стану облікового запису за замовчуванням" id="default-account-state-extension" level="h2" />
+
+Розширення `DefaultAccountState` є розширенням `Mint`, яке дозволяє всім новоствореним токен-рахункам для цього конкретного мінту бути замороженими за замовчуванням. Потім `Freeze Authority` мінту може розморозити ці рахунки `Token`, щоб вони стали придатними для використання.
+
+Ця функція надає творцям токенів можливість мати більший контроль над розповсюдженням токенів, обмежуючи, хто може володіти токенами. Це особливо корисно для сценаріїв відповідності, вимог KYC/AML або створення розподілів токенів на основі білого списку, де рахунки повинні бути явно схвалені, перш ніж вони зможуть отримувати або передавати токени.
+
+Ось як виглядають дані розширення `DefaultAccountState`:
+
+```rust
+/// DefaultAccountState Extension
+pub const default_account_state_extension_header: [u8; 4] = [6, 0, 1, 0];
+
+pub struct DefaultAccountState {
+    pub account_state: AccountState,
+}
+
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+```
+
+<ArticleSection name="Розширення незмінного власника" id="immutable-owner-extension" level="h2" />
+
+Розширення `ImmutableOwner` є розширенням рахунку `Token`, яке запобігає будь-яким змінам у власності токен-рахунку. Це захищає рахунки від несанкціонованого доступу та спроб передачі.
+
+Це розширення особливо цінне для асоційованих токен-рахунків (ATA) та інших рахунків, де власність ніколи не повинна змінюватися. Воно захищає від шкідливих програм, які можуть спробувати викрасти власність токен-рахунків, і забезпечує додаткові гарантії безпеки для користувачів і додатків.
+
+> Усі ATA програми розширень токенів мають незмінних власників, увімкнених за замовчуванням
+
+Ось як виглядають дані розширення `ImmutableOwner`:
+
+```rust
+/// ImmutableOwner Extension
+pub const immutable_owner_extension_header: [u8; 4] = [7, 0, 0, 0];
+```
+
+<ArticleSection name="Розширення передачі з нотаткою" id="memo-transfer-extension" level="h2" />
+
+`MemoTranfer Extension` - це розширення облікового запису `Token`, яке забезпечує, щоб усі вхідні перекази на токен-рахунок включали примітку, полегшуючи розширене відстеження транзакцій та ідентифікацію користувачів.
+
+Це розширення особливо корисне для бірж, регульованих установ та додатків, яким потрібно відстежувати призначення або джерело вхідних переказів для дотримання вимог, бухгалтерського обліку або обслуговування клієнтів. Коли воно активоване, будь-який переказ на рахунок не вдасться, якщо він не містить інструкції з приміткою в тій самій транзакції.
+
+Ось як виглядають дані розширення `MemoTranfer`:
+
+```rust
+/// MemoTranfer Extension
+pub const memo_transfer_extension_header: [u8; 4] = [8, 0, 1, 0];
+
+pub struct MemoTranfer {
+    pub require_incoming_transfer_memos: bool,
+}
+```
+
+<ArticleSection name="Non Transferable Extension" id="non-transferable-extension" level="h2" />
+
+Розширення `NonTransferable` - це розширення облікового запису `Mint`, яке запобігає передачі токенів між рахунками, роблячи їх постійно прив'язаними до їхніх поточних власників.
+
+Це розширення корисне для створення прив'язаних до душі токенів, значків досягнень, сертифікатів або будь-яких токенів, що представляють непередаване право чи статус. Після випуску на рахунок ці токени не можуть бути переміщені, продані або передані на інший гаманець, забезпечуючи їх постійний зв'язок з початковим отримувачем.
+
+Крім того, обліковий запис `Token`, пов'язаний з `Mint`, що має розширення `NonTransferable`, матиме розширення `NonTransferableAccount`.
+
+Ось як виглядають дані розширень `NonTransferable` та `NonTransferableAccount`:
+
+```rust
+/// NonTransferable Extension
+pub const non_transferable_extension_header: [u8; 4] = [9, 0, 0, 0];
+
+/// NonTransferableAccount Extension
+pub const non_transferable_account_extension_header: [u8; 4] = [13, 0, 0, 0];
+```
+
+Обидва розширення - це просто прапорці; сама їх присутність забезпечує обмеження.
+
+<ArticleSection name="Interest Bearing Extension" id="interest-bearing-extension" level="h2" />
+
+Розширення `InterestBearing` - це розширення облікового запису `Mint`, яке дозволяє користувачам застосовувати процентну ставку до своїх токенів і отримувати оновлену загальну суму, включаючи відсотки, у будь-який момент.
+
+> Цей механізм не генерує нові токени; відображена сума просто включає накопичені відсотки через функцію `amount_to_ui_amount`, роблячи зміну суто естетичною. Тим не менш, це значення зберігається в обліковому записі випуску, і програми можуть використовувати це для створення функціональності, що виходить за межі чистої естетики.
+
+Ось як виглядають дані розширення `InterestBearing`:
+
+```rust
+/// InterestBearing Extension
+pub const interest_bearing_extension_header: [u8; 4] = [10, 0, 52, 0];
+
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+Оскільки ставка може оновлюватися, щоб переконатися, що розрахунки правильні, існує поле `pre_update_average_rate`, яке використовується під час обчислення для визначення поведінки у випадку оновлення ставки.
+
+<ArticleSection name="Розширення Cpi Guard" id="cpi-guard-extension" level="h2" />
+
+Розширення `CpiGuard` — це розширення облікового запису `Token`, яке забороняє певні дії всередині міжпрограмних викликів, захищаючи користувачів від зловмисних програм, які можуть спробувати маніпулювати їхніми токен-рахунками без явної згоди.
+
+Це розширення є вирішальним для безпеки при взаємодії з протоколами DeFi, DEX або будь-якою програмою, яка запитує доступ до токен-рахунку. Воно запобігає виконанню програмами несанкціонованих дій, таких як зміна власності, встановлення небажаних делегатів або перенаправлення коштів до непередбачених отримувачів під час міжпрограмних викликів.
+
+Коли розширення `CpiGuard` увімкнено, наступні CPI працюють так, як описано:
+- Переказ: підписуючим органом має бути власник або раніше встановлений делегат рахунку
+- Спалювання: підписуючим органом має бути власник або раніше встановлений делегат рахунку
+- Схвалення: заборонено - жодні делегати не можуть бути схвалені в межах CPI
+- Закриття рахунку: призначення лампортів має бути власником рахунку
+- Встановлення органу закриття: заборонено, якщо не скасовується
+- Встановлення власника: завжди заборонено, включаючи поза CPI
+
+Ось як виглядають дані розширення `CpiGuard`:
+
+```rust
+/// CpiGuard Extension
+pub const cpi_guard_extension_header: [u8; 4] = [11, 0, 1, 0];
+
+pub struct CpiGuard {
+    pub lock_cpi: bool,
+}
+```
+
+<ArticleSection name="Розширення постійного делегата" id="permanent-delegate-extension" level="h2" />
+
+Розширення `PermanentDelegate` — це розширення облікового запису `Mint`, яке дозволяє постійному делегату для всіх токенів емісії переказувати або спалювати будь-який токен цієї емісії з будь-якого токен-рахунку.
+
+Це розширення корисне для створення токенів із вбудованим адміністративним контролем, таких як стейблкоїни, що потребують можливості екстреного заморожування, ігрові токени, що вимагають централізованого управління, або токени відповідності, де регулятор потребує постійного нагляду.
+
+> На відміну від звичайних делегатів, які можна відкликати, ця делегована влада є постійною та незмінною.
+
+Ось як виглядають дані розширення `PermanentDelegate`:
+
+```rust
+/// PermanentDelegate Extension
+pub const permanent_delegate_extension_header: [u8; 4] = [12, 0, 32, 0];
+
+pub struct PermanentDelegate {
+    delegate: Pubkey,
+}
+```
+
+<ArticleSection name="Розширення Transfer Hook" id="transfer-hook-extension" level="h2" />
+
+Розширення `TransferHook` є розширенням облікового запису `Mint`, яке надає можливість створювати облікові записи `Mint`, що виконують користувацьку логіку інструкцій при кожному переказі токенів.
+
+Це розширення забезпечує потужні варіанти використання, такі як автоматичний збір податків, виплати роялті, обмеження переказів на основі користувацької логіки, перевірки відповідності або будь-яку іншу програмовану поведінку, яка має відбуватися під час переказів. Програма-хук автоматично викликається програмою розширення щоразу, коли відбувається переказ.
+
+Для досягнення цього розробники повинні створити програму, яка реалізує [інтерфейс Transfer Hook](https://github.com/solana-program/transfer-hook/tree/main/program) та ініціалізувати обліковий запис `Mint` з увімкненим розширенням `Transfer Hook`.
+
+Крім того, обліковий запис Token, пов'язаний з `Mint`, що має розширення `TransferHook`, матиме розширення `TransferHookAccount`.
+
+Ось як виглядають дані розширень `TransferHook` та `TransferHookAccount`:
+
+```rust
+/// TransferHook Extension
+pub const transfer_hook_extension_header: [u8; 4] = [14, 0, 64, 0];
+
+pub struct TransferHook {
+    // The transfer hook update authority
+    authority: Pubkey,
+    // The transfer hook program account
+    programId: Pubkey,
+}
+
+/// TransferHookAccount Extension
+pub const transfer_hook_account_extension_header: [u8; 4] = [15, 0, 1, 0];
+
+pub struct TransferHookAccount {
+    // Whether or not this account is currently transferring tokens
+    transferring: bool,
+}
+```
+
+<ArticleSection name="Розширення Metadata" id="metadata-extension" level="h2" />
+
+Розширення `Metadata` є розширенням облікового запису `Mint`, яке надає можливість вбудовувати метадані безпосередньо в облікові записи емісії нативно та без необхідності використання іншої програми.
+
+Це розширення особливо корисне для NFT, токенів та інших активів, які потребують метаданих на блокчейні, таких як назви, символи, зображення та користувацькі атрибути. Вбудовуючи метадані безпосередньо в обліковий запис емісії, воно усуває потребу в зовнішніх програмах метаданих і забезпечує постійний зв'язок метаданих з токеном.
+
+Розширення `Metadata` складається з 2 різних розширень, які обидва застосовуються до рахунку Mint:
+- Розширення `Metadata`, яке містить усю інформацію метаданих, як-от назву, символ, URI та додаткові рахунки.
+- Розширення `MetadataPointer`, яке посилається на рахунок `Mint`, де знаходиться розширення `Metadata`.
+
+Зазвичай, коли використовуються, ці 2 розширення знаходяться на одному рахунку `Mint`. Але може бути випадок, коли одні й ті самі метадані використовуються для різних активів, і з цієї причини було б дешевше розділити ці 2 розширення та посилатися на `Mint` з розширенням `Metadata`.
+
+> На відміну від інших розширень, для створення розширення `Metadata` нам потрібно використовувати [інтерфейс Token Metadata](https://github.com/solana-program/token-metadata/tree/main). Розширення Metadata Pointer використовує класичну програму Token2022
+
+Цього разу ми не можемо створити заголовок набору розширень для розширення `Metadata`, оскільки воно містить змінні дані, а це означає, що довжина буде відрізнятися залежно від поля.
+
+Ось як виглядають дані розширень `Metadata` та `MetadataPointer`:
+
+```rust
+/// Metadata Pointer Extension
+pub const metadata_pointer_extension_header: [u8; 4] = [18, 0, 64, 0]
+
+pub struct MetadataPointer {
+    // Authority that can set the metadata address
+    authority: Pubkey;
+    // Account Address that holds the metadata
+    metadata_address: Pubkey;
+}
+
+/// Metadata Extension (Discriminator: 19)
+pub struct TokenMetadata {
+    /// The authority that can sign to update the metadata
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that metadata
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The longer name of the token
+    pub name: String,
+    /// The shortened symbol for the token
+    pub symbol: String,
+    /// The URI pointing to richer metadata
+    pub uri: String,
+    /// Any additional metadata about the token as key-value pairs. The program
+    /// must avoid storing the same key twice.
+    pub additional_metadata: Vec<(String, String)>,
+}
+```
+
+<ArticleSection name="Розширення Group та Member" id="group-and-member-extension" level="h2" />
+
+Розширення `Group` та `Member` — це розширення рахунку `Mint`, які вводять можливість створювати групи, такі як колекції для NFT, які пов'язані з кількома активами.
+
+Ця система розширень ідеально підходить для створення колекцій NFT, сімейств токенів або будь-яких груп пов'язаних активів, де вам потрібно відстежувати членство та застосовувати обмеження колекцій. Групи можуть представляти колекції, тоді як члени представляють окремі елементи в цих колекціях.
+
+Обидва розширення Group і Member складаються з 2 різних розширень, які обидва застосовуються до рахунку `Mint`, так само як і розширення `Metadata`:
+- `Extension`, яке містить усю інформацію про групу або члена.
+- `Pointer Extension`, яке посилається на рахунок Mint, де знаходиться розширення `Group` або `Member`.
+
+Зв'язок між групою та учасником полягає в тому, що група може мати багато учасників, але не навпаки.
+
+Як і з розширенням Metadata, тут ми розміщуємо як `Extension`, так і `Pointer` зазвичай в одному обліковому записі `Mint`, і для створення розширень `Group` та `Member` нам потрібно використовувати [Token Group Interface](https://github.com/solana-program/token-group/tree/main).
+
+> Ми не можемо мати розширення `Group` в тому ж обліковому записі `Mint`, де є розширення `Member`.
+
+Ось як виглядають дані розширень `Group` та `GroupPointer`:
+
+```rust
+/// GroupPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [20, 0, 64, 0]
+
+pub struct GroupPointer {
+    // Authority that can set the group address
+    authority: Pubkey;
+    // Account Address that holds the group
+    group_address: Pubkey;
+}
+
+/// Group Extension
+pub const group_extension_header: [u8; 4] = [21, 0, 80, 0]
+
+pub struct TokenGroup {
+    /// The authority that can sign to update the group
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that group
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The current number of group members
+    pub size: u64,
+    /// The maximum number of group members
+    pub max_size: u64,
+}
+```
+
+Ось як виглядають дані розширень `Member` та `MemberPointer`:
+
+```rust
+/// MemberPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [22, 0, 64, 0]
+
+pub struct MemberPointer {
+    // Authority that can set the member address
+    authority: Pubkey;
+    // Account Address that holds the member
+    member_address: Pubkey;
+}
+
+/// Member Extension
+pub const group_extension_header: [u8; 4] = [23, 0, 72, 0]
+
+pub struct TokenGroupMember {
+    /// The associated mint, used to counter spoofing to be sure that member
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The pubkey of the `TokenGroup`
+    pub group: Pubkey,
+    /// The member number
+    pub member_number: u64,
+}
+```

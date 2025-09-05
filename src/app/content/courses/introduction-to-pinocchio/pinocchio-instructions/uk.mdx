@@ -1,0 +1,193 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкції
+
+Як ми бачили раніше, використання трейту `TryFrom` дозволяє чітко відокремити валідацію від бізнес-логіки, покращуючи як підтримуваність, так і безпеку.
+
+<ArticleSection name="Instruction Structure" id="instruction-structure" level="h2" />
+
+Коли настає час обробити логіку, ми можемо створити структуру такого вигляду: 
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_datas: DepositInstructionData,
+}
+```
+
+Ця структура визначає, які дані будуть доступні під час обробки логіки. Потім ми десеріалізуємо це за допомогою функції `try_from`, яку можна знайти у файлі `lib.rs`:
+
+```rust
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_datas = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_datas,
+        })
+    }
+}
+```
+
+Цей обгортка надає три ключові переваги:
+1. Вона приймає як необроблені вхідні дані (байти та акаунти)
+2. Делегує валідацію окремим реалізаціям `TryFrom`
+3. Повертає повністю типізовану та повністю валідовану структуру Deposit
+
+Потім ми можемо реалізувати логіку обробки таким чином:
+
+```rust
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&self) -> ProgramResult {
+        // deposit logic
+        Ok(())
+    }
+}
+```
+
+- `DISCRIMINATOR` — це байт, який ми використовуємо для зіставлення шаблонів у точці входу
+- Метод `process()` містить лише бізнес-логіку, оскільки всі перевірки валідації вже завершені
+
+Результат? Ми отримуємо ергономіку в стилі Anchor з усіма перевагами повністю нативного підходу: явний, передбачуваний і швидкий.
+
+<ArticleSection name="Cross Program Invocation" id="cross-program-invocation" level="h2" />
+
+Як згадувалося раніше, Pinocchio надає допоміжні крейти, такі як `pinocchio-system` та `pinocchio-token`, які спрощують міжпрограмні виклики (CPI) до нативних програм. 
+
+Ці допоміжні структури та методи замінюють підхід Anchor з `CpiContext`, який ми використовували раніше:
+
+```rust
+Transfer {
+    from: self.accounts.owner,
+    to: self.accounts.vault,
+    lamports: self.instruction_datas.amount,
+}
+.invoke()?;
+```
+
+Структура `Transfer` (з `pinocchio-system`) інкапсулює всі поля, необхідні для System Program, а `.invoke()` виконує CPI. Не потрібен конструктор контексту чи додатковий шаблонний код.
+
+Коли викликач повинен бути адресою, похідною від програми (PDA), Pinocchio зберігає той самий лаконічний API:
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(self.accounts.owner.key().as_ref()),
+    Seed::from(&[bump]),
+];
+let signers = [Signer::from(&seeds)];
+
+Transfer {
+    from: self.accounts.vault,
+    to: self.accounts.owner,
+    lamports: self.accounts.vault.lamports(),
+}
+.invoke_signed(&signers)?;
+```
+
+**Ось як це працює:**
+1. `Seeds` створює масив об'єктів Seed, які відповідають деривації PDA
+2. `Signer` обгортає ці сіди в допоміжний клас Signer
+3. `invoke_signed` виконує CPI, передаючи масив підписантів для авторизації переказу
+
+Результат? Чистий, першокласний інтерфейс як для звичайних, так і для підписаних CPI: без необхідності в макросах і без прихованої магії.
+
+<ArticleSection name="Multiple Instruction Structure" id="multiple-instruction-structure" level="h2" />
+
+Часто вам знадобиться повторно використовувати ту саму структуру облікових записів і логіку валідації для кількох інструкцій; наприклад, при оновленні різних полів конфігурації.
+
+Замість створення окремого дискримінатора для кожної інструкції, ви можете використовувати шаблон, який розрізняє інструкції за розміром їхнього корисного навантаження даних.
+
+Ось як це працює:
+
+Ми використовуємо єдиний дискримінатор інструкцій для всіх пов'язаних оновлень конфігурації. Конкретна інструкція визначається довжиною вхідних даних.
+
+Після цього, у вашому процесорі, зіставляйте за `self.data.len()`. Кожен тип інструкції має унікальний розмір даних, тож ви можете відповідно направляти до правильного обробника.
+
+Це виглядатиме так:
+
+```rust
+pub struct UpdateConfig<'a> {
+    pub accounts: UpdateConfigAccounts<'a>,
+    pub data: &'a [u8],
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for UpdateConfig<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = UpdateConfigAccounts::try_from(accounts)?;
+
+        // Return the initialized struct
+        Ok(Self { accounts, data })
+    }
+}
+
+impl<'a> UpdateConfig<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &4;
+
+    pub fn process(&mut self) -> ProgramResult {
+        match self.data.len() {
+            len if len == size_of::<UpdateConfigStatusInstructionData>() => {
+                self.process_update_status()
+            }
+            len if len == size_of::<UpdateConfigFeeInstructionData>() => self.process_update_fee(),
+            len if len == size_of::<UpdateConfigAuthorityInstructionData>() => {
+                self.process_update_authority()
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+
+    //..
+}
+```
+
+Зверніть увагу, що ми відкладаємо десеріалізацію даних інструкції до того моменту, коли дізнаємося, який обробник викликати. Це дозволяє уникнути непотрібного розбору та зберігає логіку точки входу чистою.
+
+Потім кожен обробник може десеріалізувати свій конкретний тип даних і виконати оновлення:
+
+```rust
+pub fn process_update_authority(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigAuthorityInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_authority_unchecked(instruction_data.authority) }?;
+
+    Ok(())
+}
+
+pub fn process_update_fee(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigFeeInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_fee_unchecked(instruction_data.fee) }?;
+
+    Ok(())
+}
+
+pub fn process_update_status(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigStatusInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_state_unchecked(instruction_data.status) }?;
+
+    Ok(())
+}
+```
+
+Цей підхід дозволяє вам спільно використовувати валідацію облікових записів і використовувати єдину точку входу для кількох пов'язаних інструкцій, зменшуючи шаблонний код і роблячи вашу кодову базу простішою для підтримки.
+
+Використовуючи зіставлення за розміром даних, ви можете ефективно направляти до правильної логіки без додаткових дискримінаторів або складного розбору.

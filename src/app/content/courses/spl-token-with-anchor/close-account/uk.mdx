@@ -1,0 +1,26 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Інструкція закриття рахунку
+
+Закриває токен-рахунок і переказує залишок його SOL-ренти на цільовий рахунок. Токен-рахунок повинен мати нульовий баланс, якщо це не нативний SOL-рахунок.
+
+> Починаючи з Token2022 можливо закрити `Mint` рахунок, який має запас 0
+
+Перш ніж ми зможемо закрити будь-який токен-рахунок, нам потрібно вже мати:
+- Ініціалізований `Mint` рахунок
+- Ініціалізований `Token` рахунок або `Associated Token` рахунок, який не містить жодних токенів.
+
+Ось як виглядає CPI до інструкції `close_account()`: 
+
+```rust
+close_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        CloseAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            destination: ctx.accounts.authority.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

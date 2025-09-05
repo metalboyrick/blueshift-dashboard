@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Дублювання змінюваних облікових записів
+
+Атаки з дублюванням змінюваних облікових записів використовують програми, які приймають кілька змінюваних облікових записів одного типу, передаючи той самий обліковий запис двічі, що призводить до того, що програма несвідомо перезаписує власні зміни. Це створює стан гонки в межах однієї інструкції, де пізніші мутації можуть непомітно скасувати попередні.
+
+Ця вразливість насамперед впливає на інструкції, які змінюють дані в облікових записах, що належать програмі, а не на системні операції, такі як переказ лампортів. Атака вдається, оскільки середовище виконання Solana не запобігає передачі того самого облікового запису кілька разів різним параметрам; відповідальність за виявлення та обробку дублікатів лежить на програмі.
+
+Небезпека полягає в послідовному характері виконання інструкцій. Коли той самий обліковий запис передається двічі, програма виконує першу мутацію, а потім негайно перезаписує її другою мутацією, залишаючи обліковий запис у неочікуваному стані, який може не відображати наміри користувача або логіку програми.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Розгляньмо цю вразливу інструкцію, яка оновлює поля власності у двох програмних облікових записах:
+
+```rust
+#[program]
+pub mod unsafe_update_account{
+    use super::*;
+    
+    //..
+
+    pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+        ctx.accounts.program_account_1.owner = pubkey_a;
+        ctx.accounts.program_account_2.owner = pubkey_b;
+        
+        Ok(())
+    }
+
+    //..
+
+}
+
+#[derive(Accounts)]
+pub struct UpdateAccount<'info> {
+   #[account(mut)]
+    pub program_account_1: Account<'info, ProgramAccount>,
+    #[account(mut)]
+    pub program_account_2: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Цей код має критичний недолік: він ніколи не перевіряє, чи `program_account_1` та `program_account_2` є різними обліковими записами.
+
+Зловмисник може використати це, передавши той самий обліковий запис для обох параметрів. Ось що відбувається:
+- Програма встановлює `program_account_1.owner = pubkey_a`
+- Оскільки обидва параметри посилаються на той самий обліковий запис, програма негайно перезаписує це значенням `program_account_2.owner = pubkey_b`
+
+Кінцевий результат: власник облікового запису встановлюється як `pubkey_b`, повністю ігноруючи `pubkey_a`
+
+Це може здаватися нешкідливим, але розгляньмо наслідки. Користувач, який очікує оновити два різні облікові записи з конкретними призначеннями власності, виявляє, що був змінений лише один обліковий запис, і не так, як вони очікували. У складних протоколах це може призвести до неузгодженого стану, невдалих багатоетапних операцій або навіть фінансових втрат.
+
+Рішення просте. Вам лише потрібно перевірити, що облікові записи унікальні перед тим, як продовжити:
+
+```rust
+pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+    if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+        return Err(ProgramError::InvalidArgument)
+    }
+
+    ctx.accounts.program_account_1.owner = pubkey_a;
+    ctx.accounts.program_account_2.owner = pubkey_b;
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+У Pinocchio застосовується той самий шаблон валідації:
+
+```rust
+if self.accounts.program_account_1.key() == self.accounts.program_account_2.key() {
+    return Err(ProgramError::InvalidArgument)
+}
+```

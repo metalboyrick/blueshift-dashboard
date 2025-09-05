@@ -1,0 +1,147 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Make" id="make" level="h2" />
+
+Тепер ми можемо перейти до інструкції `make`, яка знаходиться в `make.rs` і виконає такі дії:
+- Ініціалізує запис Escrow та зберігає всі умови.
+- Створює Vault (ATA для `mint_a`, що належить `escrow`).
+- Переміщує токени A творця в цей vault за допомогою CPI до програми SPL-Token.
+
+### Облікові записи 
+
+Облікові записи, необхідні в цьому контексті:
+- `maker`: користувач, який визначає умови та вносить `mint_a` у `Escrow`
+- `escrow`: обліковий запис, що містить умови обміну (творець, монети, суми)
+- `mint_a`: токен, який `maker` вносить
+- `mint_b`: токен, який `maker` хоче отримати в обмін
+- `maker_ata_a`: токен-акаунт, пов'язаний з `maker` та `mint_a`, що використовується для внесення токенів у `vault`
+- `vault`: токен-акаунт, пов'язаний з `escrow` та `mint_a`, де зберігаються внесені токени
+- `associated_token_program`: програма асоційованих токенів, що використовується для створення асоційованих токен-акаунтів
+- `token_program`: програма токенів, що використовується для CPI-переказу
+- `system_program`: системна програма, що використовується для створення `Escrow`
+
+І з усіма обмеженнями це виглядатиме приблизно так:
+
+```rust
+#[derive(Accounts)]
+#[instruction(seed: u64)]
+pub struct Make<'info> {
+    #[account(mut)]
+    pub maker: Signer<'info>,
+    #[account(
+        init,
+        payer = maker,
+        space = Escrow::INIT_SPACE + Escrow::DISCRIMINATOR.len(),
+        seeds = [b"escrow", maker.key().as_ref(), seed.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub escrow: Account<'info, Escrow>,
+
+    /// Token Accounts
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint_a: InterfaceAccount<'info, Mint>,
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint_b: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint_a,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_a: InterfaceAccount<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = maker,
+        associated_token::mint = mint_a,
+        associated_token::authority = escrow,
+        associated_token::token_program = token_program
+    )]
+    pub vault: InterfaceAccount<'info, TokenAccount>,
+
+    /// Programs
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+**Примітка**: Ця інструкція передає одну token_program. Оскільки take передає обидві монети, ми повинні переконатися, що обидві монети належать одній і тій самій програмі (SPL Token або Token-2022), інакше CPI не вдасться.
+
+### Логіка 
+
+Після ініціалізації облікових записів ми нарешті можемо обробити логіку, створивши менші допоміжні функції як реалізацію структури облікового запису.
+
+Ми починаємо з заповнення `Escrow` за допомогою хелпера `set_inner()`, а потім переходимо до внесення токенів через CPI `transfer` таким чином:
+
+```rust
+impl<'info> Make<'info> {
+    /// # Create the Escrow
+    fn populate_escrow(&mut self, seed: u64, amount: u64, bump: u8) -> Result<()> {
+        self.escrow.set_inner(Escrow {
+            seed,
+            maker: self.maker.key(),
+            mint_a: self.mint_a.key(),
+            mint_b: self.mint_b.key(),
+            receive: amount,
+            bump,
+        });
+
+        Ok(())
+    }
+
+    /// # Deposit the tokens
+    fn deposit_tokens(&self, amount: u64) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.maker_ata_a.to_account_info(),
+                    mint: self.mint_a.to_account_info(),
+                    to: self.vault.to_account_info(),
+                    authority: self.maker.to_account_info(),
+                },
+            ),
+            amount,
+            self.mint_a.decimals,
+        )?;
+
+        Ok(())
+    }
+}
+```
+
+Ми бачимо, що Anchor допомагає нам кількома способами:
+- `set_inner()`: гарантує, що кожне поле заповнене.
+- `transfer_checked`: обгортає Token CPI так само, як і системні хелпери, які ми використовували раніше.
+
+А тепер ми можемо перейти до створення функції `handler`, де ми виконуємо деякі перевірки перед використанням хелперів, ось так:
+
+```rust
+pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+    // Validate the amount
+    require_gt!(receive, 0, EscrowError::InvalidAmount);
+    require_gt!(amount, 0, EscrowError::InvalidAmount);
+
+    // Save the Escrow Data
+    ctx.accounts.populate_escrow(seed, receive, ctx.bumps.escrow)?;
+
+    // Deposit Tokens
+    ctx.accounts.deposit_tokens(amount)?;
+
+    Ok(())
+}
+  ```
+
+Тут ми додаємо дві перевірки валідації; одну для аргументу `amount` і одну для аргументу `receive`, щоб переконатися, що ми не передаємо нульове значення для жодного з них.
+
+### Попередження
+
+Певні розширення з SPL Token-2022, наприклад, хуки передачі, конфіденційні передачі, стани облікових записів за замовчуванням можуть створювати вразливості, такі як блокування передач, блокування коштів та спричинення rug pull в логіці ескроу, сховищах або CPI.
+
+- Переконайтеся, що `mint_a` та `mint_b` належать одній і тій самій програмі токенів, щоб запобігти збоям CPI.
+- Використовуйте добре перевірені токени (наприклад, USDC, wSOL) зі стандартної програми SPL Token.
+- Уникайте неперевірених або складних мінтів Token-2022.
