@@ -2,6 +2,8 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # 指令内省
 
+![指令内省](/graphics/course-banners/instruction-introspection.png)
+
 指令内省是 Solana 上的一项强大功能，它允许程序分析同一事务中的其他指令，包括尚未执行的指令。这使您能够动态响应或增强这些指令，例如通过注入保护措施、验证行为或将外部程序的指令集成到您自己的逻辑中。
 
 这得益于一个特殊的系统账户，称为 `Instructions` sysvar。Sysvar 是由 Solana 运行时维护的只读账户，向程序公开内部状态（例如，时钟、租金、纪元计划等）。Instructions sysvar 专门公开当前事务中的完整指令列表，以及它们的元数据和序列化数据。
