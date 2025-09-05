@@ -3,7 +3,7 @@
   "locale": {
     "source": "en",
     "targets": [
-      "vi"
+      "vi", "uk"
     ]
   },
   "buckets": {
