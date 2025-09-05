@@ -83,20 +83,17 @@ new TransactionInstruction({
     data: Buffer.from(message, "utf-8"), // Memo message. In this case it is "Hello, Solana"
     programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), // Memo program that validates keys and memo message
 }),
+```
 
 或者，我们可以在下载该软件包后，使用 Memo 程序的软件开发工具包，如下所示：
 
 ```
-
 npm i @solana/spl-memo
-
 ```
 
 在我们的示例中，我们将使用后者，代码如下：
 
-```
-
-ts
+```ts
 const memoInstruction = createMemoInstruction(
     "Hello, world!",
     [keypair.publicKey],
@@ -121,16 +118,13 @@ const transferTransaction = new Transaction().add(
 const transferSignature = await sendAndConfirmTransaction(connection, transferTransaction, [keypair]);
 
 console.log(`Tokens transferred with memo! Check out your TX here: https://explorer.solana.com/tx/${transferSignature}?cluster=devnet`);
-
 ```
 
 <ArticleSection name="Disabling and Enabling the Memo" id="disabling-and-enabling-the-memo" level="h2" />
 
 如果我们不想强制要求转账必须附带备注，可以使用 memo_transfer_disable 函数来实现，具体如下：
 
-```
-
-ts
+```ts
 const disableRequiredMemoTransfersInstruction = createDisableRequiredMemoTransfersInstruction(
     destinationTokenAccount,
     destinationKeypair.publicKey,
@@ -157,14 +151,11 @@ const transaction = new Transaction().add(
 const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, destinationKeypair]);
 
 console.log(`Tokens transferred and account state changed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
-
 ```
 
 如需恢复强制备注要求，只需调用 enableRequiredMemoTransfers() 函数，示例如下：
 
-```
-
-ts
+```ts
 const enableRequiredMemoTransfersInstruction = createEnableRequiredMemoTransfersInstruction(
     destinationTokenAccount,
     destinationKeypair.publicKey,
