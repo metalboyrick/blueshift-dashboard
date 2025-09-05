@@ -18,7 +18,7 @@
 - system_program: 系统程序。必须是可执行的
 - token_program: 代币程序。必须是可执行的
 
-**注意**：我们将使用 [Pinocchio 简介](/en/courses/introduction-to-pinocchio/pinocchio-accounts) 中介绍的类型。
+**注意**：我们将使用 [Pinocchio 简介](/zh-CN/courses/introduction-to-pinocchio/pinocchio-accounts) 中介绍的类型。
 
 在代码中，这看起来像这样：
 
@@ -111,7 +111,7 @@ impl<'a> TryFrom<&'a [u8]> for MakeInstructionData {
 
 我们首先在 `TryFrom` 实现中初始化所需的账户，在此之前我们已经反序列化了 `instruction_data` 和 `accounts`。
 
-在此步骤中，我们使用从[Pinocchio简介](/en/courses/introduction-to-pinocchio/pinocchio-accounts)中介绍的辅助函数的`ProgramAccount::init::<Escrow>`特性创建`Escrow`账户。同样，我们初始化Vault账户，因为它需要重新创建：
+在此步骤中，我们使用从[Pinocchio简介](/zh-CN/courses/introduction-to-pinocchio/pinocchio-accounts)中介绍的辅助函数的`ProgramAccount::init::<Escrow>`特性创建`Escrow`账户。同样，我们初始化Vault账户，因为它需要重新创建：
 
 ```rust
 pub struct Make<'a> {
