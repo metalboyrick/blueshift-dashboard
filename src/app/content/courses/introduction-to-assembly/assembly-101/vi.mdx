@@ -32,19 +32,19 @@ Hãy coi sBPF như một máy tính được thiết kế đặc biệt cho vi�
 
 Không giống như assembly gốc chạy trực tiếp trên CPU của bạn, mã sBPF thực thi trong một môi trường máy ảo có kiểm soát. Máy ảo này đảm bảo an toàn bằng cách xác minh từng lệnh trước khi thực thi, ngăn chặn sự cố, vòng lặp vô hạn và truy cập bộ nhớ trái phép.
 
-Mặc dù có những ràng buộc an toàn này, sBPF vẫn duy trì hiệu suất cao thông qua biên dịch `just-in-time` đạt tốc độ thực thi gần như nguyên bản.
+Bất chấp những ràng buộc về an toàn này, sBPF vẫn duy trì hiệu suất cao thông qua biên dịch `just-in-time` để đạt được tốc độ thực thi gần như nguyên bản.
 
-Máy ảo cũng đảm bảo thực thi xác định: các chương trình giống hệt nhau với đầu vào giống nhau sẽ tạo ra kết quả giống nhau trên tất cả các trình xác thực trên toàn thế giới. Tính nhất quán này rất quan trọng cho sự đồng thuận blockchain.
+Máy ảo cũng đảm bảo việc thực thi được xác định: các chương trình giống hệt nhau với đầu vào giống nhau sẽ tạo ra kết quả giống nhau trên tất cả các trình xác thực trên toàn thế giới. Tính nhất quán này rất quan trọng cho sự đồng thuận blockchain.
 
-Ngoài ra, sBPF bao gồm các syscall để truy cập tài khoản, gọi chéo chương trình và tương tác thời gian chạy.
+Ngoài ra, sBPF bao gồm các syscall để truy cập tài khoản, gọi chéo chương trình và tương tác với runtime.
 
 ### Tại sao việc hiểu Assembly sBPF lại quan trọng
 
-Mặc dù trình biên dịch Rust chuyển đổi hiệu quả mã cấp cao thành các lệnh sBPF, việc hiểu assembly mang lại một số lợi thế:
+Mặc dù trình biên dịch Rust chuyển đổi hiệu quả mã cấp cao thành các lệnh sBPF, việc hiểu assembly mang lại một số lợi ích sau:
 - **Hiểu chi phí tính toán**: Mỗi lệnh sBPF tiêu thụ các đơn vị tính toán (CU). Một dòng Rust có thể biên dịch thành hàng trăm lệnh—assembly cho thấy tại sao một số hoạt động lại tốn kém.
 - **Kích thước chương trình nhỏ hơn**: Các chương trình được viết trực tiếp bằng assembly sBPF nhỏ hơn đáng kể so với các phiên bản Rust được biên dịch, giảm chi phí triển khai và cải thiện thời gian tải.
-- **Cơ hội tối ưu hóa**: Trình biên dịch Rust tạo ra mã an toàn, chính xác nhưng không phải lúc nào cũng hiệu quả nhất. Assembly phơi bày các kiểm tra an toàn dư thừa và chuỗi lệnh chưa tối ưu.
-- **Gỡ lỗi và phân tích**: Khi chương trình hoạt động không như mong đợi, assembly cung cấp sự thật nền tảng. Bạn có thể theo dõi chính xác những lệnh nào đã thực thi và xác định các điểm lỗi.
+- **Khả năng có thể tối ưu hóa**: Trình biên dịch Rust tạo ra mã an toàn, chính xác nhưng không phải lúc nào cũng hiệu quả nhất. Assembly cho thấy các kiểm tra an toàn dư thừa và chuỗi lệnh chưa tối ưu.
+- **Gỡ lỗi và phân tích**: Khi chương trình hoạt động không như mong đợi, assembly cung cấp lỗi rõ ràng. Bạn có thể theo dõi chính xác những lệnh nào đã thực thi và xác định các điểm lỗi.
 
 ### Kiến trúc
 
@@ -56,24 +56,24 @@ Mỗi khi một chương trình eBPF được tải vào kernel, bytecode của 
 
 ### Thực thi
 
-Các chương trình sBPF thực thi thông qua một quy trình đơn giản. Bộ đếm chương trình (`PC`) theo dõi lệnh nào sẽ được thực thi tiếp theo, giống như một dấu trang trong danh sách lệnh của bạn.
+Các chương trình sBPF thực thi thông qua một quy trình đơn giản. Program Counter (`PC`) theo dõi lệnh nào sẽ được thực thi tiếp theo, giống như một đánh dấu trang trong danh sách lệnh của bạn.
 
 Chu kỳ thực thi tuân theo các bước sau:
-1. **Lấy**: Đọc lệnh tại bộ đếm chương trình
-2. **Giải mã**: Diễn giải định dạng lệnh và toán hạng
-3. **Thực thi**: Thực hiện thao tác (sửa đổi thanh ghi, truy cập bộ nhớ, hoặc thay đổi luồng điều khiển)
-4. **Tiến hành**: Di chuyển bộ đếm chương trình đến lệnh tiếp theo (hoặc nhảy đối với các nhánh)
-5. **Lặp lại**: Tiếp tục cho đến khi chương trình kết thúc
+1. **Fetch**: Đọc lệnh tại PC
+2. **Decode**: Diễn giải định dạng lệnh và toán hạng
+3. **Execute**: Thực hiện thao tác (sửa đổi thanh ghi, truy cập bộ nhớ, hoặc thay đổi luồng điều khiển)
+4. **Advance**: Di chuyển PC đến lệnh tiếp theo (hoặc nhảy đến các nhánh)
+5. **Repeat**: Tiếp tục cho đến khi chương trình kết thúc
 
-Mỗi lệnh thực hiện chính xác một thao tác: số học, truy cập bộ nhớ, so sánh, hoặc gọi hàm. Thiết kế một-lệnh-cho-một-thao-tác này làm cho các chương trình sBPF có thể dự đoán và phân tích được.
+Mỗi lệnh thực hiện chính xác một thao tác: số học, truy cập bộ nhớ, so sánh, hoặc gọi hàm. Thiết kế mỗi-lệnh-một-thao-tác này làm cho các chương trình sBPF có thể dự đoán và phân tích được.
 
 <ArticleSection name="Quy trình biên dịch JIT" id="the-jit-compiler-pipeline" level="h2" />
 
 Các chương trình sBPF đạt hiệu suất cao thông qua biên dịch Just-In-Time (JIT).
 
-Khi bạn triển khai một chương trình lên Solana, thời gian chạy thực hiện hai thao tác:
-- **Xác minh**: Đảm bảo an toàn chương trình bằng cách kiểm tra các vòng lặp vô hạn, truy cập bộ nhớ không hợp lệ và các sự cố tiềm ẩn. Trình xác minh phân tích mọi đường dẫn thực thi có thể để đảm bảo hoạt động an toàn.
-- **Biên dịch**: Chuyển đổi các lệnh sBPF thành mã máy gốc chạy trực tiếp trên CPU của trình xác thực. Các thao tác đơn giản như `add64 r1, r2` trở thành các lệnh cộng gốc đơn lẻ, trong khi các thao tác phức tạp nhận thêm kiểm tra an toàn nhưng vẫn biên dịch thành mã gốc hiệu quả.
+Khi bạn triển khai một chương trình lên Solana, runtime thực hiện hai thao tác:
+- **Xác minh**: Đảm bảo tính an toàn của chương trình bằng cách kiểm tra các vòng lặp vô hạn, truy cập bộ nhớ không hợp lệ và các sự cố tiềm ẩn. Trình xác minh phân tích mọi đường dẫn thực thi có thể để đảm bảo hoạt động an toàn.
+- **Biên dịch**: Chuyển đổi các lệnh sBPF thành mã máy gốc chạy trực tiếp trên CPU của trình xác thực. Các thao tác đơn giản như `add64 r1, r2` trở thành các lệnh cộng gốc đơn lẻ, trong khi các thao tác phức tạp sẽ có thêm các kiểm tra an toàn nhưng vẫn biên dịch thành mã gốc hiệu quả.
 
 Cách tiếp cận này đánh đổi thời gian triển khai để lấy tốc độ thực thi. Các chương trình được xác minh và biên dịch một lần trong quá trình triển khai nhưng được thực thi hàng nghìn lần, làm cho đây là một sự đánh đổi tuyệt vời cho hiệu suất blockchain.
 
@@ -81,4 +81,4 @@ Quá trình xác minh JIT đi qua mọi đường dẫn chương trình có th�
 
 Quá trình biên dịch JIT chuyển đổi mỗi lệnh sBPF thành các lệnh CPU gốc tương đương. Vì hầu hết việc thực thi diễn ra trong mã gốc, chi phí máy ảo là tối thiểu.
 
-> Hiểu rằng sBPF biên dịch thành mã máy giải thích tại sao các phép toán số học nhanh trong khi các syscall đi vào runtime lại có chi phí phụ trội. Kiến thức này hướng dẫn các quyết định tối ưu hóa.
+> Việc hiểu cách sBPF biên dịch thành mã máy giải thích tại sao các phép toán số học nhanh trong khi các syscall đi vào runtime lại có chi phí phụ trội. Kiến thức này bổ trợ cho các quyết định tối ưu hóa.

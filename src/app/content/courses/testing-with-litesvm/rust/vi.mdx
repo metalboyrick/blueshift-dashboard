@@ -64,13 +64,13 @@ Khi kiểm thử các chương trình Solana với LiteSVM, bạn sẽ làm vi�
 
 Hiểu cách xây dựng các tài khoản này một cách đúng đắn là điều cần thiết để kiểm thử hiệu quả.
 
-### Tài khoản hệ thống
+### System Accounts
 
 Loại tài khoản cơ bản nhất là tài khoản hệ thống, có hai biến thể chính:
 - **Tài khoản thanh toán**: Tài khoản có lamports để tài trợ cho việc tạo tài khoản chương trình hoặc chuyển lamport
 - **Tài khoản chưa khởi tạo**: Tài khoản trống không có lamports, thường được sử dụng để đại diện cho các tài khoản chương trình đang chờ khởi tạo
 
-Tài khoản hệ thống không chứa dữ liệu và thuộc sở hữu của Chương trình Hệ thống. Sự khác biệt chính giữa tài khoản thanh toán và tài khoản chưa khởi tạo là số dư lamport: tài khoản thanh toán có tiền, trong khi tài khoản chưa khởi tạo bắt đầu với số dư trống.
+Tài khoản hệ thống không chứa dữ liệu và thuộc sở hữu của System Program. Sự khác biệt chính giữa tài khoản thanh toán và tài khoản chưa khởi tạo là số dư lamport: tài khoản thanh toán có tiền, trong khi tài khoản chưa khởi tạo bắt đầu với số dư trống.
 
 Đây là cách tạo tài khoản `payer` trong LiteSVM:
 
@@ -104,7 +104,7 @@ fn test() {
 
 > Một tài khoản chưa khởi tạo đơn giản chỉ là một tài khoản được tạo bình thường với `Keypair.generate()` - không cần thiết lập thêm.
 
-### Tài khoản chương trình
+### Program Accounts
 
 Đối với tài khoản chương trình chứa cấu trúc dữ liệu tùy chỉnh, bạn có thể sử dụng phương pháp tương tự.
 Bạn cũng cần phải tuần tự hóa dữ liệu tài khoản thành một mảng byte, điều này có thể được thực hiện thủ công hoặc bằng cách sử dụng thư viện như `borsh`, `bincode`, hoặc `solana_program_pack`.
@@ -146,7 +146,7 @@ fn test() {
 
 > Trong quá trình kiểm thử, bạn không cần tính toán chính xác tiền thuê. Bạn có thể đặt lamports với một giá trị lớn như `100_000_000_000` và bỏ qua việc tính toán tiền thuê vì đây không phải là tiền thật.
 
-### Tài khoản token
+### Token Accounts
 
 Để tuần tự hóa dữ liệu cho tài khoản SPL Token, bạn có thể sử dụng `spl_token::Mint` và `spl_token::Account`, các lớp này triển khai `solana_program_pack::Pack`.
 
@@ -229,7 +229,7 @@ fn test() {
 }
 ```
 
-<ArticleSection name="Execution" id="execution" level="h2" />
+<ArticleSection name="Thực thi" id="execution" level="h2" />
 
 Với các tài khoản đã được tạo và thêm vào phiên bản LiteSVM của bạn, bây giờ bạn có thể gửi các giao dịch và xác thực logic chương trình của mình.
 

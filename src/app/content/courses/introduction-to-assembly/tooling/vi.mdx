@@ -6,7 +6,7 @@ Việc viết và xây dựng các chương trình sBPF Assembly truyền thốn
 
 <ArticleSection name="Cài đặt" id="installation" level="h2" />
 
-Chúng ta bắt đầu bằng cách cài đặt gói bằng cách:
+Chúng ta bắt đầu bằng cách cài đặt gói như sau:
 
 ```
 cargo install --git https://github.com/blueshift-gg/sbpf.git
@@ -15,10 +15,10 @@ cargo install --git https://github.com/blueshift-gg/sbpf.git
 Sau đó chúng ta sẽ có thể thực hiện tất cả các lệnh sau:
 - `init`: Tạo khung dự án mới.
 - `build`: Biên dịch thành tệp thực thi chương trình Solana.
-- `deploy`: Xây dựng và triển khai chương trình.
+- `deploy`: Build và triển khai chương trình.
 - `test`: Kiểm tra chương trình đã triển khai.
-- `e2e`: Xây dựng, triển khai và kiểm tra chương trình.
-- `clean`: Dọn dẹp các tệp xây dựng và triển khai.
+- `e2e`: Build, triển khai và kiểm thử chương trình.
+- `clean`: Dọn dẹp các tệp đã build và triển khai.
 - `help`: In thông báo này hoặc trợ giúp của (các) lệnh phụ đã cho.
 
 ```text
@@ -57,15 +57,15 @@ Options:
   -V, --version   Print version information
 ```
 
-Sau khi khởi tạo dự án, bạn có thể điều hướng vào thư mục dự án và sử dụng các lệnh khác để xây dựng, triển khai và kiểm tra chương trình của bạn.
+Sau khi khởi tạo dự án, bạn có thể điều hướng vào thư mục dự án và sử dụng các lệnh khác để build, triển khai và kiểm thử chương trình của bạn.
 
-<ArticleSection name="Xây dựng chương trình" id="building-programs" level="h2" />
+<ArticleSection name="Build chương trình" id="building-programs" level="h2" />
 
-sBPF cung cấp hai tùy chọn xây dựng tùy thuộc vào thiết lập và nhu cầu của bạn:
+sBPF cung cấp hai tùy chọn để build tùy thuộc vào thiết lập và nhu cầu của bạn:
 
-### Xây dựng sBPF
+### Build sBPF
 
-Lệnh xây dựng sử dụng một trình hợp ngữ độc lập không yêu cầu thêm các phụ thuộc. Nó hoàn hảo để học tập và thử nghiệm vì nó "hoạt động ngay lập tức" trên bất kỳ nền tảng nào.
+Lệnh build sử dụng một trình hợp ngữ độc lập không yêu cầu thêm các phụ thuộc. Nó hoàn hảo để học tập và thử nghiệm vì nó "hoạt động ngay lập tức" trên bất kỳ nền tảng nào.
 
 ```
 sbpf build
@@ -96,7 +96,7 @@ src/example/example.s
 src/example/example.ld
 ```
 
-<ArticleSection name="Development Environment" id="development-environment" level="h2" />
+<ArticleSection name="Môi trường phát triển" id="development-environment" level="h2" />
 
 Để có trải nghiệm phát triển tốt nhất, hãy cân nhắc cài đặt [tiện ích mở rộng VS Code sBPF Assembly](https://github.com/deanmlittle/vscode-sbpf-asm) cung cấp:
 - Tô sáng cú pháp cho assembly sBPF

@@ -4,11 +4,11 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 Khi chương trình sBPF của bạn thực thi, nó hoạt động với hai cơ chế lưu trữ chính: 11 thanh ghi tốc độ cao được tích hợp vào bộ xử lý và các vùng bộ nhớ có tổ chức chứa mọi thứ khác.
 
-<ArticleSection name="Registers" id="registers" level="h2" />
+<ArticleSection name="Các thanh ghi" id="registers" level="h2" />
 
 Thanh ghi giống như 11 ô lưu trữ được đánh số (`r0` đến `r10`) được tích hợp trực tiếp vào bộ xử lý. Mỗi ô chứa một giá trị 64-bit và cung cấp khả năng truy cập tức thì không có độ trễ. Khi bạn thực thi `add64 r1, r2`, bộ xử lý ngay lập tức truy xuất giá trị từ cả hai thanh ghi và thực hiện phép tính.
 
-Sự đánh đổi rất đơn giản: bạn chỉ có tổng cộng 11 ô, vì vậy bạn cần sử dụng chúng một cách chiến lược cho các giá trị mà bạn đang làm việc.
+Sự đánh đổi rất đơn giản: bạn chỉ có tổng cộng 11 ô, vì vậy bạn cần sử dụng chúng một cách có chiến lược cho các giá trị mà bạn đang làm việc.
 
 sBPF gán vai trò cụ thể cho mỗi thanh ghi:
 
@@ -108,4 +108,4 @@ Hành vi thoát phụ thuộc vào độ sâu của lời gọi:
 - Ở độ sâu lời gọi 0, lệnh thoát kết thúc chương trình với `r0` là mã kết quả. 
 - Ở các cấp độ gọi sâu hơn, lệnh thoát hoạt động như một câu lệnh return, khôi phục các thanh ghi được lưu bởi người gọi (`r6`-`r9`) và con trỏ khung của người gọi (`r10`) trước khi tiếp tục thực thi tại địa chỉ trả về.
 
-Thời gian chạy tự động xử lý việc thiết lập và dọn dẹp thông qua mã đầu và cuối ngầm định, bao gồm cấu hình trạng thái thanh ghi ban đầu và xử lý trả về cuối cùng.
+Runtime tự động xử lý việc thiết lập và dọn dẹp thông qua mã đầu và cuối ngầm định, bao gồm cấu hình trạng thái thanh ghi ban đầu và xử lý trả về cuối cùng.
