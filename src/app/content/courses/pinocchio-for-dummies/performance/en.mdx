@@ -103,3 +103,73 @@ cargo build-bpf --no-default-features
 ```
 
 This approach allows you to maintain a single codebase that can be tuned for development safety or production speed simply by toggling a feature flag.
+
+<ArticleSection name="Bitwise Operations" id="bitwise-operations" level="h2" />
+
+When discussing efficient operations, booleans are among the most wasteful. Consider this: they occupy 1 byte to represent just two possible values: 0 or 1.
+
+If you have multiple booleans in your code, you can store them much more efficiently using bit manipulation. With bitwise operations, you can store up to 8 different boolean values in a single byte.
+
+### Flag Definition
+
+Define flags as bit positions using left-shift operations:
+
+```rust
+const FLAG_ACTIVE: u8 = 1 << 0;     // 0000_0001
+const FLAG_VERIFIED: u8 = 1 << 1;   // 0000_0010  
+const FLAG_PREMIUM: u8 = 1 << 2;    // 0000_0100
+const FLAG_LOCKED: u8 = 1 << 3;     // 0000_1000
+```
+
+To set a flag we can simply do:
+
+```rust
+let mut flags = 0u8;           // flags = 0000_0000
+
+flags |= FLAG_ACTIVE;          // flags = 0000_0001
+flags |= FLAG_VERIFIED;        // flags = 0000_0011
+flags |= FLAG_PREMIUM | FLAG_LOCKED;  // flags = 0000_1111
+```
+
+The `|` (OR operator) is perfect for "turning on" specific bits without affecting others since when you OR with 0, the original bit is preserved and when you OR with 1, the result is always 1 (flag gets set)
+
+If we want to check if a flag is active we can do something like this:
+
+```rust
+let flags = 0b0000_0101u8;  // Has ACTIVE and PREMIUM flags set
+
+// Check if a single flag is set
+if flags & FLAG_ACTIVE != 0 {
+    println!("Account is active");
+}
+
+// Check if multiple flags are set
+if (flags & (FLAG_ACTIVE | FLAG_PREMIUM)) == (FLAG_ACTIVE | FLAG_PREMIUM) {
+    println!("Account is both active and premium");
+}
+
+// Check if any of multiple flags are set
+if flags & (FLAG_VERIFIED | FLAG_PREMIUM) != 0 {
+    println!("Account is either verified or premium (or both)");
+}
+```
+
+The `&` (AND operator) is perfect for "masking" specific bits to check their values since when you AND with 0, the result is always 0 and when you AND with 1, the original bit is preserved
+
+To clear or toggle flags, instead we can do something like this: 
+
+```rust
+let mut flags = 0b0000_1111u8;      // All flags set
+
+// Clear a single flag
+flags &= !FLAG_ACTIVE;              // flags = 0000_1110
+
+// Clear multiple flags at once
+flags &= !(FLAG_VERIFIED | FLAG_PREMIUM);   // flags = 0000_1000
+
+// Toggle a single flag
+flags ^= FLAG_ACTIVE;               // flags = 0000_1001 (now has VERIFIED)
+flags ^= FLAG_LOCKED;               // flags = 0000_0001 (LOCKED now cleared)
+
+// Toggle multiple flags at once
+flags ^= FLAG_PREMIUM | FLAG_LOCKED;        // flags = 0000_1011
