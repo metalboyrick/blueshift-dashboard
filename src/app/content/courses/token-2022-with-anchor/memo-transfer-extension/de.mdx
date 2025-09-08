@@ -97,22 +97,19 @@ new TransactionInstruction({
     data: Buffer.from(message, "utf-8"), // Memo message. In this case it is "Hello, Solana"
     programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), // Memo program that validates keys and memo message
 }),
+```
 
 Or we can use the Memo program SDK after downloading the package like this: 
 
 ```
-
 npm i @solana/spl-memo
-
 ```
 
 > After creating the memo, the next instruction will be a simple transfer instruction.
 
 In our example we're going to use the second option and it will look like this:
 
-```
-
-ts
+```ts
 const memoInstruction = createMemoInstruction(
     "Hello, world!",
     [keypair.publicKey],
@@ -128,16 +125,13 @@ const transferTransaction = new Transaction().add(
 const transferSignature = await sendAndConfirmTransaction(connection, transferTransaction, [keypair]);
 
 console.log(`Tokens transferred with memo! Check out your TX here: https://explorer.solana.com/tx/${transferSignature}?cluster=devnet`);
-
 ```
 
 <ArticleSection name="Disabling and Enabling the Memo" id="disabling-and-enabling-the-memo" level="h2" />
 
 If we don't want to enforce the transfer to come with a memo, we can do so using the `memo_transfer_disable` function and it would look like so:
 
-```
-
-rust
+```rust
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{memo_transfer_disable, MemoTransfer, Token, Mint, Token2022};
 
