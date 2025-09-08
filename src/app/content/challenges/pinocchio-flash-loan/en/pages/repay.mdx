@@ -85,7 +85,7 @@ impl<'a> Repay<'a> {
             }
 
             // Check if the loan is already repaid
-            let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+            let balance = get_token_amount(&protocol_token_account.try_borrow_data()?)?;
             let loan_balance = unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>() + size_of::<[u8; 32]>()) as *const u64) };
 
             if balance < loan_balance {
