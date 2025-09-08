@@ -1,0 +1,111 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Serangan Reinisialisasi
+
+Serangan reinisialisasi memanfaatkan program yang gagal memeriksa apakah sebuah akun sudah diinisialisasi, memungkinkan penyerang untuk menimpa data yang ada dan mengambil alih kendali atas akun-akun berharga.
+
+Sementara inisialisasi secara sah menyiapkan akun baru untuk penggunaan pertama kali, reinisialisasi secara jahat mengatur ulang akun yang ada ke keadaan yang dikendalikan penyerang.
+
+Tanpa validasi inisialisasi yang tepat, penyerang dapat memanggil fungsi inisialisasi pada akun yang sudah digunakan, secara efektif melakukan pengambilalihan secara paksa terhadap status program yang sudah ada. Ini sangat merusak dalam protokol seperti escrow, vault, atau sistem apa pun di mana kepemilikan akun menentukan kendali atas aset berharga.
+
+Inisialisasi menetapkan data akun baru untuk pertama kalinya. Sangat penting untuk memeriksa apakah akun sudah diinisialisasi untuk mencegah penimpaan data yang ada.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Perhatikan instruksi rentan ini yang menginisialisasi akun program:
+
+```rust
+#[program]
+pub mod unsafe_initialize_account{
+    use super::*;
+
+    //..
+
+    pub fn unsafe_initialize_account(ctx: Context<InitializeAccount>) -> Result<()> {
+        let mut writer: Vec<u8> = vec![];
+
+        ProgramAccount {
+            owner: ctx.accounts.owner.key()
+        }.try_serialize(&mut writer)?;
+
+        let mut data = ctx.accounts.program_account.try_borrow_mut_data()?;
+        sol_memcpy(&mut data, &writer, writer.len());
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct InitializeAccount<'info> {
+    pub owner: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Kode ini memiliki kelemahan fatal: tidak pernah memeriksa apakah akun sudah diinisialisasi. Setiap kali instruksi ini dipanggil, kode tersebut tanpa syarat menimpa data akun dan menetapkan pemanggil sebagai pemilik baru, terlepas dari status akun sebelumnya.
+
+Seorang penyerang dapat mengeksploitasi ini dengan:
+- Mengidentifikasi akun yang sudah diinisialisasi yang berharga (seperti PDA escrow yang mengendalikan akun token)
+- Memanggil `unsafe_initialize_account` dengan akun yang sudah ada tersebut
+- Menjadi "pemilik" baru dengan menimpa data pemilik sebelumnya
+- Menggunakan kepemilikan baru mereka untuk menguras aset apa pun yang dikendalikan oleh akun tersebut
+
+Serangan ini sangat merusak dalam skenario escrow. Bayangkan sebuah PDA escrow yang memiliki akun token berisi aset senilai ribuan dolar. Inisialisasi escrow asli dengan benar menyiapkan akun dengan peserta yang sah. Tetapi jika penyerang dapat memanggil fungsi reinisialisasi, mereka dapat menimpa data escrow, menetapkan diri mereka sebagai pemilik, dan mendapatkan kendali atas semua token yang di-escrow.
+
+Untungnya `Anchor` membuatnya sangat mudah untuk melakukan pemeriksaan ini langsung di struct akun hanya dengan menggunakan constraint `init` saat menginisialisasi akun seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct InitializeAccount<'info> {
+    pub owner: Signer<'info>,
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + ProgramAccount::INIT_SPACE
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Atau Anda bisa memeriksa bahwa akun sudah diinisialisasi dalam instruksi menggunakan pemeriksaan `ctx.accounts.program_account.is_initialized` seperti ini:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.is_initialized {
+        return Err(ProgramError::AccountAlreadyInitialized.into());
+    }
+
+    Ok(())
+}
+```
+
+> Constraint `init_if_needed` milik Anchor, yang dilindungi oleh feature flag, harus digunakan dengan sangat hati-hati. Meskipun ini memudahkan inisialisasi akun hanya jika belum diinisialisasi, ini menciptakan jebakan berbahaya: jika akun sudah diinisialisasi, handler instruksi akan terus berjalan secara normal. Ini berarti program Anda dapat beroperasi pada akun yang sudah ada tanpa disadari, berpotensi menimpa data penting atau memungkinkan akses yang tidak sah.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Di Pinocchio, karena kita tidak memiliki kemungkinan untuk menambahkan pemeriksaan keamanan langsung di dalam struct akun, kita terpaksa melakukannya dalam logika instruksi.
+
+Kita dapat melakukannya dengan memeriksa apakah akun memiliki discriminator yang benar:
+
+```rust
+let account_data = self.accounts.program_account.try_borrow_data()?;
+
+if account_data[0] == DISCRIMINATOR {
+    return Err(ProgramError::AccountAlreadyInitialized.into());
+}
+```

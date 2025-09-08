@@ -1,0 +1,231 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Membangun Codama IDL Anda dari awal
+
+Membangun Codama IDL dari awal berarti membuat pohon node lengkap untuk program Anda. Untuk melakukan ini secara efisien, mari kita periksa jenis-jenis node yang tersedia untuk digunakan.
+
+<ArticleSection name="Jenis Node" id="node-types" level="h2" />
+
+### Node Nilai
+
+Untuk memasukkan nilai spesifik ke dalam node, kita menggunakan `ValueNode`. Jenis ini mewakili semua node nilai yang tersedia yang dapat menyimpan berbagai jenis data.
+
+[Di sini](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/valueNodes/README.md) Anda dapat menemukan dokumentasi detail tentang semua nilai yang tersedia.
+
+> `ValueNode` adalah alias tipe dan tidak dapat digunakan langsung sebagai node. Ketika `ValueNode` diperlukan, gunakan salah satu jenis node nilai spesifik sebagai gantinya.
+
+### Node Tipe
+
+Untuk mendefinisikan struktur dan bentuk data, kita menggunakan `TypeNode`. Node-node ini menjelaskan jenis data apa yang diharapkan: seperti angka, string, struct, array, atau tipe kustom.
+
+Mereka mendefinisikan skema tanpa berisi nilai sebenarnya.
+
+[Di sini](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/typeNodes/README.md) Anda dapat menemukan dokumentasi detail tentang semua tipe yang tersedia.
+
+> `TypeNode` adalah alias tipe dan tidak dapat digunakan langsung sebagai node. Ketika `TypeNode` diperlukan, gunakan salah satu jenis node tipe spesifik sebagai gantinya.
+
+### Node Diskriminator
+
+Untuk membedakan antara akun dan instruksi dalam program kita, kita menggunakan diskriminator. Ada berbagai metode untuk mencapai ini, dan `DiscriminatorNode` menyediakan semua opsi yang tersedia:
+
+- `ConstantDiscriminatorNode`: Digunakan untuk mendeskripsikan nilai konstan pada offset tertentu. Ini mengambil `ConstantValueNode` sebagai konstanta dan `number` sebagai offset:
+    
+
+    ```ts
+    const discriminatorNode = constantDiscriminatorNode(constantValueNodeFromString('utf8', 'Hello'), 64);
+    ```
+
+- `FieldDiscriminatorNode`: Digunakan untuk mendeskripsikan nilai default dari field struct pada offset tertentu. Ini mengambil `CamelCaseString` sebagai nama field dan `number` sebagai offset:
+    
+
+    ```ts
+    const discriminatorNode = fieldDiscriminatorNode('accountState', 64);
+    ```
+
+    > Field harus tersedia dalam data akun atau argumen instruksi dan harus memiliki nilai default. Misalnya:
+
+    ```ts
+    accountNode({
+        data: structTypeNode([
+            structFieldTypeNode({
+                name: 'discriminator',
+                type: numberTypeNode('u32'),
+                defaultValue: numberValueNode(42),
+                defaultValueStrategy: 'omitted',
+            }),
+            // ...
+        ]),
+        discriminators: [fieldDiscriminatorNode('discriminator')],
+        // ...
+    });
+    ```
+
+- `SizeDiscriminatorNode`: Digunakan untuk membedakan akun atau instruksi berdasarkan ukuran datanya. Ini mengambil `number` sebagai parameter ukuran:
+    
+
+    ```ts
+    const discriminatorNode = sizeDiscriminatorNode(165);
+    ```
+
+> `DiscriminatorNode` adalah alias tipe dan tidak dapat digunakan langsung sebagai node. Ketika `DiscriminatorNode` diperlukan, gunakan salah satu tipe node diskriminator spesifik sebagai gantinya.
+
+### Node Pda Seed
+
+Untuk mendefinisikan seed untuk Program Derived Addresses (PDA), kita menggunakan `PdaSeedNode`. Node-node ini menentukan bagaimana alamat PDA harus diturunkan, baik dari nilai konstan atau input variabel. `PdaSeedNode` menyediakan berbagai metode untuk mendefinisikan seed PDA:
+
+- `ConstantPdaSeedNode`: Digunakan untuk mendeskripsikan seed konstan untuk alamat program-derived. Ini mengambil `TypeNode` dan `ValueNode` secara bersamaan:
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNode(stringTypeNode('utf8'), stringValueNode('auth'));
+    ```
+
+    > Helper `constantPdaSeedNodeFromString` juga dapat digunakan untuk mendefinisikan konstanta berbasis string dengan lebih mudah. Misalnya, contoh berikut setara dengan contoh di atas:
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNodeFromString('utf8', 'auth');
+    ```
+
+- `VariablePdaSeedNode`: Digunakan untuk mendeskripsikan seed variabel untuk alamat program-derived. Ini mengambil nama dan `TypeNode`:
+
+    ```ts
+    const pdaSeedNode = variablePdaSeedNode('authority', publicKeyTypeNode())
+    ```
+
+Berikut cara penggunaannya dalam `pdaNode`:
+
+```ts
+const counterPda = pdaNode({
+    name: 'counter',
+    seeds: [
+        constantPdaSeedNodeFromString('utf8', 'counter'),
+        variablePdaSeedNode('authority', publicKeyTypeNode()),
+    ],
+});
+```
+
+> `PdaSeedNode` adalah alias tipe dan tidak dapat digunakan langsung sebagai node. Ketika `PdaSeedNode` diperlukan, gunakan salah satu tipe node pda seed spesifik sebagai gantinya.
+
+<ArticleSection name="Writing a Codama IDL" id="writing-a-codama-idl" level="h2" />
+
+Sekarang kita telah memeriksa node-node terpenting yang tersedia dalam program, mari kita pelajari cara membuat Codama IDL dari awal.
+
+### Root Node
+
+Untuk membuat dasar Codama IDL Anda, kita menggunakan `RootNode`. Node ini berfungsi sebagai wadah tingkat atas yang menampung `ProgramNode` utama Anda serta program tambahan lainnya yang mungkin direferensikan oleh program utama.
+
+```ts
+const node = rootNode(programNode({ ... }));
+```
+
+### Program Node
+
+Untuk mendefinisikan seluruh program on-chain, kita menggunakan `ProgramNode`. Node ini mewakili program lengkap yang di-deploy pada blockchain dan mendefinisikan semua elemen minimum yang diperlukan seperti akun, instruksi, PDA, dan error.
+
+Selain elemen-elemen inti tersebut, node ini menerima nama program, versi, kunci publik deployment, dan dokumentasi markdown:
+
+```ts
+const node = programNode({
+    name: 'counter',
+    publicKey: '22222222222222222222222222222222222222222222',
+    version: '0.0.1',
+    docs: [],
+    accounts: [],
+    instructions: [],
+    definedTypes: [],
+    pdas: [],
+    errors: [],
+});
+```
+
+Pada bagian selanjutnya kita akan memeriksa semua elemen ini secara detail.
+
+### Account Node
+
+Untuk mendefinisikan akun on-chain, kita menggunakan `AccountNode`. Node ini dicirikan oleh nama, struktur data, dan atribut opsional seperti definisi PDA dan diskriminator akun.
+
+Ini mewakili akun yang biasanya sesuai dengan file `state.rs` dari program Anda.
+
+Bidang docs dapat digunakan untuk menambahkan dokumentasi yang menjelaskan apa yang dicapai akun ini dalam program:
+
+```ts
+const node = accountNode({
+    name: 'token',
+    data: structTypeNode([
+        structFieldTypeNode({ name: 'mint', type: publicKeyTypeNode() }),
+        structFieldTypeNode({ name: 'owner', type: publicKeyTypeNode() }),
+        structFieldTypeNode({ name: 'amount', type: numberTypeNode('u64') }),
+    ]),
+    discriminators: [sizeDiscriminatorNode(72)],
+    size: 72,
+    pda: pdaLinkNode("associatedTokenAccount"),
+});
+```
+
+> `AccountNode` tidak menyimpan array dari `PdaNode` tetapi tautan opsional tunggal ke `PdaNode` melalui `PdaLinkNode` sehingga jika `PdaNode` didefinisikan di dalam `ProgramNode`, keduanya dapat dihubungkan di sini.
+
+### Instruction Node
+
+Untuk mendefinisikan instruksi program, kita menggunakan `InstructionNode`. Node ini mewakili instruksi dalam program dan memungkinkan Anda menentukan diskriminator, akun yang diperlukan, dan data instruksi tanpa komplikasi.
+
+Selain itu, Anda dapat menyertakan akun opsional. Berdasarkan desain program Anda, akun opsional ini dapat diselesaikan dengan dua cara: dengan dihilangkan atau dengan meneruskan ID program sebagai akun. Anda dapat memilih metode penyelesaian menggunakan bidang `optionalAccountStrategy: "omitted" | "programId"`.
+
+> Ketika `optionalAccountStrategy` tidak disediakan, strategi `programId` akan diasumsikan secara default.
+
+Bidang docs dapat digunakan untuk menambahkan dokumentasi yang menjelaskan apa yang dicapai instruksi ini dalam program.
+
+```ts
+const node = instructionNode({
+    name: 'increment',
+    discriminators: [fieldDiscriminatorNode('discriminator')],
+    arguments: [
+        instructionArgumentNode({
+            name: 'discriminator',
+            type: numberTypeNode('u8'),
+            defaultValue: numberValueNode(1),
+            defaultValueStrategy: 'omitted',
+        }),
+    ],
+    accounts: [
+        instructionAccountNode({ name: 'counter', isWritable: true, isSigner: true }),
+        instructionAccountNode({ name: 'authority', isWritable: false, isSigner: false }),
+    ],
+    remainingAccounts: [instructionRemainingAccountsNode(argumentValueNode('authorities'), { isSigner: true })],
+    optionalAccountStrategy: 'omitted',
+});
+```
+
+Dalam `instructionAccountNode`, Anda dapat menentukan opsionalitas akun menggunakan bidang `isOptional: boolean`, atau menyediakan `defaultValue` yang mengarah ke `ValueNode`.
+
+> Fungsionalitas defaultValue juga bekerja untuk `instructionArgumentNode`.
+
+DefaultValueStrategy dalam instructionArgumentNode menentukan bagaimana nilai default ditangani: "optional" berarti nilai default argumen dapat diganti oleh argumen yang disediakan atau "omitted" yang berarti tidak ada argumen yang harus disediakan dan nilai default harus selalu digunakan
+
+Strategi ini default ke "optional" jika tidak ditentukan.
+
+### Error Node
+
+Untuk mendefinisikan error yang dapat dikembalikan oleh program, kita menggunakan `ErrorNode`. Node ini dicirikan oleh nama, kode numerik yang akan dikembalikan, dan pesan yang dapat dibaca terkait untuk debugging.
+
+```ts
+const node = errorNode({
+    name: 'invalidAmountArgument',
+    code: 1,
+    message: 'The amount argument is invalid.',
+});
+```
+
+### PDA Node
+
+Untuk menyediakan definisi untuk Program-Derived Addresses tertentu, kita menggunakan `PdaNode`. Node ini dicirikan oleh nama dan daftar seed yang bisa konstan atau variabel, memungkinkan pembuatan PDA yang fleksibel.
+
+```ts
+const node = pdaNode({
+    name: 'counter',
+    seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+    docs: ['The counter PDA derived from its authority.'],
+});
+```
+
+> Jika ID program berbeda dari leluhur ProgramNode terdekat, Anda perlu menentukannya menggunakan bidang programId.
+
+Ini dapat digunakan untuk menghubungkan PDA sebagai `defaultValue` dalam `instructionAccountNode` menggunakan `pdaValueNode`.

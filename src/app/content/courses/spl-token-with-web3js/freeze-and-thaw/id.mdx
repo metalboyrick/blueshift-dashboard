@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruksi Freeze dan Thaw
+
+Freeze mencegah semua operasi token pada akun sampai di-thaw. Hanya freeze authority dari mint yang dapat melakukan operasi ini.
+
+> Sepenuhnya menonaktifkan transfer, persetujuan, dan pembakaran dan hanya memengaruhi akun tertentu yang dibekukan
+
+Thaw mengaktifkan kembali operasi token pada akun yang sebelumnya dibekukan. Hanya freeze authority dari mint yang dapat men-thaw akun.
+
+> Mengembalikan fungsionalitas penuh ke akun yang dibekukan dan hanya dapat dilakukan oleh freeze authority dari mint
+
+Sebelum kita dapat membekukan dan mencairkan token apa pun, kita perlu sudah memiliki:
+- Akun `Mint` yang telah diinisialisasi di mana kita memegang `freezeAuthority`
+- Akun `Token` atau akun `Associated Token` yang telah diinisialisasi yang ingin kita bekukan atau cairkan
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Dengan menggunakan instruksi "raw" tanpa abstraksi apa pun, beginilah cara membekukan token:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    tokenAccount.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Freeze an ATA 
+const freezeInstruction = createFreezeAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    freezeInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and frozen! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Dengan menggunakan instruksi "raw" tanpa abstraksi apa pun, beginilah cara mencabut token:
+
+```ts
+// Thaw an ATA 
+const thawInstruction = createThawAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(thawInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token account thawed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+Beginilah instruksi yang sama akan terlihat jika diabstraksikan dengan instruksi `freezeAccount()`:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    tokenAccount.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await freezeAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Frozen!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+Beginilah instruksi yang sama akan terlihat jika diabstraksikan dengan instruksi `thawAccount()`:
+
+```ts
+let tx = await thawAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Thawed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

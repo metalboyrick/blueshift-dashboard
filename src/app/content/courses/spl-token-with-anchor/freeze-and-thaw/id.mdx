@@ -1,0 +1,45 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruksi Freeze dan Thaw
+
+Freeze mencegah semua operasi token pada akun sampai di-thaw. Hanya freeze authority dari mint yang dapat melakukan operasi ini.
+
+> Sepenuhnya menonaktifkan transfer, persetujuan, dan pembakaran dan hanya memengaruhi akun tertentu yang dibekukan
+
+Thaw mengaktifkan kembali operasi token pada akun yang sebelumnya dibekukan. Hanya freeze authority dari mint yang dapat men-thaw akun.
+
+> Mengembalikan fungsionalitas penuh ke akun yang dibekukan dan hanya dapat dilakukan oleh freeze authority dari mint
+
+Sebelum kita dapat membekukan atau mencairkan akun token apa pun, kita perlu sudah memiliki:
+- Akun `Mint` yang terinisialisasi di mana kita memegang `freezeAuthority`
+- Akun `Token` atau akun `Associated Token` yang terinisialisasi yang ingin kita bekukan atau cairkan
+
+Beginilah tampilan CPI untuk instruksi `freeze_account()`: 
+
+```rust
+freeze_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        FreezeAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```
+
+Dan beginilah tampilan CPI untuk instruksi `thaw_account()`: 
+
+```rust
+thaw_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        ThawAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

@@ -1,0 +1,113 @@
+# Pembayaran Kembali
+
+Instruksi `repay` adalah bagian kedua dari sistem pinjaman kilat kita. Berkat desain dari instruksi `loan`, logika untuk `repay` cukup sederhana, karena hanya perlu:
+1. Memeriksa bahwa semua saldo telah dibayar kembali dengan benar menggunakan akun `loan`.
+2. Menutup akun `loan`, karena sudah tidak diperlukan lagi.
+
+<ArticleSection name="Akun yang Diperlukan" id="required-accounts" level="h2" />
+- `borrower`: Pengguna yang meminta pinjaman kilat. Mereka menyediakan lamports untuk membuat akun `loan`. Harus dapat diubah (mutable).
+- `loan`: Akun sementara yang digunakan untuk menyimpan `protocol_token_account` dan `balance` akhir yang diperlukan. Harus dapat diubah (mutable) karena akan ditutup pada akhir instruksi.
+
+Berikut adalah implementasinya:
+
+```rust
+pub struct RepayAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, loan, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self {
+            borrower,
+            loan,
+            token_accounts,
+        })
+    }
+}
+```
+
+Bidang `token_accounts` adalah array dinamis dari akun yang mewakili akun token protokol yang terkait dengan pinjaman peminjam.
+
+<ArticleSection name="Data Instruksi" id="instruction-data" level="h2" />
+
+Tidak diperlukan data instruksi karena kita menggunakan bidang `balance` dalam akun `loan` untuk memverifikasi apakah pinjaman telah dibayar kembali.
+
+<ArticleSection name="Logika Instruksi" id="instruction-logic" level="h2" />
+
+Kita mulai dengan mengurai akun ke dalam struct `RepayAccounts`.
+
+```rust
+pub struct Repay<'a> {
+    pub accounts: RepayAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let accounts = RepayAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts })
+    }
+}
+
+```
+
+Selanjutnya, kita memeriksa apakah semua pinjaman telah dibayar kembali. Kita melakukan ini dengan mengambil jumlah pinjaman dari akun `loan` dan melakukan iterasi melaluinya. Untuk setiap pinjaman, kita memverifikasi bahwa `protocol_token_account` sudah benar dan saldonya lebih besar atau sama dengan jumlah yang dipinjamkan.
+
+```rust
+impl<'a> Repay<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        let loan_data = self.accounts.loan.try_borrow_data()?;
+        let loan_num = loan_data.len() / size_of::<LoanData>();
+
+        if loan_num.ne(&self.accounts.token_accounts.len()) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Process each pair of token accounts (protocol, borrower) with corresponding amounts
+        for i in 0..loan_num {
+            // Validate that protocol_ata is the same as the one in the loan account
+            let protocol_token_account = &self.accounts.token_accounts[i];
+
+            if unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>()) as *const [u8; 32]) } != *protocol_token_account.key() {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            // Check if the loan is already repaid
+            let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+            let loan_balance = unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>() + size_of::<[u8; 32]>()) as *const u64) };
+
+            if balance < loan_balance {
+                return Err(ProgramError::InvalidAccountData);
+            }
+        }
+
+        //..
+    }
+}
+```
+
+Kemudian kita dapat melanjutkan untuk menutup akun `loan` dan mengklaim kembali biaya sewa, karena sudah tidak diperlukan lagi:
+
+```rust
+drop(loan_data);
+// Close the loan account and give back the lamports to the borrower
+unsafe {
+    *self.accounts.borrower.borrow_mut_lamports_unchecked() += *self.accounts.loan.borrow_lamports_unchecked();
+    // There is no need to manually zero out lamports in the loan account because it is done in the close_unchecked function
+    self.accounts.loan.close_unchecked();
+}
+```
+
+> Seperti yang Anda lihat, untuk tujuan optimasi dan berdasarkan desain, pembayaran kembali tidak terjadi dalam instruksi ini. Ini karena `borrower` dapat memilih untuk membayar kembali akun token dalam instruksi lain, seperti ketika melakukan swap atau mengeksekusi serangkaian CPI dari program arbitrase mereka.

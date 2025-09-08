@@ -1,0 +1,204 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Escrow
+
+![Pinocchio Escrow Challenge](/graphics/challenge-banners/pinocchio-escrow.png)
+
+Escrow adalah alat keuangan yang ampuh yang memungkinkan pertukaran token yang aman antara dua pihak.
+
+Anggap saja seperti kotak penyimpanan digital di mana satu pengguna dapat mengunci Token A, menunggu pengguna lain menyetor Token B sebelum pertukaran selesai.
+
+Ini menciptakan lingkungan tanpa kepercayaan di mana kedua belah pihak tidak perlu khawatir tentang pihak lain yang membatalkan kesepakatan.
+
+Dalam tantangan ini, kita akan mengimplementasikan konsep ini melalui tiga instruksi sederhana namun ampuh:
+- **Make**: Pembuat (pengguna pertama) menentukan persyaratan perdagangan dan menyetor jumlah Token A yang disepakati ke dalam vault yang aman. Ini seperti menempatkan barang Anda di kotak penyimpanan dan menetapkan persyaratan pertukaran.
+- **Take**: Pengambil (pengguna kedua) menerima tawaran dengan mentransfer jumlah Token B yang dijanjikan kepada pembuat, dan sebagai gantinya, menerima Token A yang terkunci. Ini adalah saat ketika kedua belah pihak menyelesaikan bagian mereka dalam kesepakatan.
+- **Refund**: Jika pembuat berubah pikiran atau tidak ada pengambil yang cocok, mereka dapat membatalkan tawaran dan mengambil kembali Token A mereka. Ini seperti mendapatkan kembali barang Anda dari kotak penyimpanan jika kesepakatan gagal.
+
+**Catatan**: Jika Anda tidak familiar dengan Pinocchio, Anda sebaiknya mulai dengan membaca [Pengantar Pinocchio](/id/courses/introduction-to-pinocchio) untuk membiasakan diri dengan konsep inti yang akan kita gunakan dalam program ini.
+
+<ArticleSection name="Instalasi" id="installation" level="h2" />
+
+Mari mulai dengan membuat lingkungan Rust yang baru:
+
+```bash
+# create workspace
+cargo new blueshift_escrow --lib --edition 2021
+cd blueshift_escrow
+```
+
+Tambahkan pinocchio, pinocchio-system, pinocchio-token dan pinocchio-associated-token:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+```
+
+Deklarasikan jenis crate di `Cargo.toml` untuk menghasilkan artefak deployment di `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Anda sekarang siap untuk menulis program escrow Anda.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Kali ini kita akan membagi program menjadi modul-modul kecil yang terfokus alih-alih memasukkan semuanya ke dalam `lib.rs`. Struktur folder akan terlihat kurang lebih seperti ini:
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── helpers.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+Entrypoint, yang berada di `lib.rs` terlihat sangat mirip dengan yang kita lakukan di pelajaran sebelumnya, jadi kita akan membahasnya dengan sangat cepat:
+
+```rust
+use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Make::DISCRIMINATOR, data)) => Make::try_from((data, accounts))?.process(),
+        Some((Take::DISCRIMINATOR, _)) => Take::try_from(accounts)?.process(),
+        Some((Refund::DISCRIMINATOR, _)) => Refund::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Kita akan beralih ke `state.rs` di mana semua data untuk `Escrow` kita berada. Mari kita bagi ini menjadi dua bagian: definisi struct dan implementasinya.
+
+Pertama, mari kita lihat definisi struct:
+
+```rust
+use pinocchio::{program_error::ProgramError, pubkey::Pubkey};
+use core::mem::size_of;
+
+#[repr(C)]
+pub struct Escrow {
+    pub seed: u64,        // Random seed for PDA derivation
+    pub maker: Pubkey,    // Creator of the escrow
+    pub mint_a: Pubkey,   // Token being deposited
+    pub mint_b: Pubkey,   // Token being requested
+    pub receive: u64,     // Amount of token B wanted
+    pub bump: [u8;1]      // PDA bump seed
+}
+```
+
+Atribut `#[repr(C)]` memastikan struct kita memiliki tata letak memori yang dapat diprediksi, yang sangat penting untuk data on-chain. Setiap field memiliki tujuan spesifik:
+- **seed**: Angka acak yang memungkinkan satu pembuat untuk membuat beberapa escrow dengan pasangan token yang sama
+- **maker**: Alamat dompet yang membuat escrow dan akan menerima token
+- **mint_a**: Alamat mint token SPL untuk token yang disetor
+- **mint_b**: Alamat mint token SPL untuk token yang diminta
+- **receive**: Jumlah pasti token B yang ingin diterima oleh pembuat
+- **bump**: Satu byte yang digunakan dalam derivasi PDA untuk memastikan alamat tidak berada pada kurva Ed25519
+
+Sekarang, mari kita lihat implementasinya dengan semua metode pembantu:
+
+```rust
+impl Escrow {
+    pub const LEN: usize = size_of::<u64>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<u64>()
+    + size_of::<[u8;1]>();
+
+    #[inline(always)]
+    pub fn load_mut(bytes: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &mut *core::mem::transmute::<*mut u8, *mut Self>(bytes.as_mut_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn load(bytes: &[u8]) -> Result<&Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &*core::mem::transmute::<*const u8, *const Self>(bytes.as_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
+    }
+
+    #[inline(always)]
+    pub fn set_maker(&mut self, maker: Pubkey) {
+        self.maker = maker;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_a(&mut self, mint_a: Pubkey) {
+        self.mint_a = mint_a;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_b(&mut self, mint_b: Pubkey) {
+        self.mint_b = mint_b;
+    }
+
+    #[inline(always)]
+    pub fn set_receive(&mut self, receive: u64) {
+        self.receive = receive;
+    }
+
+    #[inline(always)]
+    pub fn set_bump(&mut self, bump: [u8;1]) {
+        self.bump = bump;
+    }
+
+    #[inline(always)]
+    pub fn set_inner(&mut self, seed: u64, maker: Pubkey, mint_a: Pubkey, mint_b: Pubkey, receive: u64, bump: [u8;1]) {
+        self.seed = seed;
+        self.maker = maker;
+        self.mint_a = mint_a;
+        self.mint_b = mint_b;
+        self.receive = receive;
+        self.bump = bump;
+    }
+}
+```
+
+Implementasi ini menyediakan beberapa fitur utama:
+1. **Perhitungan Ukuran Tepat**: `LEN` menghitung ukuran akun dengan tepat dengan menjumlahkan ukuran setiap field
+2. **Pemuatan Aman**: `load` menyediakan cara aman untuk memuat dan memvalidasi data escrow
+3. **Optimasi Performa**:
+   - `#[inline(always)]` pada getter untuk performa maksimal
+   - Metode tidak aman untuk ketika kita tahu peminjaman (borrow) aman
+   - Pengaturan field yang efisien dengan `set_inner`
+4. **Keamanan Memori**: Validasi yang tepat untuk panjang data akun dan kepemilikan
+5. **Dokumentasi**: Komentar yang jelas menjelaskan tujuan dan pertimbangan keamanan dari setiap metode
+
+Implementasi ini memastikan state escrow kita aman dan efisien, dengan validasi yang tepat dan optimasi performa di tempat yang sesuai.

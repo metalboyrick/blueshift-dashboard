@@ -1,0 +1,81 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Introspeksi Instruksi dengan Anchor
+
+Anchor tidak memiliki helper bawaan untuk sysvar `Instruction`, tetapi semua tipe dan fungsi dari crate `solana_program` secara inheren didukung di Anchor.
+
+Untuk menggunakan Introspeksi Instruksi di Anchor, Anda perlu menambahkan crate `solana_program` ke proyek Anda:
+
+```sh
+cargo add solana-program
+```
+
+Setelah menambahkan crate, Anda dapat mengakses fungsi-fungsi yang diperlukan dengan mengimpornya:
+
+```rust
+use solana_program::sysvar::instructions::{
+    self,
+    load_current_index_checked, 
+    load_instruction_at_checked
+}; 
+```
+
+<ArticleSection name="Cara menggunakan Introspeksi" id="how-to-use-introspection" level="h2" />
+
+Seperti yang disebutkan dalam pendahuluan, Introspeksi Instruksi bekerja dengan mendeserialkan data dari akun sysvar `Instruction` untuk memberikan detail tentang instruksi dalam sebuah transaksi.
+
+Meskipun fungsi `load_instruction_at_checked` memverifikasi bahwa akun yang dideserialkan adalah yang benar, adalah praktik yang baik untuk menambahkan pemeriksaan tambahan ke struct akun Anda:
+
+```rust
+#[account(address = instructions::ID)]
+/// CHECK: InstructionsSysvar account
+instructions: UncheckedAccount<'info>,
+```
+
+Sekarang Anda dapat mulai bekerja dengan Introspeksi Instruksi.
+
+Pertama, periksa indeks instruksi saat ini menggunakan fungsi `load_current_index_checked`:
+
+```rust
+// Check the index of the currently executing instruction. This could be in a different position than [0]).
+let index = load_current_index_checked(&ctx.accounts.instructions.to_account_info())?;
+```
+
+Selanjutnya, Anda dapat memeriksa instruksi pada indeks relatif menggunakan `load_instruction_at_checked`. Di sini, kita akan memeriksa instruksi yang langsung mengikuti instruksi saat ini:
+
+```rust
+// Load the next instruction to check its input.
+let ix = load_instruction_at_checked(index as usize + 1, &ctx.accounts.instructions.to_account_info())?;
+```
+
+Sebelum melanjutkan ke langkah berikutnya, penting untuk mempertimbangkan informasi apa yang penting untuk mencegah serangan berbahaya.
+
+Biasanya kita mulai dengan memeriksa apakah program yang dipanggil adalah yang diharapkan. Dalam contoh ini, kita melakukan introspeksi instruksi lain dari program yang sama:
+
+```rust
+require_keys_eq!(ix.program_id, ID, EscrowError::InvalidProgram);
+```
+
+Selanjutnya, periksa apakah instruksi tersebut adalah yang Anda harapkan. Untuk melakukannya, bandingkan diskriminator instruksi dengan yang diharapkan. Dalam kasus ini, karena ini adalah instruksi Anchor lainnya, Anda dapat melakukannya seperti ini:
+
+```rust
+require!(ix.data[0..8].eq(instruction::TakeEnd::DISCRIMINATOR.as_slice()), EscrowError::InvalidIx);
+```
+
+> Anchor memudahkan ini dengan menyediakan trait `Discriminator` `anchor_lang::Discriminator` langsung pada
+instruksi.
+
+Anda kemudian dapat melakukan pemeriksaan yang lebih spesifik berdasarkan logika instruksi yang sedang diperiksa.
+
+Dalam contoh ini, kita memeriksa bahwa data instruksi (jumlah) sudah benar. Data instruksi selalu di-deserialisasi setelah diskriminator, jadi Anda dapat melakukannya seperti ini:
+
+```rust
+require!(ix.data[8..16].eq(&escrow.take_amount.to_le_bytes()), EscrowError::InvalidAmount);
+```
+
+Terakhir, periksa akun yang ada dalam instruksi yang diintrospeksi. Langkah ini mengharuskan Anda mengetahui struktur pasti dari struct `Account`, karena Anda akan meminta data atau kunci publik dari akun pada indeks tertentu:
+
+```rust
+let maker_ata = get_associated_token_address(&ctx.accounts.maker.key(), &escrow.mint_b);
+require_keys_eq!(ix.accounts.get(3).unwrap().pubkey, maker_ata, EscrowError::InvalidMakerATA);
+```

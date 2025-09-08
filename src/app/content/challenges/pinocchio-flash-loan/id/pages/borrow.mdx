@@ -1,0 +1,240 @@
+# Pinjaman
+
+Instruksi `loan` adalah bagian pertama dari sistem flash loan kita. Instruksi ini melakukan empat langkah penting untuk memastikan peminjaman yang aman dan atomik:
+1. Mendeserialkan sejumlah akun secara dinamis berdasarkan jumlah pinjaman yang ingin diambil oleh pengguna.
+2. Menyimpan semua pinjaman ini di akun "scratch" `loan` dan menghitung saldo akhir yang harus dimiliki oleh `protocol_token_account`.
+3. Memverifikasi pembayaran kembali: Menggunakan introspeksi instruksi untuk mengonfirmasi bahwa instruksi pembayaran kembali yang valid ada di akhir transaksi
+4. Mentransfer dana: Memindahkan semua jumlah pinjaman yang diminta dari treasury protokol ke akun peminjam
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+- `borrower`: pengguna yang meminta flash loan. Harus sebagai Penandatangan
+- `protocol`: Program Derived Address (PDA) yang memiliki pool likuiditas protokol untuk biaya tertentu.
+- `loan`: akun "scratch" yang digunakan untuk menyimpan `protocol_token_account` dan `balance` akhir yang harus dimilikinya. Harus dapat diubah
+- `token_program`: program token. Harus dapat dieksekusi
+
+Berikut implementasinya:
+
+```rust
+pub struct LoanAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub protocol: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub instruction_sysvar: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, protocol, loan, instruction_sysvar, _token_program, _system_program, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        if instruction_sysvar.key() != &INSTRUCTIONS_ID {
+            return Err(ProgramError::UnsupportedSysvar);
+        }
+
+        // Verify that the number of token accounts is valid
+        if (token_accounts.len() % 2).ne(&0) || token_accounts.len().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        if loan.try_borrow_data()?.len().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self {
+            borrower,
+            protocol,
+            loan,
+            instruction_sysvar,
+            token_accounts,
+        })
+    }
+}
+```
+
+Karena `token_accounts` adalah array akun dinamis, kita meneruskannya dengan cara yang mirip dengan `remaining_accounts`.
+
+Untuk memastikan strukturnya benar, kita menambahkan validasi. Setiap pinjaman memerlukan `protocol_token_account` dan `borrower_token_account`, jadi kita harus memverifikasi bahwa array tersebut berisi akun dan jumlah akun dapat dibagi dua.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Program flash loan kita perlu menangani jumlah data yang bervariasi tergantung pada berapa banyak pinjaman yang ingin diambil pengguna secara bersamaan. Berikut struktur data yang kita butuhkan:
+- `bump`: Satu byte yang digunakan untuk menurunkan PDA protokol tanpa harus menggunakan fungsi `find_program_address()`.
+- `fee`: tingkat biaya (dalam basis poin) yang dibayar pengguna untuk meminjam
+- `amounts`: array dinamis dari jumlah pinjaman, karena pengguna dapat meminta beberapa pinjaman dalam satu transaksi
+
+Berikut implementasinya:
+
+```rust
+pub struct LoanInstructionData<'a> {
+    pub bump: [u8; 1],
+    pub fee: u16,
+    pub amounts: &'a [u64],
+}
+
+impl<'a> TryFrom<&'a [u8]> for LoanInstructionData<'a> {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // Get the bump
+        let (bump, data) = data.split_first().ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Get the fee
+        let (fee, data) = data.split_at_checked(size_of::<u16>()).ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Verify that the data is valid
+        if data.len() % size_of::<u64>() != 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // Get the amounts
+        let amounts: &[u64] = unsafe {
+            core::slice::from_raw_parts(
+                data.as_ptr() as *const u64,
+                data.len() / size_of::<u64>()
+            )
+        };
+
+        Ok(Self { bump: [*bump], fee: u16::from_le_bytes(fee.try_into().map_err(|_| ProgramError::InvalidInstructionData)?), amounts })
+    }
+}
+```
+
+Kami menggunakan fungsi `split_first` dan `split_at_checked` untuk secara berurutan mengekstrak `bump` dan `fee` dari data instruksi, memungkinkan kita memproses byte yang tersisa dan mengubahnya langsung menjadi slice `u64` menggunakan fungsi `core::slice::from_raw_parts()` untuk parsing yang efisien.
+
+> Menurunkan Program Derived Address `protocol` dengan `fee` menciptakan pool likuiditas yang terisolasi untuk setiap tingkat biaya, menghilangkan kebutuhan untuk menyimpan data biaya dalam akun. Desain ini aman dan optimal karena setiap PDA dengan biaya spesifik hanya memiliki likuiditas yang terkait dengan tingkat biaya tersebut. Jika seseorang memasukkan biaya yang tidak valid, akun token yang sesuai untuk kelompok biaya tersebut akan kosong, secara otomatis menyebabkan transfer gagal karena dana tidak mencukupi.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Setelah mendeserialkan `instruction_data` dan `accounts`, kita memeriksa bahwa jumlah `amounts` sama dengan jumlah `token_accounts` dibagi dua. Ini memastikan kita memiliki jumlah akun yang benar untuk pinjaman yang diminta.
+
+```rust
+pub struct Loan<'a> {
+    pub accounts: LoanAccounts<'a>,
+    pub instruction_data: LoanInstructionData<'a>,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = LoanAccounts::try_from(accounts)?;
+        let instruction_data = LoanInstructionData::try_from(data)?;
+
+        // Verify that the number of amounts matches the number of token accounts
+        if instruction_data.amounts.len() != accounts.token_accounts.len() / 2 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+```
+
+Selanjutnya, kita membuat `signer_seeds` yang diperlukan untuk mentransfer token ke peminjam dan membuat akun `loan`. Ukuran akun ini dihitung menggunakan `size_of::<LoanData>() * self.instruction_data.amounts.len()` untuk memastikan dapat menampung semua data pinjaman untuk transaksi tersebut.
+
+```rust
+impl<'a> Loan<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Get the fee
+        let fee = self.instruction_data.fee.to_le_bytes();
+
+        // Get the signer seeds
+        let signer_seeds = [
+            Seed::from("protocol".as_bytes()),
+            Seed::from(&fee),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signer_seeds = [Signer::from(&signer_seeds)];
+
+        // Open the LoanData account and create a mutable slice to push the Loan struct to it
+        let size = size_of::<LoanData>() * self.instruction_data.amounts.len();
+        let lamports = Rent::get()?.minimum_balance(size);
+
+        CreateAccount {
+            from: self.accounts.borrower,
+            to: self.accounts.loan,
+            lamports,
+            space: size as u64,
+            owner: &ID,
+        }.invoke()?;
+
+        //..
+    }
+}
+```
+
+Kemudian kita membuat slice yang dapat diubah dari data akun `loan`. Kita akan mengisi slice ini dalam loop `for` saat kita memproses setiap pinjaman dan transfer yang sesuai:
+
+```rust
+let mut loan_data = self.accounts.loan.try_borrow_mut_data()?;
+let loan_entries = unsafe {
+    core::slice::from_raw_parts_mut(
+        loan_data.as_mut_ptr() as *mut LoanData,
+        self.instruction_data.amounts.len()
+    )
+};
+```
+
+Akhirnya, kita melakukan loop melalui semua pinjaman. Dalam setiap iterasi, kita mendapatkan `protocol_token_account` dan `borrower_token_account`, menghitung saldo yang harus dibayarkan ke protokol, menyimpan data ini di akun `loan`, dan mentransfer token.
+
+```rust
+for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
+    let protocol_token_account = &self.accounts.token_accounts[i * 2];
+    let borrower_token_account = &self.accounts.token_accounts[i * 2 + 1];
+
+    // Get the balance of the protocol's token account and add the fee to it so we can save it to the loan account
+    let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+    let balance_with_fee = balance.checked_add(
+        amount.checked_mul(self.instruction_data.fee as u64)
+            .and_then(|x| x.checked_div(10_000))
+            .ok_or(ProgramError::InvalidInstructionData)?
+    ).ok_or(ProgramError::InvalidInstructionData)?;
+
+    // Push the Loan struct to the loan account
+    loan_entries[i] = LoanData {
+        protocol_token_account: *protocol_token_account.key(),
+        balance: balance_with_fee,
+    };
+
+    // Transfer the tokens from the protocol to the borrower
+    Transfer {
+        from: protocol_token_account,
+        to: borrower_token_account,
+        authority: self.accounts.protocol,
+        amount: *amount,
+    }.invoke_signed(&signer_seeds)?;
+}
+```
+
+Kami menyelesaikannya dengan menggunakan introspeksi instruksi untuk melakukan pemeriksaan yang diperlukan. Kami memverifikasi bahwa instruksi terakhir dalam transaksi adalah instruksi `repay` dan bahwa instruksi tersebut menggunakan akun `loan` yang sama dengan instruksi `loan` kita saat ini.
+
+```rust
+// Introspecting the Repay instruction
+let instruction_sysvar = unsafe { Instructions::new_unchecked(self.accounts.instruction_sysvar.try_borrow_data()?) };
+let num_instructions = instruction_sysvar.num_instructions();
+let instruction = instruction_sysvar.load_instruction_at(num_instructions as usize - 1)?;
+
+if instruction.get_program_id() != &crate::ID {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { *(instruction.get_instruction_data().as_ptr()) } != *Repay::DISCRIMINATOR {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts.loan.key() {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+> Menggunakan akun `loan` dan menyusun introspeksi instruksi dengan cara ini memastikan bahwa kita tidak perlu melakukan introspeksi apa pun dalam instruksi `repay` karena semua pemeriksaan pembayaran kembali akan ditangani oleh akun `loan`.

@@ -1,0 +1,89 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Program Token
+
+![SPL Token dengan Anchor](/graphics/course-banners/spl-token-with-anchor.png)
+
+Di Solana, semua hal yang berkaitan dengan token ditangani oleh [Program SPL Token](https://github.com/solana-program/token) dan [Program Token2022](/id/courses/token-2022-program): kerangka token asli Solana yang mendefinisikan bagaimana semua token dibuat, dikelola, dan ditransfer.
+
+Ini adalah program tunggal dan terpadu yang menangani semua operasi token di seluruh jaringan, memastikan konsistensi dan interoperabilitas.
+
+> Keputusan untuk memiliki antarmuka tunggal dan terpadu untuk semua token di Solana menciptakan implementasi yang mudah yang dapat direplikasi di semua dApps (aplikasi terdesentralisasi) dan integrasi (seperti dompet, ...)
+
+Untuk anchor, semua hal yang berkaitan dengan token dapat ditemukan di crate `anchor-spl`. Karena alasan ini, setelah menginisialisasi workspace `Anchor` kita dapat melakukan:
+
+```bash
+cargo add anchor-spl
+```
+
+> Jika Anda tidak familiar dengan anchor, kami sarankan Anda mempelajari [Anchor untuk Pemula](/id/courses/anchor-for-dummies) sebelum melanjutkan.
+
+<ArticleSection name="Akun Mint dan Token" id="mint-and-token-accounts" level="h2" />
+
+Jika Anda familiar dengan `Anchor`, Anda akan tahu bahwa mereka memiliki serangkaian makro yang membantu pengguna mengabstraksikan banyak kompleksitas terkait inisialisasi akun.
+
+Hal yang sama berlaku di sini untuk akun `Mint`, `Token` dan `Associated Token`.
+
+### Akun Mint
+
+Berkat makro yang ditawarkan `Anchor`, inilah cara kita dapat dengan mudah membuat akun `Mint`:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+    )]
+    pub mint: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Akun Token
+
+Hal yang sama berlaku dengan akun `Token`. Membuat akun `Token` melalui makro akan terlihat seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Akun Token Terkait
+
+Hal yang sama berlaku untuk akun `Associated Token`, membuat akun `Associated Token` melalui makro akan terlihat mirip dengan membuat akun `Token`, perbedaannya hanya pada batasan dan inilah tampilannya:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+```

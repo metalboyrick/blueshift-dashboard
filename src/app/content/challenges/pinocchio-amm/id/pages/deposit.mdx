@@ -1,0 +1,168 @@
+# Deposit
+
+Instruksi `deposit` melakukan tiga tugas utama:
+- Deposit token `mint_x` dan `mint_y` berdasarkan jumlah LP yang ingin di`mint` oleh pengguna.
+- Menghitung jumlah yang akan didepositkan dan memeriksa bahwa jumlahnya tidak lebih besar dari `max_x` dan `max_y` yang ditentukan oleh pengguna.
+- Mencetak jumlah `mint_lp` yang tepat ke dalam ata pengguna.
+
+> Seperti yang disebutkan dalam bagian instruksi `initialize`; kita akan menginisialisasi semua `Associated Token Accounts` di luar instruksi kita untuk tujuan optimasi.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Berikut adalah akun yang diperlukan untuk konteks ini:
+- `user`: Pengguna yang mendepositkan token ke dalam likuiditas Amm. Harus berupa `signer`.
+- `mint_lp`: Akun Mint yang akan mewakili likuiditas pool. Harus dilewatkan sebagai `mutable`.
+- `vault_x`: Akun token yang menyimpan semua token X yang didepositkan ke dalam pool. Harus dilewatkan sebagai `mutable`.
+- `vault_y`: Akun token yang menyimpan semua token Y yang didepositkan ke dalam pool. Harus dilewatkan sebagai `mutable`.
+- `user_x_ata`: Akun token terkait pengguna untuk token X. Ini adalah akun sumber dari mana token X pengguna akan ditransfer ke dalam pool. Harus dilewatkan sebagai `mutable`.
+- `user_y_ata`: Akun token terkait pengguna untuk token Y. Ini adalah akun sumber dari mana token Y pengguna akan ditransfer ke dalam pool. Harus dilewatkan sebagai `mutable`.
+- `user_lp_ata`: Akun token terkait pengguna untuk token LP. Ini adalah akun tujuan di mana token LP akan dicetak. Harus dilewatkan sebagai `mutable`.
+- `config`: Akun konfigurasi untuk pool AMM. Menyimpan semua parameter dan status pool yang relevan.
+- `token program`: Akun program SPL Token. Ini diperlukan untuk melakukan operasi token seperti transfer dan pencetakan. Harus `executable`.
+
+Di sini, sekali lagi, saya akan menyerahkan implementasinya kepada Anda:
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub user: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub vault_x: &'a AccountInfo,
+    pub vault_y: &'a AccountInfo,
+    pub user_x_ata: &'a AccountInfo,
+    pub user_y_ata: &'a AccountInfo,
+    pub user_lp_ata: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    //..
+  }
+}
+```
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Berikut adalah data instruksi yang perlu kita berikan:
+- `amount`: Jumlah token LP yang ingin diterima pengguna. Harus berupa `[u64]`
+- `max_x`: Jumlah maksimum token X yang bersedia disetor oleh pengguna. Harus berupa `[u64]`
+- `max_y`: Jumlah maksimum token Y yang bersedia disetor oleh pengguna. Harus berupa `[u64]`
+- `expiration`: Waktu kedaluwarsa dari pesanan ini. Penting untuk memastikan bahwa transaksi harus dijalankan dalam jangka waktu tertentu. Harus berupa `[i64]`
+
+Kita akan menangani implementasi untuk `DepositInstructionData` sama seperti inisialisasi. Jadi saya akan menyerahkan implementasinya kepada Anda:
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+    pub max_x: u64,
+    pub max_y: u64,
+    pub expiration: i64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+> Pastikan bahwa semua jumlah, seperti `amount`, `max_y` dan `max_x` lebih besar dari nol dan bahwa pesanan belum kedaluwarsa dengan menggunakan sysvar `Clock`.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Kita mulai dengan mendeserialkan baik `instruction_data` maupun `accounts`.
+
+Kemudian kita perlu:
+- Memuat akun `Config` untuk mengambil semua data di dalamnya. Kita dapat melakukannya menggunakan helper `Config::load()`.
+- Memverifikasi bahwa `AmmState` valid (jika sama dengan `AmmState::Initialized`)
+- Memeriksa derivasi `vault_x` dan `vault_y` sebagai Associated Token Accounts seperti ini:
+
+```rust
+// Check if the vault_x is valid
+let (vault_x, _) = find_program_address(
+    &[
+        self.accounts.config.key(),
+        self.accounts.token_program.key(),
+        config.mint_x(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+
+if vault_x.ne(self.accounts.vault_x.key()) {
+    return Err(ProgramError::InvalidAccountData);
+}
+```
+
+- Mendeserialkan semua akun token yang terlibat dan menggunakan data di dalamnya untuk menghitung jumlah yang akan disetor menggunakan crate `constant-product-curve` dan memeriksa slippage seperti ini:
+
+```rust
+// Deserialize the token accounts
+let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
+let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
+let vault_y = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_y)? };
+
+// Grab the amounts to deposit
+let (x, y) = match mint_lp.supply() == 0 && vault_x.amount() == 0 && vault_y.amount() == 0 {
+    true => (self.instruction_data.max_x, self.instruction_data.max_y),
+    false => {
+        let amounts = ConstantProduct::xy_deposit_amounts_from_l(
+            vault_x.amount(),
+            vault_y.amount(),
+            mint_lp.supply(),
+            self.instruction_data.amount,
+            6,
+        )
+        .map_err(|_| ProgramError::InvalidArgument)?;
+
+        (amounts.x, amounts.y)
+    }
+};
+
+// Check for slippage
+if !(x <= self.instruction_data.max_x && y <= self.instruction_data.max_y) {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+> Jika ini adalah deposit pertama, kita bisa melewati perhitungan token LP dan deposit dan langsung menggunakan nilai yang disarankan pengguna
+
+- Transfer jumlah dari akun token pengguna ke vault dan mint jumlah token LP yang sesuai ke akun token pengguna
+
+Anda seharusnya cukup mahir untuk melakukan ini sendiri, jadi saya akan menyerahkan implementasinya kepada Anda:
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_data: DepositInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_data = DepositInstructionData::try_from(data)?;
+
+        // Return the initialized struct
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+      //..
+
+      Ok(())
+    }
+}
+```

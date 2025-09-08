@@ -1,0 +1,140 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Penghasil Bunga
+
+Ekstensi `InterestBearing` adalah ekstensi akun `Mint` yang memungkinkan pengguna menerapkan suku bunga pada token mereka dan mengambil total yang diperbarui, termasuk bunga, pada waktu tertentu.
+
+<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+
+Untuk menginisialisasi ekstensi `InterestBearing` pada akun `Mint` kita akan membutuhkan fungsi `interestBearingMint()`.
+
+Berikut cara membuat mint dengan ekstensi Interest Bearing:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeInterestBearingMintInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Interest Bearing extension
+const mintLen = getMintLen([ExtensionType.InterestBearingConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Interest Bearing extension
+const initializeMintInterestBearing = createInitializeInterestBearingMintInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    500,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintNonTransferable,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Calculating the Interest" id="calculating-the-interest" level="h2" />
+
+Ekstensi `InterestBearing` tidak menghasilkan token baru; jumlah yang ditampilkan hanya mencakup bunga yang terakumulasi melalui fungsi `amount_to_ui_amount`, sehingga perubahan tersebut murni bersifat estetis.
+
+Jadi setelah `unpacking` akun `Token` yang ingin kita hitung bunganya, sangat mudah untuk mendapatkan semua informasi yang kita butuhkan untuk melakukan perhitungan jumlah bunga.
+
+Untungnya kita bahkan tidak perlu melakukannya karena kita dapat menggunakan fungsi `amountToUiAmount` seperti ini:
+
+```ts
+const tokenInfo = await getAccount(
+    connection,
+    tokenAccount,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+console.log("Token Amount: ", tokenInfo.amount);
+    
+const uiAmount = await amountToUiAmount(
+    connection,
+    keypair,
+    mint.publicKey,
+    tokenInfo.amount,
+    TOKEN_2022_PROGRAM_ID,
+);
+    
+console.log("UI Amount: ", uiAmount);
+```
+
+<ArticleSection name="Updating the Interest Bearing Extension" id="updating-the-interest-bearing-extension" level="h2" />
+
+Dengan ekstensi `InterestBearing` dimungkinkan untuk mengubah bunga yang dihasilkan oleh akun token berkat cara data tersebut terstruktur:
+
+```rust
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+Untuk melakukannya kita dapat menggunakan fungsi `updateRateInterestBearingMint` seperti ini:
+
+```ts
+const updateRateInstruction = await createUpdateRateInterestBearingMintInstruction(
+    mint.publicKey,
+    newRateAuthority.publicKey,
+    1000, // updated rate
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+```
+
+Dan jika kita mau, kita dapat mengubah otoritas pengaturan bunga menggunakan fungsi `setAuthority` dan memasukkan `AuthorityType` yang tepat seperti ini:
+
+```ts
+const setAuthorityInstruction = await createSetAuthorityInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    AuthorityType.InterestRate,
+    newRateAuthority.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+```

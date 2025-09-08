@@ -1,0 +1,30 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Memo sBPF Assembly</ChallengeTitle>
+
+Buat program yang hanya memiliki satu instruksi. Program tersebut harus:
+- Gagal jika data instruksi berisi akun apa pun (ini dapat dilakukan dengan mengatur `r0` ke jumlah akun)
+- Atur `r2` ke panjang data instruksi, dan `r1` ke offset data instruksi, 
+- Panggil syscall `sol_log_`.
+
+Mulailah dengan menginstal paket sBPF seperti yang dijelaskan di [bagian alat](/id/courses/introduction-to-assembly/tooling) dari kursus Pengantar Assembly dan bangun program Anda menggunakan perintah berikut di terminal Anda:
+
+```
+sbpf build
+```
+
+Ini akan menghasilkan file `.so` di folder `target/deploy` Anda.
+
+Sekarang klik tombol `take challenge` dan letakkan file tersebut di sana!
+
+<RequirementList>
+  <Requirement title="Tantangan 1: Menguji Memo">
+    Program Anda harus berhasil dan mencatat `Hello, Solana!`
+  </Requirement>
+
+  <Requirement title="Tantangan 2: Menguji Memo dengan Input Berbeda">
+    Untuk memastikan bahwa Anda tidak mengkodekan string `Hello, Solana!` secara hardcode, kami mencoba lagi dengan input lain: `Hello, Solana, but different!`
+  </Requirement>
+</RequirementList>

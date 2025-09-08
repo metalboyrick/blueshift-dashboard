@@ -1,0 +1,192 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Program Metaplex Core
+
+Program Metaplex Core mengatasi masalah kompleksitas dan biaya yang melekat pada arsitektur multi-akun program Token Metadata. Sementara Token Metadata mengandalkan SPL-Token sebagai fondasinya, yang memerlukan beberapa akun untuk setiap NFT, pendekatan ini menciptakan implementasi yang mahal dan berat yang membebani pengguna dan jaringan.
+
+Dirilis pada tahun 2024, Metaplex Core merupakan program yang sangat ringan yang dirancang khusus untuk operasi NFT. Tidak seperti pendahulunya, Core beroperasi secara independen tanpa ketergantungan pada SPL-Token, menangani pencetakan, transfer, pembakaran, dan perilaku yang dapat disesuaikan melalui logika programnya sendiri.
+
+Standar generasi berikutnya ini menggunakan desain akun tunggal yang secara signifikan mengurangi biaya pencetakan sambil meningkatkan kinerja jaringan secara keseluruhan melalui sistem plugin yang fleksibel.
+
+<ArticleSection name="Assets" id="assets" level="h2" />
+
+Aspek revolusioner dari Metaplex Core terletak pada struktur akunnya yang terpadu yang menghilangkan pemisahan tradisional antara akun mint dan token.
+
+Karena NFT mempertahankan kepemilikan unik dengan satu pemegang, program menyimpan hubungan antara dompet dan aset langsung di dalam akun aset itu sendiri.
+
+Desain ini masuk akal secara intuitif ketika mempertimbangkan bahwa sistem Token Account asli dibuat untuk mengelola ribuan pemilik per mint, skenario yang tidak pernah berlaku untuk token non-fungible.
+
+Struktur Asset menunjukkan pendekatan yang berfokus pada efisiensi ini melalui persyaratan bidang minimalnya:
+
+```rust
+#[derive(Clone, BorshSerialize, BorshDeserialize, Debug, ShankAccount, Eq, PartialEq)]
+pub struct AssetV1 {
+    /// The account discriminator.
+    pub key: Key,
+    /// The owner of the asset.
+    pub owner: Pubkey,
+    /// The update authority of the asset.
+    pub update_authority: UpdateAuthority,
+    /// The name of the asset.
+    pub name: String,
+    /// The URI of the asset that points to the off-chain data.
+    pub uri: String,
+    /// The sequence number used for indexing with compression.
+    pub seq: Option<u64>,
+}
+```
+
+Struktur ini mewakili data minimum absolut yang diperlukan untuk operasi NFT yang fungsional.
+
+Bidang akun `Mint` tradisional menjadi berlebihan dalam konteks ini karena: supply selalu sama dengan satu, desimal selalu sama dengan nol, otoritas mint harus tetap tidak diatur, dan otoritas pembekuan dapat dikonsolidasikan dengan bidang otoritas pembaruan.
+
+Demikian pula, sebagian besar fungsionalitas akun `Token` terintegrasi langsung ke dalam struktur aset.
+
+Tidak adanya mekanisme pembekuan eksplisit menunjukkan filosofi desain cerdas Core.
+
+Alih-alih menyediakan ruang untuk fitur yang jarang digunakan oleh banyak aset, Core mengimplementasikan fungsionalitas pembekuan melalui sistem plugin, menambahkan kemampuan sesuai permintaan daripada mempertahankan bidang yang tidak digunakan.
+
+Pendekatan ini mengoptimalkan biaya penyimpanan sambil mempertahankan fungsionalitas penuh untuk aset yang memerlukan kemampuan pembekuan.
+
+Keanggotaan koleksi mendapat perlakuan yang sama cermatnya melalui sistem enumerasi otoritas pembaruan: karena aset yang dikelompokkan biasanya berbagi otoritas pembaruan yang sama, Core memanfaatkan hubungan ini untuk menghilangkan penyimpanan bidang yang berlebihan:
+
+```rust
+pub enum UpdateAuthority {
+    None,
+    Address(Pubkey),
+    Collection(Pubkey),
+}
+```
+
+Bidang otoritas pembaruan berfungsi tiga kali lipat dengan menunjukkan aset yang tidak dapat diubah melalui `None`, aset independen melalui alamat tertentu, atau anggota koleksi yang mewarisi otoritas pembaruan dari koleksi induk mereka.
+
+Solusi elegan ini mengurangi kebutuhan penyimpanan sambil mempertahankan hubungan otoritas yang jelas dan verifikasi keanggotaan koleksi.
+
+<ArticleSection name="Collections" id="collections" level="h2" />
+
+Koleksi dalam Metaplex Core mewakili kumpulan aset yang dikelompokkan yang berbagi hubungan tematik, kreatif, atau fungsional.
+
+Tidak seperti koleksi NFT tradisional yang mengandalkan sistem verifikasi eksternal, koleksi Core membangun hubungan yang dapat diverifikasi on-chain antara aset melalui struktur otoritas terintegrasi mereka.
+
+Membuat koleksi dimulai dengan membuat Aset Koleksi yang berfungsi sebagai akun induk yang otoritatif untuk semua aset anggota.
+
+Aset Koleksi ini berfungsi sebagai pusat organisasi dan repositori metadata untuk informasi seluruh koleksi termasuk nama koleksi, deskripsi, dan gambar representatif.
+
+Akun koleksi juga bertindak sebagai titik kontrol pusat untuk plugin yang berlaku di semua aset anggota, memungkinkan kreator untuk mengimplementasikan perilaku seragam di seluruh koleksi mereka.
+
+```rust
+pub struct CollectionV1 {
+    /// The account discriminator.
+    pub key: Key, //1
+    /// The update authority of the collection.
+    pub update_authority: Pubkey, //32
+    /// The name of the collection.
+    pub name: String, //4
+    /// The URI that links to what data to show for the collection.
+    pub uri: String, //4
+    /// The number of assets minted in the collection.
+    pub num_minted: u32, //4
+    /// The number of assets currently in the collection.
+    pub current_size: u32, //4
+}
+```
+
+Struktur Collection mempertahankan statistik penting melalui bidang `num_minted` dan `current_size`, yang melacak jumlah total aset yang pernah dibuat dalam koleksi dan jumlah aset yang saat ini tetap aktif.
+
+Metrik ini memungkinkan analitik koleksi yang akurat dan mendukung fitur seperti rilis edisi terbatas atau pelacakan pembakaran tanpa memerlukan layanan pengindeksan eksternal.
+
+Ketika aset mengatur `update_authority` ke `Collection(collection_pubkey)`, aset tersebut secara otomatis mewarisi struktur otoritas koleksi sambil membangun keanggotaan yang dapat diverifikasi. Desain ini menghilangkan kebutuhan akan akun verifikasi terpisah atau sistem pengesahan eksternal, menciptakan hubungan koleksi yang tidak dapat diubah yang dapat divalidasi sepenuhnya on-chain.
+
+<ArticleSection name="Plugins" id="plugins" level="h2" />
+
+Sistem plugin merupakan fitur paling inovatif dari Metaplex Core, mengatasi keterbatasan perilaku kaku dan telah ditentukan sebelumnya yang menjadi ciri standar NFT sebelumnya.
+
+Sementara program Token Metadata lama memerlukan solusi rumit seperti NFT yang dapat diprogram untuk fungsionalitas kustom, arsitektur plugin Core memungkinkan kustomisasi yang terperinci tanpa mengorbankan kesederhanaan atau kinerja.
+
+Pendekatan revolusioner Core memperlakukan data on-chain secara fleksibel daripada menguncinya dalam struktur tetap. Filosofi desain ini memungkinkan sistem berbasis plugin yang fleksibel yang melayani berbagai kasus penggunaan sambil mempertahankan pengelolaan akun yang efisien.
+
+Setiap plugin mendefinisikan model izinnya sendiri, menentukan dengan tepat siapa yang dapat melakukan tindakan tertentu, sementara sistem validasi Core mencegah konflik antara otoritas dan izin yang berbeda.
+
+Arsitektur akun dibagi menjadi dua komponen berbeda:
+- Bagian data inti yang berisi informasi aset penting dengan panjang bidang yang dapat diprediksi
+- Bagian metadata plugin opsional di mana fungsionalitas tambahan dan perilaku kustom berada.
+
+Pemisahan ini memastikan bahwa aset dasar tetap ringan sementara fungsionalitas kompleks dapat diskalakan sesuai kebutuhan.
+
+Metadata plugin mengatur dirinya melalui struktur tiga bagian: header, plugin individual, dan registry yang mengkoordinasikan semuanya.
+
+```
+Header | Plugin1 | Plugin2 | Plugin3 | Registry
+```
+
+Plugin Header berfungsi sebagai titik masuk, berisi pointer `plugin_registry_offset` yang menunjukkan lokasi registry di dalam akun:
+
+```rust
+pub struct PluginHeaderV1 {
+    /// The Discriminator of the header which doubles as a Plugin metadata version.
+    pub key: Key, // 1
+    /// The offset to the plugin registry stored at the end of the account.
+    pub plugin_registry_offset: usize, // 8
+}
+```
+
+Plugin Registry berfungsi sebagai pusat koordinasi, memelihara vektor dari entri `RegistryRecord` internal dan entri `ExternalRegistryRecord` untuk plugin pihak ketiga.
+
+Setiap catatan berisi tipe plugin, otoritas yang mengatur, dan lokasi offset di dalam akun:
+
+```rust
+pub struct PluginRegistryV1 {
+    /// The Discriminator of the header which doubles as a plugin metadata version.
+    pub key: Key, // 1
+    /// The registry of all plugins.
+    pub registry: Vec<RegistryRecord>, // 4
+    /// The registry of all adapter, third party, plugins.
+    pub external_registry: Vec<ExternalRegistryRecord>, // 4
+}
+
+pub struct RegistryRecord {
+    /// The type of plugin.
+    pub plugin_type: PluginType, // 2
+    /// The authority who has permission to utilize a plugin.
+    pub authority: Authority, // Variable
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+}
+
+pub struct ExternalRegistryRecord {
+    /// The adapter, third party plugin type.
+    pub plugin_type: ExternalPluginAdapterType,
+    /// The authority of the external plugin adapter.
+    pub authority: Authority,
+    /// The lifecycle events for which the external plugin adapter is active.
+    pub lifecycle_checks: Option<Vec<(HookableLifecycleEvent, ExternalCheckResult)>>,
+    /// The offset to the plugin in the account.
+    pub offset: usize, // 8
+    /// For plugins with data, the offset to the data in the account.
+    pub data_offset: Option<usize>,
+    /// For plugins with data, the length of the data in the account.
+    pub data_len: Option<usize>,
+}
+```
+
+Pengambilan plugin mengikuti proses sistematis yang memanfaatkan struktur terorganisir ini.
+
+Sistem pertama-tama memuat data aset untuk menentukan lokasi plugin header, kemudian menggunakan offset header untuk menemukan registry, dan akhirnya melakukan iterasi melalui catatan registry untuk menyusun daftar plugin lengkap:
+
+```rust
+pub fn list_plugins(account: &AccountInfo) -> Result<Vec<PluginType>, ProgramError> {
+    let asset = AssetV1::load(account, 0)?;
+    if asset.get_size() == account.data_len() {
+        return Err(MplCoreError::PluginNotFound.into());
+    }
+    let header = PluginHeaderV1::load(account, asset.get_size())?;
+    let PluginRegistryV1 { registry, .. } =
+        PluginRegistryV1::load(account, header.plugin_registry_offset)?;
+    Ok(registry
+        .iter()
+        .map(|registry_record| registry_record.plugin_type)
+        .collect())
+}
+```
+
+> Untuk mempelajari lebih lanjut tentang cara menggunakan program `Core`, lihat [dokumentasi resmi](https://developers.metaplex.com/core)

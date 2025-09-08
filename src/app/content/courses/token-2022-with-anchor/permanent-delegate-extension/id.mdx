@@ -1,0 +1,38 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Delegasi Permanen
+
+Ekstensi `PermanentDelegate` adalah ekstensi akun Mint yang memungkinkan adanya delegasi permanen untuk semua token dari mint tersebut yang mampu mentransfer atau membakar token apa pun dari mint tersebut, dari akun token mana pun.
+
+<ArticleSection name="Initializing the Mint Account" id="initializing-the-mint-account" level="h2" />
+
+Untuk menginisialisasi ekstensi `PermanentDelegate` pada akun `Mint`, kita dapat menggunakan makro yang telah dibuat oleh `Anchor` untuk kita.
+
+Berikut cara membuat mint dengan ekstensi Delegasi Permanen:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+        extensions::permanent_delegate::delegate = signer,
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+<ArticleSection name="Permissioned Actions" id="permissioned-actions" level="h2" />
+
+Tidak seperti delegasi biasa yang dapat dicabut, otoritas delegasi ini bersifat permanen dan tidak dapat diubah.
+
+Ini berarti bahwa setiap tindakan normal seperti `transfer()`, `burn()`, `approve()` dan `freeze()` dapat dieksekusi kapan pun diperlukan langsung oleh otoritas tanpa memerlukan tanda tangan dari pemilik sebenarnya.
+
+Ini berarti kita dapat menggunakan instruksi normal seperti `transferChecked()`, `burnChecked()`, ... dan memasukkan otoritas `PermanetDelegate` ke dalam kolom `authority`.

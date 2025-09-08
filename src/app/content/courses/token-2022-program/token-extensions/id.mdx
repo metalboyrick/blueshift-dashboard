@@ -1,0 +1,380 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Token
+
+Sementara program Token asli menyediakan fungsionalitas penting seperti minting, transfer, dan pembekuan token, Ekstensi Token membuka paradigma baru token yang dapat diprogram.
+
+Program yang ditingkatkan ini mempertahankan kompatibilitas penuh dengan operasi SPL Token yang ada sambil menambahkan fitur canggih seperti transfer hook untuk eksekusi logika kustom, mekanisme biaya bawaan, dukungan metadata yang ditingkatkan, perhitungan berbunga, dan kontrol keamanan lanjutan.
+
+### Kompatibilitas Ekstensi
+
+Ekstensi Token dirancang agar dapat dikomposisi, memungkinkan Anda menggabungkan beberapa ekstensi untuk membuat token yang sangat sesuai dengan kebutuhan proyek Anda.
+
+Namun, kombinasi tertentu tidak kompatibel karena fungsi yang bertentangan atau kontradiksi logis seperti:
+- Non-transferable + transfer hooks / biaya transfer / transfer rahasia
+- Transfer rahasia + biaya transfer (hingga 1.18)
+- Transfer rahasia + transfer hooks (transfer ini hanya dapat melihat akun sumber / tujuan, oleh karena itu tidak dapat bertindak berdasarkan jumlah yang ditransfer)
+- Transfer rahasia + delegasi permanen
+
+<ArticleSection name="Transfer Fee Extension" id="transfer-fee-config" level="h2" />
+
+Ekstensi `TransferFee` adalah ekstensi `Mint` yang memungkinkan pembuat menetapkan "pajak" pada token yang dikumpulkan setiap kali seseorang melakukan swap.
+
+Untuk memastikan bahwa penerima biaya tidak mendapatkan write-lock setiap kali seseorang melakukan swap, dan untuk memastikan bahwa kita dapat memparalelkan transaksi yang berisi Mint dengan ekstensi ini, biaya disisihkan di Akun Token penerima yang hanya dapat ditarik oleh `Withdraw Authority`.
+
+Untuk alasan ini, untuk menggunakan ekstensi `TransferFee`, kita memerlukan 2 jenis ekstensi yang berbeda: satu yang langsung masuk ke akun `Mint` yang disebut `TransferFeeConfig` yang memiliki semua data yang diperlukan untuk melakukan swap, dan satu lagi yang masuk ke akun `Token` yang disebut `TransferFeeAmount` yang "mendaftarkan" berapa banyak token yang ditahan oleh akun token.
+
+Beginilah tampilan data Ekstensi `TransferFee`:
+
+```rust
+/// TransferFeeConfig Extension
+pub const transfer_fee_config_header: [u8; 4] = [1, 0, 108, 0];
+
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Beberapa hal yang perlu diperhatikan:
+- `config_authority` bisa berbeda dari siapa yang sebenarnya dapat menarik token dari akun `Token`.
+- Kita memiliki struktur biaya transfer `older` dan `newer`.
+
+Poin terakhir disebabkan oleh adanya periode "pendinginan" ketika kita menetapkan `TransferFee` baru selama 2 epoch untuk menghindari rug pull di akhir epoch. Ini berarti bahwa untuk 2 epoch pertama dari `TransferFee` baru, `TransferFee` yang lebih lama adalah yang sebenarnya aktif.
+
+Selain itu, Anda dapat melihat bahwa `TransferFeeConfig` memiliki bidang `withheld_amount`. Ini mungkin terdengar aneh karena kita baru saja mengatakan bahwa biaya token terakumulasi ke dalam `Token Account` tetapi kenyataannya adalah bahwa mengklaim biaya tersebut adalah proses 2 langkah:
+- Klaim biaya dari `Token Account` ke `Mint`. Ini dapat dilakukan tanpa izin
+- Klaim biaya dari `Mint` ke akun tujuan. Ini adalah tindakan yang memerlukan izin yang hanya dapat dilakukan oleh `Withdraw Authority`.
+
+Untuk ekstensi ini, kita memerlukan proses 2 langkah untuk menangani kasus khusus di mana seseorang ingin menutup `Token Account` yang masih berisi biaya di dalamnya. Karena tujuan dari biaya tersebut bisa "berbeda" dari `Withdraw Authority` kita perlu memperhitungkan fakta bahwa biaya tersebut perlu dikirim ke suatu tempat sebelum menutup `Token Account`
+
+Dan beginilah tampilan data Ekstensi `TransferFeeAmount`
+
+```rust
+/// TransferFeeAmount Extension
+pub const transfer_amount_config_header: [u8; 4] = [2, 0, 8, 0];
+
+pub struct TransferFeeAmount {
+    pub withheld_amount: u64,
+}
+```
+
+<ArticleSection name="Mint Close Authority Extension" id="mint-close-authority-config" level="h2" />
+
+Ekstensi `MintCloseAuthority` adalah ekstensi `Mint` yang memungkinkan otoritas untuk menutup dan mengambil kembali rent dari akun `Mint` yang memiliki jumlah suplai saat ini sebesar 0.
+
+Ekstensi ini berguna untuk membersihkan mint yang tidak digunakan dan mendapatkan kembali SOL yang digunakan untuk membayar pembebasan sewa akun. Mint hanya dapat ditutup ketika tidak ada token yang beredar.
+
+Beginilah tampilan data ekstensi `MintCloseAuthority`:
+
+```rust
+/// MintCloseAuthority Extension
+pub const mint_close_authority_extension_header: [u8; 4] = [3, 0, 32, 0];
+
+pub struct MintCloseAuthority {
+    pub close_authority: Pubkey,
+}
+```
+
+<ArticleSection name="Default Account State Extension" id="default-account-state-extension" level="h2" />
+
+Ekstensi `DefaultAccountState` adalah ekstensi `Mint` yang memungkinkan semua Akun Token yang baru dibuat untuk mint tertentu dibekukan secara default. `Freeze Authority` dari mint kemudian dapat mencairkan (unfreeze) akun `Token` ini sehingga dapat digunakan.
+
+Fitur ini memberikan pembuat token kemampuan untuk memiliki kontrol lebih besar atas distribusi token dengan membatasi siapa yang dapat memegang token. Ini sangat berguna untuk skenario kepatuhan, persyaratan KYC/AML, atau membuat distribusi token berbasis daftar izin di mana akun harus disetujui secara eksplisit sebelum dapat menerima atau mentransfer token.
+
+Beginilah tampilan data ekstensi `DefaultAccountState`:
+
+```rust
+/// DefaultAccountState Extension
+pub const default_account_state_extension_header: [u8; 4] = [6, 0, 1, 0];
+
+pub struct DefaultAccountState {
+    pub account_state: AccountState,
+}
+
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+```
+
+<ArticleSection name="Immutable Owner Extension" id="immutable-owner-extension" level="h2" />
+
+Ekstensi `ImmutableOwner` adalah ekstensi akun `Token` yang mencegah perubahan kepemilikan akun Token. Ini mengamankan akun dari akses tidak sah dan upaya transfer.
+
+Ekstensi ini sangat berharga untuk Associated Token Accounts (ATA) dan akun lain di mana kepemilikan seharusnya tidak pernah berubah. Ini melindungi dari program berbahaya yang mungkin mencoba mencuri kepemilikan akun token, dan memberikan jaminan keamanan tambahan untuk pengguna dan aplikasi.
+
+> Semua ATA Program Token Extensions memiliki pemilik yang tidak dapat diubah (immutable) secara default
+
+Beginilah tampilan data ekstensi `ImmutableOwner`:
+
+```rust
+/// ImmutableOwner Extension
+pub const immutable_owner_extension_header: [u8; 4] = [7, 0, 0, 0];
+```
+
+<ArticleSection name="Memo Transfer Extension" id="memo-transfer-extension" level="h2" />
+
+`MemoTranfer Extension` adalah ekstensi akun `Token` yang mewajibkan semua transfer masuk ke akun token menyertakan memo, sehingga memfasilitasi pelacakan transaksi dan identifikasi pengguna yang lebih baik.
+
+Ekstensi ini sangat berguna untuk bursa, institusi yang diregulasi, dan aplikasi yang perlu melacak tujuan atau sumber transfer masuk untuk keperluan kepatuhan, akuntansi, atau layanan pelanggan. Ketika diaktifkan, setiap transfer ke akun akan gagal kecuali jika menyertakan instruksi memo dalam transaksi yang sama.
+
+Beginilah tampilan data ekstensi `MemoTranfer`:
+
+```rust
+/// MemoTranfer Extension
+pub const memo_transfer_extension_header: [u8; 4] = [8, 0, 1, 0];
+
+pub struct MemoTranfer {
+    pub require_incoming_transfer_memos: bool,
+}
+```
+
+<ArticleSection name="Non Transferable Extension" id="non-transferable-extension" level="h2" />
+
+Ekstensi `NonTransferable` adalah ekstensi akun `Mint` yang mencegah token ditransfer antar akun, sehingga membuatnya terikat secara permanen pada pemegang saat ini.
+
+Ekstensi ini berguna untuk membuat token soulbound, lencana prestasi, sertifikat, atau token apa pun yang mewakili hak atau status yang tidak dapat ditransfer. Setelah dicetak ke akun, token ini tidak dapat dipindahkan, dijual, atau ditransfer ke dompet lain, memastikan mereka tetap terkait secara permanen dengan penerima asli.
+
+Selain itu, akun `Token` yang terkait dengan `Mint` yang memiliki ekstensi `NonTransferable` akan dilengkapi dengan ekstensi `NonTransferableAccount`.
+
+Beginilah tampilan data ekstensi `NonTransferable` dan `NonTransferableAccount`:
+
+```rust
+/// NonTransferable Extension
+pub const non_transferable_extension_header: [u8; 4] = [9, 0, 0, 0];
+
+/// NonTransferableAccount Extension
+pub const non_transferable_account_extension_header: [u8; 4] = [13, 0, 0, 0];
+```
+
+Kedua ekstensi hanyalah flag; keberadaannya saja sudah cukup untuk menerapkan pembatasan.
+
+<ArticleSection name="Interest Bearing Extension" id="interest-bearing-extension" level="h2" />
+
+Ekstensi `InterestBearing` adalah ekstensi akun `Mint` yang memungkinkan pengguna menerapkan suku bunga pada token mereka dan mengambil total yang diperbarui, termasuk bunga, pada waktu tertentu.
+
+> Mekanisme ini tidak menghasilkan token baru; jumlah yang ditampilkan hanya mencakup bunga yang terakumulasi melalui fungsi `amount_to_ui_amount`, membuat perubahan murni bersifat estetis. Meskipun demikian, ini adalah nilai yang disimpan dalam akun mint dan program dapat memanfaatkannya untuk membuat fungsionalitas di luar estetika murni.
+
+Inilah bagaimana data ekstensi `InterestBearing` terlihat:
+
+```rust
+/// InterestBearing Extension
+pub const interest_bearing_extension_header: [u8; 4] = [10, 0, 52, 0];
+
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+Karena rate dapat diperbarui, untuk memastikan bahwa perhitungan sudah benar, terdapat bidang `pre_update_average_rate` yang digunakan selama perhitungan untuk menentukan bagaimana bersikap jika terjadi pembaruan rate.
+
+<ArticleSection name="Ekstensi Cpi Guard" id="cpi-guard-extension" level="h2" />
+
+Ekstensi `CpiGuard` adalah ekstensi akun `Token` yang melarang tindakan tertentu di dalam invokasi lintas program, melindungi pengguna dari program berbahaya yang mungkin mencoba memanipulasi akun token mereka tanpa persetujuan eksplisit.
+
+Ekstensi ini sangat penting untuk keamanan ketika berinteraksi dengan protokol DeFi, DEX, atau program apa pun yang meminta akses akun token. Ini mencegah program melakukan tindakan tidak sah seperti mengubah kepemilikan, menetapkan delegasi yang tidak diinginkan, atau mengalihkan dana ke penerima yang tidak dimaksudkan selama panggilan lintas program.
+
+Ketika ekstensi `CpiGuard` diaktifkan, CPI berikut bekerja sebagaimana dijelaskan:
+- Transfer: otoritas penandatangan harus pemilik atau delegasi akun yang telah ditetapkan sebelumnya
+- Burn: otoritas penandatangan harus pemilik atau delegasi akun yang telah ditetapkan sebelumnya
+- Approve: dilarang - tidak ada delegasi yang dapat disetujui dalam CPI
+- Close Account: tujuan lamport harus pemilik akun
+- Set Close Authority: dilarang kecuali untuk menghapus pengaturan
+- Set Owner: selalu dilarang, termasuk di luar CPI
+
+Inilah bagaimana data ekstensi `CpiGuard` terlihat:
+
+```rust
+/// CpiGuard Extension
+pub const cpi_guard_extension_header: [u8; 4] = [11, 0, 1, 0];
+
+pub struct CpiGuard {
+    pub lock_cpi: bool,
+}
+```
+
+<ArticleSection name="Ekstensi Permanent Delegate" id="permanent-delegate-extension" level="h2" />
+
+Ekstensi `PermanentDelegate` adalah ekstensi akun `Mint` yang memungkinkan delegasi permanen untuk semua token dari mint yang mampu mentransfer atau membakar token apa pun dari mint tersebut, dari akun token mana pun.
+
+Ekstensi ini berguna untuk membuat token dengan kontrol administratif bawaan, seperti stablecoin yang memerlukan kemampuan pembekuan darurat, token game yang memerlukan pengelolaan terpusat, atau token kepatuhan di mana regulator memerlukan pengawasan permanen.
+
+> Tidak seperti delegasi biasa yang dapat dicabut, otoritas delegasi ini bersifat permanen dan tidak dapat diubah.
+
+Beginilah tampilan data ekstensi `PermanentDelegate`:
+
+```rust
+/// PermanentDelegate Extension
+pub const permanent_delegate_extension_header: [u8; 4] = [12, 0, 32, 0];
+
+pub struct PermanentDelegate {
+    delegate: Pubkey,
+}
+```
+
+<ArticleSection name="Transfer Hook Extension" id="transfer-hook-extension" level="h2" />
+
+Ekstensi `TransferHook` adalah ekstensi akun `Mint` yang memperkenalkan kemampuan untuk membuat Akun `Mint` yang menjalankan logika instruksi kustom pada setiap transfer token.
+
+Ekstensi ini memungkinkan kasus penggunaan yang kuat seperti pengumpulan pajak otomatis, pembayaran royalti, pembatasan transfer berdasarkan logika kustom, pemeriksaan kepatuhan, atau perilaku yang dapat diprogram lainnya yang harus terjadi selama transfer. Program hook dipanggil secara otomatis oleh program ekstensi setiap kali transfer terjadi.
+
+Untuk mencapai ini, pengembang harus membangun program yang mengimplementasikan [Transfer Hook Interface](https://github.com/solana-program/transfer-hook/tree/main/program) dan menginisialisasi akun `Mint` dengan ekstensi `Transfer Hook` yang diaktifkan.
+
+Selain itu, akun Token yang terkait dengan `Mint` yang memiliki ekstensi `TransferHook` akan dilengkapi dengan ekstensi `TransferHookAccount`.
+
+Beginilah tampilan data ekstensi `TransferHook` dan `TransferHookAccount`:
+
+```rust
+/// TransferHook Extension
+pub const transfer_hook_extension_header: [u8; 4] = [14, 0, 64, 0];
+
+pub struct TransferHook {
+    // The transfer hook update authority
+    authority: Pubkey,
+    // The transfer hook program account
+    programId: Pubkey,
+}
+
+/// TransferHookAccount Extension
+pub const transfer_hook_account_extension_header: [u8; 4] = [15, 0, 1, 0];
+
+pub struct TransferHookAccount {
+    // Whether or not this account is currently transferring tokens
+    transferring: bool,
+}
+```
+
+<ArticleSection name="Metadata Extension" id="metadata-extension" level="h2" />
+
+Ekstensi `Metadata` adalah ekstensi akun `Mint` yang memperkenalkan kemampuan untuk menyematkan metadata langsung ke dalam akun mint secara native dan tanpa harus menggunakan program lain.
+
+Ekstensi ini sangat berguna untuk NFT, token, dan aset lain yang membutuhkan metadata on-chain seperti nama, simbol, gambar, dan atribut kustom. Dengan menyematkan metadata langsung di akun mint, ini menghilangkan kebutuhan untuk program metadata eksternal dan memastikan metadata secara permanen terkait dengan token.
+
+Ekstensi `Metadata` terdiri dari 2 ekstensi berbeda yang keduanya berada pada akun Mint:
+- Ekstensi `Metadata` yang berisi semua informasi metadata seperti nama, simbol, uri, dan akun tambahan.
+- Ekstensi `MetadataPointer` yang mereferensikan akun `Mint` tempat ekstensi `Metadata` berada.
+
+Biasanya, ketika digunakan, kedua ekstensi ini berada pada akun `Mint` yang sama. Namun mungkin ada kasus di mana Metadata yang sama digunakan pada berbagai aset, dan karena alasan itu akan lebih murah untuk memisahkan 2 ekstensi tersebut dan mereferensikan `Mint` dengan ekstensi `Metadata`.
+
+> Berbeda dari ekstensi lainnya, untuk membuat ekstensi `Metadata` kita perlu menggunakan [Token Metadata Interface](https://github.com/solana-program/token-metadata/tree/main). Ekstensi Metadata Pointer menggunakan Program Token2022 klasik
+
+Kali ini kita tidak dapat membuat header ekstensi tetap untuk ekstensi `Metadata` karena memiliki data variabel di dalamnya, dan itu berarti panjangnya akan berbeda berdasarkan bidangnya.
+
+Beginilah tampilan data ekstensi `Metadata` dan `MetadataPointer`:
+
+```rust
+/// Metadata Pointer Extension
+pub const metadata_pointer_extension_header: [u8; 4] = [18, 0, 64, 0]
+
+pub struct MetadataPointer {
+    // Authority that can set the metadata address
+    authority: Pubkey;
+    // Account Address that holds the metadata
+    metadata_address: Pubkey;
+}
+
+/// Metadata Extension (Discriminator: 19)
+pub struct TokenMetadata {
+    /// The authority that can sign to update the metadata
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that metadata
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The longer name of the token
+    pub name: String,
+    /// The shortened symbol for the token
+    pub symbol: String,
+    /// The URI pointing to richer metadata
+    pub uri: String,
+    /// Any additional metadata about the token as key-value pairs. The program
+    /// must avoid storing the same key twice.
+    pub additional_metadata: Vec<(String, String)>,
+}
+```
+
+<ArticleSection name="Group and Member Extension" id="group-and-member-extension" level="h2" />
+
+Ekstensi `Group` dan `Member` adalah ekstensi akun `Mint` yang memperkenalkan kemampuan untuk membuat grup, seperti koleksi untuk NFT, yang terhubung dengan beberapa aset.
+
+Sistem ekstensi ini sempurna untuk membuat koleksi NFT, keluarga token, atau pengelompokan aset terkait lainnya di mana Anda perlu melacak keanggotaan dan menegakkan batas koleksi. Grup dapat mewakili koleksi sementara anggota mewakili item individual dalam koleksi tersebut.
+
+Baik ekstensi Group maupun Member terdiri dari 2 ekstensi berbeda yang keduanya berada pada akun `Mint`, sama seperti ekstensi `Metadata`:
+- `Extension` yang berisi semua informasi tentang grup atau anggota.
+- `Pointer Extension` yang mereferensikan akun Mint tempat ekstensi `Group` atau `Member` berada.
+
+Hubungan antara grup dan anggota adalah bahwa sebuah grup dapat memiliki banyak anggota tetapi tidak sebaliknya.
+
+Seperti pada ekstensi Metadata, di sini kita menempatkan baik `Extension` dan `Pointer` biasanya dalam akun `Mint` yang sama, dan untuk membuat ekstensi `Group` dan `Member` kita perlu menggunakan [Token Group Interface](https://github.com/solana-program/token-group/tree/main).
+
+> Kita tidak dapat memiliki ekstensi `Group` dalam akun `Mint` yang sama di mana terdapat ekstensi `Member`.
+
+Beginilah tampilan data Ekstensi `Group` dan `GroupPointer`:
+
+```rust
+/// GroupPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [20, 0, 64, 0]
+
+pub struct GroupPointer {
+    // Authority that can set the group address
+    authority: Pubkey;
+    // Account Address that holds the group
+    group_address: Pubkey;
+}
+
+/// Group Extension
+pub const group_extension_header: [u8; 4] = [21, 0, 80, 0]
+
+pub struct TokenGroup {
+    /// The authority that can sign to update the group
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that group
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The current number of group members
+    pub size: u64,
+    /// The maximum number of group members
+    pub max_size: u64,
+}
+```
+
+Beginilah tampilan data Ekstensi `Member` dan `MemberPointer`:
+
+```rust
+/// MemberPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [22, 0, 64, 0]
+
+pub struct MemberPointer {
+    // Authority that can set the member address
+    authority: Pubkey;
+    // Account Address that holds the member
+    member_address: Pubkey;
+}
+
+/// Member Extension
+pub const group_extension_header: [u8; 4] = [23, 0, 72, 0]
+
+pub struct TokenGroupMember {
+    /// The associated mint, used to counter spoofing to be sure that member
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The pubkey of the `TokenGroup`
+    pub group: Pubkey,
+    /// The member number
+    pub member_number: u64,
+}
+```

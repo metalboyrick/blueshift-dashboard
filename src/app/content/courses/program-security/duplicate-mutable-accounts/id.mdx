@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Akun Mutable Duplikat
+
+Serangan akun mutable duplikat mengeksploitasi program yang menerima beberapa akun mutable dengan tipe yang sama dengan cara memasukkan akun yang sama dua kali, menyebabkan program tanpa sadar menimpa perubahannya sendiri. Ini menciptakan kondisi balapan dalam satu instruksi di mana mutasi yang terjadi kemudian bisa diam-diam membatalkan mutasi sebelumnya.
+
+Kerentanan ini terutama mempengaruhi instruksi yang memodifikasi data dalam akun yang dimiliki program, bukan operasi sistem seperti transfer lamport. Serangan ini berhasil karena runtime Solana tidak mencegah akun yang sama dilewatkan beberapa kali ke parameter yang berbeda; ini adalah tanggung jawab program untuk mendeteksi dan menangani duplikat.
+
+Bahayanya terletak pada sifat sekuensial dari eksekusi instruksi. Ketika akun yang sama dilewatkan dua kali, program melakukan mutasi pertama, kemudian segera menimpanya dengan mutasi kedua, meninggalkan akun dalam keadaan yang tidak terduga yang mungkin tidak mencerminkan niat pengguna atau logika program.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Perhatikan instruksi rentan ini yang memperbarui bidang kepemilikan pada dua akun program:
+
+```rust
+#[program]
+pub mod unsafe_update_account{
+    use super::*;
+    
+    //..
+
+    pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+        ctx.accounts.program_account_1.owner = pubkey_a;
+        ctx.accounts.program_account_2.owner = pubkey_b;
+        
+        Ok(())
+    }
+
+    //..
+
+}
+
+#[derive(Accounts)]
+pub struct UpdateAccount<'info> {
+   #[account(mut)]
+    pub program_account_1: Account<'info, ProgramAccount>,
+    #[account(mut)]
+    pub program_account_2: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Kode ini memiliki kelemahan kritis: tidak pernah memverifikasi bahwa `program_account_1` dan `program_account_2` adalah akun yang berbeda.
+
+Penyerang dapat mengeksploitasi ini dengan melewatkan akun yang sama untuk kedua parameter. Inilah yang terjadi:
+- Program menetapkan `program_account_1.owner = pubkey_a`
+- Karena kedua parameter mereferensikan akun yang sama, program segera menimpa ini dengan `program_account_2.owner = pubkey_b`
+
+Hasil akhirnya: pemilik akun ditetapkan ke `pubkey_b`, sepenuhnya mengabaikan `pubkey_a`
+
+Ini mungkin tampak tidak berbahaya, tetapi pertimbangkan implikasinya. Pengguna yang berharap untuk memperbarui dua akun berbeda dengan penetapan kepemilikan spesifik menemukan bahwa hanya satu akun yang dimodifikasi, dan tidak dengan cara yang mereka inginkan. Dalam protokol yang kompleks, ini bisa menyebabkan status yang tidak konsisten, operasi multi-langkah yang gagal, atau bahkan kerugian finansial.
+
+Solusinya sederhana. Anda hanya perlu memverifikasi bahwa akun-akun tersebut unik sebelum melanjutkan:
+
+```rust
+pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+    if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+        return Err(ProgramError::InvalidArgument)
+    }
+
+    ctx.accounts.program_account_1.owner = pubkey_a;
+    ctx.accounts.program_account_2.owner = pubkey_b;
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dalam Pinocchio, pola validasi yang sama berlaku:
+
+```rust
+if self.accounts.program_account_1.key() == self.accounts.program_account_2.key() {
+    return Err(ProgramError::InvalidArgument)
+}
+```

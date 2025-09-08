@@ -1,0 +1,176 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Penerapan Program
+
+Setelah program Anda selesai, terapkan ke devnet atau mainnet untuk memungkinkan interaksi pengguna.
+
+<ArticleSection name="Program Deployment" id="program-deployment" level="h2" />
+
+Bangun program Anda untuk menghasilkan file penerapan yang diperlukan:
+
+```
+anchor build
+```
+
+Ini akan membuat folder `target/deploy` yang berisi:
+- `<project-name>.so`: bytecode program Anda
+- `<project-name>-keypair.json`: keypair yang dihasilkan untuk penerapan
+
+> Anda dapat mengganti keypair ini dengan alamat vanity dengan mengganti keypair di file `<project-name>-keypair.json`.
+
+Ambil alamat program:
+
+```
+solana address -k target/deploy/<project-name>-keypair.json
+```
+
+Perbarui fungsi `declare_id!()` di `lib.rs` dengan alamat ini, kemudian konfigurasikan `Anchor.toml` Anda dengan cluster target dan ID program yang benar:
+
+```
+[provider]
+cluster = "devnet"
+
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
+```
+
+Terapkan program Anda:
+
+```
+anchor deploy
+```
+
+Ini akan menerapkan program menggunakan alamat yang ditentukan, cluster, dan dompet dari `Anchor.toml` sebagai pembayar biaya.
+
+### Kegagalan Penerapan
+
+Penerapan yang gagal akan membuat akun buffer perantara yang menyimpan lamport. Anda akan melihat instruksi pemulihan seperti:
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+Untuk memulihkan saldo Anda:
+
+- **Lanjutkan penerapan** dengan memulihkan keypair:
+
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+
+    Masukkan frasa seed 12 kata saat diminta, kemudian terapkan dengan buffer:
+
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- **Tutup** buffer untuk mendapatkan kembali lamport:
+
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### Deployment melalui Solana CLI
+
+Anda dapat men-deploy program Anda langsung menggunakan Solana CLI alih-alih Anchor:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+Selama jaringan padat, gunakan flag ini untuk meningkatkan keberhasilan deployment:
+- `--with-compute-unit-price`: Tetapkan harga unit komputasi dalam micro-lamports
+- `--use-rpc`: Kirim transaksi ke RPC alih-alih validator TPU
+- `--max-sign-attempts`: Upaya percobaan ulang maksimum setelah blockhash kedaluwarsa
+
+<ArticleSection name="Program Upgrade" id="program-upgrade" level="h2" />
+
+Secara default, `anchor deploy` membuat ID program baru. Untuk meningkatkan program yang ada sambil mempertahankan alamatnya dan akun terkait:
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+Jika executable baru lebih besar dari versi yang di-deploy, perpanjang akun program terlebih dahulu:
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### Upgrade melalui Solana CLI
+
+Prosesnya tetap sama: perpanjang jika diperlukan, lalu deploy:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### Membuat Program Tidak Dapat Diubah
+
+Anda dapat menghapus otoritas upgrade untuk membuat program Anda tidak dapat diubah:
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> Tindakan ini tidak dapat dibalik. Setelah ditetapkan, program tidak dapat diperbarui.
+
+### Migrasi Program
+
+Migrasi mentransfer program dari satu alamat ke alamat lain. CLI menutup program lama dan men-deploy ulang ke lokasi baru:
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> Migrasi akan merusak semua PDA yang ada karena mereka berasal dari Program ID lama. Pengguna harus memperbarui aplikasi mereka untuk menggunakan alamat baru dan mengubah otoritas atas akun token yang otoritasnya adalah PDA.
+
+<ArticleSection name="Uploading an IDL" id="uploading-an-idl" level="h2" />
+
+File Interface Description Language (IDL) menyediakan deskripsi JSON terstandarisasi dari instruksi dan akun program Anda, memungkinkan integrasi klien yang lebih mudah.
+
+Unggah IDL ke blockchain untuk membantu pengembang mengintegrasikan program Anda:
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### Memperbarui IDL
+
+Setelah men-deploy ulang program Anda, perbarui IDL onchain:
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+<ArticleSection name="Verified Builds" id="verified-builds" level="h2" />
+
+Verified builds memastikan bahwa program yang dijalankan di Solana sesuai dengan kode sumber di repositori Anda. Verifikasi ini memungkinkan pengembang dan pengguna untuk mengonfirmasi bahwa program onchain benar-benar sesuai dengan basis kode publik.
+
+Proses verifikasi membandingkan hash program onchain dengan program yang dibangun secara lokal dari kode sumber, mendeteksi setiap perbedaan antara versi-versi tersebut.
+
+Membangun program dengan Solana CLI dapat menyematkan kode khusus mesin ke dalam binary. Mengompilasi program yang sama pada mesin yang berbeda dapat menghasilkan executable yang berbeda. Untuk mengatasi hal ini, lakukan build di dalam container Docker dengan dependensi yang tetap untuk hasil yang dapat direproduksi.
+
+Anchor menyediakan perintah CLI yang menangani konfigurasi build dan Docker:
+
+```
+anchor build --verifiable
+```
+
+Verifikasi build terhadap program yang di-deploy di mainnet:
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+> `<lib-name>` sesuai dengan nama yang didefinisikan dalam file `Cargo.toml` program Anda.

@@ -1,0 +1,84 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# sBPF Assembly 101
+
+![Pengenalan Assembly](/graphics/course-banners/introduction-to-assembly.png)
+
+Untuk memahami sBPF Assembly dan perannya dalam program Solana, kita perlu terlebih dahulu memahami bahasa assembly dan bagaimana ia menjembatani kode tingkat tinggi dengan eksekusi mesin.
+
+<ArticleSection name="Bahasa Assembly" id="the-assembly-language" level="h2" />
+
+Assembly adalah bentuk kode mesin yang dapat dibaca manusia: instruksi sebenarnya yang dieksekusi oleh prosesor. Ini berfungsi sebagai jembatan antara bahasa pemrograman tingkat tinggi dan kode biner yang dipahami komputer.
+
+Ketika Anda menulis kode Rust seperti:
+
+```rust
+let result = a + b;
+```
+
+Kompiler menerjemahkannya melalui beberapa tahap:
+1. Kode sumber Rust → diuraikan dan dianalisis
+2. Representasi perantara → dioptimalkan
+3. Kode assembly → instruksi yang dapat dibaca manusia
+4. Kode mesin → biner yang dieksekusi oleh prosesor
+
+Assembly menempati tahap 3: bentuk terakhir yang dapat dibaca manusia sebelum konversi ke biner. Setiap instruksi assembly berkorespondensi dengan tepat satu operasi prosesor: menambahkan angka, memuat memori, atau melompat ke bagian kode yang berbeda.
+
+<ArticleSection name="Mesin Virtual sBPF" id="the-sbpf-virtual-machine" level="h2" />
+
+Solana sBPF adalah varian kustom Solana dari set instruksi dan mesin virtual extended Berkeley Packet Filter (eBPF) yang mengeksekusi setiap program on-chain. Ini menciptakan lingkungan eksekusi khusus: mesin register 64-bit yang berada di antara program Anda dan CPU asli validator.
+
+Anggap sBPF sebagai komputer yang dibuat khusus untuk eksekusi blockchain: cukup cepat untuk transaksi throughput tinggi, namun cukup dibatasi untuk menjamin keamanan dan determinisme di ribuan validator.
+
+Tidak seperti assembly asli yang berjalan langsung di CPU Anda, kode sBPF dieksekusi dalam lingkungan mesin virtual yang terkontrol. Mesin virtual ini menjamin keamanan dengan memverifikasi setiap instruksi sebelum eksekusi, mencegah crash, loop tak terbatas, dan akses memori yang tidak sah.
+
+Meskipun adanya batasan keamanan ini, sBPF tetap mempertahankan performa tinggi melalui kompilasi `just-in-time` yang mencapai kecepatan eksekusi hampir setara dengan native.
+
+Mesin virtual ini juga memastikan eksekusi yang deterministik: program identik dengan input identik akan menghasilkan hasil yang identik di seluruh validator di seluruh dunia. Konsistensi ini sangat penting untuk konsensus blockchain.
+
+Selain itu, sBPF menyertakan syscall untuk akses akun, panggilan antar-program, dan interaksi runtime.
+
+### Mengapa Memahami Assembly sBPF Penting
+
+Meskipun kompiler Rust secara efisien menerjemahkan kode tingkat tinggi menjadi instruksi sBPF, memahami assembly memberikan beberapa keuntungan:
+- **Memahami Biaya Komputasi**: Setiap instruksi sBPF mengkonsumsi unit komputasi (CU). Satu baris Rust dapat dikompilasi menjadi ratusan instruksi—assembly mengungkapkan mengapa operasi tertentu memerlukan biaya mahal.
+- **Ukuran Program Lebih Kecil**: Program yang ditulis langsung dalam assembly sBPF jauh lebih kecil dibandingkan dengan program Rust yang dikompilasi, mengurangi biaya deployment dan meningkatkan waktu pemuatan.
+- **Peluang Optimasi**: Kompiler Rust menghasilkan kode yang aman dan benar tetapi tidak selalu paling efisien. Assembly mengekspos pemeriksaan keamanan yang berlebihan dan urutan instruksi yang kurang optimal.
+- **Debugging dan Analisis**: Ketika program berperilaku tidak terduga, assembly memberikan kebenaran dasar. Anda dapat melacak dengan tepat instruksi mana yang dieksekusi dan mengidentifikasi titik kegagalan.
+
+### Arsitektur
+
+sBPF menggunakan arsitektur load-store dengan 10 register tujuan umum, satu pointer stack yang hanya-baca, dan tanpa mode pengalamatan kompleks.
+
+Kesederhanaan ini disengaja: varian instruksi yang lebih sedikit memungkinkan verifikasi lebih cepat, kompilasi JIT lebih cepat, dan performa yang lebih dapat diprediksi.
+
+Setiap kali program eBPF dimuat ke dalam kernel, bytecode-nya diterjemahkan menjadi instruksi mesin native khusus untuk arsitektur CPU host oleh kompiler JIT dan kemudian dieksekusi oleh VM.
+
+### Eksekusi
+
+Program sBPF dieksekusi melalui proses yang sederhana. Program Counter (`PC`) melacak instruksi mana yang akan dieksekusi selanjutnya, seperti penanda dalam daftar instruksi Anda.
+
+Siklus eksekusi mengikuti langkah-langkah berikut:
+1. **Ambil**: Baca instruksi pada program counter
+2. **Decode**: Interpretasikan format instruksi dan operand
+3. **Eksekusi**: Lakukan operasi (modifikasi register, akses memori, atau ubah alur kontrol)
+4. **Maju**: Pindahkan program counter ke instruksi berikutnya (atau lompat untuk percabangan)
+5. **Ulangi**: Lanjutkan hingga program selesai
+
+Setiap instruksi melakukan tepat satu operasi: aritmatika, akses memori, perbandingan, atau pemanggilan fungsi. Desain satu-instruksi-per-operasi ini membuat program sBPF dapat diprediksi dan dianalisis.
+
+<ArticleSection name="Pipeline Kompiler JIT" id="the-jit-compiler-pipeline" level="h2" />
+
+Program sBPF mencapai kinerja tinggi melalui kompilasi Just-In-Time (JIT).
+
+Ketika Anda men-deploy program ke Solana, runtime melakukan dua operasi:
+- **Verifikasi**: Memastikan keamanan program dengan memeriksa loop tak terbatas, akses memori yang tidak valid, dan potensi crash. Verifikator menganalisis setiap jalur eksekusi yang mungkin untuk menjamin operasi yang aman.
+- **Kompilasi**: Mengkonversi instruksi sBPF menjadi kode mesin native yang berjalan langsung di CPU validator. Operasi sederhana seperti `add64 r1, r2` menjadi instruksi add native tunggal, sementara operasi kompleks menerima pemeriksaan keamanan tambahan tetapi tetap dikompilasi menjadi kode native yang efisien.
+
+Pendekatan ini menukar waktu deployment dengan kecepatan eksekusi. Program diverifikasi dan dikompilasi sekali selama deployment tetapi dieksekusi ribuan kali, menjadikan ini pertukaran yang sangat baik untuk performa blockchain.
+
+Proses verifikasi JIT menelusuri setiap jalur program yang mungkin, memeriksa bahwa akses memori tetap dalam batas, lompatan mengarah ke alamat yang valid, dan eksekusi berakhir dalam batas komputasi.
+
+Proses kompilasi JIT menerjemahkan setiap instruksi sBPF ke instruksi CPU native yang setara. Karena sebagian besar eksekusi terjadi dalam kode native, overhead mesin virtual menjadi minimal.
+
+> Memahami bahwa sBPF dikompilasi menjadi kode native menjelaskan mengapa operasi aritmatika cepat sementara syscall yang melintasi ke runtime memiliki overhead. Pengetahuan ini memandu keputusan optimasi.

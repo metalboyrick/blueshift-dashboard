@@ -1,0 +1,126 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Secp256r1 dengan Pinocchio
+
+[Dean](https://x.com/deanmlittle) dari tim Blueshift telah merilis crate pertama yang memungkinkan kompatibilitas Pinocchio untuk memverifikasi instruksi yang mengeksekusi precompile `Secp256r1`.
+
+Ini sangat berguna untuk mengimplementasikan metode autentikasi modern seperti passkeys dalam program Pinocchio.
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+SDK ini menyediakan abstraksi yang bersih melalui struktur data inti:
+
+```rust
+// 33-byte compressed public key (1 byte parity + 32 byte x-coordinate)
+pub type Secp256r1Pubkey = [u8; 33];
+// 64-byte signature (r,s values)
+pub type Secp256r1Signature = [u8; 64];
+
+// Main instruction parser
+pub struct Secp256r1Instruction<'a> {
+    header: Secp256r1InstructionHeader,    // Number of signatures
+    offsets: &'a [Secp256r1SignatureOffsets], // Data location pointers
+    data: &'a [u8],                        // Raw instruction data
+}
+```
+
+Struct `Secp256r1SignatureOffsets` bertindak sebagai peta memori, berisi offset byte yang menunjukkan di mana setiap komponen berada dalam payload instruksi:
+
+```rust
+pub struct Secp256r1SignatureOffsets {
+    pub signature_offset: u16,
+    pub signature_instruction_index: u16,
+    pub public_key_offset: u16,
+    pub public_key_instruction_index: u16,
+    pub message_data_offset: u16,
+    pub message_data_size: u16,
+    pub message_instruction_index: u16,
+}
+```
+
+Dalam data, kita menemukan tiga komponen penting yang direferensikan oleh struktur offset:
+- Publickey: Kunci publik `Secp256r1` terkompresi 33-byte. Ketika digunakan dengan metode autentikasi modern seperti passkeys, ini mewakili identitas kriptografis dari perangkat/pengguna yang melakukan autentikasi.
+- Signature: Tanda tangan `ECDSA` 64-byte (nilai r,s) yang dihasilkan oleh kunci privat. Ini membuktikan bahwa pemegang kunci privat yang sesuai telah mengotorisasi pesan tertentu.
+- Message Data: Byte-byte arbitrer yang ditandatangani secara kriptografis. Dalam praktiknya, ini berisi data spesifik aplikasi seperti detail transaksi, stempel waktu, atau pengidentifikasi pengguna yang mencegah serangan replay dan memastikan tanda tangan terikat secara kontekstual.
+
+Seperti yang Anda lihat, publickey memiliki panjang 33 byte karena menggunakan representasi titik terkompresi; pengkodean titik kurva eliptik yang hemat ruang.
+
+Pada Secp256r1, kunci publik secara matematis adalah titik (x,y) di mana kedua koordinat adalah 32 byte (total 64 byte).
+
+Namun, dengan koordinat x tertentu, hanya dua kemungkinan koordinat y yang memenuhi persamaan kurva.
+
+Format terkompresi menyimpan koordinat x 32-byte ditambah satu byte paritas (0x02 untuk y genap, 0x03 untuk y ganjil), memungkinkan rekonstruksi titik penuh dengan penyimpanan 48% lebih sedikit.
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+Untuk memverifikasi tanda tangan `Secp256r1`, kita membutuhkan dua komponen utama:
+1. Instruction sysvar: Ini memungkinkan kita untuk memeriksa tanda tangan `Secp256r1`
+2. Crate `pinocchio-secp256r1-instruction`: Ini menyediakan alat untuk mendeserialkan instruksi
+
+Instruction sysvar sudah termasuk dalam crate Pinocchio, jadi tidak diperlukan instalasi tambahan.
+
+Namun, kita perlu menambahkan crate `pinocchio-secp256r1-instruction` ke program Pinocchio kita:
+
+```
+cargo add pinocchio-secp256r1-instruction
+```
+
+Untuk mengimplementasikan verifikasi, kita perlu:
+1. Menyertakan program Instruction Sysvar (`Sysvar1nstructions1111111111111111111111111`, yang akan kita sebut sebagai `instructions`)
+2. Menempatkan instruksi `Secp256r1` setelah instruksi kita saat ini
+
+Berikut cara mengakses dan mendeserialkan instruksi:
+
+```rust
+// Deserialize the instructions sysvar
+let instructions: Instructions<Ref<[u8]>> = Instructions::try_from(self.accounts.instructions)?;
+// Get the instruction that follows our current one
+let ix: IntrospectedInstruction = instructions.get_instruction_relative(1)?;
+```
+
+Selanjutnya, kita mendeserialkan instruksi `Secp256r1`:
+
+```rust
+// Deserialize the Secp256r1 instruction
+let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+```
+
+Kemudian kita melakukan beberapa pemeriksaan keamanan.
+
+Sangat penting untuk mengimplementasikan beberapa pemeriksaan keamanan:
+1. **Pemeriksaan Otoritas**: Memastikan bahwa hanya penerima yang berwenang yang dapat menerima dana dari PDA yang membungkus kunci publik Secp256r1. Ini mencegah serangan MEV di mana seseorang dapat menangkap transaksi, mengambil tanda tangan yang valid, dan mengganti penerima yang dituju.
+2. **Pemeriksaan Kedaluwarsa**: Menerapkan batas waktu pada validitas tanda tangan. Karena tanda tangan yang tervalidasi tetap valid tanpa batas waktu, mengimplementasikan stempel waktu kedaluwarsa mencegah serangan replay.
+
+Kita melakukan pemeriksaan ini dengan menempatkan data tersebut dalam pesan tanda tangan.
+
+Berikut cara mengimplementasikan pemeriksaan keamanan tersebut:
+
+```rust
+// Verify the fee payer is authorized
+let (receiver, expiry) = secp256r1_ix.get_message_data(0)?.split_at_checked(32).ok_or(ProgramError::InvalidInstructionData)?;
+if self.accounts.payer.key().ne(payer) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+
+// Check signature expiration
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(expiry.try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+Akhirnya, kita dapat menurunkan Program Derived Addresses (PDA) langsung dari kunci publik Secp256r1, menciptakan alamat akun deterministik yang dapat dikontrol pengguna melalui metode autentikasi modern:
+
+```rust
+// Verify the first signature matches our PDA owner
+let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+// Create signer seeds for CPI
+let seeds = [
+    Seed::from(signer[..1].as_ref()),
+    Seed::from(signer[1..].as_ref()),
+];
+let signers = [Signer::from(&seeds)];
+```
+
+> Kita perlu membagi pubkey menjadi 2 bagian berbeda karena seeds menerima maksimal 32 byte sebagai panjang maksimum.

@@ -1,0 +1,90 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# NFT di Solana
+
+![NFT di Solana](/graphics/course-banners/nfts-on-solana.png)
+
+Non-Fungible Token (NFT) adalah token digital dengan karakteristik khusus yang membedakannya dari token fungible seperti cryptocurrency.
+
+Tidak seperti token fungible di mana setiap unit identik dan dapat dipertukarkan, NFT mewakili aset digital unik yang tidak dapat dibagi dan tidak dapat direplikasi.
+
+<ArticleSection name="Properti NFT" id="nft-properties" level="h2" />
+
+Agar token memenuhi syarat sebagai NFT sejati, token tersebut harus memiliki properti penting berikut:
+- Tidak dapat dibagi: Tidak memiliki tempat desimal, memastikan Anda tidak dapat memiliki pecahan seperti 0,1 dari NFT
+- Keunikan: Memiliki pasokan tepat 1, menjamin hanya ada satu instance yang ada
+- Pasokan tetap: Tidak ada otoritas pencetakan, mencegah token tambahan dibuat
+- Pengelompokan: Dapat diorganisir ke dalam koleksi untuk mengelompokkan token serupa sambil mempertahankan keunikan individu
+- Metadata kaya: Mencakup data yang dapat dibaca seperti nama, deskripsi, gambar, dan atribut lain untuk ditampilkan di explorer dan dompet
+
+Untuk alasan ini, membuat NFT melibatkan penerapan kontrak pintar atau antarmuka yang:
+- Membuat akun mint dengan nol desimal
+- Mencetak satu token ke dompet pemilik
+- Mencabut otoritas pencetakan untuk mencegah pencetakan di masa depan
+- Mengaitkan akun metadata yang berisi informasi deskriptif token
+
+Protokol yang sudah mapan menyederhanakan kompleksitas ini secara signifikan. Pengembang Solana umumnya menggunakan program seperti `mpl-token-metadata` atau `mpl-core` yang dikembangkan oleh [Metaplex](https://metaplex.com), yang menangani detail implementasi teknis dan menyediakan antarmuka standar untuk pembuatan dan pengelolaan NFT.
+
+<ArticleSection name="Mengapa Non-Fungible Token Penting" id="why-non-fungible-tokens-matter" level="h2" />
+
+NFT merepresentasikan solusi teknis pertama yang memungkinkan kepemilikan digital yang dapat dibuktikan tanpa perantara tepercaya. Sebelum NFT, aset digital hanya ada dalam platform terpusat di mana kepemilikan dapat dicabut secara sewenang-wenang.
+
+> NFT menetapkan kepemilikan yang beroperasi secara independen di tingkat protokol, menciptakan hak properti digital yang nyata.
+
+### Keunggulan Dibandingkan Aset Fisik
+
+NFT meningkatkan kepemilikan aset fisik dengan memungkinkan logika yang dapat diprogram yang merespons kondisi yang telah ditentukan sebelumnya.
+
+Kontrak pintar dapat secara otomatis mendistribusikan pembayaran royalti kepada kreator setiap kali NFT mereka terjual di pasar sekunder.
+
+Pembatasan transfer dapat mencegah pergerakan tidak sah dari aset sensitif, sementara mekanisme berbasis waktu dapat membuka fitur atau mengubah properti berdasarkan tanggal atau kondisi tertentu.
+
+Beberapa NFT bahkan memperbarui properti visual atau fungsionalnya secara dinamis, merespons umpan data eksternal atau interaksi pengguna.
+
+### Model Ekonomi Baru
+
+NFT membuka struktur ekonomi yang tidak dapat didukung oleh sistem tradisional.
+
+Ekonomi kreator mengubah cara seniman menghasilkan pendapatan dengan menetapkan aliran royalti abadi—setiap kali NFT berpindah tangan, kreator asli secara otomatis menerima persentase dari harga jual.
+
+Ini menciptakan model pendapatan berkelanjutan yang jauh melampaui penjualan awal.
+
+Kepemilikan komunitas muncul melalui tata kelola NFT kolektif, di mana kelompok dapat bersama-sama memiliki aset digital berharga dan membuat keputusan tentang penggunaannya melalui mekanisme voting terdesentralisasi.
+
+Sementara itu, kompensasi kerja digital menyediakan kerangka baru untuk memberi penghargaan atas kontribusi ke komunitas online, kolaborasi kreatif, dan pengembangan dunia virtual dengan cara yang tidak dapat diakomodasi oleh struktur pekerjaan tradisional.
+
+### Komposabilitas dan Interoperabilitas
+
+NFT mencapai komposabilitas lengkap di seluruh aplikasi dan protokol, menciptakan fleksibilitas yang belum pernah ada sebelumnya dalam utilitas aset digital.
+
+Sebuah NFT item game tunggal dapat berfungsi secara bersamaan di beberapa game dengan mekanisme berbeda, ditampilkan di galeri digital dan dunia virtual, berfungsi sebagai jaminan dalam protokol DeFi untuk pinjaman atau yield farming, dan berinteraksi dengan protokol lain melalui integrasi kontrak pintar.
+
+Interoperabilitas ini beroperasi tanpa memerlukan izin dari pembuat asli, membangun ekonomi digital yang benar-benar terbuka di mana aset memperoleh nilai melalui efek jaringan dan utilitas lintas platform, bukan melalui pembatasan khusus platform.
+
+<ArticleSection name="Collections" id="collections" level="h2" />
+
+Koleksi mewakili sekelompok NFT yang memiliki atribut, tema, atau asal-usul yang sama, menciptakan hubungan on-chain yang dapat diverifikasi antara aset yang berbeda.
+
+Karena secara teoritis siapa pun dapat membuat NFT dan mengklaim secara palsu keanggotaan dalam koleksi bergengsi, koleksi memiliki otoritas (biasanya pembuat asli atau entitas yang berwenang) yang dapat memverifikasi NFT mana yang secara sah termasuk dalam koleksi.
+
+Proses verifikasi ini menciptakan catatan on-chain yang tidak dapat diubah yang disimpan dalam metadata NFT, menetapkan keanggotaan koleksi otentik yang tidak dapat dipalsukan atau dimanipulasi setelah pembuatan.
+
+Koleksi memiliki beberapa fungsi penting dalam ekosistem NFT. Koleksi memungkinkan penemuan dan penelusuran aset terkait secara efisien, memberikan identitas merek dan koherensi tematik bagi kreator, menetapkan verifikasi asal-usul dan keaslian, serta menciptakan kerangka kerja untuk tata kelola komunitas dan pengalaman bersama di antara pemegang aset koleksi.
+
+Selain itu, koleksi menciptakan cara yang sangat efisien untuk mengelompokkan token terkait secara logis sambil mempertahankan keunikan dan properti individualnya, membuat kontrol akses untuk aset dengan tipe yang sama menjadi jauh lebih efisien dan murah.
+
+<ArticleSection name="Metadata" id="metadata" level="h2" />
+
+Metadata berfungsi sebagai lapisan deskriptif yang mengubah token NFT mentah menjadi aset digital yang bermakna.
+
+Sementara blockchain hanya menyimpan informasi token yang penting: kepemilikan, pasokan, dan pengidentifikasi dasar; metadata menyediakan konteks yang kaya yang membuat Token Fungible dan Non-Fungible bernilai dan dapat digunakan dalam aplikasi.
+
+Struktur metadata biasanya mengikuti standar yang telah ditetapkan untuk memastikan bahwa dompet, marketplace, dan aplikasi dapat secara konsisten menafsirkan dan menampilkan informasi NFT terlepas dari program mana yang membuat token tersebut.
+
+Metadata mencakup elemen-elemen dasar seperti nama dan deskripsi aset, yang memberikan konteks yang dapat dibaca manusia tentang apa yang diwakili oleh NFT tersebut.
+
+Bidang gambar berisi URI yang mengarah ke aset visual, baik itu seni digital, gambar profil, atau ilustrasi item permainan. Untuk media yang lebih kompleks, bidang tambahan dapat merujuk pada animasi, model 3D, atau konten interaktif yang menghidupkan NFT dalam aplikasi yang kompatibel.
+
+Atribut kustom memperluas metadata melampaui deskripsi dasar, memungkinkan sistem klasifikasi dan penyaringan yang canggih. Atribut-atribut ini dapat mewakili ciri kelangkaan dalam koleksi, properti statistik dalam aset permainan, atau parameter utilitas dalam token fungsional. Sistem atribut yang fleksibel memungkinkan kreator untuk menyematkan data relevan apa pun yang meningkatkan nilai atau fungsionalitas NFT.
+
+Beberapa proyek menyimpan metadata langsung on-chain untuk permanensi maksimal (dengan proses yang kami sebut inscripsi), yang lain menggunakan solusi penyimpanan terdesentralisasi seperti IPFS atau Arweave untuk menyeimbangkan biaya dengan daya tahan, beberapa menggunakan database terpusat. Perbedaan utamanya adalah metode penyimpanan yang dipilih berdampak langsung pada aksesibilitas jangka panjang NFT dan tanggung jawab berkelanjutan kreator untuk memelihara konten terkait.

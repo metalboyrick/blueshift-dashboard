@@ -1,0 +1,99 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Assembly Timeout
+
+![Assembly Timeout Challenge](/graphics/challenge-banners/assembly-timeout.png)
+
+Dalam unit ini kita akan menggunakan sBPF Assembly untuk membuat instruksi validasi berbasis waktu yang menerapkan batas waktu slot-height.
+
+Dengan menyertakan instruksi ini dalam transaksi Anda, Anda membuat mekanisme pengaman yang mencegah eksekusi setelah waktu blockchain tertentu, melindungi dari eksekusi transaksi yang tertunda atau replay instruksi yang sudah kadaluarsa.
+
+Beberapa properti yang membuat pemeriksaan timeout ideal untuk assembly:
+- Kasus penggunaan tunggal dan terbatas
+- Memanfaatkan variabel sistem secara efisien
+- Tidak memerlukan validasi akun yang kompleks
+- Hanya meningkatkan keamanan transaksi
+
+Jika Anda belum familiar dengan pemrograman assembly, ikuti [kursus pengantar Assembly](/id/courses/introduction-to-assembly)
+
+<ArticleSection name="Program Design" id="program-design" level="h2" />
+
+Program kita mengimplementasikan operasi temporal yang penting: memvalidasi bahwa tinggi slot blockchain saat ini belum melebihi batas waktu yang telah ditentukan sebelumnya. Pola ini sangat penting untuk operasi DeFi yang sensitif terhadap waktu—mulai dari mencegah upaya arbitrase yang sudah kadaluarsa hingga menegakkan batas waktu lelang.
+
+Program ini mengharapkan:
+- Tinggi slot maksimum 8-byte dalam data instruksi.
+- Akses ke sysvar Clock Solana melalui `sol_get_clock_sysvar`.
+- Mengembalikan sukses jika slot saat ini ≤ slot maksimum, error jika sebaliknya.
+
+<ArticleSection name="Memory Offsets" id="memory-offsets" level="h2" />
+
+Program sBPF menerima data akun sebagai region memori yang berdekatan. Konstanta-konstanta ini mendefinisikan offset byte dalam memori tersebut.
+
+Karena program kita tidak menerima akun, kita dapat menghitung di mana `MAX_SLOT_HEIGHT` (yang diteruskan sebagai data instruksi) akan berada. Kita juga akan menyimpan data sysvar `Clock` di stack, karena alasan ini `CURRENT_SLOT_HEIGHT` akan bernilai negatif.
+
+Konstanta-konstanta ini mendefinisikan tata letak memori kita:
+
+```sbpf
+.equ NUM_ACCOUNTS, 0x0000
+.equ MAX_SLOT_HEIGHT, 0x0010
+.equ CURRENT_SLOT_HEIGHT, -0x0028
+```
+
+- `NUM_ACCOUNTS` (0x0000): Menunjuk ke jumlah akun dalam header data instruksi untuk validasi
+- `MAX_SLOT_HEIGHT` (0x0010): Menempatkan tinggi slot batas waktu 8-byte dalam payload data instruksi
+- `CURRENT_SLOT_HEIGHT` (-0x0028): Offset stack di mana field slot dari sysvar Clock akan disimpan. Karena slot adalah field pertama dalam struktur Clock, offset ini menunjuk langsung ke sana
+
+Tidak seperti bahasa tingkat tinggi yang mengabstraksi tata letak memori, assembly mengharuskan pengetahuan yang tepat tentang lokasi setiap bagian data.
+
+<ArticleSection name="Entrypoint and Initial Validation" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+  ldxdw r0, [r1+NUM_ACCOUNTS]       // Veto if any accounts are included
+  ldxdw r2, [r1+MAX_SLOT_HEIGHT]    // Store target slot height
+```
+
+Setiap program sBPF dimulai pada simbol global `.entrypoint`. Runtime Solana menyediakan data akun dan instruksi melalui register `r1`.
+
+Instruksi `ldxdw` memuat (`ldx`) nilai 8-byte (double word, `dx`) dari memori ke dalam register. Berikut yang terjadi:
+- `ldxdw r0, [r1+NUM_ACCOUNTS]`: memuat jumlah akun ke dalam `r0`. Karena `r0` adalah register yang dibaca VM saat keluar, nilai bukan nol secara otomatis akan menggagalkan program (tepat seperti yang kita inginkan jika akun dilewatkan).
+- `ldxdw r2, [r1+MAX_SLOT_HEIGHT]`: menunjuk ke ketinggian slot maksimum yang diizinkan yang kita lewatkan dalam data instruksi. Nilai 64-bit ini masuk ke dalam `r2`.
+
+Kedua operasi tersebut adalah zero-copy: kita membaca langsung dari data akun tanpa overhead deserialisasi.
+
+<ArticleSection name="The Clock Sysvar" id="the-clock-sysvar" level="h2" />
+
+```sbpf
+mov64 r1, r10
+add64 r1, CURRENT_SLOT_HEIGHT
+call sol_get_clock_sysvar
+ldxdw r1, [r1+0x0000]
+```
+
+Syscall `sol_get_clock_sysvar` menulis data `Clock` saat ini ke `r1`.
+
+Karena struktur Clock berukuran 40 byte (terlalu besar untuk register yang hanya dapat menampung 8 byte masing-masing), kita menggunakan stack untuk penyimpanan cepat tanpa alokasi dengan pembersihan otomatis.
+
+Karena `r10` bersifat read-only, untuk beroperasi pada stack kita perlu menyalin alamat memorinya ke dalam registrar: `mov64 r1, r10`
+
+Kemudian kita menambahkan `CURRENT_SLOT_HEIGHT` (-0x0028) ke `r1`. Karena konstanta ini negatif, sebenarnya ini adalah pengurangan: `r1 = r10 - 40 bytes`, mengalokasikan 40 byte pada stack.
+
+Setelah memanggil fungsi `sol_get_clock_sysvar`, `r1` berisi alamat memori tempat data Clock ditulis, bukan nilai slot itu sendiri. Karena alasan ini kita melanjutkan untuk memuat nilai slot yang sebenarnya menggunakan `ldxdw r1, [r1+0x0000]`.
+
+<ArticleSection name="Logika Perbandingan Temporal" id="temporal-comparison-logic" level="h2" />
+
+```sbpf
+jle r1, r2, end    // If current slot <= max slot, success
+lddw r0, 1         // Otherwise, set error code
+```
+
+Logika timeout inti menggunakan satu lompatan bersyarat:
+- Validasi temporal: `jle` (lompat jika kurang atau sama) membandingkan slot saat ini (`r1`) dengan batas waktu kita (`r2`). Jika kita masih dalam jendela waktu, lompat ke `exit`
+- Penanganan timeout: Jika batas waktu telah berlalu, eksekusi berlanjut untuk memuat (`lddw`) kode error 1 ke dalam register pengembalian `r0`
+
+<ArticleSection name="Kesimpulan" id="conclusion" level="h2" />
+
+Program yang ringkas ini menyelesaikan validasi temporal dengan konsumsi unit komputasi minimal.
+
+Timbal baliknya adalah memahami antarmuka syscall, manajemen stack, dan tata letak biner sysvar `Clock`. Tetapi untuk validasi temporal yang kritis terhadap kinerja, assembly memberikan efisiensi yang tak tertandingi.

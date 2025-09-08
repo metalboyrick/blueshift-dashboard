@@ -1,0 +1,753 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Membaca dan Menulis Data
+
+Saat membangun program Solana yang dioptimalkan, serialisasi dan deserialisasi data yang efisien dapat berdampak signifikan pada performa.
+
+Meskipun Pinocchio tidak memerlukan operasi memori tingkat rendah, memahami cara membaca dan menulis data akun secara efisien dapat membantu Anda membangun program yang lebih cepat.
+
+Teknik dalam panduan ini berfungsi dengan kerangka kerja pengembangan Solana apa pun; baik Anda menggunakan Pinocchio, Anchor, atau SDK asli. Kuncinya adalah merancang struktur data Anda dengan cermat dan menangani serialisasi dengan aman.
+
+### Kapan Menggunakan Kode Unsafe
+
+Gunakan kode unsafe hanya ketika:
+- Anda membutuhkan performa maksimal dan telah mengukur bahwa alternatif yang aman terlalu lambat
+- Anda dapat memverifikasi semua invariant keamanan dengan ketat
+- Anda mendokumentasikan persyaratan keamanan dengan jelas
+
+> Utamakan alternatif yang aman bila memungkinkan.
+
+<ArticleSection name="Prinsip Keamanan" id="safety-principles" level="h2" />
+
+Saat bekerja dengan array byte mentah dan operasi memori, kita harus berhati-hati untuk menghindari perilaku yang tidak terdefinisi. Memahami prinsip-prinsip ini sangat penting untuk menulis kode yang benar dan andal.
+
+### Pemeriksaan Batas Buffer
+
+Selalu validasi bahwa buffer Anda cukup besar sebelum melakukan operasi baca atau tulis. Membaca atau menulis melampaui memori yang dialokasikan adalah perilaku yang tidak terdefinisi.
+
+```rust
+// Good: Check bounds first
+if data.len() < size_of::<u64>() {
+    return Err(ProgramError::InvalidInstructionData);
+}
+let value = u64::from_le_bytes(data[0..8].try_into().unwrap());
+
+// Bad: No bounds checking - could panic or cause UB
+let value = u64::from_le_bytes(data[0..8].try_into().unwrap());
+```
+
+### Persyaratan Alignment
+
+Setiap tipe di Rust memiliki persyaratan alignment yang menentukan di mana tipe tersebut dapat ditempatkan dalam memori. Membaca tipe dari memori yang tidak sejajar dengan benar menghasilkan perilaku yang tidak terdefinisi. Sebagian besar tipe primitif memerlukan alignment yang sama dengan ukurannya:
+- `u8`: alignment 1-byte
+- `u16`: alignment 2-byte
+- `u32`: alignment 4-byte
+- `u64`: alignment 8-byte
+
+Ini berarti `u64` harus disimpan pada alamat memori yang dapat dibagi dengan 8, sementara `u16` harus dimulai pada alamat genap.
+
+Jika hal ini tidak dipatuhi, kompiler akan secara otomatis menyisipkan byte "padding" yang tidak terlihat di antara field struct untuk memastikan setiap field memenuhi persyaratan penjajaran.
+
+> Selain itu, ukuran total struct harus merupakan kelipatan dari persyaratan penjajaran field terbesarnya.
+
+Inilah tampilan struct dengan urutan yang buruk:
+
+```rust
+#[repr(C)]
+struct BadOrder {
+    small: u8,    // 1 byte
+    // padding: [u8; 7] since `big` needs to be aligned at 8 bytes.
+    big: u64,     // 8 bytes  
+    medium: u16,  // 2 bytes
+    // padding: [u8; 6] since the struct size needs to be aligned to 8 bytes.
+}
+```
+
+Kompiler menyisipkan 7 byte padding setelah small karena big memerlukan penjajaran 8-byte. Kemudian menambahkan 6 byte lagi di akhir untuk membuat ukuran total (24 byte) menjadi kelipatan dari 8, membuang 13 byte.
+
+Cara yang lebih baik adalah mengurutkan field struct seperti ini:
+
+```rust
+#[repr(C)]
+struct GoodOrder {
+    big: u64,     // 8 bytes
+    medium: u16,  // 2 bytes  
+    small: u8,    // 1 byte
+    // padding: [u8; 5] since the struct size needs to be aligned to 8 bytes.
+}
+```
+
+Dengan menempatkan field yang lebih besar terlebih dahulu, kita mengurangi padding dari 13 byte menjadi hanya 5 byte.
+
+> Aturan emasnya adalah mengurutkan field struct dari persyaratan penjajaran terbesar ke terkecil untuk meminimalkan padding dan mengurangi penggunaan memori.
+
+Ada cara lain yang lebih canggih untuk melakukan serialisasi dan deserialisasi data untuk efisiensi ruang yang maksimal. Kita dapat membuat Struct Tanpa-Padding di mana persyaratan penjajaran dihilangkan sepenuhnya:
+
+```rust
+#[repr(C)]
+struct ByteArrayStruct {
+    big: [u8; 8],    // represents u64
+    medium: [u8; 2], // represents u16  
+    small: u8,
+}
+```
+
+Ukurannya dalam kasus ini adalah tepat 11 byte karena semuanya dijajarkan 1 byte.
+
+### Pola Bit yang Valid
+
+Tidak semua pola bit valid untuk setiap tipe. Tipe seperti `bool`, `char`, dan `enums` memiliki nilai valid yang terbatas. Membaca pola bit yang tidak valid ke dalam tipe-tipe ini adalah perilaku yang tidak terdefinisi.
+
+<ArticleSection name="Membaca Data" id="reading-data" level="h2" />
+
+Ada beberapa pendekatan untuk membaca data dari buffer akun, masing-masing dengan trade-off yang berbeda:
+
+### Deserialisasi Field-by-Field (Direkomendasikan)
+
+Pendekatan teraman adalah mendeserialkan setiap field secara individual. Ini menghindari semua masalah penjajaran karena Anda bekerja dengan array byte:
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+    pub recipient: Pubkey,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() < (size_of::<u64>() + size_of::<Pubkey>()) {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // No alignment issues: we're reading bytes and converting
+        let amount = u64::from_le_bytes(
+            data[0..8].try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+        );
+        
+        let recipient = Pubkey::try_from(&data[8..40])
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+        Ok(Self { amount, recipient })
+    }
+}
+```
+
+### Deserialisasi Zero-Copy
+
+Ini dapat digunakan untuk performa maksimal dengan struct yang disejajarkan dengan tepat tetapi memerlukan pemeriksaan penjajaran yang hati-hati:
+
+```rust
+#[repr(C)]
+pub struct Config {
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    pub seed: u64,        // This field requires 8-byte alignment
+    pub fee: u16,         // This field requires 2-byte alignment  
+    pub state: u8,
+    pub config_bump: u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<Self>();
+    
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, ProgramError> {
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Critical: Check alignment for the most restrictive field (u64 in this case)
+        if (data.as_ptr() as usize) % core::mem::align_of::<Self>() != 0 {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: We've verified length and alignment
+        Ok(unsafe { &*(data.as_ptr() as *const Self) })
+    }
+}
+
+// Alternative: Avoid alignment issues entirely by using byte arrays for types with
+// alignment requirement greater than 1 and provide accessor methods
+#[repr(C)]
+pub struct ConfigSafe {
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    seed: [u8; 8],      // Convert with u64::from_le_bytes when needed
+    fee: [u8; 2],       // Convert with u16::from_le_bytes when needed
+    pub state: u8,
+    pub config_bump: u8,
+}
+
+impl ConfigSafe {
+    pub fn from_bytes(data: &[u8]) -> Result<&Self, ProgramError> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: No alignment check needed - everything is u8 aligned
+        Ok(unsafe { &*(data.as_ptr() as *const Self) })
+    }
+    
+    pub fn seed(&self) -> u64 {
+        u64::from_le_bytes(self.seed)
+    }
+    
+    pub fn fee(&self) -> u16 {
+        u16::from_le_bytes(self.fee)
+    }
+}
+```
+
+Seperti yang Anda lihat, kedua field seed dan fee bersifat private. Ini karena kita harus selalu menggunakan metode aksesor untuk membaca data, karena nilai-nilai tersebut direpresentasikan oleh array byte.
+
+Ketika Anda mengakses field secara langsung (`config.seed`), kompiler mungkin perlu membuat referensi ke lokasi memori field tersebut, meskipun hanya sementara. Jika field tersebut tidak disejajarkan dengan benar, membuat referensi adalah perilaku yang tidak terdefinisi, bahkan jika Anda tidak pernah secara eksplisit menggunakan referensi tersebut!
+
+Metode aksesor menghindari hal ini dengan melakukan operasi baca dalam lingkup metode, di mana kompiler dapat mengoptimalkan referensi perantara.
+
+```rust
+#[repr(C, packed)]  // This can cause unaligned fields!
+pub struct PackedConfig {
+    pub state: u8,
+    pub seed: u64,    // This u64 might not be 8-byte aligned due to packing
+}
+
+impl PackedConfig {
+    pub fn seed(&self) -> u64 {
+        self.seed  // Safe: Direct value copy, no reference created
+    }
+}
+
+// Usage:
+let config = PackedConfig::load(account)?;
+
+// ❌ UNDEFINED BEHAVIOR: Creates a reference to potentially unaligned field
+let seed_ref = &config.seed; // Compiler must create a reference here!
+
+// ❌ UNDEFINED BEHAVIOR: Even this can be problematic
+let seed_value = config.seed; // May create temporary reference internally
+
+// ✅ SAFE: Accessor method reads value without creating reference
+let seed_value = config.seed(); // No intermediate reference
+```
+
+> Field `u8` selalu aman untuk diakses secara langsung karena `u8` memiliki penjajaran 1 dan selalu sejajar sehingga kita dapat langsung menggunakan `self.state`
+
+Dalam kasus ini kita tidak memiliki "tipe khusus", tetapi selalu ingat bahwa beberapa tipe memerlukan perhatian ekstra karena pola bit yang tidak valid:
+
+```rust
+pub struct StateAccount {
+    pub is_active: bool,
+    pub state_type: StateType,
+    pub data: [u8; 32],
+}
+
+#[repr(u8)]
+pub enum StateType {
+    Inactive = 0,
+    Active = 1,
+    Paused = 2,
+}
+
+impl StateAccount {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, ProgramError> {
+        if data.len() < size_of::<Self>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Safely handle bool (only 0 or 1 are valid)
+        let is_active = match data[0] {
+            0 => false,
+            1 => true,
+            _ => return Err(ProgramError::InvalidAccountData),
+        };
+
+        // Safely handle enum
+        let state_type = match data[1] {
+            0 => StateType::Inactive,
+            1 => StateType::Active, 
+            2 => StateType::Paused,
+            _ => return Err(ProgramError::InvalidAccountData),
+        };
+
+        let mut data_array = [0u8; 32];
+        data_array.copy_from_slice(&data[2..34]);
+
+        Ok(Self {
+            is_active,
+            state_type,
+            data: data_array,
+        })
+    }
+}
+```
+
+### Pola Berbahaya yang Harus Dihindari
+
+Berikut adalah pola umum yang dapat menyebabkan perilaku tidak terdefinisi dan harus dihindari:
+
+1. Menggunakan `transmute()` dengan Data yang Tidak Sejajar
+
+```rust
+// ❌ UNDEFINED BEHAVIOR: transmute requires proper alignment
+let value: u64 = unsafe { core::mem::transmute(bytes_slice) };
+```
+
+`transmute()` mengasumsikan data sumber disejajarkan dengan tepat untuk tipe target. Jika Anda bekerja dengan irisan byte yang acak, asumsi ini sering kali dilanggar.
+
+2. Casting Pointer ke Struct yang Dipadatkan
+
+```rust
+#[repr(C, packed)]
+pub struct PackedConfig {
+    pub state: u8,
+    pub seed: u64,     // This u64 is only 1-byte aligned!
+    pub authority: Pubkey,
+}
+
+// ❌ UNDEFINED BEHAVIOR: Creates references to unaligned fields
+let config = unsafe { &*(data.as_ptr() as *const PackedConfig) };
+let seed_value = config.seed; // UB: May create reference to unaligned u64
+```
+
+Meskipun struct tersebut muat dalam memori, mengakses field multi-byte dapat membuat referensi yang tidak sejajar.
+
+3. Akses Field Langsung pada Struct yang Dipadatkan
+
+```rust
+#[repr(C, packed)]
+pub struct PackedStruct {
+    pub a: u8,
+    pub b: u64,
+}
+
+let packed = /* ... */;
+// ❌ UNDEFINED BEHAVIOR: Creates reference to unaligned field
+let b_ref = &packed.b;
+// ❌ UNDEFINED BEHAVIOR: May create temporary reference
+let b_value = packed.b;
+```
+
+4. Mengasumsikan Penjajaran Tanpa Verifikasi
+
+```rust
+// ❌ UNDEFINED BEHAVIOR: No alignment check
+let config = unsafe { &*(data.as_ptr() as *const Config) };
+```
+
+Meskipun data cocok, bukan berarti data tersebut sejajar dengan benar.
+
+5. Menggunakan `read_unaligned()` secara tidak tepat
+
+```rust
+// ❌ WRONG: read_unaligned needs proper layout, not just size
+#[repr(Rust)]  // Default layout - not guaranteed!
+pub struct BadStruct {
+    pub field: u64,
+}
+
+let value = unsafe { (data.as_ptr() as *const BadStruct).read_unaligned() };
+```
+
+`read_unaligned()` tetap memerlukan struktur dengan tata letak yang dapat diprediksi (`#[repr(C)]`).
+
+<ArticleSection name="Writing Data" id="writing-data" level="h2" />
+
+Menulis data dengan aman mengikuti prinsip yang mirip dengan membaca:
+
+### Serialisasi per bidang (direkomendasikan)
+
+```rust
+impl Config {
+    pub fn write_to_buffer(&self, data: &mut [u8]) -> Result<(), ProgramError> {
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        let mut offset = 0;
+        
+        // Write authority
+        data[offset..offset + 32].copy_from_slice(self.authority.as_ref());
+        offset += 32;
+        
+        // Write mint_x  
+        data[offset..offset + 32].copy_from_slice(self.mint_x.as_ref());
+        offset += 32;
+        
+        // Write mint_y
+        data[offset..offset + 32].copy_from_slice(self.mint_y.as_ref());
+        offset += 32;
+        
+        // Write seed
+        data[offset..offset + 8].copy_from_slice(&self.seed.to_le_bytes());
+        offset += 8;
+        
+        // Write fee
+        data[offset..offset + 2].copy_from_slice(&self.fee.to_le_bytes());
+        offset += 2;
+        
+        // Write state
+        data[offset] = self.state;
+        offset += 1;
+        
+        // Write config_bump
+        data[offset] = self.config_bump;
+
+        Ok(())
+    }
+}
+```
+
+Pendekatan ini adalah metode paling aman karena secara eksplisit melakukan serialisasi setiap bidang ke dalam buffer byte:
+- Tidak ada masalah penjajaran: anda menulis ke dalam array byte
+- Endianness eksplisit: anda mengontrol urutan byte dengan to_le_bytes()
+- Tata letak memori yang jelas: mudah untuk di-debug dan dipahami
+- Tidak ada perilaku yang tidak terdefinisi: semua operasi dilakukan pada array byte
+
+### Mutasi langsung (zero-copy)
+
+Untuk performa maksimal, anda dapat mengubah buffer byte menjadi struct dan mengubah bidang secara langsung. Ini memerlukan struct yang disejajarkan dengan benar:
+
+```rust
+impl Config {
+    pub fn from_bytes_mut(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if data.len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Check alignment
+        if (data.as_ptr() as usize) % core::mem::align_of::<Self>() != 0 {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: We've verified length and alignment
+        Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
+    }
+}
+```
+
+Ketika penjajaran diverifikasi dan struct menggunakan `#[repr(C)]`, mutasi bidang langsung tidak menciptakan referensi yang tidak sejajar.
+
+### Pendekatan array byte dengan setter (paling aman + cepat)
+
+Yang terbaik dari kedua dunia: kita dapat menggunakan array byte secara internal tetapi menyediakan setter yang ergonomis:
+
+```rust
+#[repr(C)]
+pub struct ConfigSafe {
+    pub authority: Pubkey,
+    pub mint_x: Pubkey, 
+    pub mint_y: Pubkey,
+    seed: [u8; 8],
+    fee: [u8; 2],
+    pub state: u8,
+    pub config_bump: u8,
+}
+
+impl ConfigSafe {
+    pub fn from_bytes_mut(data: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // No alignment check needed - everything is u8 aligned
+        Ok(unsafe { &mut *(data.as_mut_ptr() as *mut Self) })
+    }
+    
+    pub fn seed(&self) -> u64 {
+        u64::from_le_bytes(self.seed)
+    }
+    
+    pub fn fee(&self) -> u16 {
+        u16::from_le_bytes(self.fee)
+    }
+
+    // Setters that handle endianness correctly
+
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed.to_le_bytes();
+    }
+    
+    pub fn set_fee(&mut self, fee: u16) {
+        self.fee = fee.to_le_bytes();
+    }
+}
+```
+
+Ini ideal karena: 
+- Tidak ada masalah penjajaran: semua bidang disejajarkan dengan byte
+- Mutasi langsung yang cepat: tidak ada overhead serialisasi setelah pengaturan awal
+- Endianness yang konsisten: setter menangani konversi urutan byte
+- Keamanan tipe: setter mengambil tipe yang diharapkan, bukan array byte
+
+<ArticleSection name="Dynamically Sized Data" id="dynamically-sized-data" level="h2" />
+
+Bila memungkinkan, hindari menyimpan data berukuran dinamis secara langsung dalam akun. Namun, beberapa kasus penggunaan memerlukannya.
+
+Jika akun anda berisi data dinamis, selalu tempatkan semua bidang berukuran statis di awal struct anda, dan tambahkan data dinamis di akhir.
+
+### Bidang Dinamis Tunggal
+
+Ini adalah kasus paling sederhana: satu bagian dengan panjang variabel di akhir akun Anda:
+
+```rust
+#[repr(C)]
+pub struct DynamicAccount {
+    pub fixed_data: [u8; 32],
+    pub counter: u64,
+    // Dynamic data follows after the struct in memory
+    // Layout: [fixed_data][counter][dynamic_data...]
+}
+
+impl DynamicAccount {
+    pub const FIXED_SIZE: usize = size_of::<Self>();
+    
+    /// Safely parse account with dynamic data
+    pub fn from_bytes_with_dynamic(data: &[u8]) -> Result<(&Self, &[u8]), ProgramError> {
+        if data.len() < Self::FIXED_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // SAFETY: We've verified the buffer is large enough for the fixed part
+        // The fixed part only contains [u8; 32] and u64, which have predictable layout
+        let fixed_part = unsafe { &*(data.as_ptr() as *const Self) };
+        
+        // Everything after the fixed part is dynamic data
+        let dynamic_part = &data[Self::FIXED_SIZE..];
+        
+        Ok((fixed_part, dynamic_part))
+    }
+    
+    /// Get mutable references to both parts
+    pub fn from_bytes_mut_with_dynamic(data: &mut [u8]) -> Result<(&mut Self, &mut [u8]), ProgramError> {
+        if data.len() < Self::FIXED_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Split the buffer to avoid borrowing issues
+        let (fixed_bytes, dynamic_bytes) = data.split_at_mut(Self::FIXED_SIZE);
+        
+        // SAFETY: We've verified the size and split safely
+        let fixed_part = unsafe { &mut *(fixed_bytes.as_mut_ptr() as *mut Self) };
+        
+        Ok((fixed_part, dynamic_bytes))
+    }
+}
+
+/// Writing single dynamic field
+impl DynamicAccount {
+    pub fn write_with_dynamic(
+        data: &mut [u8], 
+        fixed_data: &[u8; 32], 
+        counter: u64,
+        dynamic_data: &[u8]
+    ) -> Result<(), ProgramError> {
+        let total_size = Self::FIXED_SIZE + dynamic_data.len();
+        
+        if data.len() != total_size {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Write fixed part field by field (safest approach)
+        data[0..32].copy_from_slice(fixed_data);
+        data[32..40].copy_from_slice(&counter.to_le_bytes());
+        
+        // Write dynamic part
+        data[Self::FIXED_SIZE..].copy_from_slice(dynamic_data);
+        
+        Ok(())
+    }
+    
+    /// Update just the dynamic portion
+    pub fn update_dynamic_data(&mut self, account_data: &mut [u8], new_data: &[u8]) -> Result<(), ProgramError> {
+        if account_data.len() < Self::FIXED_SIZE + new_data.len() {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Write new dynamic data
+        account_data[Self::FIXED_SIZE..Self::FIXED_SIZE + new_data.len()].copy_from_slice(new_data);
+        
+        Ok(())
+    }
+}
+```
+
+Untuk menghindari perilaku yang tidak terdefinisi, selalu periksa bahwa buffer data akun setidaknya sama besar dengan bagian yang berukuran statis. Bagian dinamis mungkin kosong, jadi pemeriksaan ini sangat penting.
+
+Tata letak ini memastikan bahwa offset untuk bidang berukuran tetap selalu diketahui, terlepas dari panjang data dinamis.
+
+Ada dua skenario utama saat membaca data berukuran dinamis:
+
+- Bidang dinamis tunggal di akhir: Anda dapat dengan mudah menentukan ukuran dan offset data dinamis saat runtime seperti ini:
+
+```rust
+const DYNAMIC_DATA_START_OFFSET: usize = size_of::<[u8; 32]>();
+
+#[repr(C)]
+pub struct DynamicallySizedAccount {
+    pub sized_data: [u8; 32],
+    // pub dynamic_data: &'info [u8], // Not part of the struct, but follows in the buffer
+}
+
+impl DynamicallySizedAccount {
+    /// Returns the length of the dynamic data section.
+    #[inline(always)]
+    pub fn get_dynamic_data_len(data: &[u8]) -> Result<usize, ProgramError> {
+        if data.len().le(&DYNAMIC_DATA_START_OFFSET) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(data.len() - DYNAMIC_DATA_START_OFFSET)
+    }
+
+    /// Returns a slice of the dynamic data.
+    #[inline(always)]
+    pub fn read_dynamic_data(data: &[u8]) -> Result<&[u8], ProgramError> {
+        if data.len().le(&DYNAMIC_DATA_START_OFFSET) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(&data[DYNAMIC_DATA_START_OFFSET..])
+    }
+}
+```
+
+### Beberapa Bidang Dinamis
+
+Pendekatan ini lebih kompleks karena kita akan membutuhkan cara untuk menentukan panjang setiap bidang dinamis kecuali yang terakhir. Pendekatan yang paling umum adalah dengan memberikan awalan panjang pada setiap bidang dinamis (kecuali yang terakhir), sehingga kita dapat mengurai buffer dengan benar.
+
+Berikut adalah pola yang sederhana dan kuat: simpan panjang bidang dinamis pertama sebagai u8 (atau u16, dll. jika Anda membutuhkan ukuran yang lebih besar) segera setelah data berukuran statis. Bidang dinamis pertama mengikuti, dan bidang dinamis kedua menempati sisa buffer.
+
+```rust
+#[repr(C)]  
+pub struct MultiDynamicAccount {
+    pub fixed_data: [u8; 32],
+    pub timestamp: u64,
+    // Layout: [fixed_data][timestamp][len1: u8][data1][data2: remainder]
+}
+
+impl MultiDynamicAccount {
+    pub const FIXED_SIZE: usize = size_of::<Self>();
+    pub const LEN_PREFIX_SIZE: usize = size_of::<u8>();
+    pub const MIN_SIZE: usize = Self::FIXED_SIZE + Self::LEN_PREFIX_SIZE;
+    
+    /// Parse account with two dynamic sections
+    pub fn parse_dynamic_fields(data: &[u8]) -> Result<(&[u8; 32], u64, &[u8], &[u8]), ProgramError> {
+        if data.len() < Self::MIN_SIZE {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Extract fixed data safely
+        let fixed_data = data[..32].try_into()
+            .map_err(|_| ProgramError::InvalidAccountData)?;
+            
+        let timestamp = u64::from_le_bytes(
+            data[32..40].try_into()
+                .map_err(|_| ProgramError::InvalidAccountData)?
+        );
+            
+        // Read length of first dynamic field (single byte)
+        let len = data[Self::FIXED_SIZE] as usize;
+        
+        // Validate we have enough data
+        if data.len() <  Self::MIN_SIZE + len {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        let data_1 = &data[Self::MIN_SIZE..Self::MIN_SIZE + len];
+        let data_2 = &data[Self::MIN_SIZE + len..]; // Remainder
+        
+        Ok((fixed_data, timestamp, data_1, data_2))
+    }
+    
+    /// Write account with two dynamic sections
+    pub fn write_with_multiple_dynamic(
+        buffer: &mut [u8],
+        fixed_data: &[u8; 32],
+        timestamp: u64,
+        data_1: &[u8],
+        data_2: &[u8]
+    ) -> Result<(), ProgramError> {
+        let total_size = Self::MIN_SIZE + data_1.len() + data_2.len();
+        
+        if buffer.len() != total_size {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        
+        // Validate data_1 length fits in u8
+        if data_1.len() > u8::MAX as usize {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        
+        let mut offset = 0;
+        
+        // Write fixed data
+        buffer[offset..offset + 32].copy_from_slice(fixed_data);
+        offset += 32;
+        
+        buffer[offset..offset + 8].copy_from_slice(&timestamp.to_le_bytes());
+        offset += 8;
+        
+        // Write length prefix for data1 (single byte)
+        buffer[offset] = data_1.len() as u8;
+        offset += 1;
+        
+        // Write data1
+        buffer[offset..offset + data_1.len()].copy_from_slice(data_1);
+        offset += data_1.len();
+        
+        // Write data2 (remainder - no length prefix needed)
+        buffer[offset..].copy_from_slice(data_2);
+        
+        Ok(())
+    }
+}
+```
+
+### Mengubah ukuran akun
+
+Setiap kali Anda memperbarui bidang dinamis, jika ukurannya berubah, Anda harus mengubah ukuran akun. Berikut adalah fungsi umum untuk mengubah ukuran akun:
+
+```rust
+pub fn resize_account(
+    account: &AccountInfo,
+    payer: &AccountInfo,
+    new_size: usize,
+    zero_out: bool,
+) -> ProgramResult {
+    // If the account is already the correct size, return early
+    if new_size == account.data_len() {
+        return Ok(());
+    }
+
+    // Calculate rent requirements
+    let rent = Rent::get()?;
+    let new_minimum_balance = rent.minimum_balance(new_size);
+
+    // Adjust lamports to meet rent-exemption requirements
+    match new_minimum_balance.cmp(&account.lamports()) {
+        core::cmp::Ordering::Greater => {
+            // Need more lamports for rent exemption
+            let lamports_diff = new_minimum_balance.saturating_sub(account.lamports());
+            **payer.try_borrow_mut_lamports()? -= lamports_diff;
+            **account.try_borrow_mut_lamports()? += lamports_diff;
+        }
+        core::cmp::Ordering::Less => {
+            // Return excess lamports to payer
+            let lamports_diff = account.lamports().saturating_sub(new_minimum_balance);
+            **account.try_borrow_mut_lamports()? -= lamports_diff;
+            **payer.try_borrow_mut_lamports()? += lamports_diff;
+        }
+        core::cmp::Ordering::Equal => {
+            // No lamport transfer needed
+        }
+    }
+
+    // Reallocate the account
+    account.resize(new_size)?;
+
+    Ok(())
+}
+```

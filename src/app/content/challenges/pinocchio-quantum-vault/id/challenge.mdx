@@ -1,0 +1,91 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# The Quantum Vault
+
+![Pinocchio Quantum Vault Challenge](/graphics/challenge-banners/pinocchio-quantum-vault.png)
+
+Vault adalah blok bangunan fundamental dalam DeFi yang menyediakan cara aman bagi pengguna untuk menyimpan aset mereka.
+
+Dalam tantangan ini, kita akan membangun vault yang menggunakan tanda tangan Winternitz untuk verifikasi transaksi. Ini sangat menarik karena Tanda Tangan Winternitz adalah tanda tangan post-quantum pertama yang terintegrasi di Solana.
+
+> Jika Anda belum familiar dengan Tanda Tangan Winternitz, mulailah dengan membaca [Tanda Tangan Winternitz di Solana](/id/courses/winternitz-signatures-on-solana) untuk memahami konsep inti dan kriptografi yang mendasarinya.
+
+Dalam tantangan ini, kita akan memperbarui lamport vault sederhana yang kita bangun di [Tantangan Pinocchio Vault](/id/challenges/pinocchio-vault) untuk memungkinkan Tanda Tangan Winternitz sebagai metode verifikasi untuk transaksi.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Sebelum Anda memulai, pastikan Rust dan Pinocchio sudah terpasang. Kemudian, jalankan perintah berikut di terminal Anda:
+
+```bash
+# create workspace
+cargo new blueshift-pinocchio-quantum-vault --lib --edition 2021
+cd blueshift-pinocchio-quantum-vault
+```
+
+Tambahkan `pinocchio`, `pinocchio-system`, dan `solana-nostd-sha256` dan `solana-winternitz`:
+
+```bash
+cargo add pinocchio pinocchio-system solana-nostd-sha256 solana-winternitz
+```
+
+Deklarasikan tipe crate di `Cargo.toml` untuk menghasilkan artefak deployment di `target/deploy`:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Anda sekarang siap untuk menulis program quantum vault Anda.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Kali ini, kita akan membagi program menjadi modul-modul kecil yang terfokus alih-alih menempatkan semuanya di `lib.rs`. Struktur folder akan terlihat kurang lebih seperti ini:
+
+```
+src
+├── instructions
+│       ├── close.rs
+│       ├── open.rs
+│       ├── mod.rs
+│       └── split.rs
+└── lib.rs
+```
+
+**Catatan**: Ingat untuk mengubah ID program menjadi `22222222222222222222222222222222222222222222` karena kita menggunakan ini di balik layar untuk menguji program Anda.
+
+Entrypoint di `lib.rs` sangat mirip dengan yang kita bahas di [Pengantar Kursus Pinocchio](/id/courses/introduction-to-pinocchio).
+
+```rust
+pub mod instructions;
+use instructions::*;
+
+use pinocchio::{
+    account_info::AccountInfo, program_entrypoint, program_error::ProgramError,
+    pubkey::Pubkey, ProgramResult,
+};
+
+program_entrypoint!(process_instruction);
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee, 
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7, 
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((OpenVault::DISCRIMINATOR, data)) => OpenVault::try_from((data, accounts))?.process(),
+        Some((SplitVault::DISCRIMINATOR, data)) => SplitVault::try_from((data, accounts))?.process(),
+        Some((CloseVault::DISCRIMINATOR, data)) => CloseVault::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+Kita tidak memerlukan pengaturan state untuk ini, jadi kita akan langsung beralih ke pembuatan instruksi kita.

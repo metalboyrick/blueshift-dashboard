@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Berbagi PDA
+
+Serangan berbagi PDA mengeksploitasi program yang menggunakan Program Derived Address (PDA) yang sama di beberapa pengguna atau domain, memungkinkan penyerang untuk mengakses dana, data, atau izin yang bukan milik mereka. Meskipun menggunakan PDA global mungkin tampak elegan untuk operasi program secara luas, hal ini menciptakan kontaminasi silang yang berbahaya di mana tindakan satu pengguna dapat memengaruhi aset pengguna lain.
+
+Kerentanan ini berasal dari kurangnya spesifikasi seed saat menurunkan PDA. Ketika beberapa akun berbagi otoritas PDA yang sama, program kehilangan kemampuan untuk membedakan antara upaya akses yang sah dan tidak sah. Penyerang dapat membuat akun mereka sendiri yang mereferensikan PDA yang sama, kemudian menggunakan otoritas penandatanganan PDA tersebut untuk memanipulasi aset milik pengguna lain.
+
+Hal ini sangat merusak dalam protokol DeFi di mana PDA mengendalikan vault token, saldo pengguna, atau izin penarikan. PDA yang dibagikan pada dasarnya menciptakan kunci utama yang membuka aset beberapa pengguna, mengubah operasi pengguna individual menjadi potensi serangan terhadap seluruh protokol.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Pertimbangkan sistem penarikan yang rentan ini yang menggunakan PDA berbasis mint untuk penandatanganan:
+
+```rust
+#[program]
+pub mod insecure_withdraw{
+    use super::*;
+    //..
+
+    pub fn withdraw(ctx: Context<WithdrawTokens>) -> Result<()> {
+
+        //..
+        // other conditions/actions...
+        //..
+
+        let amount = ctx.accounts.vault.amount;
+        
+        let seeds = &[
+            ctx.accounts.pool.mint.as_ref(),
+            &[ctx.accounts.pool.bump],
+        ];
+
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.withdraw_destination.to_account_info(),
+                    authority: ctx.accounts.pool.to_account_info(),
+                },
+            ),
+            &amount,
+            seeds,
+        )?;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        seeds = [b"pool", pool.mint.as_ref()],
+        bump = pool.bump,                                        
+    )]
+    pool: Account<'info, TokenPool>,
+    vault: Account<'info, TokenAccount>,
+    withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool {
+    pub mint: Pubkey,
+    pub bump: u8,
+}
+```
+
+Kode ini memiliki kelemahan kritis: PDA diturunkan hanya menggunakan alamat mint. Ini berarti bahwa semua vault untuk jenis token yang sama berbagi otoritas penandatanganan yang sama, menciptakan vektor serangan yang berbahaya.
+
+Penyerang dapat mengeksploitasi ini dengan:
+- Membuat vault mereka sendiri untuk mint yang sama
+- Memanggil instruksi dengan alamat mereka sendiri sebagai `withdraw_destination`
+- Menggunakan otoritas PDA bersama untuk menarik token dari vault mana pun yang menggunakan mint yang sama
+- Menguras dana pengguna lain ke tujuan mereka sendiri
+
+Serangan berhasil karena otoritas PDA tidak membedakan antara instance pool yang berbeda, ia hanya peduli tentang jenis mint, bukan pengguna spesifik yang seharusnya memiliki akses ke dana tersebut.
+
+Solusi yang mungkin adalah membuat PDA khusus untuk pengguna dan tujuan individual dan menggunakan seeds dan bump constraints Anchor untuk memvalidasi derivasi PDA:
+
+```rust
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        has_one = vault,
+        has_one = withdraw_destination,
+        seeds = [b"pool", vault.key().as_ref(), withdraw_destination.key().as_ref()],
+        bump = pool.bump,                                        
+    )]
+    pool: Account<'info, TokenPool>, // Authority for the vault
+    #[account(mut)]
+    vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool{
+    pub vault:Pubkey,
+    pub withdraw_destination:Pubkey,
+    pub bump:u8
+}
+```
+
+Perubahan yang sama dibuat untuk handler instruksi, salah satu situasi di mana ini dapat berlaku adalah program perdagangan leverage yang memungkinkan perdagangan pengguna dilikuidasi ketika mereka telah kehilangan jumlah tertentu, misalnya mereka mengatur stop loss sendiri, kode kemudian akan memeriksa kondisi mencapai jumlah tersebut dan kemudian mengizinkan siapa pun untuk menghentikan perdagangan dan menarik dana yang tersisa ke tujuan, akun penarikan.
+
+Satu PDA tunggal yang mengontrol semua dana untuk mint tertentu akan menciptakan situasi di mana jika kondisi terpenuhi untuk pengguna secara bersamaan, misalnya banyak pengguna yang mendekati stop loss/likuidasi, maka pengguna tunggal mana pun dapat menarik dana tersebut untuk semua pengguna, kemungkinan dalam satu atau lebih transaksi yang berisi beberapa instruksi yang melakukan ini untuk pengguna yang berbeda.

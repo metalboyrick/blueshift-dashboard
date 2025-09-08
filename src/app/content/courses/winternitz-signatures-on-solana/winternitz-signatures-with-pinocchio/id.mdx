@@ -1,0 +1,221 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Tanda Tangan Winternitz dengan Pinocchio
+
+[Dean](https://x.com/deanmlittle) dari tim Blueshift telah merilis crate pertama yang memungkinkan kompatibilitas Pinocchio untuk membuat dan memverifikasi Tanda Tangan Winternitz.
+
+Implementasi ini sangat berharga untuk menyediakan keamanan tahan-kuantum untuk aplikasi blockchain.
+
+<ArticleSection name="Introduction" id="introduction" level="h2" />
+
+Implementasi ini menggunakan `w = 8` untuk menyeimbangkan batasan Solana: batas ukuran transaksi dan pembatasan unit komputasi.
+
+Parameter Winternitz `w` menciptakan trade-off mendasar antara ukuran tanda tangan dan kebutuhan komputasi:
+- Nilai w yang lebih tinggi berarti tanda tangan lebih kecil tetapi komputasi lebih banyak karena verifikasi memerlukan lebih banyak operasi hash per komponen tanda tangan
+- Nilai w yang lebih rendah berarti tanda tangan lebih besar tetapi komputasi lebih sedikit karena verifikasi memerlukan lebih sedikit operasi hash per komponen tanda tangan
+
+Solana menerapkan dua batasan penting yang membentuk pilihan parameter:
+- Batasan Ukuran Transaksi (1024 byte): Dengan `w = 8`, implementasi penuh menghasilkan tanda tangan 1024-byte menggunakan hash 256-bit (32 byte × 32 komponen). Ini menghabiskan seluruh ruang transaksi, tidak menyisakan ruang untuk overhead transaksi dan data tambahan.
+- Batasan Unit Komputasi: Beralih ke `w = 16` akan mengurangi ukuran tanda tangan setengahnya tetapi akan melebihi batas unit komputasi (CU) Solana selama verifikasi, karena setiap komponen tanda tangan akan memerlukan operasi hash yang jauh lebih banyak.
+
+Karena batas unit komputasi tidak dapat diselesaikan melalui penyesuaian parameter, masalah ukuran tanda tangan diatasi dengan memotong tanda tangan menjadi 896 byte dan merklizing komponen yang tersisa. Pendekatan ini mempertahankan keamanan sambil menciptakan ruang yang penting untuk overhead transaksi.
+
+Inilah mengapa implementasi ini menetapkan `w = 8`: ini mewakili titik optimal di mana kebutuhan komputasi tetap dapat dikelola sementara pemotongan tanda tangan memberikan solusi praktis untuk batasan ukuran.
+
+### Pembuatan Kunci
+
+Buat kunci privat dan turunkan kunci publik yang sesuai menggunakan SDK:
+
+```rust
+use winternitz::{hash::WinternitzKeccak, privkey::WinternitzPrivkey};
+
+// Generate a new random private key
+let privkey = WinternitzPrivkey::generate();
+
+// Derive the corresponding public key
+let pubkey = privkey.pubkey::<WinternitzKeccak>();
+```
+
+Kunci publik diturunkan dengan menerapkan fungsi hash beberapa kali pada komponen kunci privat, menciptakan transformasi satu arah yang memastikan keamanan.
+
+### Menandatangani pesan
+
+```rust
+// Sign a message
+let message = b"Hello, World!";
+let signature = privkey.sign::<WinternitzKeccak>(message);
+```
+
+Proses penandatanganan menghasilkan komponen tanda tangan berdasarkan intisari pesan, dengan setiap komponen memerlukan sejumlah operasi hash tertentu yang ditentukan oleh bit pesan yang sesuai.
+
+### Verifikasi Tanda Tangan
+
+```rust
+// Recover public key from signature and message
+let recovered_pubkey = signature.recover_pubkey::<WinternitzKeccak>(message);
+
+// Verify by comparing public keys
+assert_eq!(recovered_pubkey, pubkey);
+```
+
+Verifikasi merekonstruksi kunci publik dari tanda tangan dan pesan, kemudian membandingkannya dengan kunci publik yang diharapkan untuk mengonfirmasi keaslian.
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+Untuk mengimplementasikan verifikasi tanda tangan Winternitz dalam program Pinocchio Anda, Anda memerlukan:
+1. Crate `solana-winternitz`: Ini menyediakan fungsionalitas inti tanda tangan Winternitz
+2. Pembuatan dan verifikasi PDA menggunakan derivasi alamat yang aman secara kuantum
+
+Mari mulai dengan menambahkan crate `solana-winternitz`
+
+```
+cargo add solana-winternitz
+```
+
+### Optimasi Ukuran Tanda Tangan
+
+Implementasi ini menggunakan pendekatan terpotong untuk menyesuaikan dengan batasan transaksi Solana:
+- Tanda tangan lengkap (`WinternitzSignature`): 1024 byte (32 byte × 32 komponen).
+- Tanda tangan terpotong (`WinternitzCommitmentSignature`): 896 byte (32 byte × 28 komponen).
+- Ruang tersedia: 128 byte tersisa untuk overhead transaksi
+
+Pemotongan dari hash 256-bit menjadi 224-bit mempertahankan keamanan yang kuat sambil memastikan kegunaan praktis. Komponen tanda tangan yang tersisa dimerkelisasi untuk mempertahankan model keamanan yang lengkap.
+
+### Menyiapkan PDA yang Aman secara Kuantum
+
+Karena tanda tangan blockchain tradisional tetap rentan terhadap serangan kuantum, implementasi ini memanfaatkan Program Derived Addresses (PDA) untuk keamanan kuantum.
+
+PDA tidak memiliki kunci privat terkait, menjadikannya kebal terhadap serangan kriptografi.
+
+Berikut cara membuat PDA dari kunci publik Winternitz:
+
+```rust
+pub struct CreateWinternitzPDA {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl CreateWinternitzPDA {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        let data: [u8; 33] = bytes
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+        let (hash, bump) = array_refs![&data, 32, 1];
+        Ok(Self {
+            hash: *hash,
+            bump: *bump,
+        })
+    }
+
+    pub fn create_pda(&self, accounts: &CreatePDAAccounts) -> ProgramResult {
+        let seeds = [Seed::from(&self.hash), Seed::from(&self.bump)];
+        let signers = [Signer::from(&seeds)];
+        
+        // Create the quantum-secure PDA
+        CreateAccount {
+            from: accounts.payer,
+            to: accounts.vault,
+            lamports: accounts.lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+> Hash yang digunakan dalam derivasi PDA adalah Merkle root yang dibuat dari 28 dari 32 komponen pubkey. Ini karena seperti yang disebutkan sebelumnya, kita hanya dapat memuat tanda tangan yang Terpotong.
+
+Inti dari verifikasi Winternitz melibatkan pemulihan kunci publik dari tanda tangan dan pesan, kemudian memverifikasi bahwa kunci tersebut cocok dengan PDA yang diharapkan. Berikut adalah alur verifikasi lengkapnya:
+
+```rust
+pub struct VerifyWinternitzSignature {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl VerifyWinternitzSignature {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        if bytes.len() != 897 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        let (signature_bytes, bump) = bytes.split_at(896);
+        Ok(Self {
+            signature: WinternitzSignature::from(signature_bytes.try_into().unwrap()),
+            bump: [bump[0]],
+        })
+    }
+
+    pub fn verify_and_execute(&self, accounts: &VerifyAccounts, message: &[u8]) -> ProgramResult {
+        // Recover the public key from signature and message
+        let recovered_pubkey = self.signature.recover_pubkey(message);
+        let hash = recovered_pubkey.merklize();
+        
+        // Verify PDA ownership
+        let expected_pda = solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ]);
+        
+        if expected_pda.ne(accounts.pda.key()) {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        
+        // Execute the protected operation
+        self.execute_protected_operation(accounts)
+    }
+
+    fn execute_protected_operation(&self, accounts: &VerifyAccounts) -> ProgramResult {
+        // Your quantum-secure operation logic here
+        Ok(())
+    }
+}
+```
+
+Fungsi `recover_pubkey()` merekonstruksi kunci publik asli dengan mengubah pesan yang ditandatangani menjadi nilai-nilai digest yang menentukan berapa banyak hash tambahan yang dibutuhkan setiap komponen dan menghasilkan 28 komponen kunci publik yang hanya dapat dihasilkan dengan kunci privat yang benar.
+
+Fungsi `merklize()` kemudian membangun pohon biner dari 28 komponen kunci publik yang menghasilkan satu root 32-byte yang secara unik mewakili semua 28 komponen
+
+<ArticleSection name="Pertimbangan Keamanan" id="security-considerations" level="h2" />
+
+Selalu sertakan parameter penting dalam pesan yang ditandatangani untuk mencegah manipulasi:
+
+```rust
+// Construct message with security parameters
+let message = [
+    accounts.recipient.key().as_ref(),     // Prevent recipient substitution
+    &amount.to_le_bytes(),                 // Prevent amount manipulation
+    &expiry_timestamp.to_le_bytes(),       // Prevent replay attacks
+].concat();
+```
+
+### Pemeriksaan Kedaluwarsa
+
+Karena tanda tangan Winternitz tetap valid tanpa batas waktu, terapkan kedaluwarsa berbasis waktu:
+
+```rust
+// Verify signature hasn't expired
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(
+    message[40..48].try_into()
+    .map_err(|_| ProgramError::InvalidInstructionData)?
+);
+
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+### Pemeriksaan Pubkey
+
+Pastikan hanya pihak yang berwenang yang dapat memanfaatkan tanda tangan:
+
+```rust
+// Verify the recipient is authorized
+let intended_recipient = &message[0..32];
+if accounts.recipient.key().as_ref().ne(intended_recipient) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```
