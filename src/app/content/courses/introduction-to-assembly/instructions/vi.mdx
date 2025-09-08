@@ -23,9 +23,9 @@ Các lệnh sBPF làm việc với các kích thước dữ liệu khác nhau:
 
 Hầu hết các thao tác sBPF sử dụng giá trị 64-bit (doublewords) vì các thanh ghi là 64 bit, nhưng bạn có thể tải và lưu trữ các kích thước nhỏ hơn khi cần thiết để tăng hiệu quả.
 
-<ArticleSection name="Phân loại và định dạng lệnh" id="instruction-categories-and-format" level="h2" />
+<ArticleSection name="Danh mục và định dạng các lệnh" id="instruction-categories-and-format" level="h2" />
 
-Khi bạn biên dịch mã Rust, C, hoặc assembly, chuỗi công cụ sẽ tạo ra một luồng các lệnh có độ rộng cố định 8-byte được đóng gói vào phần `.text` của ELF.
+Khi bạn biên dịch mã Rust, C, hoặc assembly, toolchain sẽ tạo ra một luồng các lệnh có kích thước cố định 8-byte được đóng gói vào phần `.text` của ELF.
 
 Mỗi lệnh tuân theo một cấu trúc nhất quán mà VM có thể giải mã trong một lần duyệt:
 
@@ -36,15 +36,15 @@ Mỗi lệnh tuân theo một cấu trúc nhất quán mà VM có thể giải m
 └──────────┴────────┴────────┴──────────────┴──────────────────┘
 ```
 
-- `opcode`: Xác định loại thao tác. 3 bit cao nhất chọn lớp lệnh (số học, bộ nhớ, nhảy, gọi, thoát), trong khi 5 bit thấp hơn chỉ định biến thể chính xác (cộng, nhân, tải, nhảy-nếu-bằng).
-- `dst`: Số thanh ghi đích (`r0–r10`) nơi kết quả được lưu trữ—kết quả số học, giá trị đã tải, hoặc giá trị trả về từ hàm trợ giúp.
+- `opcode`: Xác định loại thao tác. 3 bit cao nhất xác định lớp lệnh (số học, bộ nhớ, nhảy, gọi, thoát), trong khi 5 bit thấp hơn chỉ định  chính xác biến thể (cộng, nhân, tải, nhảy-nếu-bằng).
+- `dst`: Số thanh ghi đích (`r0–r10`) nơi kết quả được lưu trữ—kết quả số học, giá trị đã tải, hoặc giá trị trả về từ hàm bổ trợ.
 - `src`: Thanh ghi nguồn cung cấp đầu vào. Đối với số học hai toán hạng (`add r1, r2`), nó cung cấp giá trị thứ hai. Đối với các thao tác bộ nhớ, nó có thể cung cấp địa chỉ cơ sở. Đối với các biến thể tức thời (`add r1, 10`), 4 bit này được gộp vào mã lệnh.
 - `offset`: Một số nguyên nhỏ điều chỉnh hành vi lệnh. Đối với tải/lưu, nó được thêm vào địa chỉ nguồn để đạt đến `[src + offset]`. Đối với các lệnh nhảy, đó là mục tiêu nhánh tương đối được đo bằng số lệnh.
 - `imm`: Trường giá trị tức thời. Các thao tác số học sử dụng nó cho hằng số (`add r1, 42`), `CALL` sử dụng nó cho số syscall (`sol_log = 16`), và các thao tác bộ nhớ có thể coi nó như một con trỏ tuyệt đối.
 
-### Các danh mục chỉ dẫn
+### Các danh mục lệnh
 
-Các loại chỉ dẫn khác nhau sử dụng các trường này theo những cách cụ thể:
+Các loại lệnh khác nhau sử dụng các trường này theo những cách cụ thể:
 
 - **Di chuyển dữ liệu**: Di chuyển giá trị giữa các thanh ghi và bộ nhớ:
 
@@ -82,31 +82,31 @@ jeq r1, 42, +3         // If r1 == 42, jump forward 3 instructions
                        // opcode=jump_eq_imm, dst=1, src=unused, offset=3, imm=42
 ```
 
-### Mã hóa mã thao tác
+### Mã hóa opcode
 
-Mã hóa mã thao tác nắm bắt nhiều thông tin ngoài loại thao tác:
-- Lớp chỉ dẫn: Số học, bộ nhớ, nhảy, gọi, v.v.
-- Kích thước thao tác: Thao tác 32-bit so với 64-bit
-- Loại nguồn: Thanh ghi so với giá trị tức thời
-- Thao tác cụ thể: Cộng so với trừ, tải so với lưu trữ, v.v.
+Mã hóa opcode nắm bắt nhiều thông tin ngoài loại thao tác:
+- Lớp lệnh: Số học, bộ nhớ, nhảy, gọi, v.v.
+- Kích thước thao tác: các thao tác 32-bit hay 64-bit
+- Loại nguồn: Thanh ghi hay giá trị tức thời
+- Thao tác cụ thể: Cộng hay trừ, tải so hay lưu trữ, v.v.
 
-Điều này tạo ra các mã thao tác riêng biệt cho các biến thể chỉ dẫn. Ví dụ, `add64 r1, r2` (nguồn thanh ghi) sử dụng mã thao tác khác với `add64 r1, 42 ` (nguồn tức thời). Tương tự, `add64` và `add32` có các mã thao tác khác nhau cho các kích thước thao tác khác nhau.
+Việc này tạo ra các mã thao tác riêng biệt cho các biến thể lệnh. Ví dụ, `add64 r1, r2` (nguồn thanh ghi) sử dụng mã thao tác khác với `add64 r1, 42 ` (nguồn giá trị tức thời). Tương tự, `add64` và `add32` có các mã thao tác khác nhau cho các kích thước thao tác khác nhau.
 
-Các thao tác số học phân biệt thêm giữa các biến thể có dấu và không dấu. `udiv64` xử lý giá trị như không dấu (0 đến 18 quintillion), trong khi `sdiv64` xử lý các giá trị có dấu (-9 quintillion đến +9 quintillion).
+Các thao tác số học phân biệt thêm giữa các biến thể có dấu và không dấu. `udiv64` coi các giá trị là không dấu (0 đến 18 nghìn tỉ), trong khi `sdiv64` xử lý các giá trị có dấu (-9 nghìn tỉ đến +9 nghìn tỉ).
 
-<ArticleSection name="Thực thi chỉ dẫn" id="instruction-execution" level="h2" />
+<ArticleSection name="Thực thi lệnh" id="instruction-execution" level="h2" />
 
-Mã thao tác xác định cách VM diễn giải các trường còn lại.
+Mã opcode xác định cách VM diễn giải các trường còn lại.
 
-Khi VM gặp `add64 r1, r2`, nó đọc mã thao tác và nhận ra đây là một thao tác số học 64-bit sử dụng hai thanh ghi:
+Khi VM gặp `add64 r1, r2`, nó đọc opcode và nhận ra đây là một thao tác số học 64-bit sử dụng hai thanh ghi:
 
-Trường `dst` chỉ ra kết quả đi vào `r1`, trường `src` chỉ định `r2` là toán hạng thứ hai, và các trường `offset` và `immediate` bị bỏ qua.
+Trường `dst` chỉ ra kết quả lưu vào `r1`, trường `src` chỉ định `r2` là toán hạng thứ hai, và các trường `offset` và `immediate` bị bỏ qua.
 
-Đối với `add64 r1, 42`, mã thao tác thay đổi để chỉ ra một thao tác tức thời. Bây giờ `dst` vẫn trỏ đến `r1`, nhưng `src` trở nên vô nghĩa, và trường `immediate` cung cấp toán hạng thứ hai (42).
+Đối với `add64 r1, 42`, opcode thay đổi để chỉ ra một thao tác tức thời. Bây giờ `dst` vẫn trỏ đến `r1`, nhưng `src` trở nên vô nghĩa, và trường `immediate` cung cấp toán hạng thứ hai (42).
 
 Các thao tác bộ nhớ kết hợp nhiều trường một cách có ý nghĩa:
 
-Đối với `ldxdw r1, [r2+8]`, mã thao tác chỉ ra một thao tác tải bộ nhớ 64-bit, `dst` nhận giá trị được tải, `src` cung cấp địa chỉ cơ sở, và `offset` (8) được thêm vào để tạo địa chỉ cuối cùng `r2 + 8`.
+Đối với `ldxdw r1, [r2+8]`, opcode chỉ ra một thao tác tải bộ nhớ 64-bit, `dst` nhận giá trị được tải, `src` cung cấp địa chỉ cơ sở, và `offset` (8) được thêm vào để tạo địa chỉ cuối cùng `r2 + 8`.
 
 Các lệnh điều khiển luồng tuân theo cùng một mẫu: 
 
@@ -116,11 +116,11 @@ Khi bạn viết `jeq r1, r2, +5`, mã opcode mã hóa một lệnh nhảy có �
 
 ### Lệnh gọi hàm và Syscall
 
-Cơ chế gọi của sBPF đã phát triển qua nhiều phiên bản để có độ rõ ràng và bảo mật tốt hơn. Cho đến sBPF v3, `call imm` phục vụ hai mục đích: giá trị tức thời xác định liệu bạn đang gọi một hàm nội bộ hay đang gọi một syscall. 
+Cơ chế gọi của sBPF đã phát triển qua nhiều phiên bản để có được sự rõ ràng và độ bảo mật tốt hơn. Cho đến sBPF v3, `call imm` phục vụ hai mục đích: giá trị tức thời xác định liệu bạn đang gọi một hàm nội bộ hay đang gọi một syscall. 
 
-Thời gian chạy phân biệt giữa các loại này dựa trên phạm vi giá trị tức thời, với các số syscall thường là các số nguyên dương nhỏ như 16 cho `sol_log`.
+Runtime phân biệt giữa các loại này dựa trên phạm vi giá trị tức thời, với các số syscall thường là các số nguyên dương nhỏ như 16 cho `sol_log`.
 
-Từ sBPF v3 trở đi, các lệnh được tách biệt để có hành vi rõ ràng. `call` giờ đây xử lý các lệnh gọi hàm nội bộ bằng cách sử dụng offset tương đối, trong khi `syscall imm` gọi rõ ràng các hàm thời gian chạy. Sự tách biệt này làm rõ ý định của bytecode và cho phép xác minh tốt hơn.
+Từ sBPF v3 trở đi, các lệnh được tách biệt để có hành vi rõ ràng. `call` giờ đây xử lý các lệnh gọi hàm nội bộ bằng cách sử dụng offset tương đối, trong khi `syscall imm` gọi rõ ràng các hàm runtime. Sự tách biệt này làm rõ ý định của bytecode và cho phép xác minh tốt hơn.
 
 Các lệnh gọi gián tiếp thông qua `callx` cũng đã phát triển. Các phiên bản trước mã hóa thanh ghi đích trong trường tức thời, nhưng từ v2 trở đi, nó được mã hóa trong trường thanh ghi nguồn để đảm bảo tính nhất quán với định dạng lệnh chung.
 
@@ -141,14 +141,14 @@ Các lệnh gọi gián tiếp thông qua `callx` cũng đã phát triển. Các
 
 | opcode | Mnemonic                 | Mô tả                         |
 |--------|--------------------------|--------------------------------|
-| stw    | `stw [dst + off], imm`   | Lưu trữ từ tức thời            |
-| sth    | `sth [dst + off], imm`   | Lưu trữ nửa từ tức thời        |
+| stw    | `stw [dst + off], imm`   | Lưu trữ word tức thời            |
+| sth    | `sth [dst + off], imm`   | Lưu trữ halfword tức thời        |
 | stb    | `stb [dst + off], imm`   | Lưu trữ byte tức thời          |
-| stdw   | `stdw [dst + off], imm`  | Lưu trữ từ kép tức thời        |
-| stxw   | `stxw [dst + off], src`  | Lưu trữ từ từ thanh ghi        |
-| stxh   | `stxh [dst + off], src`  | Lưu trữ nửa từ từ thanh ghi    |
+| stdw   | `stdw [dst + off], imm`  | Lưu trữ doubleword tức thời        |
+| stxw   | `stxw [dst + off], src`  | Lưu trữ word từ thanh ghi        |
+| stxh   | `stxh [dst + off], src`  | Lưu trữ halfword từ thanh ghi    |
 | stxb   | `stxb [dst + off], src`  | Lưu trữ byte từ thanh ghi      |
-| stxdw  | `stxdw [dst + off], src` | Lưu trữ từ kép từ thanh ghi    |
+| stxdw  | `stxdw [dst + off], src` | Lưu trữ doubleword từ thanh ghi    |
 
 ### Các thao tác số học (64-bit)
 
