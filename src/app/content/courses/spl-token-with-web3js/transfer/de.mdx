@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Transfer-Anweisung
+
+Überträgt Token von einem Konto auf ein anderes. Dies ist die grundlegende Operation zum Senden von Token zwischen Benutzern.
+
+Bevor wir Token übertragen können, benötigen wir bereits:
+- Ein initialisiertes `Mint` Konto.
+- Ein Quell-`Token` Konto oder `Associated Token` Konto, das bereits mindestens den Betrag enthält, den wir übertragen möchten.
+- Ein Ziel-`Token` Konto oder `Associated Token` Konto, das die Token vom Quell-`Token` Konto empfangen wird.
+
+> Die Anzahl der Token, die wir übertragen, wird für Dezimalstellen "normalisiert". Das bedeutet, wenn wir 1 Token mit 6 Dezimalstellen übertragen möchten, müssen wir tatsächlich `1e6` als Betrag angeben
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Bei Verwendung einer "rohen" Anweisung ohne Abstraktion würde die Übertragung eines Tokens so aussehen:
+
+```ts
+const destination = Keypair.generate();
+
+const destinationTokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    destination.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    destinationTokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Transfer tokens to ATA 
+const transferInstruction = createTransferInstruction(
+    sourceTokenAccount, // source token account pubkey
+    destinationTokenAccount, // destination token account pubkey
+    keypair.publicKey, // owner of the source token account
+    1e6, // amount
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    transferInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and tokens transferred! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+So würden die gleichen Anweisungen mit der `transfer()` Anweisung abstrahiert aussehen:
+
+```ts
+const destination = Keypair.generate();
+
+const destinationAta = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    destination.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await transfer(
+    connection, // connection
+    keypair, // payer
+    sourceAta, // source token account
+    destinationAta, // destination token account
+    keypair.publicKey, // owner of the source token account
+    1e6, // amount to transfer
+);
+
+console.log(`Succesfully Transferred!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+<ArticleSection name="Checked Instruction" id="checked-instruction" level="h2" />

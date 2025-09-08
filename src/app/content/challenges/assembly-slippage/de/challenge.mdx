@@ -1,0 +1,110 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+![Assembly Slippage Challenge](/graphics/challenge-banners/assembly-slippage.png)
+
+# Assembly Slippage
+
+In dieser Einheit werden wir sBPF Assembly verwenden, um eine grundlegende Slippage-Prüfungsanweisung zu erstellen. Indem wir eine solche Anweisung am letzten Index unseres Anweisungsarrays einfügen, können wir einen zusätzlichen Schutz als letzte Verteidigungslinie gegen Smart-Contract-Fehler oder bösartige Bit-Flip-Verträge schaffen.
+
+Es gibt mehrere Eigenschaften einer Slippage-Prüfung, die sie zu einem idealen Kandidaten für Assembly machen:
+
+- Einzelner, eingeschränkter Anwendungsfall
+- Keine Notwendigkeit, Unterzeichner-/Kontoprüfungen durchzuführen
+- Kann nur die Sicherheit verbessern
+
+Wenn du nicht weißt, wie man Assembly-Programme schreibt, folge dem [Einführungskurs zu Assembly](/de/courses/introduction-to-assembly)
+
+<ArticleSection name="Programm-Design" id="program-design" level="h2" />
+
+Unser Programm implementiert eine einfache, aber entscheidende Operation: die Überprüfung, ob ein Token-Konto über ausreichendes Guthaben verfügt, bevor mit einer Transaktion fortgefahren wird. Dieses Muster taucht überall im DeFi-Bereich auf – von AMM-Swaps bis hin zu Lending-Protokollen.
+
+Das Programm erwartet:
+- Ein einzelnes SPL-Token-Konto im Kontoarray
+- Einen 8-Byte-Betrag in den Anweisungsdaten
+- Gibt Erfolg zurück, wenn Guthaben ≥ Betrag, sonst einen Fehler
+
+<ArticleSection name="Speicher-Offsets" id="memory-offsets" level="h2" />
+
+sBPF-Programme erhalten Kontodaten als zusammenhängende Speicherbereiche. Diese Konstanten definieren Byte-Offsets. Unter der Annahme, dass unser Programm nur ein einziges Konto aufnimmt und es sich um ein SPL-Token-Konto handelt, ist es möglich, diese Offsets statisch abzuleiten als:
+
+```sbpf
+.equ TOKEN_ACCOUNT_BALANCE, 0x00a0
+.equ MINIMUM_BALANCE, 0x2918
+```
+
+- `TOKEN_ACCOUNT_BALANCE (0x00a0)`: zeigt auf das Guthaben-Feld in den SPL-Token-Kontodaten. Token-Konten folgen einem Standardlayout, bei dem das Guthaben (8 Bytes, Little-Endian) am Offset 160 liegt.
+
+- `MINIMUM_BALANCE (0x2918)`: lokalisiert, wo Solana deine Anweisungsdaten-Payload platziert. Dieser Offset ist Teil der Kontoinformationsstruktur der Laufzeitumgebung.
+
+> Du kannst Offsets mit unserem Tool unter [sbpf.xyz](https://sbpf.xyz) generieren
+
+Im Gegensatz zu höheren Programmiersprachen, die das Speicherlayout abstrahieren, erfordert Assembly, dass du genau weißt, wo jedes Datenelement gespeichert ist.
+
+<ArticleSection name="Entrypoint und erste Validierung" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
+    ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
+```
+
+Jedes sBPF-Programm beginnt mit einem globalen `.entrypoint` Symbol. Die Solana-Laufzeitumgebung stellt Konto- und Anweisungsdaten über Register `r1` bereit.
+
+Die `ldxdw` Anweisung lädt (`ldx`) einen 8-Byte-Wert (Doppelwort, `dx`) aus dem Speicher in ein Register. Hier ist, was passiert:
+- `ldxdw r3, [r1+MINIMUM_BALANCE]`: berechnet die Speicheradresse, die unseren erforderlichen Betrag enthält. Der Wert wird in `r3` geladen.
+- `ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE]`: zeigt auf das Bilanzfeld des Token-Kontos. Dieser 64-Bit-Wert landet in `r4`.
+
+Beide Operationen sind Zero-Copy: Wir lesen direkt aus den Kontodaten ohne Deserialisierungs-Overhead.
+
+<ArticleSection name="Bedingte Logik und Verzweigung" id="conditional-logic-and-branching" level="h2" />
+
+```sbpf
+jge r3, r4, end         // Skip to exit if balance is valid
+```
+
+Die `jge` (Jump if greater or equal) Anweisung vergleicht `r3` (erforderlicher Betrag) mit `r4` (verfügbares Guthaben). Wenn `r3 >= r4`, springen wir zum `end` Label; ähnlich wie bei einem frühen Return.
+
+Wenn die Bedingung nicht erfüllt ist, wird die Ausführung mit dem Fehlerbehandlungspfad fortgesetzt. Dieses Branch-on-Condition-Muster ist die Art und Weise, wie Assembly If/Else-Logik implementiert.
+
+<ArticleSection name="Fehlerbehandlung und Logging" id="error-handling-and-logging" level="h2" />
+
+```sbpf
+lddw r1, e              // Load error message address
+lddw r2, 17             // Load length of error message  
+call sol_log_           // Log out error message
+lddw r0, 1              // Return error code 1
+```
+
+Wenn die Validierung fehlschlägt, protokollieren wir einen menschenlesbaren Fehler, bevor wir beenden:
+- `lddw` lädt Direktwerte, in diesem Fall die Adresse unseres Fehlerstrings, der sich im `.rodata` Abschnitt befindet, und seine Länge (17 Bytes für "Slippage exceeded").
+- `call sol_log_` ruft Solanas Logging-Syscall auf. Die Laufzeitumgebung liest die Nachricht aus dem Speicher und fügt sie den Transaktionsprotokollen hinzu.
+- Dann laden wir `1` in `r0`, um einen Programmfehler zu signalisieren. Die Laufzeitumgebung bricht die Transaktion ab und gibt diesen Fehlercode zurück.
+
+<ArticleSection name="Programmbeendigung" id="program-termination" level="h2" />
+
+```sbpf
+end:
+    exit
+```
+
+Die Anweisung `exit` beendet die Programmausführung und gibt die Kontrolle an die Solana-Laufzeit zurück. Der Wert in `r0` wird zum Exit-Code des Programms (0 für Erfolg, ungleich Null für Fehler).
+
+Im Gegensatz zu höheren Programmiersprachen mit automatischer Bereinigung müssen Assembly-Programme explizit beendet werden. Das Erreichen des Programmendes ohne explizite Beendigung führt zu undefiniertem Verhalten.
+
+## Schreibgeschützte Daten
+
+```sbpf
+.rodata
+    e: .ascii "Slippage exceeded"
+```
+
+Der Abschnitt `.rodata` (schreibgeschützte Daten) enthält unsere Fehlermeldung als String.
+
+<ArticleSection name="Fazit" id="conclusion" level="h2" />
+  
+Dieses kleine Programm erreicht mit nur `4 CUs` im Erfolgsfall, `6 CUs` im Fehlerfall oder `106 CUs` im Fehlerfall mit Protokollierung einer Fehlermeldung, was in Rust Dutzende von CUs benötigen würde.
+
+Der Kompromiss besteht darin, dass wir Speicherlayouts, Aufrufkonventionen und Fehlerbehandlung auf niedrigster Ebene verstehen müssen. Aber für leistungskritische Operationen rechtfertigen die Vorteile oft den Aufwand.
+
+> Dieser Code ist allein nicht "sicher". Wir überprüfen keine der übergebenen Konten. Aber dies soll eine Zusatzanweisung sein, was bedeutet, dass sie in gutem Glauben ausgeführt werden sollte.

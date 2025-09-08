@@ -1,0 +1,44 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex Token Metadata Programm
+
+Stellen Sie sich vor, Sie starten einen Token auf Solana, der dann in jeder Wallet nur als bedeutungslose Zeichenfolge wie "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" erscheint. 
+
+Benutzer hätten keine Ahnung, was sie besitzen, und Ihr sorgfältig entwickeltes Projekt wäre nicht von tausenden anderen anonymen Tokens im Netzwerk zu unterscheiden.
+
+Das Metaplex Token Metadata Programm löst dieses kritische Problem, indem es anonyme Blockchain-Einträge in gebrandete, wiedererkennbare digitale Assets verwandelt. 
+
+Während das SPL-Token-Programm bei den technischen Mechanismen – der Verfolgung von Besitzverhältnissen, der Verwaltung des Angebots und der Erleichterung von Transfers – hervorragend ist, bleiben Tokens dabei grundlegende Datenstrukturen ohne menschenlesbaren Kontext.
+
+Hier entfaltet Metaplex seine Magie und schließt die Lücke zwischen der rohen Blockchain-Funktionalität und der Benutzererfahrung. Statt kryptischer Adressen sehen Benutzer "Solana (SOL)" mit vertrauten Logos, klaren Beschreibungen und allen kontextuellen Informationen, die Tokens in der realen Welt tatsächlich nutzbar machen.
+
+<ArticleSection name="Metadata Account" id="metadata-account" level="h2" />
+
+Das `Metadata` Konto fungiert als digitaler Ausweis Ihres Tokens und speichert alle Informationen, die eine bloße Mint-Adresse in einen erkennbaren Vermögenswert verwandeln. 
+
+Dabei geht es nicht nur um schöne Namen und Bilder: Es geht darum, die Grundlage dafür zu schaffen, wie Ihr Token im gesamten Solana-Ökosystem erscheint.
+
+Durch Solanas Program Derived Address-System erhält jeder Token genau ein Metadata-Konto, das mathematisch mit seiner Mint verknüpft ist. Dies schafft eine unzerbrechliche Verbindung zwischen dem technischen Token und seinen beschreibenden Informationen, gewährleistet Konsistenz über alle Anwendungen hinweg und verhindert Identitätskonflikte:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+
+let (metadata, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+    ], 
+    &ID  
+);
+```
+
+Das Metadata-Konto wird zum universellen Pass Ihres Tokens und enthält alles, was Anwendungen benötigen, um Ihren Vermögenswert richtig darzustellen. 
+
+Token-Namen ersetzen unverständliche Adressen, Symbole bieten sofortige Wiedererkennung (denken Sie an "SOL" anstatt der langen Zeichenfolge oben), und URI-Referenzen verweisen auf umfangreiche Medien wie Logos und detaillierte Beschreibungen.
+
+Das Ergebnis? Ihr Token existiert nicht nur auf der Blockchain – er gedeiht in Wallets, erscheint professionell in Explorern und integriert sich nahtlos in Anwendungen im gesamten Solana-Ökosystem.
+
+> Um mehr darüber zu erfahren, wie man das `Token Metadata` Programm verwendet, siehe die [offizielle Dokumentation](https://developers.metaplex.com/token-metadata)

@@ -1,0 +1,38 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Die Permanent Delegate Erweiterung
+
+Die `PermanentDelegate` Erweiterung ist eine Mint-Konto-Erweiterung, die einen permanenten Delegierten für alle Token der Mint ermöglicht, der in der Lage ist, jeden Token dieser Mint von jedem Token-Konto zu übertragen oder zu verbrennen.
+
+<ArticleSection name="Initialisierung des Mint-Kontos" id="initializing-the-mint-account" level="h2" />
+
+Um die `PermanentDelegate` Erweiterung auf einem `Mint` Konto zu initialisieren, können wir einfach das Makro verwenden, das `Anchor` für uns erstellt hat.
+
+Hier ist, wie man eine Mint mit der Permanent Delegate Erweiterung erstellt:
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+        extensions::permanent_delegate::delegate = signer,
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+<ArticleSection name="Berechtigte Aktionen" id="permissioned-actions" level="h2" />
+
+Im Gegensatz zu regulären Delegierten, die widerrufen werden können, ist diese Delegiertenautorität permanent und unveränderlich.
+
+Das bedeutet, dass jede normale Aktion wie `transfer()`, `burn()`, `approve()` und `freeze()` jederzeit direkt von der Autorität ausgeführt werden kann, ohne dass die Signatur des eigentlichen Besitzers erforderlich ist.
+
+Das bedeutet, dass wir einfach die normalen `transferChecked()`, `burnChecked()`, ... Anweisungen verwenden und die `PermanetDelegate` Autorität im `authority` Feld übergeben können.

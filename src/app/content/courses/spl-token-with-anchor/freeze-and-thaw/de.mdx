@@ -1,0 +1,45 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Einfrieren und Auftauen Anweisungen
+
+Einfrieren verhindert alle Token-Operationen auf einem Konto, bis es aufgetaut wird. Nur die Freeze-Authority der Mint kann diese Operation durchführen.
+
+> Deaktiviert vollständig Überweisungen, Genehmigungen und Verbrennungen und betrifft nur das spezifisch eingefrorene Konto
+
+Auftauen aktiviert Token-Operationen auf einem zuvor eingefrorenen Konto wieder. Nur die Freeze-Authority der Mint kann Konten auftauen.
+
+> Stellt die volle Funktionalität eines eingefrorenen Kontos wieder her und kann nur von der Freeze-Authority der Mint durchgeführt werden
+
+Bevor wir ein Token-Konto einfrieren oder auftauen können, benötigen wir bereits:
+- Ein initialisiertes `Mint` Konto, für das wir die `freezeAuthority` besitzen
+- Ein initialisiertes `Token` Konto oder `Associated Token` Konto, das wir einfrieren oder auftauen möchten
+
+So sieht der CPI-Aufruf für die `freeze_account()` Anweisung aus:
+
+```rust
+freeze_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        FreezeAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```
+
+Und so sieht der CPI-Aufruf für die `thaw_account()` Anweisung aus:
+
+```rust
+thaw_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        ThawAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

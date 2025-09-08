@@ -1,0 +1,27 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mint To Instruction
+
+Erstellt neue Token und hinterlegt sie in einem bestimmten Konto. Nur die Mint-Autorität kann diese Operation durchführen.
+
+Bevor wir Token prägen können, benötigen wir bereits:
+- Ein initialisiertes `Mint` Konto, für das wir die `mintAuthority` besitzen
+- Ein initialisiertes `Token` Konto oder `Associated Token` Konto, in das wir Token prägen werden
+
+> Die Menge der geprägten Token wird für Dezimalstellen "normalisiert". Das bedeutet, wenn wir 1 Token mit 6 Dezimalstellen prägen möchten, müssen wir tatsächlich `1_000_000` als Betrag angeben
+
+So sieht der CPI-Aufruf für die `mint_to()` Instruction aus:
+
+```rust
+mint_to(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        MintTo {
+            mint: ctx.accounts.mint_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

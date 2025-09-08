@@ -1,0 +1,184 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Anchor Flash Loan
+
+![Anchor Flash Loan](/graphics/challenge-banners/anchor-flash-loan.png)
+
+Instruction Introspection ist eine leistungsstarke Funktion, die es einem Blockchain-Programm ermöglicht, andere Anweisungen innerhalb desselben Transaktionsbündels zu untersuchen und zu analysieren. Dies umfasst auch Anweisungen, die noch nicht ausgeführt wurden, und gibt Ihrem Programm die Möglichkeit, "vorauszuschauen" und Entscheidungen basierend auf dem zu treffen, was später in der Transaktion passieren wird.
+
+Stellen Sie sich das wie Röntgenblick für Transaktionen vor: Ihr Programm kann die gesamte Transaktion durchschauen, um die vollständige Abfolge der Operationen zu verstehen, bevor es entscheidet, wie es fortfahren soll.
+
+Die überzeugendste Anwendung der Instruction Introspection sind Flash Loans. Dies ist eine einzigartige Art von Darlehen, die nur innerhalb der Grenzen einer einzelnen Transaktion existiert.
+
+So funktionieren Flash Loans:
+- **Leihen**: Am Anfang einer Transaktion können Sie sofort eine große Menge Kapital mit einer `loan` Anweisung ausleihen
+- **Verwenden**: Sie können dieses geliehene Kapital für Handel, Arbitrage oder andere Operationen innerhalb derselben Transaktion nutzen
+- **Zurückzahlen**: Vor dem Ende der Transaktion müssen Sie das Darlehen plus eine kleine Gebühr mit einer `repay` Anweisung zurückzahlen
+
+Die zentrale Erkenntnis ist, dass Flash Loans auf der atomaren Natur von Blockchain-Transaktionen basieren. Wenn ein Teil der Transaktion fehlschlägt (einschließlich der Rückzahlung), wird die gesamte Transaktion rückgängig gemacht, als wäre sie nie passiert. Das bedeutet, dass der Kreditgeber kein Risiko hat: Entweder wird er zurückgezahlt, oder das Darlehen ist nie tatsächlich erfolgt.
+
+In dieser Challenge erstellen Sie ein einfaches Flash-Loan-Programm, das Instruction Introspection in Aktion demonstriert. Das Programm wird Anweisungsdaten und Konten über verschiedene Anweisungen innerhalb derselben Transaktion untersuchen, um sicherzustellen, dass die Darlehensbedingungen erfüllt werden.
+
+Wenn du neu bei der Instruktionsintrospektion bist, empfehlen wir dir, mit dem [Kurs zur Instruktionsintrospektion](/de/courses/instruction-introspection) zu beginnen, um die grundlegenden Konzepte zu verstehen, die in diesem Programm verwendet werden.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Bevor du beginnst, stelle sicher, dass du Rust und Anchor installiert hast. Falls du Installationsanleitungen benötigst, schau in der [offiziellen Anchor-Dokumentation](https://www.anchor-lang.com/docs/installation) nach. Führe dann in deinem Terminal aus:
+
+```bash
+anchor init blueshift_anchor_flash_loan
+```
+
+Füge die erforderlichen Abhängigkeiten hinzu:
+- `anchor-spl`: Bietet Hilfsmittel für die Arbeit mit SPL-Tokens (Solanas Token-Standard)
+
+```bash
+cd blueshift_anchor_flash_loan
+cargo add anchor-spl
+```
+
+Jetzt bist du bereit, mit dem Aufbau deines Flash-Loan-Programms zu beginnen!
+
+<ArticleSection name="Vorlage" id="template" level="h2" />
+
+Lass uns das Fundament unseres Flash-Loan-Programms legen, indem wir die grundlegende Struktur, Konten und Fehlerbehandlung einrichten, die sowohl unsere Ausleih- als auch Rückzahlungsanweisungen verwenden werden.
+
+Wir werden alles in `lib.rs` implementieren, da wir nur zwei Anweisungen haben, die dieselbe Kontostruktur teilen. Hier ist unsere Ausgangsvorlage mit allen wesentlichen Komponenten:
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::{
+  token::{Token, TokenAccount, Mint, Transfer, transfer}, 
+  associated_token::AssociatedToken
+}; 
+use anchor_lang::{
+  Discriminator,
+  solana_program::sysvar::instructions::{
+      ID as INSTRUCTIONS_SYSVAR_ID,
+      load_instruction_at_checked
+  }
+};
+
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_flash_loan {
+  use super::*;
+
+  pub fn borrow(ctx: Context<Loan>, borrow_amount: u64) -> Result<()> {
+    // borrow logic...
+    
+    Ok(())
+  }
+
+  pub fn repay(ctx: Context<Loan>) -> Result<()> {
+    // repay logic...
+
+    Ok(())
+  }
+}
+
+#[derive(Accounts)]
+pub struct Loan<'info> {
+  // loan accounts...
+}
+
+#[error_code]
+pub enum ProtocolError {
+  // error enum..
+}
+```
+
+**Hinweis**: Denke daran, die Programm-ID auf `22222222222222222222222222222222222222222222` zu ändern, da wir diese im Hintergrund verwenden, um dein Programm zu testen.
+
+<ArticleSection name="Konten" id="accounts" level="h2" />
+
+Da sowohl die `borrow` als auch die `repay` Anweisungen mit denselben Konten arbeiten, können wir einen einzigen `Loan` Kontext erstellen, der beiden Funktionen dient. Dies macht unseren Code wartbarer und leichter verständlich.
+
+Unser `Loan` Konto-Struct benötigt diese Komponenten:
+- `borrower`: der Benutzer, der den Flash-Loan anfordert.
+- `protocol`: eine Program Derived Address (PDA), die den Liquiditätspool des Protokolls besitzt.
+- `mint`: der spezifische Token, der ausgeliehen wird.
+- `borrower_ata`: das Associated Token Account des Kreditnehmers, das die geliehenen Token erhalten wird.
+- `protocol_ata`: das Associated Token Account des Protokolls, das die geliehenen Token bereitstellen wird.
+- `instructions`: das Instructions Sysvar-Konto für die Introspektion.
+- `token_program`, `associated_token_program` und `system_program`: erforderliche Programme für das Programm.
+
+So definieren wir die Account-Struktur:
+
+```rust
+#[derive(Accounts)]
+pub struct Loan<'info> {
+  #[account(mut)]
+  pub borrower: Signer<'info>,
+  #[account(
+    seeds = [b"protocol".as_ref()],
+    bump,
+  )]
+  pub protocol: SystemAccount<'info>,
+
+  pub mint: Account<'info, Mint>,
+  #[account(
+    init_if_needed,
+    payer = borrower,
+    associated_token::mint = mint,
+    associated_token::authority = borrower,
+  )]
+  pub borrower_ata: Account<'info, TokenAccount>,
+  #[account(
+    mut,
+    associated_token::mint = mint,
+    associated_token::authority = protocol,
+  )]
+  pub protocol_ata: Account<'info, TokenAccount>,
+
+  #[account(address = INSTRUCTIONS_SYSVAR_ID)]
+  /// CHECK: InstructionsSysvar account
+  instructions: UncheckedAccount<'info>,
+  pub token_program: Program<'info, Token>,
+  pub associated_token_program: Program<'info, AssociatedToken>,
+  pub system_program: Program<'info, System>
+}
+```
+
+Wie Sie sehen können, sind die für diese Anweisung benötigten Konten und ihre Einschränkungen recht übersichtlich:
+- `protocol`: verwendet `seeds = [b"protocol".as_ref()]` um eine deterministische Adresse zu erstellen, die die gesamte Protokoll-Liquidität besitzt. Dies stellt sicher, dass nur unser Programm diese Gelder kontrollieren kann.
+- `borrower_ata`: verwendet `init_if_needed`, da der Kreditnehmer möglicherweise noch kein zugehöriges Token-Konto für diesen spezifischen Token hat. Die Einschränkung erstellt bei Bedarf automatisch eines.
+- `protocol_ata`: muss bereits existieren und veränderbar sein, da wir Tokens von dort übertragen werden. Die `associated_token::authority = protocol`Einschränkung stellt sicher, dass nur die Protokoll-PDA Überweisungen autorisieren kann.
+- `instructions`: verwendet die `address`Einschränkung, um zu überprüfen, ob wir auf das richtige Systemkonto zugreifen, das Transaktionsanweisungsdaten enthält.
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+Flash Loans erfordern präzise Validierung in mehreren Schritten, daher benötigen wir eine umfassende Fehlerbehandlung. Hier ist unser vollständiges Fehler-Enum:
+
+```rust
+#[error_code]
+pub enum ProtocolError {
+    #[msg("Invalid instruction")]
+    InvalidIx,
+    #[msg("Invalid instruction index")]
+    InvalidInstructionIndex,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Not enough funds")]
+    NotEnoughFunds,
+    #[msg("Program Mismatch")]
+    ProgramMismatch,
+    #[msg("Invalid program")]
+    InvalidProgram,
+    #[msg("Invalid borrower ATA")]
+    InvalidBorrowerAta,
+    #[msg("Invalid protocol ATA")]
+    InvalidProtocolAta,
+    #[msg("Missing repay instruction")]
+    MissingRepayIx,
+    #[msg("Missing borrow instruction")]
+    MissingBorrowIx,
+    #[msg("Overflow")]
+    Overflow,
+}
+```
+
+Mit dieser Grundlage sind wir bereit, die Kernlogik für unsere Flash-Loan-Anweisungen zu implementieren. Die Kontostruktur gewährleistet eine ordnungsgemäße Token-Handhabung, während das Fehlersystem klares Feedback für Debugging und Sicherheitsvalidierung bietet.
+
+> Das Programm kompiliert noch nicht vollständig. Können Sie herausfinden, warum?

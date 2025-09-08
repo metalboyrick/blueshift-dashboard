@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Winternitz-Signaturen auf Solana
+
+![Winternitz-Signaturen auf Solana](/graphics/course-banners/winternitz-signatures-on-solana.png)
+
+Im Gegensatz zu RSA- oder ECDSA-Signaturen, die auf mathematischen Problemen wie Ganzzahlfaktorisierung oder diskreten Logarithmen basieren – beide anfällig für Quantenangriffe – leiten Winternitz-Signaturen ihre Sicherheit ausschließlich von der Einweg-Eigenschaft kryptografischer Hash-Funktionen ab.
+
+Dieser grundlegende Unterschied macht sie zu einem Eckpfeiler der Post-Quanten-Kryptografie.
+
+<ArticleSection name="Was ist eine Winternitz-Signatur" id="what-is-a-winternitz-signature" level="h2" />
+
+Winternitz-Einmalsignaturen (WOTS) entwickelten sich aus Leslie Lamports bahnbrechender Arbeit in den 1970er Jahren. Lamport zeigte, dass man digitale Signaturen nur mit einer kryptografischen Hash-Funktion erstellen kann, ohne komplexe mathematische Annahmen zu benötigen.
+
+Lamports ursprüngliches Schema signierte ein einzelnes Bit mit zwei geheimen Werten. Um Bit `b` zu signieren, offenbart man das Urbild des Hashwerts `H₀` (wenn b=0) oder `H₁` (wenn b=1). Die Sicherheit beruhte vollständig auf der rechnerischen Unmöglichkeit, Hash-Urbilder zu finden: im Wesentlichen, rückwärts von einem Hash-Output zu arbeiten, um seinen Input zu finden.
+
+Allerdings waren Lamport-Signaturen extrem ineffizient. Das Signieren einer `n-bit`Nachricht erforderte `2n` geheime Werte und erzeugte Signaturen mit `2n` Werten. Für eine 256-Bit-Nachricht bedeutete dies, 512 geheime Werte zu verwalten und Signaturen mit 512 Werten zu generieren.
+
+Robert Winternitz erkannte in den 1990er Jahren, dass man anstatt einzelne Bits in Basis-2 zu signieren, größere "Ziffern" in höheren Basen wie Basis-16 oder Basis-256 signieren könnte. Diese Innovation reduzierte sowohl die Schlüssel- als auch die Signaturgrößen drastisch, während die gleichen Sicherheitsgarantien beibehalten wurden.
+
+<ArticleSection name="Mathematische Grundlagen" id="mathematical-foundations" level="h2" />
+
+### Der Winternitz-Parameter und die Basisdarstellung
+
+Der entscheidende Parameter in Winternitz-Signaturen ist `w`, der bestimmt, wie wir Nachrichtenbits gruppieren:
+- Basis: `b = 2^w`
+- Ziffernbereich: Jede Ziffer repräsentiert `w` Bits und kann Werte von `0` bis `2^w - 1` annehmen
+
+Übliche Parameterauswahl:
+- `w = 1`: Jede Position repräsentiert 1 Bit (Werte 0 oder 1), äquivalent zu Lamport-Signaturen in Basis-2
+- `w = 4`: Jede Position repräsentiert 4 Bits (Werte 0-15), Darstellung in Basis-16
+- `w = 8`: Jede Position repräsentiert 8 Bits (Werte 0-255), Darstellung in Basis-256
+
+> Größere `w`-Werte erzeugen kleinere Signaturen, erfordern aber mehr Rechenleistung für die Sicherheit. Dieser Kompromiss ist grundlegend für das Verständnis der Leistungsmerkmale von WOTS.
+
+### Hash-Ketten
+
+Winternitz-Signaturen verwenden Hash-Ketten – Sequenzen wiederholter Hash-Anwendungen, beginnend mit einem geheimen Wert: `H⁰(s) = s`, `H¹(s) = H(s)`, `H²(s) = H(H(s))`, ..., `Hⁱ(s) = H(H^(i-1)(s))`
+
+Die Sicherheitseigenschaft ist asymmetrisch: Bei gegebenem `Hⁱ(s)` ist die Berechnung eines beliebigen `Hʲ(s)`, wobei `j > i`, einfach (einfach `j-i` mehrmals hashen), aber die Berechnung eines beliebigen `Hʲ(s)`, wobei `j < i`, ist rechnerisch nicht machbar, da es die Umkehrung der Hash-Funktion erfordern würde.
+
+### Prüfsummenmechanismus
+
+Der Prüfsummenmechanismus verhindert eine bestimmte Art von Fälschungsangriffen. Ohne ihn könnte ein Angreifer, der eine Signatur sieht, möglicherweise die Nachricht so modifizieren, dass für einige Ketten mehr Hash-Operationen erforderlich sind, und dann diese Komponenten fälschen.
+
+Die Prüfsumme stellt sicher, dass das gesamte "Hash-Budget" über alle Ketten hinweg konstant bleibt: Wenn ein Angreifer Nachrichtenziffern zu größeren Werten modifiziert (die mehr Hashes erfordern), werden die Prüfsummenziffern automatisch kleiner (was weniger Hashes in anderen Werten erfordert, was ohne den privaten Schlüssel unmöglich zu fälschen ist).
+
+### Schlüsselgenerierungsprozess
+
+Für eine Nachrichtenlänge von `n` Bits mit Winternitz-Parameter `w`:
+
+1. Berechnung der Signaturlänge: Zuerst ermitteln, wie viele "Chunks" benötigt werden, um eine beliebige Nachricht darzustellen. Wenn Ihre Nachrichten 256 Bits lang sind und Sie einen Winternitz-Parameter von `w = 4` wählen, benötigen Sie insgesamt 64 Chunks: `l₁ = ⌈n/w⌉`. Mit der Formel `l₂ = ⌊log₂(l₁ × (2^w - 1))/w⌋ + 1` finden wir dann für `w = 4`, wobei die maximale Prüfsumme 960 ist, `l₂ = 3` und die Größe der Signatur wird `l = l₁ + l₂` sein
+
+> Während der Schlüsselerzeugung wissen Sie nicht, wie die Prüfsumme sein wird, da Sie noch keine Nachricht zum Signieren ausgewählt haben, aber dennoch benötigen Sie `l₂` private Schlüsselkomponenten, die für die Prüfsumme reserviert sind.
+
+2. Erstellen Sie zufällige Ausgangspunkte: Generieren Sie einen zufälligen geheimen Wert für jede Hash-Kette, die Sie benötigen. Diese Zufallswerte werden Ihre privaten Schlüsselkomponenten. Betrachten Sie jeden als "Ausgangspunkt" einer separaten Hash-Kette: `sk = (sk₁, sk₂, ..., skₗ)`
+
+3. Wenden Sie für jede private Schlüsselkomponente die Hash-Funktion wiederholt an, bis Sie sie die maximal mögliche Anzahl von Malen (`2^w - 1`) gehasht haben:`pk = (H^(2^w-1)(sk₁), H^(2^w-1)(sk₂), ..., H^(2^w-1)(skₗ))`
+
+### Signaturprozess
+
+Um Nachricht `M` zu signieren:
+
+1. Konvertieren Sie die Nachricht in die Basisdarstellung: `M → (m₁, m₂, ..., m_l₁)` wobei jedes `mᵢ ∈ [0, 2^w - 1]`
+
+2. Berechnen Sie die Prüfsumme: `c = Σ((2^w - 1) - mᵢ) for i = 1 to l₁` und konvertieren Sie c in die Basisdarstellung: `c → (c₁, c₂, ..., c_l₂)`
+
+> Um den tatsächlichen Prüfsummenwert für diese Nachricht zu berechnen, können wir die entsprechenden privaten Prüfsummenkomponenten verwenden und sie basierend auf den Prüfsummenziffern die richtige Anzahl von Malen hashen
+
+3. Generieren Sie die Signatur: Wobei die Basisdarstellung angibt, wie oft der private Schlüssel gehasht werden muss.
+
+### Verifizierungsprozess
+
+Um Signatur σ für Nachricht `M` mit öffentlichem Schlüssel `pk` zu verifizieren:
+
+1. Berechnen Sie die Nachrichtenrepräsentation neu: `M → (m₁, m₂, ..., m_l₁)`
+
+2. Berechnen Sie die Prüfsumme neu: `c = Σ((2^w - 1) - mᵢ) → (c₁, c₂, ..., c_l₂)`
+
+3. Hashen Sie für jede Signaturkomponente die verbleibenden Male:
+   - Für Nachrichtenteile: verifizieren Sie `H^((2^w-1)-mᵢ)(σᵢ) = pkᵢ`
+   - Für Prüfsummenteile: verifizieren Sie `H^((2^w-1)-cⱼ)(σ_(l₁+j)) = pk_(l₁+j)`
+
+> Der Verifizierer "setzt" jede Hash-Kette von dem Punkt fort, an dem der Signierer aufgehört hat, und erreicht den bekannten öffentlichen Schlüssel-Endpunkt, wenn die Signatur gültig ist.
+
+<ArticleSection name="Security" id="security" level="h2" />
+
+### Einmalige Nutzungsbeschränkung
+
+Winternitz-Signaturen sind Einmal-Signaturen (OTS): Sie können pro Schlüsselpaar nur einmal sicher verwendet werden.
+
+Der Angriff funktioniert wie folgt: Wenn du mehrere Nachrichten mit demselben privaten Schlüssel signierst, offenbarst du Zwischenwerte in deinen Hash-Ketten.
+
+Der Prüfsummenmechanismus erfordert, dass die Erhöhung einiger Nachrichtenziffern (mehr Hashes) durch die Verringerung der Prüfsummenziffern (weniger Hashes) ausgeglichen werden muss. Mit mehreren Signaturen, die Zwischenwerte an verschiedenen Positionen offenlegen, kann ein Angreifer Fälschungen konstruieren, bei denen er höhere Zwischenpositionen nutzt, um bei Nachrichtenkomponenten noch höher zu gehen, während er niedrigere Zwischenpositionen verwendet, um die Prüfsumme auszugleichen und so die Gesamthash-Budgetbeschränkung einzuhalten.
+
+### Post-Quantum-Sicherheit
+
+Winternitz-Signaturen leiten ihre Sicherheit ausschließlich aus der Urbildresistenz von Hashfunktionen ab. Quantencomputer können kryptografische Hashfunktionen wie SHA-256 oder SHA-3 nicht effizient umkehren – im Gegensatz zu den Quantenalgorithmen mit polynomieller Laufzeit (Shors Algorithmus), die RSA und ECDSA brechen.
+
+Die Verwendung von SHA-256 mit geeigneten Parametern bietet 128 Bit Post-Quantum-Sicherheit, was diese Signaturen auch in einer Post-Quantum-Welt für langfristige kryptografische Anwendungen geeignet macht.
+
+<ArticleSection name="Winternitz Signatures on Solana" id="winternitz-on-solana" level="h2" />
+
+Solanas aktuelle kryptografische Grundlage basiert vollständig auf Ed25519-Signaturen, die durch Quantenangriffe mittels Shors Algorithmus angreifbar sind.
+
+Wenn Quantencomputer praktisch einsetzbar werden, wird jedes Wallet, jede Programmautorität und jede Transaktion auf Solana fälschbar.
+
+Die Post-Quantum-Migration ist nichts, was man über Nacht durchführen kann. Systeme müssen heute mit Quantenresistenz im Hinterkopf konzipiert werden, wobei hybride Ansätze entwickelt werden, die sowohl in der Prä-Quantum- als auch in der Post-Quantum-Welt funktionieren.
+
+Während Solanas Basisschicht quantenanfällig bleibt, können Entwickler quantenresistente Anwendungen darauf aufbauen, indem sie Winternitz-Signaturen verwenden.

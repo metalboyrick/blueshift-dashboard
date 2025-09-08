@@ -1,0 +1,28 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Transfer-Anweisung
+
+Überträgt Token von einem Konto auf ein anderes. Dies ist die grundlegende Operation zum Senden von Token zwischen Benutzern.
+
+Bevor wir Token übertragen können, benötigen wir bereits:
+- Ein initialisiertes `Mint` Konto.
+- Ein Quell-`Token` Konto oder `Associated Token` Konto, das bereits mindestens den Betrag enthält, den wir übertragen möchten.
+- Ein Ziel-`Token` Konto oder `Associated Token` Konto, das die Token vom Quell-`Token` Konto empfangen wird.
+
+> Die Anzahl der Token, die wir übertragen, wird für Dezimalstellen "normalisiert". Das bedeutet, wenn wir 1 Token mit 6 Dezimalstellen übertragen möchten, müssen wir tatsächlich `1_000_000` als Betrag angeben
+
+So sieht der CPI-Aufruf für die `transfer()` Anweisung aus:
+
+```rust
+transfer(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.from_token_account.to_account_info(),
+            to: ctx.accounts.to_token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

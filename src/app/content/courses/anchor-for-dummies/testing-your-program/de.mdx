@@ -1,0 +1,160 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Testen deines Programms
+
+Gründliches Testen verhindert finanzielle Verluste, schafft Vertrauen bei den Nutzern und stellt sicher, dass dein Programm unter allen Bedingungen korrekt funktioniert.
+
+> Teste gründlich vor dem Mainnet-Deployment.
+
+<ArticleSection name="TypeScript Tests" id="typescript-tests" level="h2" />
+
+TypeScript-Tests sind der gängigste Ansatz, da du TypeScript ohnehin für deinen dApp-Client benötigst. So kannst du Tests und Client-Code gleichzeitig entwickeln.
+
+Die clientseitige Einrichtung haben wir ausführlich [hier](/de/courses/anchor-for-dummies/client-side-development) behandelt.
+
+> Jedes Anchor CLI-Projekt enthält einen Test-Ordner mit einer TypeScript-Datei, die für Tests bereit ist.
+
+TypeScript-Tests bieten wichtige Vorteile:
+- Spiegeln reale Client-Interaktionen wider
+- Testen komplexe Workflows und Grenzfälle
+- Bieten sofortiges Feedback zu API-Änderungen
+- Validieren Erfolgs- und Fehlerszenarien
+
+Führe Tests mit folgendem Befehl aus:
+
+```bash
+anchor test
+```
+
+> Führe Tests im Localnet aus, indem du den Cluster in deiner Konfiguration auf Localnet setzt. Dies startet einen lokalen Validator und fügt dem Provider-Wallet 1.000 SOL hinzu. Wenn du zusätzliche Konten mit Daten benötigst, schau dir das Ausführen eines [lokalen Validators](/de/courses/anchor-for-dummies/testing-your-program#running-a-local-validator) an.
+
+<ArticleSection name="Mollusk Tests" id="mollusk-tests" level="h2" />
+
+Wenn du eine präzise Kontrolle über Testumgebungen oder komplexe Programmzustandseinrichtungen benötigst, bietet Mollusk die Lösung.
+
+Mollusk ist ein Rust-Testing-Framework, das speziell für Solana-Programme entwickelt wurde. Es ermöglicht dir:
+- Programmlogik isoliert ohne Netzwerk-Overhead zu testen
+- Komplexe Kontozustände einfach einzurichten
+- Tests schneller als vollständige Integrationstests auszuführen
+- Spezifische Blockchain-Bedingungen und Grenzfälle zu simulieren
+
+Wir haben Mollusk-Tests ausführlich [hier](/de/courses/testing-with-mollusk) behandelt.
+
+Erstelle ein neues Anchor-Programm mit Mollusk:
+
+```bash
+anchor init <name-of-the-project> --test-template mollusk
+```
+
+Führe Tests mit folgendem Befehl aus:
+
+```bash
+anchor test
+```
+
+<ArticleSection name="LiteSVM Tests" id="litesvm-tests" level="h2" />
+
+Wenn du die gleiche granulare Kontrolle über deinen Programmzustand benötigst, wie bei Mollusk, aber in Typescript, bietet LiteSVM die optimale Lösung.
+
+LiteSVM ist ein leichtgewichtiges Test-Framework, das die Solana Virtual Machine direkt in deinem Testprozess ausführt. Es ermöglicht dir:
+- Tests deutlich schneller auszuführen als mit herkömmlichen Frameworks wie `solana-program-test`
+- Kontozustände und Sysvars präzise zu manipulieren
+- Tests in mehreren Sprachen durchzuführen: TypeScript, Rust und Python
+- Komplexe Blockchain-Bedingungen und Grenzfälle mühelos zu simulieren
+
+LiteSVM eliminiert den Validator-Overhead, indem es die VM direkt in deine Tests einbettet und liefert so die Geschwindigkeit, die für schnelle Entwicklungszyklen benötigt wird, ohne die Testgenauigkeit zu beeinträchtigen.
+
+Wir haben LiteSVM-Tests ausführlich [hier](/de/courses/testing-with-litesvm) behandelt.
+
+Du kannst deinen Anchor-Provider einrichten und das Client-seitige Setup verwenden, das wir [zuvor](/de/courses/anchor-for-dummies/client-side-development) mit dem `anchor-litesvm` Paket gesehen haben.
+
+Installiere das `anchor-litesvm` Paket.
+
+```bash
+npm install git:https://github.com/LiteSVM/anchor-litesvm
+```
+
+Ändere dann den Standard-Anchor-Provider zu `LiteSVMProvider` wie folgt:
+
+```ts
+import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
+
+test("anchor", async () => {
+	const client = fromWorkspace("target/types/<program-name>.ts");
+	const provider = new LiteSVMProvider(client);
+	const program = new Program<Puppet>(IDL, provider);
+
+    // program.methods..
+})
+```
+
+<ArticleSection name="Ausführen eines lokalen Validators" id="running-a-local-validator" level="h2" />
+
+Spiegle das Mainnet-Verhalten lokal mit einem Validator, der als deine persönliche Blockchain-Sandbox fungiert. Dies geschieht automatisch, wenn du deinen Cluster auf Localnet einstellst.
+
+Der lokale Validator betreibt ein vereinfachtes Solana-Ledger mit vorinstallierten nativen Programmen. Standardmäßig speichert er nur Testdaten und hat keinen Zugriff auf bestehende Mainnet-Konten – was das Testen mit etablierten Protokollen einschränkt.
+
+### Konfigurieren deines lokalen Validators
+
+Passe deinen Validator in `Anchor.toml` unter dem Abschnitt `[test]` an:
+
+```
+[test]
+startup_wait = 10000
+```
+
+Das Flag `startup_wait` verzögert den Validator-Start, was nützlich ist, wenn mehrere Konten geklont werden, die die Ladezeit erhöhen.
+
+### Klonen von Mainnet-Konten
+
+Klone bestehende Mainnet-Konten und -Programme mit der `[test.validator]`Konfiguration:
+
+```
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+[[test.validator.clone]]
+address = "7NL2qWArf2BbEBBH1vTRZCsoNqFATTddH6h8GkVvrLpG"
+[[test.validator.clone]]
+address = "2RaN5auQwMdg5efgCaVqpETBV8sacWGR8tkK4m9kjo5r"
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+```
+
+Der Abschnitt `clone` kopiert Konten vom angegebenen Cluster. Wenn ein Konto mit einem Programm verknüpft ist, das vom "BPF upgradeable loader" verwaltet wird, klont Anchor automatisch das zugehörige Programmdatenkonto.
+
+### Laden lokaler Kontodaten
+
+Laden Sie lokale Konten aus JSON-Dateien mit dem Flag `account`:
+
+```
+[[test.validator.account]]
+address = "Ev8WSPQsGb4wfjybqff5eZNcS3n6HaMsBkMk9suAiuM"
+filename = "some_account.json"
+```
+
+Dieser Ansatz eignet sich gut zum Testen mit vorkonfigurierten Kontozuständen oder spezifischen Konfigurationen, die nicht im Mainnet existieren.
+
+<ArticleSection name="Running Surfnet" id="running-surfnet" level="h2" />
+
+Das Testen von Solana-Programmen, die auf Cross-Program Invocations (CPIs) angewiesen sind, erforderte traditionell, dass Entwickler Konten und Programme vom Mainnet exportieren, wie wir im Abschnitt Local Validator gesehen haben.
+
+Dieser Prozess funktioniert für einige wenige Konten, wird aber völlig unpraktikabel, wenn CPIs in komplexe Programme wie Jupiter getestet werden, die von mehr als 40 Konten und mehr als 8 Programmen abhängen können.
+
+Surfnet dient als direkter Ersatz für solana-test-validator und ermöglicht Entwicklern, Programme lokal zu simulieren, wobei Mainnet-Konten bei Bedarf abgerufen werden
+
+Um es zu nutzen, installieren Sie einfach surfpool über die offizielle [Installationsseite](https://docs.surfpool.run/install) und führen Sie dann aus:
+
+```bash
+surfpool start
+```
+
+Sie können jetzt eine Verbindung zu Surfnet herstellen, indem Sie den lokalen Validator anvisieren:
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```
+
+Wir haben die Einrichtung und Verwendung von Surfnet ausführlich [hier](/de/courses/testing-with-surfpool) behandelt.

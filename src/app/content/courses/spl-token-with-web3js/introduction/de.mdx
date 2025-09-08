@@ -1,0 +1,197 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Das Token-Programm
+
+![SPL Token mit Web3JS](/graphics/course-banners/spl-token-with-web3js.png)
+
+Auf Solana wird alles, was mit Tokens zu tun hat, vom [SPL Token-Programm](https://github.com/solana-program/token) und dem [Token2022-Programm](/de/courses/token-2022-program) verwaltet: Solanas natives Token-Framework, das definiert, wie alle Tokens erstellt, verwaltet und übertragen werden.
+
+Es ist ein einziges, einheitliches Programm, das alle Token-Operationen im gesamten Netzwerk verarbeitet und so Konsistenz und Interoperabilität gewährleistet.
+
+> Die Entscheidung für eine einzige, einheitliche Schnittstelle für alle Tokens auf Solana schafft eine einfache Implementierung, die in allen dApps (dezentralen Anwendungen) und Integrationen (wie Wallets, ...) repliziert werden kann
+
+Beginnen wir mit der Installation des erforderlichen Pakets, um mit dem SPL Token-Programm über Web3.js zu arbeiten:
+
+```bash
+npm i @solana/spl-token
+```
+
+<ArticleSection name="Mint- und Token-Konten" id="mint-and-token-accounts" level="h2" />
+
+Unter der Haube ist das Erstellen eines `Mint` und `Token` Kontos ziemlich "kompliziert". Es gibt verschiedene Anweisungen, die unterschiedliche Eingaben und Konten erfordern; das Konto muss mietfrei gemacht werden, bevor wir es tatsächlich initialisieren können, ...
+
+### Mint-Konto
+
+Ohne jegliche Abstraktion würde das Erstellen eines `Mint` Kontos so aussehen:
+
+```ts
+import {
+    Keypair,
+    sendAndConfirmTransaction,
+    SystemProgram,
+    Transaction,
+} from "@solana/web3.js";
+
+import {
+    createInitializeMint2Instruction,
+    MINT_SIZE,
+    getMinimumBalanceForRentExemptMint,
+    TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+
+const mint = Keypair.generate();
+
+const mintRent = await getMinimumBalanceForRentExemptMint(connection);
+
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: feePayer.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: MINT_SIZE,
+    lamports: mintRent,
+    programId: TOKEN_PROGRAM_ID
+});
+
+const initializeMintInstruction = createInitializeMint2Instruction(
+    mint.publicKey, // mint pubkey
+    6, // decimals
+    feePayer.publicKey, // mint authority
+    null, // freeze authority
+    TOKEN_PROGRAM_ID
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Glücklicherweise bietet das `@solana/spl-token` Paket einige Abstraktionen. So können wir ein `Mint` Konto mit einer einzigen `createMint()` Funktion erstellen:
+
+```ts
+const mint = await createMint(
+    connection, // connection
+    keypair, // payer
+    keypair.publicKey, // mint authority
+    null, // freeze authority
+    6 // decimals
+);
+```
+
+### Token-Konto
+
+Dasselbe gilt für das `Token` Konto. Wenn wir es ohne Abstraktionen erstellen würden, sähe es so aus:
+
+```ts
+import {
+    Keypair,
+    sendAndConfirmTransaction,
+    SystemProgram,
+    Transaction,
+} from "@solana/web3.js";
+
+import {
+    createInitializeAccount3Instruction,
+    ACCOUNT_SIZE,
+    getMinimumBalanceForRentExemptAccount,
+    TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+
+const token = Keypair.generate();
+
+const tokenRent = await getMinimumBalanceForRentExemptAccount(connection);
+
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: feePayer.publicKey,
+    newAccountPubkey: token.publicKey,
+    space: ACCOUNT_SIZE,
+    lamports: tokenRent,
+    programId: TOKEN_PROGRAM_ID
+});
+
+const initializeTokenInstruction = createInitializeAccount3Instruction(
+    token.publicKey, // token pubkey
+    mint.publicKey, // mint pubkey
+    feePayer.publicKey, // owner pubkey
+    TOKEN_PROGRAM_ID
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTokenInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, token]);
+
+console.log(`Token created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Aber genau wie beim `Mint` Konto bietet das `@solana/spl-token` Paket einige Abstraktionen zur Erstellung des `Token` Kontos. Wir können die `createAccount()` Funktion wie folgt verwenden:
+
+```ts
+const token = await createAccount(
+    connection, // connection
+    keypair, // payer
+    mint.publicKey, // mint pubkey
+    keypair.publicKey, // owner pubkey
+);
+```
+
+### Associated Token-Konto
+
+Dasselbe gilt für das `Associated Token` Konto, aber die Abstraktion bezieht sich nicht auf die Erstellung der Konten wie beim `Mint` und `Token` Konto, sondern hauptsächlich auf die Adressableitung.
+
+So erstellen wir ein `Associated Token`Konto ohne Abstraktionen:
+
+```ts
+import {
+    sendAndConfirmTransaction,
+    Transaction,
+} from "@solana/web3.js";
+
+import {
+    TOKEN_PROGRAM_ID,
+    createAssociatedTokenAccountIdempotentInstruction,
+    getAssociatedTokenAddress,
+} from "@solana/spl-token";
+
+const associatedTokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey, // mint pubkey
+    keypair.publicKey, // owner pubkey
+    false, // allow owner off-curve
+    TOKEN_PROGRAM_ID
+);
+
+// Create ATA creation instructions for all accounts
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    associatedTokenAccount, // associated token account address
+    keypair.publicKey, // owner
+    mint.publicKey, // mint
+    TOKEN_PROGRAM_ID
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Associated Token created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Und so sieht es mit Abstraktionen aus:
+
+```ts
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection, // connection
+    keypair, // payer
+    mint, // mint pubkey
+    keypair.publicKey // owner pubkey
+);
+```
+
+> Wie Sie sehen können, heißt die Funktion `getOrCreateAssociatedTokenAccount()`. Das liegt daran, dass es vorkommen kann, dass das `Associated Token`Konto bereits zuvor erstellt wurde und wir nicht möchten, dass unsere Transaktion deswegen fehlschlägt. Die Funktion erstellt also entweder das Konto oder gibt einfach die Adresse des ATA zurück.

@@ -1,0 +1,93 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Die Mint Close Authority Erweiterung
+
+Die `MintCloseAuthority` Erweiterung ist eine `Mint` Erweiterung, die es der Autorität ermöglicht, ein `Mint` Konto zu schließen und die Miete zurückzuerhalten, wenn das Konto einen aktuellen Bestand von 0 hat.
+
+Diese Erweiterung ist nützlich, um ungenutzte Mints zu bereinigen und das SOL zurückzufordern, das für die Mietbefreiung des Kontos verwendet wurde. Die Mint kann nur geschlossen werden, wenn keine Token im Umlauf sind.
+
+<ArticleSection name="Initialisierung des Mint-Kontos" id="initializing-the-mint-account" level="h2" />
+
+Um die `MintCloseAuthority` Erweiterung auf einem `Mint` Konto zu initialisieren, benötigen wir die `initializeMintCloseAuthority()` Funktion.
+
+Hier ist, wie man eine Mint mit der Mint Close Erweiterung erstellt:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeMintCloseAuthorityInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Mint Close Authority extension
+const mintLen = getMintLen([ExtensionType.MintCloseAuthority]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Mint Close Authority extension
+const initializeMintCloseAuthority = createInitializeMintCloseAuthorityInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintCloseAuthority,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Schließen des Mint-Kontos" id="closing-the-mint-account" level="h2" />
+
+Wenn ein `Mint` Konto einen Bestand von null hat, kann die `CloseMint Authority` die Miete für dieses Konto zurückfordern, indem sie die `closeAccount` Anweisung wie folgt verwendet:
+
+```ts
+const closeMintInstruction = createCloseAccountInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(closeMintInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: false});
+
+console.log(`Mint closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

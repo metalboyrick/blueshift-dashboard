@@ -1,0 +1,204 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Das Escrow
+
+![Pinocchio Escrow Challenge](/graphics/challenge-banners/pinocchio-escrow.png)
+
+Ein Escrow ist ein leistungsstarkes Finanzinstrument, das sichere Token-Tauschgeschäfte zwischen zwei Parteien ermöglicht.
+
+Stellen Sie sich das wie ein digitales Schließfach vor, in dem ein Benutzer Token A einschließen kann und darauf wartet, dass ein anderer Benutzer Token B hinterlegt, bevor der Tausch abgeschlossen wird.
+
+Dies schafft eine vertrauenslose Umgebung, in der sich keine der Parteien Sorgen machen muss, dass die andere vom Geschäft zurücktritt.
+
+In dieser Challenge werden wir dieses Konzept durch drei einfache, aber leistungsstarke Anweisungen implementieren:
+- **Make**: Der Maker (erster Benutzer) definiert die Handelsbedingungen und hinterlegt den vereinbarten Betrag von Token A in einem sicheren Tresor. Das ist, als würden Sie Ihren Gegenstand in das Schließfach legen und die Bedingungen des Austauschs festlegen.
+- **Take**: Der Taker (zweiter Benutzer) akzeptiert das Angebot, indem er den versprochenen Betrag von Token B an den Maker überweist und im Gegenzug das gesperrte Token A erhält. Dies ist der Moment, in dem beide Parteien ihren Teil des Geschäfts abschließen.
+- **Refund**: Wenn der Maker seine Meinung ändert oder kein geeigneter Taker gefunden wird, kann er das Angebot stornieren und sein Token A zurückerhalten. Das ist, als würden Sie Ihren Gegenstand aus dem Schließfach zurückholen, wenn das Geschäft nicht zustande kommt.
+
+**Hinweis**: Wenn Sie mit Pinocchio nicht vertraut sind, sollten Sie zunächst die [Einführung in Pinocchio](/de/courses/introduction-to-pinocchio) lesen, um sich mit den Kernkonzepten vertraut zu machen, die wir in diesem Programm verwenden werden.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Beginnen wir mit der Erstellung einer neuen Rust-Umgebung:
+
+```bash
+# create workspace
+cargo new blueshift_escrow --lib --edition 2021
+cd blueshift_escrow
+```
+
+Füge pinocchio, pinocchio-system, pinocchio-token und pinocchio-associated-token hinzu:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+```
+
+Deklariere die Crate-Typen in `Cargo.toml`, um Deployment-Artefakte in `target/deploy` zu generieren:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Du bist jetzt bereit, dein Escrow-Programm zu schreiben.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Diesmal werden wir das Programm in kleine, fokussierte Module aufteilen, anstatt alles in die `lib.rs` zu packen. Die Ordnerstruktur wird ungefähr so aussehen:
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── helpers.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+Der Einstiegspunkt, der in der `lib.rs` liegt, sieht sehr ähnlich aus wie das, was wir in den letzten Lektionen gemacht haben, daher werden wir es sehr schnell durchgehen:
+
+```rust
+use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Make::DISCRIMINATOR, data)) => Make::try_from((data, accounts))?.process(),
+        Some((Take::DISCRIMINATOR, _)) => Take::try_from(accounts)?.process(),
+        Some((Refund::DISCRIMINATOR, _)) => Refund::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Wir werden in das `state.rs` wechseln, wo alle Daten für unser `Escrow` liegen. Lass uns das in zwei Teile aufteilen: die Struct-Definition und ihre Implementierung.
+
+Schauen wir uns zunächst die Struct-Definition an:
+
+```rust
+use pinocchio::{program_error::ProgramError, pubkey::Pubkey};
+use core::mem::size_of;
+
+#[repr(C)]
+pub struct Escrow {
+    pub seed: u64,        // Random seed for PDA derivation
+    pub maker: Pubkey,    // Creator of the escrow
+    pub mint_a: Pubkey,   // Token being deposited
+    pub mint_b: Pubkey,   // Token being requested
+    pub receive: u64,     // Amount of token B wanted
+    pub bump: [u8;1]      // PDA bump seed
+}
+```
+
+Das Attribut `#[repr(C)]` stellt sicher, dass unser Struct ein vorhersehbares Speicherlayout hat, was für On-Chain-Daten entscheidend ist. Jedes Feld dient einem bestimmten Zweck:
+- **seed**: Eine Zufallszahl, die es einem Maker ermöglicht, mehrere Escrows mit demselben Token-Paar zu erstellen
+- **maker**: Die Wallet-Adresse, die das Escrow erstellt hat und die Token erhalten wird
+- **mint_a**: Die SPL-Token-Mint-Adresse für den Token, der eingezahlt wird
+- **mint_b**: Die SPL-Token-Mint-Adresse für den Token, der angefordert wird
+- **receive**: Die genaue Menge an Token B, die der Maker erhalten möchte
+- **bump**: Ein einzelnes Byte, das bei der PDA-Ableitung verwendet wird, um sicherzustellen, dass die Adresse nicht auf der Ed25519-Kurve liegt
+
+Nun schauen wir uns die Implementierung mit all ihren Hilfsmethoden an:
+
+```rust
+impl Escrow {
+    pub const LEN: usize = size_of::<u64>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<Pubkey>() 
+    + size_of::<u64>()
+    + size_of::<[u8;1]>();
+
+    #[inline(always)]
+    pub fn load_mut(bytes: &mut [u8]) -> Result<&mut Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &mut *core::mem::transmute::<*mut u8, *mut Self>(bytes.as_mut_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn load(bytes: &[u8]) -> Result<&Self, ProgramError> {
+        if bytes.len() != Escrow::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        Ok(unsafe { &*core::mem::transmute::<*const u8, *const Self>(bytes.as_ptr()) })
+    }
+
+    #[inline(always)]
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
+    }
+
+    #[inline(always)]
+    pub fn set_maker(&mut self, maker: Pubkey) {
+        self.maker = maker;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_a(&mut self, mint_a: Pubkey) {
+        self.mint_a = mint_a;
+    }
+
+    #[inline(always)]
+    pub fn set_mint_b(&mut self, mint_b: Pubkey) {
+        self.mint_b = mint_b;
+    }
+
+    #[inline(always)]
+    pub fn set_receive(&mut self, receive: u64) {
+        self.receive = receive;
+    }
+
+    #[inline(always)]
+    pub fn set_bump(&mut self, bump: [u8;1]) {
+        self.bump = bump;
+    }
+
+    #[inline(always)]
+    pub fn set_inner(&mut self, seed: u64, maker: Pubkey, mint_a: Pubkey, mint_b: Pubkey, receive: u64, bump: [u8;1]) {
+        self.seed = seed;
+        self.maker = maker;
+        self.mint_a = mint_a;
+        self.mint_b = mint_b;
+        self.receive = receive;
+        self.bump = bump;
+    }
+}
+```
+
+Die Implementierung bietet mehrere wichtige Funktionen:
+1. **Exakte Größenberechnung**: `LEN` berechnet die Kontogröße präzise durch Summierung der Größe jedes Feldes
+2. **Sicheres Laden**: `load` bietet eine sichere Methode zum Laden und Validieren von Escrow-Daten
+3. **Performance-Optimierungen**:
+   - `#[inline(always)]` bei Gettern für maximale Leistung
+   - Unsafe-Methoden für Fälle, in denen wir wissen, dass der Borrow sicher ist
+   - Effizientes Setzen von Feldern mit `set_inner`
+4. **Speichersicherheit**: Ordnungsgemäße Validierung der Kontodatenlänge und -eigentümerschaft
+5. **Dokumentation**: Klare Kommentare, die den Zweck und die Sicherheitsüberlegungen jeder Methode erläutern
+
+Diese Implementierung stellt sicher, dass unser Escrow-Status sowohl sicher als auch effizient ist, mit angemessener Validierung und Performance-Optimierungen wo sinnvoll.

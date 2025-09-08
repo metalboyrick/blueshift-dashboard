@@ -1,0 +1,91 @@
+# Ausleihen
+
+Die Ausleihanweisung ist die erste Hälfte unseres Flash-Loan-Systems. Sie führt drei kritische Schritte aus, um sicheres und atomares Verleihen zu gewährleisten:
+1. Überweisung von Geldern: Verschieben der angeforderten `borrow_amount` vom Treasury des Protokolls auf das Konto des Kreditnehmers
+2. Überprüfung der Rückzahlung: Verwendung von Anweisungsintrospektion, um zu bestätigen, dass am Ende der Transaktion eine gültige Rückzahlungsanweisung existiert
+
+<ArticleSection name="Geldüberweisung" id="fund-transfer" level="h2" />
+
+Zunächst implementieren wir die eigentliche Überweisung der Gelder mit ordnungsgemäßer Validierung:
+
+```rust
+// Make sure we're not sending in an invalid amount that can crash our Protocol
+require!(borrow_amount > 0, ProtocolError::InvalidAmount);
+
+// Derive the Signer Seeds for the Protocol Account
+let seeds = &[
+    b"protocol".as_ref(),
+    &[ctx.bumps.protocol]
+];
+let signer_seeds = &[&seeds[..]];
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(), 
+        Transfer {
+            from: ctx.accounts.protocol_ata.to_account_info(),
+            to: ctx.accounts.borrower_ata.to_account_info(),
+            authority: ctx.accounts.protocol.to_account_info(),
+        }, 
+        signer_seeds
+    ), 
+    borrow_amount
+)?;
+```
+
+Dieser Code stellt sicher, dass wir einen gültigen Betrag überweisen und verwendet die programmabgeleitete Adresse (PDA) des Protokolls, um die Überweisung zu autorisieren.
+
+<ArticleSection name="Anweisungsintrospektion" id="instruction-introspection" level="h2" />
+
+Jetzt kommt der sicherheitskritische Teil: die Verwendung der Anweisungsintrospektion, um die Struktur der Transaktion zu überprüfen und sicherzustellen, dass unser Flash-Loan zurückgezahlt wird.
+
+Wir beginnen mit dem Zugriff auf die `instructions` Sysvar, die Informationen über alle Anweisungen in der aktuellen Transaktion enthält:
+
+```rust
+/*
+    Instruction Introspection
+
+    This is the primary means by which we secure our program,
+    enforce atomicity while making a great UX for our users.
+*/
+
+let ixs = ctx.accounts.instructions.to_account_info();
+```
+
+Schließlich führen wir die wichtigste Prüfung durch: Sicherstellen, dass die letzte Anweisung in der Transaktion eine gültige Rückzahlungsanweisung ist:
+- Wir beginnen mit der Überprüfung der Position der Ausleihanweisung, um sicherzustellen, dass sie die einzige ist
+- Dann prüfen wir die Anzahl der Anweisungen und stellen sicher, dass wir die letzte Anweisung der Transaktion laden
+- Dann verifizieren wir, dass es sich um die Rückzahlungsanweisung handelt, indem wir die Programm-ID und den Diskriminator der Anweisung überprüfen
+- Wir beenden mit der Überprüfung, dass die ATAs, die in der Rückzahlungsanweisung übergeben wurden, dieselben sind, die wir in unserer `Borrow` Anweisung übergeben
+
+```rust
+/*
+    Repay Instruction Check
+
+    Make sure that the last instruction of this transaction is a repay instruction
+*/
+
+// Check if this is the first instruction in the transaction.
+let current_index = load_current_index_checked(&ctx.accounts.sysvar_instructions)?;
+require_eq!(current_index, 0, ProtocolError::InvalidIx); 
+
+// Check how many instruction we have in this transaction
+let instruction_sysvar = ixs.try_borrow_data()?;
+let len = u16::from_le_bytes(instruction_sysvar[0..2].try_into().unwrap());
+
+// Ensure we have a repay ix
+if let Ok(repay_ix) = load_instruction_at_checked(len as usize - 1, &ixs) {
+
+    // Instruction checks
+    require_keys_eq!(repay_ix.program_id, ID, ProtocolError::InvalidProgram);
+    require!(repay_ix.data[0..8].eq(instruction::Repay::DISCRIMINATOR), ProtocolError::InvalidIx);
+
+    // We could check the Wallet and Mint separately but by checking the ATA we do this automatically
+    require_keys_eq!(repay_ix.accounts.get(3).ok_or(ProtocolError::InvalidBorrowerAta)?.pubkey, ctx.accounts.borrower_ata.key(), ProtocolError::InvalidBorrowerAta);
+    require_keys_eq!(repay_ix.accounts.get(4).ok_or(ProtocolError::InvalidProtocolAta)?.pubkey, ctx.accounts.protocol_ata.key(), ProtocolError::InvalidProtocolAta);
+
+} else {
+    return Err(ProtocolError::MissingRepayIx.into());
+}
+```

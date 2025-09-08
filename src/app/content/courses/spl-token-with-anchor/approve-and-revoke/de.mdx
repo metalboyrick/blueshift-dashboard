@@ -1,0 +1,47 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Approve- und Revoke-Anweisungen
+
+Approve erteilt einem Delegierten die Berechtigung, eine bestimmte Menge an Token im Namen des Kontoinhabers zu übertragen. Dies ermöglicht programmgesteuerte Token-Übertragungen, ohne die vollständige Kontrolle über das Konto zu gewähren.
+
+> Wir legen einen "genehmigten" Betrag fest, und der Delegierte kann nur bis zu diesem Betrag übertragen
+
+Revoke entzieht dem aktuellen Delegierten die Berechtigung über das Konto und gibt die vollständige Kontrolle an den Kontoinhaber zurück.
+
+> Hebt sofort jede bestehende Delegation auf, und nur der Kontoinhaber kann die Delegation widerrufen (nicht der Delegierte selbst)
+
+Bevor wir ein Token-Konto delegieren oder widerrufen können, müssen wir bereits Folgendes haben:
+- Ein initialisiertes `Mint` Konto.
+- Ein initialisiertes `Token` Konto oder `Associated Token` Konto, über das wir die Kontrolle übernehmen wollen
+
+> Die Menge der Token, die wir minten, wird für Dezimalstellen "normalisiert". Das bedeutet, wenn wir 1 Token mit 6 Dezimalstellen minten wollen, müssen wir tatsächlich `1_000_000` als Betrag angeben
+
+So sieht der CPI zur `approve()` Anweisung aus:
+
+```rust
+approve(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Approve {
+            to: ctx.accounts.token_account.to_account_info(),
+            delegate: ctx.accounts.delegate.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```
+
+Und so sieht der CPI zur `revoke()` Anweisung aus:
+
+```rust
+revoke(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Revoke {
+            pub source: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

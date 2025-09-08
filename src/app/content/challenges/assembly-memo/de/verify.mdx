@@ -1,0 +1,30 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF Assembly Memo</ChallengeTitle>
+
+Erstelle ein Programm, das nur eine Anweisung hat. Es muss:
+- Fehlschlagen, wenn die Anweisungsdaten Konten enthalten (dies kann erreicht werden, indem `r0` auf die Anzahl der Konten gesetzt wird)
+- `r2` auf die Länge der Anweisungsdaten setzen und `r1` auf den Offset der Anweisungsdaten
+- Den `sol_log_` Syscall aufrufen.
+
+Beginne mit der Installation des sBPF-Pakets, wie im [Tooling-Abschnitt](/de/courses/introduction-to-assembly/tooling) des Kurses "Einführung in Assembly" erklärt, und erstelle dein Programm mit dem folgenden Befehl in deinem Terminal:
+
+```
+sbpf build
+```
+
+Dies generiert eine `.so` Datei in deinem `target/deploy` Ordner.
+
+Klicke jetzt auf die Schaltfläche `take challenge` und lege die Datei dort ab!
+
+<RequirementList>
+  <Requirement title="Challenge 1: Testen des Memos">
+    Dein Programm sollte erfolgreich sein und `Hello, Solana!` protokollieren
+  </Requirement>
+
+  <Requirement title="Challenge 2: Testen des Memos mit unterschiedlicher Eingabe">
+    Um sicherzustellen, dass du den String `Hello, Solana!` nicht fest codiert hast, versuchen wir es erneut mit einer anderen Eingabe: `Hello, Solana, but different!`
+  </Requirement>
+</RequirementList>

@@ -1,0 +1,221 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Winternitz-Signaturen mit Pinocchio
+
+[Dean](https://x.com/deanmlittle) vom Blueshift-Team hat das erste Crate veröffentlicht, das Pinocchio-Kompatibilität für die Erstellung und Verifizierung von Winternitz-Signaturen ermöglicht.
+
+Diese Implementierung ist besonders wertvoll, um quantenresistente Sicherheit für Blockchain-Anwendungen zu bieten.
+
+<ArticleSection name="Einführung" id="introduction" level="h2" />
+
+Diese Implementierung verwendet `w = 8`, um Solanas Einschränkungen auszugleichen: Transaktionsgrößenlimits und Compute-Unit-Beschränkungen.
+
+Der Winternitz-Parameter `w` schafft einen grundlegenden Kompromiss zwischen Signaturgröße und Rechenanforderungen:
+- Höhere w-Werte bedeuten kleinere Signaturen, aber mehr Rechenleistung, da die Verifizierung mehr Hash-Operationen pro Signaturkomponente erfordert
+- Niedrigere w-Werte bedeuten größere Signaturen, aber weniger Rechenleistung, da die Verifizierung weniger Hash-Operationen pro Signaturkomponente erfordert
+
+Solana legt zwei kritische Einschränkungen fest, die die Parameterwahl beeinflussen:
+- Transaktionsgrößenbeschränkung (1024 Bytes): Mit `w = 8` erzeugt eine vollständige Implementierung genau 1024-Byte-Signaturen mit 256-Bit-Hashes (32 Bytes × 32 Komponenten). Dies verbraucht den gesamten Transaktionsraum und lässt keinen Platz für Transaktions-Overhead und zusätzliche Daten.
+- Compute-Unit-Beschränkung: Der Wechsel zu `w = 16` würde die Signaturgröße halbieren, würde aber Solanas Compute-Unit-Limits (CU) während der Verifizierung überschreiten, da jede Signaturkomponente deutlich mehr Hash-Operationen erfordern würde.
+
+Da Compute-Unit-Limits nicht durch Parameteranpassung gelöst werden können, wird das Problem der Signaturgröße durch Kürzung der Signaturen auf 896 Bytes und Merkleisierung der verbleibenden Komponenten angegangen. Dieser Ansatz bewahrt die Sicherheit und schafft gleichzeitig wesentlichen Spielraum für Transaktions-Overhead.
+
+Deshalb hat sich die Implementierung für `w = 8` entschieden: Es stellt den optimalen Punkt dar, an dem die Rechenanforderungen handhabbar bleiben, während die Signaturkürzung eine praktische Lösung für Größenbeschränkungen bietet.
+
+### Schlüsselgenerierung
+
+Generieren Sie einen privaten Schlüssel und leiten Sie den entsprechenden öffentlichen Schlüssel mit dem SDK ab:
+
+```rust
+use winternitz::{hash::WinternitzKeccak, privkey::WinternitzPrivkey};
+
+// Generate a new random private key
+let privkey = WinternitzPrivkey::generate();
+
+// Derive the corresponding public key
+let pubkey = privkey.pubkey::<WinternitzKeccak>();
+```
+
+Der öffentliche Schlüssel wird durch mehrfaches Anwenden der Hash-Funktion auf die Komponenten des privaten Schlüssels abgeleitet, wodurch eine Einweg-Transformation entsteht, die Sicherheit gewährleistet.
+
+### Nachrichten signieren
+
+```rust
+// Sign a message
+let message = b"Hello, World!";
+let signature = privkey.sign::<WinternitzKeccak>(message);
+```
+
+Der Signierungsprozess erzeugt Signaturkomponenten basierend auf dem Nachrichten-Digest, wobei jede Komponente eine bestimmte Anzahl von Hash-Operationen erfordert, die durch die entsprechenden Nachrichtenbits bestimmt wird.
+
+### Signaturverifizierung
+
+```rust
+// Recover public key from signature and message
+let recovered_pubkey = signature.recover_pubkey::<WinternitzKeccak>(message);
+
+// Verify by comparing public keys
+assert_eq!(recovered_pubkey, pubkey);
+```
+
+Die Verifizierung rekonstruiert den öffentlichen Schlüssel aus der Signatur und der Nachricht und vergleicht ihn dann mit dem erwarteten öffentlichen Schlüssel, um die Authentizität zu bestätigen.
+
+<ArticleSection name="Implementation" id="implementation" level="h2" />
+
+Um die Winternitz-Signaturverifizierung in Ihrem Pinocchio-Programm zu implementieren, benötigen Sie:
+1. Das `solana-winternitz` Crate: Dieses bietet die Kern-Funktionalität für Winternitz-Signaturen
+2. PDA-Erstellung und -Verifizierung mit quantensicherer Adressableitung
+
+Beginnen wir mit dem Hinzufügen des `solana-winternitz` Crates
+
+```
+cargo add solana-winternitz
+```
+
+### Optimierung der Signaturgröße
+
+Die Implementierung verwendet einen gekürzten Ansatz, um innerhalb der Transaktionsbeschränkungen von Solana zu bleiben:
+- Vollständige Signatur (`WinternitzSignature`): 1024 Bytes (32 Bytes × 32 Komponenten).
+- Gekürzte Signatur (`WinternitzCommitmentSignature`): 896 Bytes (32 Bytes × 28 Komponenten).
+- Verfügbarer Speicherplatz: 128 Bytes verbleibend für Transaktions-Overhead
+
+Die Kürzung von 256-Bit auf 224-Bit-Hashes behält eine starke Sicherheit bei und gewährleistet gleichzeitig praktische Nutzbarkeit. Die verbleibenden Signaturkomponenten werden merkleisiert, um das vollständige Sicherheitsmodell zu erhalten.
+
+### Einrichtung quantensicherer PDAs
+
+Da traditionelle Blockchain-Signaturen weiterhin anfällig für Quantenangriffe sind, nutzt diese Implementierung Program Derived Addresses (PDAs) für Quantensicherheit.
+
+PDAs haben keine zugehörigen privaten Schlüssel, was sie immun gegen kryptografische Angriffe macht.
+
+Hier ist, wie man eine PDA aus einem Winternitz-öffentlichen Schlüssel erstellt:
+
+```rust
+pub struct CreateWinternitzPDA {
+    pub hash: [u8; 32],
+    pub bump: [u8; 1],
+}
+
+impl CreateWinternitzPDA {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        let data: [u8; 33] = bytes
+            .try_into()
+            .map_err(|_| ProgramError::InvalidInstructionData)?;
+        let (hash, bump) = array_refs![&data, 32, 1];
+        Ok(Self {
+            hash: *hash,
+            bump: *bump,
+        })
+    }
+
+    pub fn create_pda(&self, accounts: &CreatePDAAccounts) -> ProgramResult {
+        let seeds = [Seed::from(&self.hash), Seed::from(&self.bump)];
+        let signers = [Signer::from(&seeds)];
+        
+        // Create the quantum-secure PDA
+        CreateAccount {
+            from: accounts.payer,
+            to: accounts.vault,
+            lamports: accounts.lamports,
+            space: 0,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+> Der bei der Ableitung der PDA verwendete Hash ist eine Merkle-Wurzel, die aus 28 der 32 Komponenten des öffentlichen Schlüssels erstellt wird. Dies liegt daran, dass wir, wie bereits erwähnt, nur die gekürzte Signatur unterbringen können.
+
+Der Kern der Winternitz-Verifizierung besteht darin, den öffentlichen Schlüssel aus der Signatur und der Nachricht wiederherzustellen und dann zu überprüfen, ob er mit der erwarteten PDA übereinstimmt. Hier ist der vollständige Verifizierungsablauf:
+
+```rust
+pub struct VerifyWinternitzSignature {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl VerifyWinternitzSignature {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, ProgramError> {
+        if bytes.len() != 897 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        let (signature_bytes, bump) = bytes.split_at(896);
+        Ok(Self {
+            signature: WinternitzSignature::from(signature_bytes.try_into().unwrap()),
+            bump: [bump[0]],
+        })
+    }
+
+    pub fn verify_and_execute(&self, accounts: &VerifyAccounts, message: &[u8]) -> ProgramResult {
+        // Recover the public key from signature and message
+        let recovered_pubkey = self.signature.recover_pubkey(message);
+        let hash = recovered_pubkey.merklize();
+        
+        // Verify PDA ownership
+        let expected_pda = solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ]);
+        
+        if expected_pda.ne(accounts.pda.key()) {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+        
+        // Execute the protected operation
+        self.execute_protected_operation(accounts)
+    }
+
+    fn execute_protected_operation(&self, accounts: &VerifyAccounts) -> ProgramResult {
+        // Your quantum-secure operation logic here
+        Ok(())
+    }
+}
+```
+
+Die Funktion `recover_pubkey()` rekonstruiert den ursprünglichen öffentlichen Schlüssel, indem sie die signierte Nachricht in Digest-Werte umwandelt, die angeben, wie viele zusätzliche Hashes jede Komponente benötigt, und 28 Komponenten des öffentlichen Schlüssels erzeugt, die nur mit dem richtigen privaten Schlüssel generiert werden können.
+
+Die Funktion `merklize()` erstellt dann einen binären Baum aus den 28 Komponenten des öffentlichen Schlüssels und erzeugt eine einzige 32-Byte-Wurzel, die alle 28 Komponenten eindeutig repräsentiert
+
+<ArticleSection name="Security Considerations" id="security-considerations" level="h2" />
+
+Fügen Sie immer kritische Parameter in die signierte Nachricht ein, um Manipulationen zu verhindern:
+
+```rust
+// Construct message with security parameters
+let message = [
+    accounts.recipient.key().as_ref(),     // Prevent recipient substitution
+    &amount.to_le_bytes(),                 // Prevent amount manipulation
+    &expiry_timestamp.to_le_bytes(),       // Prevent replay attacks
+].concat();
+```
+
+### Ablaufprüfungen
+
+Da Winternitz-Signaturen unbegrenzt gültig bleiben, implementieren Sie zeitbasierte Ablauffristen:
+
+```rust
+// Verify signature hasn't expired
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(
+    message[40..48].try_into()
+    .map_err(|_| ProgramError::InvalidInstructionData)?
+);
+
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+### Pubkey-Prüfungen
+
+Stellen Sie sicher, dass nur autorisierte Parteien von der Signatur profitieren können:
+
+```rust
+// Verify the recipient is authorized
+let intended_recipient = &message[0..32];
+if accounts.recipient.key().as_ref().ne(intended_recipient) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```
