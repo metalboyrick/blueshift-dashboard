@@ -1,0 +1,148 @@
+# 分割保险库
+
+`split` 指令允许从抗量子保险库中部分提取资金，通过将 lamports 分配到多个账户。这对于只能安全使用一次的 Winternitz 签名方案至关重要。
+
+与传统密码学不同，Winternitz 签名在使用一次后会变得脆弱。分割指令允许您：
+- 在一次交易中将支付分配给多个接收方
+- 将剩余资金转移到一个新的量子保险库中，并使用新的密钥对（通过将量子保险库作为 `refund` 账户传递）
+
+<ArticleSection name="所需账户" id="required-accounts" level="h2" />
+
+该指令需要三个账户：
+
+- `vault`：包含存储 lamports 的源保险库（必须是可变的）
+- `split`：指定金额的接收账户（必须是可变的）  
+- `refund`：剩余保险库余额的接收账户（必须是可变的）
+
+`refund` 账户通常是一个新的量子保险库，带有新的 Winternitz 密钥对，确保剩余资金的持续安全。
+
+以下是代码示例：
+
+```rust
+pub struct SplitVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub split: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for SplitVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, split, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, split, refund })
+    }
+}
+```
+
+> 账户验证由运行时处理。如果账户不满足要求（如可变性），指令将自动失败。
+
+<ArticleSection name="指令数据" id="instruction-data" level="h2" />
+
+需要以下三项数据：
+- `signature`：证明保险库密钥对所有权的 Winternitz 签名
+- `amount`：要转移到分割账户的 lamports（8 字节，小端序）
+- `bump`：用于优化的 PDA 派生偏移量（1 字节）
+
+以下是代码示例：
+
+```rust
+pub struct SplitVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub amount: [u8; 8],
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for SplitVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<SplitVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+            amount: data[897..905].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+
+<ArticleSection name="指令逻辑" id="instruction-logic" level="h2" />
+
+验证过程遵循以下步骤：
+
+1. 消息组装：构建一个 72 字节的消息，包含：分割金额、`split` 账户公钥和 `refund` 账户公钥
+
+2. 签名验证：使用 Winternitz 签名恢复原始公钥哈希，然后将其与金库的 PDA 派生种子进行比较。
+
+3. PDA 验证：通过快速等效性检查确保恢复的哈希与金库的 PDA 匹配，从而证明签名者拥有该金库。
+
+4. 资金分配 如果验证成功：指定金额将转移到 `split` 账户，剩余余额将转移到 `refund` 账户，并关闭 `vault` 账户。
+
+> 由于程序拥有 `vault` 账户，您可以直接转移 lamports，而无需调用跨程序调用（CPI）。
+
+以下是代码示例：
+
+```rust
+pub struct SplitVault<'a> {
+    pub accounts: SplitVaultAccounts<'a>,
+    pub instruction_data: SplitVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for SplitVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = SplitVaultInstructionData::try_from(data)?;
+        let accounts = SplitVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> SplitVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&self) -> ProgramResult {
+        // Assemble our Split message
+        let mut message = [0u8; 72];
+        message[0..8].clone_from_slice(&self.instruction_data.amount);
+        message[8..40].clone_from_slice(self.accounts.split.key());
+        message[40..].clone_from_slice(self.accounts.refund.key());
+
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(&message).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault, send split balance to Split account, refund remainder to Refund account
+        *self.accounts.split.try_borrow_mut_lamports()? += u64::from_le_bytes(self.instruction_data.amount);
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports().saturating_sub(u64::from_le_bytes(self.instruction_data.amount));
+
+        self.accounts.vault.close()
+    }
+}
+```
+
+> 重建消息可以防止签名重放攻击，这种攻击中恶意行为者在利用有效签名时从内存池中捕获并替换不同的接收账户。

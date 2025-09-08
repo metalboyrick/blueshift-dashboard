@@ -1,0 +1,160 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 测试您的程序
+
+彻底的测试可以防止财务损失，建立用户信任，并确保您的程序在所有条件下都能正确运行。
+
+> 在主网部署之前进行严格测试。
+
+<ArticleSection name="TypeScript Tests" id="typescript-tests" level="h2" />
+
+TypeScript 测试是最常见的方法，因为无论如何您都需要为 dApp 客户端使用 TypeScript。这使您可以同时开发测试和客户端代码。
+
+我们在[这里](/en/courses/anchor-for-dummies/client-side-development)详细介绍了客户端设置。
+
+> 每个 Anchor CLI 项目都包含一个测试文件夹，其中有一个准备好测试的 TypeScript 文件。
+
+TypeScript 测试具有以下关键优势：
+- 模拟真实的客户端交互
+- 测试复杂的工作流和边界情况
+- 对 API 更改提供即时反馈
+- 验证成功和错误场景
+
+运行测试命令：
+
+```bash
+anchor test
+```
+
+> 通过在配置中将集群设置为 localnet 来在 localnet 上运行。这会启动一个本地验证器并向提供者钱包添加 1,000 SOL。如果您需要包含数据的额外账户，请查看运行[本地验证器](/en/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)的相关内容。
+
+<ArticleSection name="Mollusk Tests" id="mollusk-tests" level="h2" />
+
+当您需要对测试环境或复杂程序状态设置进行精细控制时，Mollusk 提供了解决方案。
+
+Mollusk 是一个专为 Solana 程序构建的 Rust 测试框架。它使您能够：
+- 在没有网络开销的情况下测试程序逻辑
+- 轻松设置复杂的账户状态
+- 比完整的集成测试运行更快的测试
+- 模拟特定的区块链条件和边界情况
+
+我们在[这里](/en/courses/testing-with-mollusk)详细介绍了 Mollusk 测试。
+
+使用 Mollusk 创建一个新的 Anchor 程序：
+
+```bash
+anchor init <name-of-the-project> --test-template mollusk
+```
+
+运行测试命令：
+
+```bash
+anchor test
+```
+
+<ArticleSection name="LiteSVM 测试" id="litesvm-tests" level="h2" />
+
+当您需要像 Mollusk 一样对程序状态进行细粒度控制，但使用 TypeScript 时，LiteSVM 提供了最佳解决方案。
+
+LiteSVM 是一个轻量级测试框架，可以直接在您的测试过程中运行 Solana 虚拟机。它使您能够：
+- 比传统框架（如 `solana-program-test`）显著加快测试速度
+- 精确操控账户状态和系统变量
+- 跨多种语言进行测试：TypeScript、Rust 和 Python
+- 轻松模拟复杂的区块链条件和边界情况
+
+LiteSVM 通过将虚拟机嵌入到您的测试中，消除了验证器的开销，在不牺牲测试准确性的情况下提供了快速开发周期所需的速度。
+
+我们在[这里](/en/courses/testing-with-litesvm)全面介绍了 LiteSVM 测试。
+
+您可以设置 Anchor 提供程序，并使用我们[之前](/en/courses/anchor-for-dummies/client-side-development)看到的客户端设置与 `anchor-litesvm` 包一起使用。
+
+安装 `anchor-litesvm` 包。
+
+```bash
+npm install git:https://github.com/LiteSVM/anchor-litesvm
+```
+
+然后将默认的 Anchor 提供程序更改为 `LiteSVMProvider`，如下所示：
+
+```ts
+import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
+
+test("anchor", async () => {
+	const client = fromWorkspace("target/types/<program-name>.ts");
+	const provider = new LiteSVMProvider(client);
+	const program = new Program<Puppet>(IDL, provider);
+
+    // program.methods..
+})
+```
+
+<ArticleSection name="运行本地验证器" id="running-a-local-validator" level="h2" />
+
+使用一个充当您个人区块链沙盒的验证器，在本地镜像主网行为。当您将集群设置为 localnet 时，这会自动发生。
+
+本地验证器操作一个简化的 Solana 账本，并预装了原生程序。默认情况下，它仅存储测试数据，无法访问现有主网账户——限制了使用已建立协议的测试。
+
+### 配置您的本地验证器
+
+在 `Anchor.toml` 的 `[test]` 部分下自定义您的验证器：
+
+```
+[test]
+startup_wait = 10000
+```
+
+`startup_wait` 标志会延迟验证器启动，这在克隆多个增加加载时间的账户时非常有用。
+
+### 克隆主网账户
+
+使用 `[test.validator]` 配置克隆现有主网账户和程序：
+
+```
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+[[test.validator.clone]]
+address = "7NL2qWArf2BbEBBH1vTRZCsoNqFATTddH6h8GkVvrLpG"
+[[test.validator.clone]]
+address = "2RaN5auQwMdg5efgCaVqpETBV8sacWGR8tkK4m9kjo5r"
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+```
+
+`clone` 部分会从指定的集群中复制账户。当某个账户链接到由 "BPF 可升级加载器" 管理的程序时，Anchor 会自动克隆相关的程序数据账户。
+
+### 加载本地账户数据
+
+使用 `account` 标志从 JSON 文件加载本地账户：
+
+```
+[[test.validator.account]]
+address = "Ev8WSPQsGb4wfjybqff5eZNcS3n6HaMsBkMk9suAiuM"
+filename = "some_account.json"
+```
+
+这种方法非常适合测试预配置的账户状态或主网中不存在的特定配置。
+
+<ArticleSection name="运行 Surfnet" id="running-surfnet" level="h2" />
+
+测试依赖于跨程序调用（CPI）的 Solana 程序通常需要开发者从主网中导出账户和程序，就像我们在本地验证器部分看到的那样。
+
+这种方法适用于少量账户，但在测试像 Jupiter 这样复杂的程序时完全不可行，因为它可能依赖于 40 多个账户和 8 个以上的程序。
+
+Surfnet 是 solana-test-validator 的替代方案，允许开发者使用按需获取的主网账户在本地模拟程序。
+
+要使用它，只需通过官方[安装页面](https://docs.surfpool.run/install)安装 surfpool，然后运行：
+
+```bash
+surfpool start
+```
+
+现在可以通过定位本地验证器连接到 Surfnet：
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```
+
+我们在[这里](/en/courses/testing-with-surfpool)详细介绍了 Surfnet 的设置和使用。

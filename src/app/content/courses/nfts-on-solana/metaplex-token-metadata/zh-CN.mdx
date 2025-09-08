@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex 代币元数据程序
+
+Metaplex 代币元数据程序通过为同质化和非同质化代币附加丰富的描述性数据，解决了 SPL-Token 程序的一个基本限制。
+
+虽然 SPL-Token 程序能够高效处理代币的核心机制，如所有权和供应，但没有元数据的代币在钱包和区块链浏览器中显示为匿名的公钥。
+
+Metaplex 通过提供应用程序和用户所需的上下文信息，将这些基本的区块链条目转变为有意义的数字资产。
+
+<ArticleSection name="元数据账户" id="metadata-account" level="h2" />
+
+`Metadata` 账户作为描述层，为区块链代币提供上下文和实用性。该账户结构使用 Solana 的程序派生地址系统，创建了每个代币与其相关信息之间的可靠关系。
+
+确定性地址生成确保每个铸币账户都有一个对应的元数据账户，从而建立明确的数据所有权并防止冲突。
+
+`Metadata` 账户通过一个确定性过程生成其地址，该过程结合了特定的种子值和铸币账户的公钥：
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+
+let (metadata, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+    ], 
+    &ID  
+);
+```
+
+`Metadata` 账户存储了超出基本代币标识符的全面信息。
+
+创作者验证系统维护了一个代币创作者列表，每个创作者都有一个经过验证的属性，提供了真实创作者授权的加密证明。此验证防止冒充行为，并为数字资产建立可靠的来源追踪。
+
+集成的版税系统通过分配给每个创作者的分成属性，实现了自动化的收入分配。市场可以通过编程引用这些百分比，根据预定协议分配二级销售收益，从而消除了手动计算和信任依赖。
+
+这创造了可持续的经济模型，使创作者在初次销售后仍能从其作品中持续获益。
+
+Token Metadata 程序成功弥合了原始区块链数据与用户可访问的数字资产之间的差距。通过为铸造账户添加丰富的上下文信息，该程序使应用程序能够以有意义的方式显示、分类和交互代币。
+
+这一元数据层为 Solana 上现有的多样化数字资产生态系统奠定了基础。
+
+<ArticleSection name="主版本账户" id="master-edition-account" level="h2" />
+
+虽然元数据账户能够有效支持同质化和非同质化代币，但确保真实的 NFT 特性需要额外的控制机制。
+
+`Master Edition` 账户作为一种专门的 PDA，解决了这一需求，负责管理代币权限。该账户仅在 Token Metadata 程序验证了适当的非同质化代币属性已建立后才会创建。
+
+主版本系统采用了一种复杂的权限管理方法。程序并未永久销毁铸造权限，而是将铸造和冻结权限转移到主版本 PDA。这种设计在保持对代币创建和管理的严格控制的同时，提供了比永久废除权限更高的安全性和功能性。
+
+> 阅读[常见问题解答](https://developers.metaplex.com/token-metadata/faq#why-are-the-mint-and-freeze-authorities-transferred-to-the-edition-pda)以了解此选择背后的原因。
+
+`Master Edition` 账户的种子如下：
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+const EDITION: &str = "edition";
+
+let (master_edition, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+        EDITION.as_bytes(),
+    ], 
+    &ID  
+);
+```
+
+<ArticleSection name="可编程 NFT" id="programmable-nfts" level="h2" />
+
+可编程 NFT（pNFTs）是一种高级代币标准，在协议层面强制执行可自定义的行为和限制。
+
+这一资产类别解决了传统 NFT 的局限性，使创作者能够定义特定的生命周期规则，这些规则在代币交互过程中自动执行，确保创作者的合规性，而无需依赖外部强制机制。
+
+执行架构通过冻结的代币账户系统运行。当一个NFT变为可编程时，其关联的代币账户将永久冻结，所有操作都必须通过Token Metadata程序进行。
+
+这种设计创建了一个强制验证检查点，在任何操作进行之前都会验证规则，从而使绕过创作者定义的限制变得不可能。
+
+创作者定义的规则存储在`RuleSet`账户中，这些账户连接到`Token Record`账户，这是一种与铸造相关的新账户类型，标志着可编程NFT的状态。
+
+`Token Record`账户通过特定的种子派生其地址，这些种子将其与铸造和代币账户连接起来：
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+const TOKEN_RECORD_SEED: &str = "token_record";
+
+let (master_edition, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+        TOKEN_RECORD_SEED.as_bytes(),
+        token.as_ref(),
+    ], 
+    &ID  
+);
+```
+
+这些`RuleSets`支持复杂的条件逻辑，包括尊重版税支付的市场白名单、多签名转账要求、基于时间的操作限制或复杂的审批工作流。
+
+[Token Auth Rules](https://developers.metaplex.com/token-auth-rules)程序管理这些`RuleSet`账户并处理其验证逻辑，为实施自定义治理机制提供了一个灵活的框架。
+
+开发者与pNFT的交互通过Token Metadata程序进行，而不是直接使用SPL-Token程序。该程序提供了简化的指令，例如`Create`和`Update`，取代了传统操作如`CreateMetadataAccount`和`UpdateMetadata`。
+
+每个指令都需要一个`authorization_rules`账户参数，该参数引用适用的`RuleSet`，可以通过链上派生或Metaplex Read API发现。
+
+这种可编程框架使创作者能够实施细致的经济模型和治理结构，并确保强制执行。
+
+无论是实施条件转账、动态版税结构还是复杂的所有权要求，pNFT都确保所有行为在协议层面自动执行，而无需依赖市场合作或用户的自愿遵守。
+
+> 要了解更多关于如何使用`Token Metadata`程序的信息，请参考[官方文档](https://developers.metaplex.com/token-metadata)

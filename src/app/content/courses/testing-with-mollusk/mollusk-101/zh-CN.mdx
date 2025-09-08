@@ -2,6 +2,8 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Mollusk 101
 
+![Mollusk 101](/graphics/course-banners/testing-with-mollusk.png)
+
 高效测试 Solana 程序需要一个能够平衡速度、精确性和洞察力的框架。在开发复杂的程序逻辑时，您需要一个既能快速迭代又不牺牲测试边界情况或准确测量性能能力的环境。
 
 理想的 Solana 测试框架应具备以下三个基本功能：
@@ -30,33 +32,27 @@ Mollusk 的测试工具支持全面的配置选项，包括计算预算调整、
 将主 Mollusk crate 添加到您的项目中：
 
 ```
-cargo add mollusk-svm
+cargo add mollusk-svm --dev
 ```
 
 根据需要包含特定程序的辅助工具：
 
 ```
-cargo add mollusk-svm-programs-memo mollusk-svm-programs-token
+cargo add mollusk-svm-programs-memo mollusk-svm-programs-token --dev
 ```
 
 这些额外的 crate 提供了预配置的辅助工具，用于标准的 Solana 程序，减少了样板代码并简化了涉及代币操作或备忘指令的常见测试场景的设置。
+
+> 在 `cargo add <crate-name> --dev` 中的 `--dev` 标志用于通过将它们添加到 `[dev-dependencies]` 部分中来保持程序二进制文件的轻量化。
+> 此配置确保测试工具不会增加程序的部署大小，同时在开发过程中提供对所有必要的 Solana 类型和辅助函数的访问。
 
 ### 额外依赖
 
 一些 Solana crate 通过提供必要的类型和工具来增强测试体验：
 
 ```
-cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk
+cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk --dev
 ```
-
-由于这些依赖项仅在测试中需要，因此可以通过将它们添加到 `[dev-dependencies]` 部分的 `Cargo.toml` 中，保持程序二进制文件的轻量化：
-
-```
-[dev-dependencies]
-mollusk-svm = "0.4.0"
-```
-
-> 此配置确保测试工具不会增加程序的部署大小，同时在开发过程中提供对所有必要的 Solana 类型和辅助功能的访问。
 
 <ArticleSection name="Mollusk 基础" id="mollusk-basics" level="h2" />
 
@@ -88,6 +84,7 @@ fn test() {
 ```
 
 在测试中，我们可以使用以下四种主要 API 方法之一：
+
 - `process_instruction`：处理指令并返回结果。
 - `process_and_validate_instruction`：处理指令并对结果执行一系列检查，如果任何检查失败则触发 panic。
 - `process_instruction_chain`：处理一系列指令并返回结果。
@@ -118,8 +115,7 @@ let payer = Pubkey::new_unique();
 let payer_account = Account::new(100_000_000, 0, &system_program::id());
 
 // Uninitialized account with no lamports
-let uninitialized_account = Pubkey::new_unique();
-let uninitialized_account_account = Account::new(0, 0, &system_program::id());
+let default_account = Account::default();
 ```
 
 对于包含数据的 `ProgramAccounts`，您有两种构建方法：
@@ -145,24 +141,6 @@ let program_account_account = Account {
 };
 ```
 
-或者使用 `AccountSharedData`：
-
-```rust
-use solana_sdk::account::AccountSharedData;
-
-let data = vec![
-    // Your serialized account data
-];
-let lamports = mollusk
-    .sysvars
-    .rent
-    .minimum_balance(data.len());
-
-let program_account = Pubkey::new_unique();
-let mut program_account_account = AccountSharedData::new(lamports, data.len(), &ID);
-program_account_account.set_data_from_slice(&data);
-```
-
 创建账户后，将它们编译成 Mollusk 所需的格式：
 
 ```rust
@@ -171,8 +149,6 @@ let accounts = [
     (program_account, program_account_account)
 ];
 ```
-
-> 使用 AccountSharedData 时，请记得调用 `.into()` 将其转换为 Mollusk 执行所需的 Account 类型，如下所示：`program_account_account.into()`。
 
 ### 指令
 
@@ -209,13 +185,14 @@ pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
     let result = hasher.finalize();
 
     [
-        result[0], result[1], result[2], result[3], 
+        result[0], result[1], result[2], result[3],
         result[4], result[5], result[6], result[7],
     ]
 }
 ```
 
 对于 `AccountMeta` 结构体，我们需要根据账户权限使用适当的构造函数：
+
 - `AccountMeta::new(pubkey, is_signer)`：用于可变账户
 - `AccountMeta::new_readonly(pubkey, is_signer)`：用于只读账户
 
@@ -269,7 +246,7 @@ mollusk.process_and_validate_instruction(
 mollusk.process_instruction_chain(
     &[
         (&instruction, &accounts),
-        (&instruction_2, &accounts_2)    
+        (&instruction_2, &accounts_2)
     ]
 );
 ```

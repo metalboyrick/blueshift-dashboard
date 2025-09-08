@@ -1,0 +1,271 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 指令
+
+现在您已经了解了 sBPF 的寄存器和内存区域，让我们来研究操作它们的指令。
+
+指令是您的程序执行的基本操作——例如加法、从内存加载数据或跳转到不同位置。
+
+<ArticleSection name="什么是指令？" id="what-are-instructions" level="h2" />
+
+指令是您程序的基本构建块。可以将它们视为告诉处理器具体执行什么操作的命令：
+- `add64 r1, r2`: "将寄存器 `r1` 和 `r2` 中的值相加，结果存储在 `r1` 中"
+- `ldxdw r0, [r10 - 8]`: "从堆栈内存中加载 8 字节到寄存器 `r0`"
+- `jeq r1, 42, +3`: "如果 `r1` 等于 42，则向前跳转 3 条指令"
+
+每条指令仅执行一个操作，并精确编码为 8 字节数据，以便虚拟机即时解码。
+
+sBPF 指令处理不同的数据大小：
+- 字节 = 8 位（1 字节）
+- 半字 = 16 位（2 字节）
+- 字 = 32 位（4 字节）
+- 双字 = 64 位（8 字节）
+
+大多数 sBPF 操作使用 64 位值（双字），因为寄存器是 64 位的，但在需要提高效率时，您可以加载和存储较小的大小。
+
+<ArticleSection name="指令类别和格式" id="instruction-categories-and-format" level="h2" />
+
+当您编译 Rust、C 或汇编代码时，工具链会生成一系列固定宽度的 8 字节指令，并将其打包到 ELF 的 `.text` 部分中。
+
+每条指令遵循一致的结构，虚拟机可以一次性解码：
+
+```
+   1 byte    4 bits   4 bits     2 bytes         4 bytes
+┌──────────┬────────┬────────┬──────────────┬──────────────────┐
+│  opcode  │  dst   │  src   │   offset     │      imm         │
+└──────────┴────────┴────────┴──────────────┴──────────────────┘
+```
+
+- `opcode`: 定义操作类型。最高 3 位选择指令类别（算术、内存、跳转、调用、退出），而低 5 位指定具体的变体（加法、乘法、加载、条件跳转）。
+- `dst`: 目标寄存器编号（`r0–r10`），用于存储结果——算术结果、加载值或辅助函数返回值。
+- `src`: 提供输入的源寄存器。对于双操作数算术（`add r1, r2`），它提供第二个值。对于内存操作，它可以提供基地址。对于立即数变体（`add r1, 10`），这 4 位折叠到操作码中。
+- `offset`: 修改指令行为的小整数。对于加载/存储操作，它会加到源地址以到达 `[src + offset]`。对于跳转操作，它是以指令为单位的相对分支目标。
+- `imm`: 立即数字段。算术操作使用它来表示常量（`add r1, 42`），`CALL` 使用它来表示系统调用编号（`sol_log = 16`），内存操作可能将其视为绝对指针。
+
+### 指令类别
+
+不同的指令类型以特定方式使用这些字段：
+
+- **数据移动**：在寄存器和内存之间移动值：
+
+```sbpf
+mov64 r1, 42           // Put immediate value 42 into r1
+                       // opcode=move_imm, dst=1, src=unused, imm=42
+
+ldxdw r0, [r10 - 8]    // Load 8 bytes from stack into r0  
+                       // opcode=load64, dst=0, src=10, offset=-8, imm=unused
+
+stxdw [r1 + 16], r0    // Store r0 to memory at [r1 + 16]
+                       // opcode=store64, dst=1, src=0, offset=16, imm=unused
+```
+
+- **算术运算**：执行数学运算：
+
+```sbpf
+add64 r1, r2           // r1 = r1 + r2
+                       // opcode=add_reg, dst=1, src=2, offset=unused, imm=unused
+
+add64 r1, 100          // r1 = r1 + 100  
+                       // opcode=add_imm, dst=1, src=unused, offset=unused, imm=100
+```
+
+- **控制流**：更改执行顺序：
+
+```sbpf
+ja +5                  // Jump forward 5 instructions unconditionally
+                       // opcode=jump, dst=unused, src=unused, offset=5, imm=unused
+
+jeq r1, r2, +3         // If r1 == r2, jump forward 3 instructions
+                       // opcode=jump_eq_reg, dst=1, src=2, offset=3, imm=unused
+
+jeq r1, 42, +3         // If r1 == 42, jump forward 3 instructions  
+                       // opcode=jump_eq_imm, dst=1, src=unused, offset=3, imm=42
+```
+
+### 操作码编码
+
+操作码编码捕获了除操作类型之外的多种信息：
+- 指令类别：算术、内存、跳转、调用等
+- 操作大小：32位与64位操作
+- 源类型：寄存器与立即数
+- 特定操作：加法与减法、加载与存储等
+
+这为指令变体创建了不同的操作码。例如，`add64 r1, r2`（寄存器源）使用的操作码与`add64 r1, 42 `（立即数源）不同。同样，`add64`和`add32`在不同操作大小下也有不同的操作码。
+
+算术运算进一步区分有符号和无符号变体。`udiv64`将值视为无符号（0到18亿亿），而`sdiv64`处理有符号值（-9亿亿到+9亿亿）。
+
+<ArticleSection name="指令执行" id="instruction-execution" level="h2" />
+
+操作码决定了虚拟机如何解释其余字段。
+
+当虚拟机遇到`add64 r1, r2`时，它读取操作码并识别这是一个使用两个寄存器的64位算术运算：
+
+`dst`字段表示结果存入`r1`，`src`字段指定`r2`为第二操作数，而`offset`和`immediate`字段被忽略。
+
+对于`add64 r1, 42`，操作码更改为表示立即数操作。此时，`dst`仍然指向`r1`，但`src`变得无意义，而`immediate`字段提供了第二操作数（42）。
+
+内存操作以有意义的方式组合多个字段：
+
+对于`ldxdw r1, [r2+8]`，操作码表示一个64位内存加载，`dst`接收加载的值，`src`提供基地址，而`offset`（8）被添加以创建最终地址`r2 + 8`。
+
+控制流指令遵循相同的模式：
+
+当您编写`jeq r1, r2, +5`时，操作码会编码一个比较两个寄存器的条件跳转。如果`r1`等于`r2`，虚拟机会将`offset`（5）加到程序计数器中，向前跳转5条指令。
+
+> 操作码决定了哪些字段是有意义的。指令格式保持不变：操作码告诉您如何解释每个字段，从而消除了复杂的寻址模式或特殊情况。
+
+### 函数调用和系统调用
+
+sBPF的调用机制在不同版本中不断演进，以提高清晰度和安全性。在sBPF v3之前，`call imm`具有双重用途：立即数值决定了您是在调用内部函数还是在调用系统调用。
+
+运行时根据立即数值范围区分这两者，系统调用号通常是像16这样的较小正整数，用于`sol_log`。
+
+从sBPF v3开始，指令被分离以实现明确的行为。`call`现在使用相对偏移量处理内部函数调用，而`syscall imm`明确调用运行时函数。这种分离使字节码意图更加清晰，并实现了更好的验证。
+
+通过`callx`的间接调用也有所演进。早期版本将目标寄存器编码在立即字段中，但从v2开始，为了与通用指令格式保持一致，它被编码在源寄存器字段中。
+
+<ArticleSection name="操作码参考表" id="opcodes-reference-table" level="h2" />
+
+### 内存加载操作
+
+| 操作码 | 助记符                 | 描述                                 |
+|--------|--------------------------|-------------------------------------|
+| lddw   | `lddw dst, imm`          | 加载64位立即数（第一个槽位）       |
+| lddw   | `lddw dst, imm`          | 加载64位立即数（第二个槽位）       |
+| ldxw   | `ldxw dst, [src + off]`  | 从内存加载字                       |
+| ldxh   | `ldxh dst, [src + off]`  | 从内存加载半字                     |
+| ldxb   | `ldxb dst, [src + off]`  | 从内存加载字节                     |
+| ldxdw  | `ldxdw dst, [src + off]` | 从内存加载双字                     |
+
+### 内存存储操作
+
+| 操作码 | 助记符                 | 描述                          |
+|--------|--------------------------|--------------------------------|
+| stw    | `stw [dst + off], imm`   | 存储字（立即数）              |
+| sth    | `sth [dst + off], imm`   | 存储半字（立即数）            |
+| stb    | `stb [dst + off], imm`   | 存储字节（立即数）            |
+| stdw   | `stdw [dst + off], imm`  | 存储双字（立即数）            |
+| stxw   | `stxw [dst + off], src`  | 从寄存器存储字                |
+| stxh   | `stxh [dst + off], src`  | 从寄存器存储半字              |
+| stxb   | `stxb [dst + off], src`  | 从寄存器存储字节              |
+| stxdw  | `stxdw [dst + off], src` | 从寄存器存储双字              |
+
+### 算术操作（64位）
+
+| 操作码 | 助记符          | 描述                          |
+|--------|-------------------|--------------------------------|
+| add64  | `add64 dst, imm`  | 加法（立即数）                |
+| add64  | `add64 dst, src`  | 加法（寄存器）                |
+| sub64  | `sub64 dst, imm`  | 减法（立即数）                |
+| sub64  | `sub64 dst, src`  | 减法（寄存器）                |
+| mul64  | `mul64 dst, imm`  | 乘法（立即数）                |
+| mul64  | `mul64 dst, src`  | 乘法（寄存器）                |
+| div64  | `div64 dst, imm`  | 除法（无符号立即数）          |
+| div64  | `div64 dst, src`  | 除法（无符号寄存器）          |
+| sdiv64 | `sdiv64 dst, imm` | 除法（有符号立即数）          |
+| sdiv64 | `sdiv64 dst, src` | 除法（有符号寄存器）          |
+| mod64  | `mod64 dst, imm`  | 取模（无符号立即数）          |
+| mod64  | `mod64 dst, src`  | 取模（无符号寄存器）          |
+| smod64 | `smod64 dst, imm` | 取模（有符号立即数）          |
+| smod64 | `smod64 dst, src` | 取模（有符号寄存器）          |
+| neg64  | `neg64 dst`       | 取反                          |
+
+### 算术操作（32位）
+
+| 操作码 | 助记符          | 描述                          |
+|--------|-------------------|--------------------------------|
+| add32  | `add32 dst, imm`  | 加法（32位立即数）            |
+| add32  | `add32 dst, src`  | 加法（32位寄存器）            |
+| sub32  | `sub32 dst, imm`  | 减法（32位立即数）            |
+| sub32  | `sub32 dst, src`  | 减法（32位寄存器）            |
+| mul32  | `mul32 dst, imm`  | 乘法（32位立即数）            |
+| mul32  | `mul32 dst, src`  | 乘法（32位寄存器）            |
+| div32  | `div32 dst, imm`  | 除法（32位立即数）            |
+| div32  | `div32 dst, src`  | 除法（32位寄存器）            |
+| sdiv32 | `sdiv32 dst, imm` | 除法（有符号32位立即数）      |
+| sdiv32 | `sdiv32 dst, src` | 除法（有符号32位寄存器）      |
+| mod32  | `mod32 dst, imm`  | 取模（32位立即数）            |
+| mod32  | `mod32 dst, src`  | 取模（32位寄存器）            |
+| smod32 | `smod32 dst, imm` | 取模（有符号32位立即数）      |
+| smod32 | `smod32 dst, src` | 取模（有符号32位寄存器）      |
+
+### 逻辑操作（64位）
+
+| 操作码 | 助记符            | 描述                           |
+|--------|-------------------|--------------------------------|
+| or64   | `or64 dst, imm`   | 按位或立即数                  |
+| or64   | `or64 dst, src`   | 按位或寄存器                  |
+| and64  | `and64 dst, imm`  | 按位与立即数                  |
+| and64  | `and64 dst, src`  | 按位与寄存器                  |
+| lsh64  | `lsh64 dst, imm`  | 左移立即数                    |
+| lsh64  | `lsh64 dst, src`  | 左移寄存器                    |
+| rsh64  | `rsh64 dst, imm`  | 右移立即数                    |
+| rsh64  | `rsh64 dst, src`  | 右移寄存器                    |
+| xor64  | `xor64 dst, imm`  | 按位异或立即数                |
+| xor64  | `xor64 dst, src`  | 按位异或寄存器                |
+| mov64  | `mov64 dst, imm`  | 移动立即数                    |
+| mov64  | `mov64 dst, src`  | 移动寄存器                    |
+| arsh64 | `arsh64 dst, imm` | 算术右移立即数                |
+| arsh64 | `arsh64 dst, src` | 算术右移寄存器                |
+
+### 逻辑操作（32位）
+
+| 操作码 | 助记符            | 描述                           |
+|--------|-------------------|--------------------------------|
+| or32   | `or32 dst, imm`   | 按位或立即数（32位）          |
+| or32   | `or32 dst, src`   | 按位或寄存器（32位）          |
+| and32  | `and32 dst, imm`  | 按位与立即数（32位）          |
+| and32  | `and32 dst, src`  | 按位与寄存器（32位）          |
+| lsh32  | `lsh32 dst, imm`  | 左移立即数（32位）            |
+| lsh32  | `lsh32 dst, src`  | 左移寄存器（32位）            |
+| rsh32  | `rsh32 dst, imm`  | 右移立即数（32位）            |
+| rsh32  | `rsh32 dst, src`  | 右移寄存器（32位）            |
+| xor32  | `xor32 dst, imm`  | 按位异或立即数（32位）        |
+| xor32  | `xor32 dst, src`  | 按位异或寄存器（32位）        |
+| mov32  | `mov32 dst, imm`  | 移动立即数（32位）            |
+| mov32  | `mov32 dst, src`  | 移动寄存器（32位）            |
+| arsh32 | `arsh32 dst, imm` | 算术右移立即数（32位）        |
+| arsh32 | `arsh32 dst, src` | 算术右移寄存器（32位）        |
+
+### 控制流操作
+
+| 操作码 | 助记符             | 描述                                       |
+|--------|----------------------|-------------------------------------------|
+| ja     | `ja off`             | 无条件跳转（跳转 0 = 跳到下一个）          |
+| jeq    | `jeq dst, imm, off`  | 如果等于立即数则跳转                      |
+| jeq    | `jeq dst, src, off`  | 如果等于寄存器则跳转                      |
+| jgt    | `jgt dst, imm, off`  | 如果大于立即数则跳转（无符号）            |
+| jgt    | `jgt dst, src, off`  | 如果大于寄存器则跳转（无符号）            |
+| jge    | `jge dst, imm, off`  | 如果大于或等于立即数则跳转（无符号）      |
+| jge    | `jge dst, src, off`  | 如果大于或等于寄存器则跳转（无符号）      |
+| jset   | `jset dst, imm, off` | 如果位被设置（立即数掩码）则跳转          |
+| jset   | `jset dst, src, off` | 如果位被设置（寄存器掩码）则跳转          |
+| jne    | `jne dst, imm, off`  | 如果不等于立即数则跳转                    |
+| jne    | `jne dst, src, off`  | 如果不等于寄存器则跳转                    |
+| jsgt   | `jsgt dst, imm, off` | 如果大于立即数则跳转（有符号）            |
+| jsgt   | `jsgt dst, src, off` | 如果大于寄存器则跳转（有符号）            |
+| jsge   | `jsge dst, imm, off` | 如果大于或等于立即数则跳转（有符号）      |
+| jsge   | `jsge dst, src, off` | 如果大于或等于寄存器则跳转（有符号）      |
+| jlt    | `jlt dst, imm, off`  | 如果小于立即数则跳转（无符号）            |
+| jlt    | `jlt dst, src, off`  | 如果小于寄存器则跳转（无符号）            |
+| jle    | `jle dst, imm, off`  | 如果小于或等于立即数则跳转（无符号）      |
+| jle    | `jle dst, src, off`  | 如果小于或等于寄存器则跳转（无符号）      |
+| jslt   | `jslt dst, imm, off` | 如果小于立即数则跳转（有符号）            |
+| jslt   | `jslt dst, src, off` | 如果小于寄存器则跳转（有符号）            |
+| jsle   | `jsle dst, imm, off` | 如果小于或等于立即数则跳转（有符号）      |
+| jsle   | `jsle dst, src, off` | 如果小于或等于寄存器则跳转（有符号）      |
+
+### 函数调用操作
+
+| 操作码 | 助记符                      | 描述                                   |
+|--------|-----------------------------|---------------------------------------|
+| call   | `call imm` 或 `syscall imm` | 调用函数或系统调用                     |
+| callx  | `callx imm`                 | 间接调用（寄存器在立即数字段中）       |
+| exit   | `exit` 或 `return`          | 从函数返回                             |
+
+### 字节交换操作
+
+| 操作码 | 助记符        | 描述                                |
+|--------|---------------|------------------------------------|
+| be     | `be dst, imm` | 字节交换（16、32 或 64 位）           |
+| le     | `le dst, imm` | 小端转换（已弃用）                    |

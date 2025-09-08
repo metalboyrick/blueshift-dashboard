@@ -1,0 +1,17 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Anchor 闪电贷</ChallengeTitle>
+
+现在，检验一下你所学的内容吧。使用 Anchor 框架构建一个满足以下要求的闪电贷程序：
+
+<RequirementList>
+  <Requirement title="挑战 1：创建一个 `borrow` 指令">
+    你的程序应允许借款人从协议中借款，并检查交易末尾是否存在一个 `repay` 指令。
+  </Requirement>
+
+  <Requirement title="挑战 2：创建一个 `repay` 指令">
+    你的程序应在交易末尾检查 `borrowed_amount`，并以正确的金额偿还协议。
+  </Requirement>
+</RequirementList>

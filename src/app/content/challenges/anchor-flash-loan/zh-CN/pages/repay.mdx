@@ -1,0 +1,49 @@
+# 还款
+
+还款指令通过确保归还借款及相应费用，完成我们的闪电贷周期。此指令执行两个关键步骤：
+1. 提取贷款金额：使用指令内省从借款指令的数据中检索原始 `amount_borrowed`
+2. 转回资金：计算 `fee` 并将借款金额加上费用转回协议
+
+<ArticleSection name="指令内省" id="instruction-introspection" level="h2" />
+
+首先，我们需要检查交易中的第一个指令以提取原始贷款金额：
+
+```rust
+let ixs = ctx.accounts.instructions.to_account_info();
+
+let mut amount_borrowed: u64;
+
+if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
+    // Check the amount borrowed:
+    let mut borrowed_data: [u8;8] = [0u8;8];
+    borrowed_data.copy_from_slice(&borrow_ix.data[8..16]);
+    amount_borrowed = u64::from_le_bytes(borrowed_data)
+
+} else {
+    return Err(ProtocolError::MissingBorrowIx.into());
+}
+```
+
+> 我们并未通过程序 ID 和区分符检查这是否是实际的 `borrow_ix`，因为即使他们构造了一个“伪造”的指令，对协议来说也是安全的，因为协议只是收取费用。同时，如果我们发放了贷款，我们知道这将是第一个指令，并且 `amount_borrowed` 会存在。
+
+<ArticleSection name="转回资金" id="transfer-funds" level="h2" />
+
+接下来，我们计算协议费用并将总金额转回：
+
+```rust
+// Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
+let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
+amount_borrowed = amount_borrowed.checked_add(fee).ok_or(ProtocolError::Overflow)?;
+
+// Transfer the funds from the protocol to the borrower
+transfer(
+    CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
+        from: ctx.accounts.borrower_ata.to_account_info(),
+        to: ctx.accounts.protocol_ata.to_account_info(),
+        authority: ctx.accounts.borrower.to_account_info(),
+    }), 
+    amount_borrowed
+)?;
+```
+
+我们的费用硬编码为 500 个基点，并执行“检查”数学运算以确保金额不会溢出，从而防止使用非常大的数字进行的攻击。此外，我们将金额转换为 `u128` 进行乘法运算以防止中间溢出，然后安全地转换回 `u64`。

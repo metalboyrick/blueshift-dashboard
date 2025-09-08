@@ -1,0 +1,199 @@
+# 创建
+
+`make` 指令完成以下三项工作：
+- 初始化托管记录并存储所有交易条款。
+- 创建金库（一个由 `mint_a` 拥有的 `escrow` 的关联代币账户 (ATA)）。
+- 使用 CPI 调用 SPL-Token 程序，将创建者的 Token A 转移到该金库中。
+
+<ArticleSection name="所需账户" id="required-accounts" level="h2" />
+
+以下是上下文所需的账户：
+
+- maker: 托管的创建者。必须是签名者且可变
+- escrow: 我们正在初始化的托管账户。必须是可变的
+- mint_a: 我们存入托管的代币
+- mint_b: 我们希望接收的代币
+- maker_ata_a: 由创建者拥有的关联代币账户。必须是可变的
+- vault: 由托管拥有的关联代币账户。必须是可变的
+- system_program: 系统程序。必须是可执行的
+- token_program: 代币程序。必须是可执行的
+
+**注意**：我们将使用 [Pinocchio 简介](/zh-CN/courses/introduction-to-pinocchio/pinocchio-accounts) 中介绍的类型。
+
+在代码中，这看起来像这样：
+
+```rust
+pub struct MakeAccounts<'a> {
+  pub maker: &'a AccountInfo,
+  pub escrow: &'a AccountInfo,
+  pub mint_a: &'a AccountInfo,
+  pub mint_b: &'a AccountInfo,
+  pub maker_ata_a: &'a AccountInfo,
+  pub vault: &'a AccountInfo,
+  pub system_program: &'a AccountInfo,
+  pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for MakeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    let [maker, escrow, mint_a, mint_b, maker_ata_a, vault, system_program, token_program, _] = accounts else {
+      return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    // Basic Accounts Checks
+    SignerAccount::check(maker)?;
+    MintInterface::check(mint_a)?;
+    MintInterface::check(mint_b)?;
+    AssociatedTokenAccount::check(maker_ata_a, maker, mint_a, token_program)?;
+
+    // Return the accounts
+    Ok(Self {
+      maker,
+      escrow,
+      mint_a,
+      mint_b,
+      maker_ata_a,
+      vault,
+      system_program,
+      token_program,
+    })
+  }
+}
+```
+
+<ArticleSection name="指令数据" id="instruction-data" level="h2" />
+
+以下是我们需要传入的指令数据：
+- seed: 在种子派生过程中使用的随机数。必须是 u64
+- receive: 创建者希望接收的金额。必须是 u64
+- amount: 创建者希望存入的金额。必须是 u64
+
+我们将检查 `amount` 是否为零，因为这对于托管来说没有意义。
+
+在代码中，这看起来像这样：
+
+```rust
+pub struct MakeInstructionData {
+  pub seed: u64,
+  pub receive: u64,
+  pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for MakeInstructionData {
+  type Error = ProgramError;
+
+  fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+    if data.len() != size_of::<u64>() * 3 {
+      return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let seed = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    let receive = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    let amount = u64::from_le_bytes(data[16..24].try_into().unwrap());
+
+    // Instruction Checks
+    if amount == 0 {
+      return Err(ProgramError::InvalidInstructionData);
+    }
+
+    Ok(Self {
+      seed,
+      receive,
+      amount,
+    })
+  }
+}
+```
+
+<ArticleSection name="指令逻辑" id="instruction-logic" level="h2" />
+
+我们首先在 `TryFrom` 实现中初始化所需的账户，在此之前我们已经反序列化了 `instruction_data` 和 `accounts`。
+
+在此步骤中，我们使用从[Pinocchio简介](/zh-CN/courses/introduction-to-pinocchio/pinocchio-accounts)中介绍的辅助函数的`ProgramAccount::init::<Escrow>`特性创建`Escrow`账户。同样，我们初始化Vault账户，因为它需要重新创建：
+
+```rust
+pub struct Make<'a> {
+  pub accounts: MakeAccounts<'a>,
+  pub instruction_data: MakeInstructionData,
+  pub bump: u8,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Make<'a> {
+  type Error = ProgramError;
+  
+  fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+    let accounts = MakeAccounts::try_from(accounts)?;
+    let instruction_data = MakeInstructionData::try_from(data)?;
+
+    // Initialize the Accounts needed
+    let (_, bump) = find_program_address(&[b"escrow", accounts.maker.key(), &instruction_data.seed.to_le_bytes()], &crate::ID);
+
+    let seed_binding = instruction_data.seed.to_le_bytes();
+    let bump_binding = [bump];
+    let escrow_seeds = [
+      Seed::from(b"escrow"),
+      Seed::from(accounts.maker.key().as_ref()),
+      Seed::from(&seed_binding),
+      Seed::from(&bump_binding),
+    ];
+            
+    ProgramAccount::init::<Escrow>(
+      accounts.maker,
+      accounts.escrow,
+      &escrow_seeds,
+      Escrow::LEN
+    )?;
+
+    // Initialize the vault
+    AssociatedTokenAccount::init(
+      accounts.vault,
+      accounts.mint_a,
+      accounts.maker,
+      accounts.escrow,
+      accounts.system_program,
+      accounts.token_program,
+    )?;
+
+    Ok(Self {
+      accounts,
+      instruction_data,
+      bump,
+    })
+  }
+}
+```
+
+现在我们可以专注于逻辑本身，这将仅是填充托管账户，然后将代币转移到Vault。
+
+```rust
+impl<'a> Make<'a> {
+  pub const DISCRIMINATOR: &'a u8 = &0;
+  
+  pub fn process(&mut self) -> ProgramResult {
+    // Populate the escrow account
+    let mut data = self.accounts.escrow.try_borrow_mut_data()?;
+    let escrow = Escrow::load_mut(data.as_mut())?;
+    
+    escrow.set_inner(
+      self.instruction_data.seed,
+      *self.accounts.maker.key(),
+      *self.accounts.mint_a.key(),
+      *self.accounts.mint_b.key(),
+      self.instruction_data.receive,
+      [self.bump],
+    );
+
+    // Transfer tokens to vault
+    Transfer {
+      from: self.accounts.maker_ata_a,
+      to: self.accounts.vault,
+      authority: self.accounts.maker,
+      amount: self.instruction_data.amount
+    }.invoke()?;
+
+    Ok(())
+  }
+}
+```

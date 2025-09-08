@@ -1,0 +1,110 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+![Assembly Slippage Challenge](/graphics/challenge-banners/assembly-slippage.png)
+
+# 汇编滑点
+
+在本单元中，我们将使用 sBPF 汇编创建一个基本的滑点检查指令。通过将此类指令包含在指令数组的最后一个索引中，我们可以为智能合约漏洞或恶意位翻转合约提供最后一道保护。
+
+滑点检查的几个特性使其成为汇编的理想候选：
+
+- 单一且受限的使用场景
+- 无需执行签名者/账户检查
+- 只能提高安全性
+
+如果您不熟悉如何编写汇编程序，请参考[汇编入门课程](/zh-CN/courses/introduction-to-assembly)。
+
+<ArticleSection name="程序设计" id="program-design" level="h2" />
+
+我们的程序实现了一个简单但至关重要的操作：在进行交易之前验证一个代币账户是否有足够的余额。这种模式在 DeFi 中无处不在——从 AMM 交换到借贷协议。
+
+程序的预期输入：
+- 账户数组中的一个单一 SPL 代币账户
+- 指令数据中的一个 8 字节金额
+- 如果余额 ≥ 金额，则返回成功，否则返回错误
+
+<ArticleSection name="内存偏移" id="memory-offsets" level="h2" />
+
+sBPF 程序将账户数据作为连续的内存区域接收。这些常量定义了字节偏移量。假设我们的程序只接收一个账户，并且它是一个 SPL 代币账户，那么可以静态推导出这些偏移量如下：
+
+```sbpf
+.equ TOKEN_ACCOUNT_BALANCE, 0x00a0
+.equ MINIMUM_BALANCE, 0x2918
+```
+
+- `TOKEN_ACCOUNT_BALANCE (0x00a0)`：指向 SPL 代币账户数据中的余额字段。代币账户遵循标准布局，其中余额（8 字节，小端序）位于偏移量 160。
+
+- `MINIMUM_BALANCE (0x2918)`：定位 Solana 放置指令数据负载的位置。此偏移量是运行时账户信息结构的一部分。
+
+> 您可以使用我们的工具在 [sbpf.xyz](https://sbpf.xyz) 生成偏移量。
+
+与抽象内存布局的高级语言不同，汇编语言要求您确切知道每一部分数据的位置。
+
+<ArticleSection name="入口点和初始验证" id="entrypoint-and-validations" level="h2" />
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    ldxdw r3, [r1+MINIMUM_BALANCE]      // Get amount from IX data
+    ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE] // Get balance from token account
+```
+
+每个 sBPF 程序都从一个全局 `.entrypoint` 符号开始。Solana 运行时通过寄存器 `r1` 提供账户和指令数据。
+
+`ldxdw` 指令从内存中加载 (`ldx`) 一个 8 字节（双字，`dx`）的值到寄存器中。以下是具体过程：
+- `ldxdw r3, [r1+MINIMUM_BALANCE]`：计算包含所需值的内存地址。该值被加载到 `r3`。
+- `ldxdw r4, [r1+TOKEN_ACCOUNT_BALANCE]`：指向代币账户的余额字段。这个 64 位的值被加载到 `r4`。
+
+这两个操作都是零拷贝的：我们直接从账户数据中读取，而无需反序列化的开销。
+
+<ArticleSection name="条件逻辑和分支" id="conditional-logic-and-branching" level="h2" />
+
+```sbpf
+jge r3, r4, end         // Skip to exit if balance is valid
+```
+
+`jge`（大于或等于时跳转）指令将 `r3`（所需值）与 `r4`（可用余额）进行比较。如果 `r3 >= r4`，我们跳转到 `end` 标签；就像是提前返回。
+
+如果条件不满足，执行将继续进入错误处理路径。这种基于条件分支的模式是汇编实现 if/else 逻辑的方式。
+
+<ArticleSection name="错误处理和日志记录" id="error-handling-and-logging" level="h2" />
+
+```sbpf
+lddw r1, e              // Load error message address
+lddw r2, 17             // Load length of error message  
+call sol_log_           // Log out error message
+lddw r0, 1              // Return error code 1
+```
+
+当验证失败时，我们会在终止前记录一条可读的错误信息：
+- `lddw` 加载立即值，在本例中是错误字符串的地址，该字符串位于 `.rodata` 段中，其长度为 17 字节（"Slippage exceeded"）。
+- `call sol_log_` 调用 Solana 的日志记录系统调用。运行时从内存中读取消息并将其添加到交易日志中。
+- 然后我们将 `1` 加载到 `r0` 中以表示程序失败。运行时将中止交易并返回此错误代码。
+
+<ArticleSection name="程序终止" id="program-termination" level="h2" />
+
+```sbpf
+end:
+    exit
+```
+
+`exit` 指令终止程序执行并将控制权返回给 Solana 运行时。`r0` 中的值将成为程序的退出代码（0 表示成功，非零表示错误）。
+
+与具有自动清理功能的高级语言不同，汇编程序必须显式退出。代码执行到末尾而未显式退出会导致未定义行为。
+
+## 只读数据
+
+```sbpf
+.rodata
+    e: .ascii "Slippage exceeded"
+```
+
+`.rodata`（只读数据）部分包含我们的错误消息字符串。
+
+<ArticleSection name="结论" id="conclusion" level="h2" />
+  
+这个小程序完成了 Rust 可能需要数十个 CU 才能完成的任务，仅在通过情况下使用 `4 CUs`，在失败情况下使用 `6 CUs`，或者在记录错误消息的失败情况下使用 `106 CUs`。
+
+代价是我们必须在最低层次上理解内存布局、调用约定和错误处理。但对于性能关键的操作，这种努力通常是值得的。
+
+> 此代码单独使用并非“安全”。我们没有检查传入账户的任何信息。但这旨在作为一个附加指令，意味着它应该在良好的信任下运行。

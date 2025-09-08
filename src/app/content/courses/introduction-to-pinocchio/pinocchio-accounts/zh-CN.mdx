@@ -88,7 +88,6 @@ impl AccountCheck for SystemAccount {
 
 正如我们在之前的示例中看到的，`SystemAccount` 和 `SignerAccount` 检查非常简单，不需要任何额外的验证，因此我们将在 `helper.rs` 中添加以下内容：
 
-
 ```rust
 pub trait AccountCheck {
     fn check(account: &AccountInfo) -> Result<(), ProgramError>;
@@ -118,13 +117,11 @@ impl AccountCheck for SystemAccount {
 }
 ```
 
-
 这里我们只是检查账户是否是签名者，或者是否由系统程序拥有。请注意，这两个结构体都提供了相同的检查方法，为我们提供了前面提到的通用接口。
 
 <ArticleSection name="铸币账户和代币账户" id="mint-and-token-accounts" level="h2" />
 
 现在事情变得更有趣了。我们从常规的 `AccountCheck` trait 开始，但我们还添加了其他特定的 traits，以提供类似于 Anchor 宏的额外辅助功能，例如 `init` 和 `init_if_needed`。
-
 
 ```rust
 pub struct MintAccount;
@@ -144,9 +141,7 @@ impl AccountCheck for MintAccount {
 }
 ```
 
-
 对于 `init` 和 `init_if_needed` 的功能，我们创建了另一个名为 `MintInit` 的 trait，专门用于此目的，因为它需要独特的字段。然后我们使用 `CreateAccount` 和 `InitializeMint2` CPI 来初始化 `Mint` 账户：
-
 
 ```rust
 pub trait MintInit {
@@ -185,9 +180,7 @@ impl MintInit for MintAccount {
 }
 ```
 
-
 然后我们对 `TokenAccount` 执行完全相同的操作：
-
 
 ```rust
 pub struct TokenAccount;
@@ -242,7 +235,6 @@ impl AccountInit for TokenAccount {
 }
 ```
 
-
 ### Token2022
 
 您可能已经注意到，对于传统的 SPL Token Program，我们仅对 `Mint` 和 `TokenAccount` 进行了长度检查。这种方法之所以有效，是因为当您只有两种固定大小的账户类型时，可以仅通过它们的长度来区分它们。
@@ -254,7 +246,6 @@ impl AccountInit for TokenAccount {
 - **通过 discriminator**：一个位于位置 165 的特殊字节（比传统的 TokenAccount 大一个字节，以避免冲突）
 
 这导致了修改后的验证检查：
-
 
 ```rust
 // TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
@@ -372,11 +363,9 @@ impl AccountInit for TokenAccount2022Account {
 }
 ```
 
-
 ### Token 接口
 
 为了让 Token2022 和传统的 Token Programs 更容易一起使用，而无需在它们之间进行区分，我们创建了一个遵循相同基本原则的辅助工具：
-
 
 ```rust
 pub struct MintInterface;
@@ -440,11 +429,9 @@ impl AccountCheck for TokenAccountInterface {
 }
 ```
 
-
 ### 关联 Token 账户
 
 我们可以为 Associated Token Program 创建一些检查。这些检查与普通的 Token Program 检查非常相似，但它们包括一个额外的派生检查，以确保账户被正确派生。
-
 
 ```rust
 pub struct AssociatedTokenAccount;
@@ -493,7 +480,6 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
 }
 ```
 
-
 <ArticleSection name="Program Accounts" id="program-accounts" level="h2" />
 
 最后，我们为 program account 实现了检查和辅助功能，包括 `init` 和 `close` 功能。
@@ -501,7 +487,6 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
 您可能会在我们的 `close` 实现中注意到一些有趣的地方：我们将账户的大小调整到几乎为零，仅保留第一个字节并将其设置为 255。这是一种安全措施，用于防止重新初始化攻击。
 
 重新初始化攻击是指攻击者试图通过重新初始化已关闭的账户并注入恶意数据来重新利用该账户。通过将第一个字节设置为 255 并将账户缩小到几乎为零的大小，我们可以确保该账户在未来不会被误认为任何有效的账户类型。这是 Solana 程序中常见的安全模式。
-
 
   ```rust
   pub struct ProgramAccount;
@@ -573,7 +558,6 @@ impl AssociatedTokenAccountInit for AssociatedTokenAccount {
       }
   }
   ```
-
 
 ### 优化账户数据访问
 

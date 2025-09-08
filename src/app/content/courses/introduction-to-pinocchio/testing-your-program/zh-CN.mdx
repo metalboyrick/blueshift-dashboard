@@ -1,0 +1,32 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 测试你的程序  
+
+在主网部署之前，进行彻底的测试是至关重要的，以识别潜在的漏洞和问题。
+
+经过充分测试的程序可以防止财务损失，建立用户信任，并确保应用程序在各种条件下正常运行。
+
+<ArticleSection name="Mollusk 测试" id="mollusk-tests" level="h2" />
+
+当设置复杂的程序状态或需要复杂的链上交互变得困难时，Mollusk 提供了对测试环境更细致的控制。
+
+Mollusk 是一个专为 Solana 程序设计的 Rust 测试框架，它可以让你：
+- 在没有网络开销的情况下独立测试程序逻辑
+- 轻松设置复杂的账户状态和程序条件
+- 比完整的集成测试运行速度更快
+- 模拟特定的区块链条件和边界情况
+
+我们在[这里](/en/courses/testing-with-mollusk)详细介绍了 Mollusk 测试。
+
+要测试你的 pinocchio 程序，只需在你的 `test.rs` 文件中使用 `test` 配置标志导入到你的 `lib.rs`：
+
+```rust
+#[cfg(test)]
+pub mod tests;
+```
+
+运行你的测试使用：
+
+```
+cargo test-sbf
+```

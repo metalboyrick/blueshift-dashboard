@@ -2,6 +2,8 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # 区块链简介
 
+![区块链简介](/graphics/course-banners/introduction-to-blockchain-and-solana.png)
+
 你可能听说过区块链被描述为“数字货币”或“互联网的未来”。这些解释完全没有抓住重点。
 
 区块链是分布式系统：一组计算机网络，它们必须在不互相信任的情况下就共享数据达成一致。本课程从基本原理讲解区块链：它解决的分布式系统问题、解决方法以及权衡的重要性。
@@ -47,7 +49,6 @@ def distributed_transfer(alice_server, bob_server, amount):
         return "Transfer successful"
     return "Insufficient funds"
 ```
-
 看起来仍然很简单吗？以下是可能出错的地方：
 - 网络分区：服务器之间的连接在步骤 1 之后但在步骤 2 之前失败。Alice 的 100 美元消失在数字虚空中。
 - 服务器崩溃：服务器 B 在接收到“添加资金”命令后崩溃，但在确认处理之前崩溃。Bob 收到钱了吗？没人知道。

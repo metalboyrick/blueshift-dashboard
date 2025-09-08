@@ -1,0 +1,169 @@
+# 交换
+
+`swap` 指令主要执行两个任务：
+- 计算通过将一定数量的 `mint_y` 发送到 AMM（或反之）后，能够接收到的 `mint_x` 的数量，包括手续费。
+- 将 `from` 代币转移到金库，并将 `to` 代币转移到用户的代币账户。
+
+> 如 `initialize` 指令部分所述；为了优化，我们将在指令外部初始化所有 `Associated Token Accounts`。
+
+<ArticleSection name="所需账户" id="required-accounts" level="h2" />
+
+以下是此上下文所需的账户：
+- `user`：将代币交换到 AMM 流动性中的用户。必须是 `signer`。
+- `user_x_ata`：用户的代币 X 关联账户。此账户将接收或发送代币 X 到池中。必须作为 `mutable` 传递。
+- `user_y_ata`：用户的代币 Y 关联账户。此账户将接收或发送代币 Y 到池中。必须作为 `mutable` 传递。
+- `vault_x`：持有所有存入池中的代币 X 的代币账户。必须作为 `mutable` 传递。
+- `vault_y`：持有所有存入池中的代币 Y 的代币账户。必须作为 `mutable` 传递。
+- `config`：AMM 池的配置账户。存储所有相关的池参数和状态。
+- `token program`：SPL 代币程序账户。执行代币操作（如转账和铸造）所需。必须是 `executable`。
+
+这里，我将再次把实现留给你：
+
+```rust
+pub struct SwapAccounts<'a> {
+    pub user: &'a AccountInfo,
+    pub user_x_ata: &'a AccountInfo,
+    pub user_y_ata: &'a AccountInfo,
+    pub vault_x: &'a AccountInfo,
+    pub vault_y: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for SwapAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+<ArticleSection name="指令数据" id="instruction-data" level="h2" />
+
+以下是我们需要传递的指令数据：
+- `is_x`：此交换是从代币 X 到代币 Y 或反之进行的；需要正确对齐账户。必须是一个 `[u8]`
+- `amount`：用户愿意用来交换另一种代币的代币数量。必须是一个 `[u64]`
+- `min`：用户愿意在交换 `amount` 时接收的最小代币数量。必须是一个 `[u64]`
+- `expiration`：此订单的过期时间。确保交易必须在一定时间内完成非常重要。必须是一个 `[i64]`
+
+我们将以与初始化相同的方式处理 `SwapInstructionData` 的实现。因此，我将实现部分留给你：
+
+```rust
+pub struct SwapInstructionData {
+    pub is_x: bool,
+    pub amount: u64,
+    pub min: u64,
+    pub expiration: i64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for SwapInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+> 确保任何数量，例如 `amount` 和 `min` 都大于零，并且使用 `Clock` 系统变量检查订单尚未过期。
+
+<ArticleSection name="指令逻辑" id="instruction-logic" level="h2" />
+
+我们首先反序列化 `instruction_data` 和 `accounts`。
+
+然后我们需要：
+- 加载 `Config` 账户以获取其中的所有数据。我们可以使用 `Config::load()` 辅助工具来完成。
+- 验证 `AmmState` 是否有效（例如它是否等于 `AmmState::Initialized`）。
+- 检查 `vault_x` 和 `vault_y` 的派生是否为关联代币账户。
+- 反序列化所有涉及的代币账户，并使用其中的数据通过 `constant-product-curve` crate 计算交换数量，并像这样检查滑点：
+
+```rust
+// Deserialize the token accounts
+let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
+let vault_y = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_y)? };
+
+// Swap Calculations
+let mut curve = ConstantProduct::init(
+    vault_x.amount(),
+    vault_y.amount(),
+    vault_x.amount(),
+    config.fee(),
+    None,
+)
+.map_err(|_| ProgramError::Custom(1))?;
+
+let p = match self.instruction_data.is_x {
+    true => LiquidityPair::X,
+    false => LiquidityPair::Y,
+};
+
+let swap_result = curve
+    .swap(p, self.instruction_data.amount, self.instruction_data.min)
+    .map_err(|_| ProgramError::Custom(1))?;
+
+// Check for correct values
+if swap_result.deposit == 0 || swap_result.withdraw == 0 {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+- 创建转账逻辑，检查`is_x`值，并将`from`金额转入金库，将`to`金额转入用户的代币账户，如下所示：
+
+```rust
+if self.instruction_data.is_x {
+    Transfer {
+        //...
+    }
+    .invoke()?;
+
+    Transfer {
+        //...
+    }
+    .invoke_signed(&signer_seeds)?;
+} else {
+    Transfer {
+        //...
+
+    }
+    .invoke()?;
+
+    Transfer {
+        //...
+    }
+    .invoke_signed(&signer_seeds)?;
+}
+```
+
+你应该已经足够熟练，可以独立完成这个任务，所以我将把实现部分留给你：
+
+```rust
+pub struct Swap<'a> {
+    pub accounts: SwapAccounts<'a>,
+    pub instruction_data: SwapInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Swap<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = SwapAccounts::try_from(accounts)?;
+        let instruction_data = SwapInstructionData::try_from(data)?;
+
+        // Return the initialized struct
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+impl<'a> Swap<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &3;
+
+    pub fn process(&mut self) -> ProgramResult {
+        //..
+
+        Ok(())
+    }
+}
+```

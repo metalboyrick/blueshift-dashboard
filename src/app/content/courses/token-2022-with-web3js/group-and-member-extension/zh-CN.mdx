@@ -16,15 +16,14 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 在深入代码之前，让我们先了解一些基础知识：
 
-虽然 `GroupPointer` 和 `MemberPointer` 扩展位于 `@solana/spl-token package` 中，但要初始化 `Group` 和 `Member`，我们需要使用 `@solana/spl-token-group` 包。
-
-虽然 `GroupPointer` 和 `MemberPointer` 扩展位于 `anchor-spl` crate 中，但要初始化 `Group` 和 `Member`，我们需要使用 `spl_token_group_interface` crate。
+虽然 `GroupPointer` 和 `MemberPointer` 扩展位于 `@solana/spl-token` 包中，但要初始化 `Group` 和 `Member`，我们需要使用 `@solana/spl-token-group` 包。
 
 因此，让我们安装所需的包：
 
 ```
-cargo add spl_token_metadata_interface
+npm i @solana/spl-token-group
 ```
+
 
 此外，`Group` 和 `Member` 扩展是少数需要在初始化 `Mint` 账户后再初始化扩展的扩展之一。
 
@@ -34,132 +33,114 @@ cargo add spl_token_metadata_interface
 
 在代码中初始化 `Group` 的方式如下：
 
-```rust
-use anchor_lang::prelude::*;
-use anchor_spl::token_2022::spl_token_2022::extension::group_pointer::GroupPointer;
-use anchor_spl::token_interface::token_group_initialize, Mint, Token2022, TokenGroupInitialize;
-use spl_token_group_interface::state::TokenGroup;
+```ts
+const mint = Keypair.generate();
 
-pub fn initialize_group(ctx: Context<InitializeGroup>) -> Result<()> {
-    // Add 4 extra bytes for size of MetadataExtension (2 bytes for the discriminator, 2 bytes for length)
-    let data_len = 4 + size_of::<TokenGroup>();?;
+// Size of Mint Account with extensions
+const mintLen = getMintLen([ExtensionType.GroupPointer]);
 
-    // Calculate lamports required for the additional metadata
-    let lamports =
-        data_len as u64 * DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64;
+// Minimum lamports required for Mint Account
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen + TYPE_SIZE + LENGTH_SIZE + TOKEN_GROUP_SIZE);
 
-    // Transfer additional lamports to mint account
-    transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.payer.to_account_info(),
-                to: ctx.accounts.mint_account.to_account_info(),
-            },
-        ),
-        lamports,
-    )?;
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
 
-    // Initialize the token group extension
-    token_group_initialize(
-        CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            TokenGroupInitialize {
-                token_program_id: ctx.accounts.token_program.to_account_info(),
-                group: ctx.accounts.mint_account.to_account_info(),
-                mint: ctx.accounts.mint_account.to_account_info(),
-                mint_authority: ctx.accounts.payer.to_account_info(),
-            },
-        )
-        Some(ctx.accounts.payer.key()), // update_authority
-        10,                             // max_size
-    )?;
-    Ok(())
-}
+const initializeGroupPointer = createInitializeGroupPointerInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    mint.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
 
-#[derive(Accounts)]
-pub struct InitializeGroup<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
 
-    #[account(
-        init,
-        payer = payer,
-        mint::decimals = 2,
-        mint::authority = payer,
-        mint::freeze_authority = mint_account,
-        extensions::group_pointer::authority = payer,
-        extensions::group_pointer::group_address = mint_account,
-    )]
-    pub mint_account: InterfaceAccount<'info, Mint>,
-    pub token_program: Program<'info, Token2022>,
-    pub system_program: Program<'info, System>,
-}
+const initializeGroupInstruction = createInitializeGroupInstruction(
+    {
+        programId: TOKEN_2022_PROGRAM_ID,
+        group: mint.publicKey,
+        mint: mint.publicKey,
+        mintAuthority: keypair.publicKey,
+        updateAuthority: keypair.publicKey,
+        maxSize: BigInt(100),
+    }
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeGroupPointer,
+    initializeMintInstruction,
+    initializeGroupInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint], {commitment: "finalized"});
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```
 
 之后，我们可以使用刚刚创建的组来添加成员，方式如下：
 
-```rust
-use anchor_lang::prelude::*;
-use anchor_spl::token_2022::spl_token_2022::extension::group_pointer::GroupPointer;
-use anchor_spl::token_interface::token_group_member_initialize, Mint, Token2022, TokenGroupMemberInitialize;
-use spl_token_group_interface::state::TokenGroupMember;
+```ts
+const member = Keypair.generate();
 
-pub fn initialize_group(ctx: Context<InitializeMember>) -> Result<()> {
-    // Add 4 extra bytes for size of MetadataExtension (2 bytes for the discriminator, 2 bytes for length)
-    let data_len = 4 + size_of::<TokenGroupMember>();?;
+// Size of Member Account with extensions
+const memberLen = getMintLen([ExtensionType.GroupMemberPointer]);
 
-    // Calculate lamports required for the additional metadata
-    let lamports =
-        data_len as u64 * DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64;
+// Minimum lamports required for Member Account
+const lamports = await connection.getMinimumBalanceForRentExemption(memberLen + TYPE_SIZE + LENGTH_SIZE + TOKEN_GROUP_MEMBER_SIZE);
 
-    // Transfer additional lamports to mint account
-    transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.payer.to_account_info(),
-                to: ctx.accounts.mint_account.to_account_info(),
-            },
-        ),
-        lamports,
-    )?;
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: member.publicKey,
+    space: memberLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
 
-    // Initialize the token group extension
-    token_group_member_initialize(
-        CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            TokenGroupMemberInitialize {
-                token_program_id: ctx.accounts.token_program.to_account_info(),
-                group: ctx.accounts.group.to_account_info(),
-                group_update_authority: ctx.accounts.payer.to_account_info(),
-                member: ctx.accounts.mint_account.to_account_info(),
-                member_mint: ctx.accounts.mint_account.to_account_info(),
-                member_mint_authority: ctx.accounts.mint_account.to_account_info(),
-            },
-        )
-    )?;
-    Ok(())
-}
+const initializeGroupMemberPointer = createInitializeGroupMemberPointerInstruction(
+    member.publicKey,
+    keypair.publicKey,
+    member.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
 
-#[derive(Accounts)]
-pub struct InitializeMember<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
+const initializeMintInstruction = createInitializeMintInstruction(
+    member.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
 
-    #[account(mut)]
-    pub group: InterfaceAccount<'info, Mint>,
-    #[account(
-        init,
-        payer = payer,
-        mint::decimals = 2,
-        mint::authority = mint_account,
-        mint::freeze_authority = mint_account,
-        extensions::group_member_pointer::authority = payer,
-        extensions::group_member_pointer::member_address = mint_account,
-    )]
-    pub mint_account: InterfaceAccount<'info, Mint>,
-    pub token_program: Program<'info, Token2022>,
-    pub system_program: Program<'info, System>,
-}
+const initializeGroupMemberInstruction = createInitializeMemberInstruction(
+    {
+        programId: TOKEN_2022_PROGRAM_ID,
+        group: mint.publicKey,
+        member: member.publicKey,
+        memberMint: member.publicKey,
+        memberMintAuthority: keypair.publicKey,
+        groupUpdateAuthority: keypair.publicKey,
+    }
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeGroupMemberPointer,
+    initializeMintInstruction,
+    initializeGroupMemberInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, member], {commitment: "finalized"});
+
+console.log(`Member created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
 ```

@@ -2,6 +2,8 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 # Token2022 程序
 
+![Token 2022 with Anchor](/graphics/course-banners/token-2022-with-anchor.png)
+
 Token2022 程序，也被称为 Token Extensions，是 Token Program 提供功能的超集。
 
 如果您想了解更多关于可用的附加功能以及与传统 Token Program 的区别，请访问[此课程](/zh-cn/courses/token-2022-program)。
@@ -10,7 +12,7 @@ Token2022 程序，也被称为 Token Extensions，是 Token Program 提供功�
 
 对于 Anchor，所有与 token 相关的内容都可以在 `anchor-spl` crate 中找到。因此，在初始化了一个 `Anchor` 工作区后，我们可以直接执行：
 
-```
+```bash
 cargo add anchor-spl
 ```
 
@@ -81,7 +83,6 @@ pub mint: InterfaceAccount<'info, Mint>,
 
 `Associated Token` 账户默认自带 `ImmutableOwner` 扩展功能。因此，创建旧版代币账户和 Token2022 `Token Account` 的唯一区别仅在于是否使用 `Interface Account`。
 
-
 创建关联代币账户的方法如下:
 
 ```rust
@@ -100,7 +101,6 @@ pub struct CreateAssociatedToken<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
-
 ```
 
 ### 带扩展程序的 Token 账户 

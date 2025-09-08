@@ -101,14 +101,11 @@ new TransactionInstruction({
 
 或者我们可以在下载该软件包后，使用 Memo 程序的软件开发工具包，如下所示：
 
-
-
-```bash
+```
 npm i @solana/spl-memo
-
 ```
 
-> After creating the memo, the next instruction will be a simple transfer instruction.
+> 创建备忘录后，下一条指令将是一个简单的转账指令。
 
 在我们的示例中，我们将使用后者，代码如下：
 
@@ -128,10 +125,9 @@ const transferTransaction = new Transaction().add(
 const transferSignature = await sendAndConfirmTransaction(connection, transferTransaction, [keypair]);
 
 console.log(`Tokens transferred with memo! Check out your TX here: https://explorer.solana.com/tx/${transferSignature}?cluster=devnet`);
-
 ```
 
-<ArticleSection name="Disabling and Enabling the Memo" id="disabling-and-enabling-the-memo" level="h2" />
+<ArticleSection name="禁用和启用备忘录" id="disabling-and-enabling-the-memo" level="h2" />
 
 如果我们不想强制要求转账必须附带备注，可以使用 memo_transfer_disable 函数来实现，具体如下：
 

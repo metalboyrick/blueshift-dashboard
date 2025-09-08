@@ -1,0 +1,240 @@
+# 贷款
+
+`loan` 指令是我们闪电贷系统的第一部分。它执行了四个关键步骤，以确保安全和原子化的借贷：
+1. 根据用户想要借贷的数量，反序列化动态数量的账户。
+2. 将所有这些贷款保存到 `loan` "临时"账户中，并计算 `protocol_token_account` 需要拥有的最终余额。
+3. 验证还款：使用指令内省功能确认交易末尾存在有效的还款指令。
+4. 转移资金：将协议资金库中的所有请求贷款金额转移到借款人的账户。
+
+<ArticleSection name="所需账户" id="required-accounts" level="h2" />
+
+- `borrower`：请求闪电贷的用户。必须是签名者
+- `protocol`：一个程序派生地址 (PDA)，它拥有协议的特定费用流动性池。
+- `loan`：用于保存 `protocol_token_account` 和其需要拥有的最终 `balance` 的 "临时"账户。必须是可变的
+- `token_program`：代币程序。必须是可执行的
+
+以下是实现代码：
+
+```rust
+pub struct LoanAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub protocol: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub instruction_sysvar: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, protocol, loan, instruction_sysvar, _token_program, _system_program, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        if instruction_sysvar.key() != &INSTRUCTIONS_ID {
+            return Err(ProgramError::UnsupportedSysvar);
+        }
+
+        // Verify that the number of token accounts is valid
+        if (token_accounts.len() % 2).ne(&0) || token_accounts.len().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        if loan.try_borrow_data()?.len().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self {
+            borrower,
+            protocol,
+            loan,
+            instruction_sysvar,
+            token_accounts,
+        })
+    }
+}
+```
+
+由于 `token_accounts` 是一个动态账户数组，我们以类似于 `remaining_accounts` 的方式传递它们。
+
+为了确保结构正确，我们添加了验证。每笔贷款需要一个 `protocol_token_account` 和一个 `borrower_token_account`，因此我们必须验证数组中包含账户，并且账户数量是二的倍数。
+
+<ArticleSection name="指令数据" id="instruction-data" level="h2" />
+
+我们的闪电贷程序需要根据用户想要同时借贷的数量处理可变数量的数据。以下是我们需要的数据结构：
+- `bump`：一个单字节，用于在不使用 `find_program_address()` 函数的情况下派生协议 PDA。
+- `fee`：用户借款需支付的费率（以基点为单位）。
+- `amounts`：一个动态贷款金额数组，因为用户可以在一次交易中请求多个贷款。
+
+以下是实现方式：
+
+```rust
+pub struct LoanInstructionData<'a> {
+    pub bump: [u8; 1],
+    pub fee: u16,
+    pub amounts: &'a [u64],
+}
+
+impl<'a> TryFrom<&'a [u8]> for LoanInstructionData<'a> {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // Get the bump
+        let (bump, data) = data.split_first().ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Get the fee
+        let (fee, data) = data.split_at_checked(size_of::<u16>()).ok_or(ProgramError::InvalidInstructionData)?;
+
+        // Verify that the data is valid
+        if data.len() % size_of::<u64>() != 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // Get the amounts
+        let amounts: &[u64] = unsafe {
+            core::slice::from_raw_parts(
+                data.as_ptr() as *const u64,
+                data.len() / size_of::<u64>()
+            )
+        };
+
+        Ok(Self { bump: [*bump], fee: u16::from_le_bytes(fee.try_into().map_err(|_| ProgramError::InvalidInstructionData)?), amounts })
+    }
+}
+```
+
+我们使用`split_first`和`split_at_checked`函数依次从指令数据中提取`bump`和`fee`，从而处理剩余字节并使用`core::slice::from_raw_parts()`函数将其直接转换为`u64`切片，以实现高效解析。
+
+> 使用`fee`派生`protocol`程序派生地址（PDA）为每个费用等级创建了独立的流动性池，无需在账户中存储费用数据。这种设计既安全又高效，因为每个具有特定费用的PDA仅拥有与该费用率相关的流动性。如果有人传递了无效费用，则该费用等级对应的代币账户将为空，自动导致转账因资金不足而失败。
+
+<ArticleSection name="指令逻辑" id="instruction-logic" level="h2" />
+
+在反序列化`instruction_data`和`accounts`后，我们检查`amounts`的数量是否等于`token_accounts`的数量除以二。这确保了我们拥有请求贷款所需的正确账户数量。
+
+```rust
+pub struct Loan<'a> {
+    pub accounts: LoanAccounts<'a>,
+    pub instruction_data: LoanInstructionData<'a>,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Loan<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = LoanAccounts::try_from(accounts)?;
+        let instruction_data = LoanInstructionData::try_from(data)?;
+
+        // Verify that the number of amounts matches the number of token accounts
+        if instruction_data.amounts.len() != accounts.token_accounts.len() / 2 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+```
+
+接下来，我们创建`signer_seeds`以将代币转移给借款人，并创建一个`loan`账户。此账户的大小通过`size_of::<LoanData>() * self.instruction_data.amounts.len()`计算，以确保其能够容纳交易的所有贷款数据。
+
+```rust
+impl<'a> Loan<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Get the fee
+        let fee = self.instruction_data.fee.to_le_bytes();
+
+        // Get the signer seeds
+        let signer_seeds = [
+            Seed::from("protocol".as_bytes()),
+            Seed::from(&fee),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signer_seeds = [Signer::from(&signer_seeds)];
+
+        // Open the LoanData account and create a mutable slice to push the Loan struct to it
+        let size = size_of::<LoanData>() * self.instruction_data.amounts.len();
+        let lamports = Rent::get()?.minimum_balance(size);
+
+        CreateAccount {
+            from: self.accounts.borrower,
+            to: self.accounts.loan,
+            lamports,
+            space: size as u64,
+            owner: &ID,
+        }.invoke()?;
+
+        //..
+    }
+}
+```
+
+然后，我们从`loan`账户的数据中创建一个可变切片。在处理每笔贷款及其相应的转账时，我们将在`for`循环中填充此切片：
+
+```rust
+let mut loan_data = self.accounts.loan.try_borrow_mut_data()?;
+let loan_entries = unsafe {
+    core::slice::from_raw_parts_mut(
+        loan_data.as_mut_ptr() as *mut LoanData,
+        self.instruction_data.amounts.len()
+    )
+};
+```
+
+最后，我们遍历所有贷款。在每次迭代中，我们获取`protocol_token_account`和`borrower_token_account`，计算协议应得的余额，将此数据保存到`loan`账户中，并转移代币。
+
+```rust
+for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
+    let protocol_token_account = &self.accounts.token_accounts[i * 2];
+    let borrower_token_account = &self.accounts.token_accounts[i * 2 + 1];
+
+    // Get the balance of the protocol's token account and add the fee to it so we can save it to the loan account
+    let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+    let balance_with_fee = balance.checked_add(
+        amount.checked_mul(self.instruction_data.fee as u64)
+            .and_then(|x| x.checked_div(10_000))
+            .ok_or(ProgramError::InvalidInstructionData)?
+    ).ok_or(ProgramError::InvalidInstructionData)?;
+
+    // Push the Loan struct to the loan account
+    loan_entries[i] = LoanData {
+        protocol_token_account: *protocol_token_account.key(),
+        balance: balance_with_fee,
+    };
+
+    // Transfer the tokens from the protocol to the borrower
+    Transfer {
+        from: protocol_token_account,
+        to: borrower_token_account,
+        authority: self.accounts.protocol,
+        amount: *amount,
+    }.invoke_signed(&signer_seeds)?;
+}
+```
+
+我们通过使用指令内省来完成必要的检查。我们验证交易中的最后一条指令是一个`repay`指令，并且它使用的`loan`账户与我们当前的`loan`指令相同。
+
+```rust
+// Introspecting the Repay instruction
+let instruction_sysvar = unsafe { Instructions::new_unchecked(self.accounts.instruction_sysvar.try_borrow_data()?) };
+let num_instructions = instruction_sysvar.num_instructions();
+let instruction = instruction_sysvar.load_instruction_at(num_instructions as usize - 1)?;
+
+if instruction.get_program_id() != &crate::ID {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { *(instruction.get_instruction_data().as_ptr()) } != *Repay::DISCRIMINATOR {
+    return Err(ProgramError::InvalidInstructionData);
+}
+
+if unsafe { instruction.get_account_meta_at_unchecked(1).key } != *self.accounts.loan.key() {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+> 使用一个`loan`账户并以这种方式构建指令内省，确保我们实际上不需要在`repay`指令中进行任何内省，因为所有的还款检查都将由`loan`账户处理。

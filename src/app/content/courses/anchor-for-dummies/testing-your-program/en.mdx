@@ -10,7 +10,7 @@ Thorough testing prevents financial losses, builds user trust, and ensures your 
 
 TypeScript testing is the most common approach since you'll need TypeScript for your dApp client anyway. This lets you develop tests and client code simultaneously.
 
-We covered client-side setup in detail [here](/en/courses/anchor-for-dummies/client-side-development).
+We covered client-side setup in detail [here](/zh-CN/courses/anchor-for-dummies/client-side-development).
 
 > Every Anchor CLI project includes a test folder with a TypeScript file ready for testing.
 
@@ -26,7 +26,7 @@ Run tests with:
 anchor test
 ```
 
-> Run on localnet by setting the cluster to localnet in your configuration. This spins up a local validator and adds 1,000 SOL to the provider wallet. If you need additional accounts with data inside of them, look at running a [Local Validator](/en/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)
+> Run on localnet by setting the cluster to localnet in your configuration. This spins up a local validator and adds 1,000 SOL to the provider wallet. If you need additional accounts with data inside of them, look at running a [Local Validator](/zh-CN/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)
 
 <ArticleSection name="Mollusk Tests" id="mollusk-tests" level="h2" />
 
@@ -38,7 +38,7 @@ Mollusk is a Rust testing framework built specifically for Solana programs. It e
 - Run tests faster than full integration tests
 - Mock specific blockchain conditions and edge cases
 
-We covered Mollusk testing thoroughly [here](/en/courses/testing-with-mollusk).
+We covered Mollusk testing thoroughly [here](/zh-CN/courses/testing-with-mollusk).
 
 Create a new Anchor program with Mollusk:
 
@@ -64,9 +64,9 @@ LiteSVM is a lightweight testing framework that runs the Solana Virtual Machine 
 
 LiteSVM eliminates validator overhead by embedding the VM within your tests, delivering the speed needed for rapid development cycles without sacrificing testing accuracy.
 
-We covered LiteSVM testing thoroughly [here](/en/courses/testing-with-litesvm).
+We covered LiteSVM testing thoroughly [here](/zh-CN/courses/testing-with-litesvm).
 
-You can set up your Anchor provider and use the client-side setup we saw [previously](/en/courses/anchor-for-dummies/client-side-development) with the `anchor-litesvm` package.
+You can set up your Anchor provider and use the client-side setup we saw [previously](/zh-CN/courses/anchor-for-dummies/client-side-development) with the `anchor-litesvm` package.
 
 Installe the `anchor-litesvm` package.
 
@@ -157,4 +157,4 @@ import { Connection } from "@solana/web3.js";
 const connection = new Connection("http://localhost:8899", "confirmed");
 ```
 
-We covered Surfnet setup and usage thoroughly [here](/en/courses/testing-with-surfpool).
+We covered Surfnet setup and usage thoroughly [here](/zh-CN/courses/testing-with-surfpool).
