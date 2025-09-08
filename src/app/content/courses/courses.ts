@@ -33,7 +33,7 @@ const allCourses: CourseMetadata[] = withCourseNumber([
     ],
   },
   {
-    slug: "introduction-to-pinocchio",
+    slug: "pinocchio-for-dummies",
     language: "Rust",
     color: "255,173,102",
     difficulty: 1,
@@ -46,6 +46,8 @@ const allCourses: CourseMetadata[] = withCourseNumber([
       { slug: "reading-and-writing-data" },
       { slug: "testing-your-program" },
       { slug: "performance" },
+      { slug: "middleware-entrypoint" },
+      { slug: "batch-instructions" },
       { slug: "conclusion" },
     ],
   },
