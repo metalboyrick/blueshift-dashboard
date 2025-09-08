@@ -28,7 +28,7 @@ Assembly hoạt động ở giai đoạn 3: dạng cuối cùng có thể đọc
 
 Solana sBPF là biến thể tùy chỉnh của Solana từ bộ lệnh Berkeley Packet Filter mở rộng (eBPF) và máy ảo thực thi mọi chương trình trên chuỗi. Nó tạo ra một môi trường thực thi chuyên biệt: một máy tính với thanh ghi 64-bit nằm ở giữa chương trình của bạn và bộ xử lý CPU gốc của trình xác thực.
 
-Hãy coi sBPF như một máy tính được thiết kế đặc biệt cho việc thực thi blockchain: đủ nhanh cho các giao dịch thông lượng cao, nhưng đủ hạn chế để đảm bảo an ninh và tính xác định trên hàng nghìn trình xác thực.
+Hãy coi sBPF như một máy tính được thiết kế đặc biệt cho việc thực thi blockchain: đủ nhanh cho các giao dịch thông lượng cao, nhưng đủ các ràng buộc hạn chế để đảm bảo an ninh và tính xác định trên hàng nghìn trình xác thực.
 
 Không giống như assembly gốc chạy trực tiếp trên CPU của bạn, mã sBPF thực thi trong một môi trường máy ảo có kiểm soát. Máy ảo này đảm bảo an toàn bằng cách xác minh từng lệnh trước khi thực thi, ngăn chặn sự cố, vòng lặp vô hạn và truy cập bộ nhớ trái phép.
 
