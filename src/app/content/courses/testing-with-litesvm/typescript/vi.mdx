@@ -1,0 +1,283 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM với TypeScript
+
+Gói `litesvm` cung cấp cơ sở hạ tầng kiểm thử cốt lõi để tạo môi trường Solana nhẹ, nơi bạn có thể trực tiếp thao tác trạng thái tài khoản và thực thi các giao dịch đối với chương trình của bạn.
+
+<ArticleSection name="Các bước đầu tiên" id="first-steps" level="h2" />
+
+Thêm LiteSVM vào dự án của bạn:
+
+```bash
+npm i --save-dev litesvm
+```
+
+<ArticleSection name="Cơ bản về LiteSVM" id="basics" level="h2" />
+
+Bắt đầu bằng cách khai báo ID chương trình của bạn và tạo một phiên bản LiteSVM.
+
+Sử dụng chính xác ID chương trình mà bạn đã định nghĩa trong chương trình của mình để đảm bảo các giao dịch thực thi chính xác và không gây ra lỗi `ProgramMismatch` trong quá trình kiểm thử:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { PublicKey } from "@solana/web3.js";
+
+const programId = new PublicKey("22222222222222222222222222222222222222222222");
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Load the program with the right public key
+    svm.addProgramFromFile(programId, "target/deploy/program.so");
+})
+```
+
+Để thực thi các bài kiểm thử, tạo một đối tượng giao dịch và sử dụng hàm `.sendTransaction(tx)`:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Transaction } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Transaction
+    const tx = new Transaction();
+
+    // Add the latest blockhash
+    tx.recentBlockhash = svm.latestBlockhash();
+
+    // Add the instructions and the signers
+    // tx.add(...ixs);
+    // tx.sign(...signersKeypair);
+
+    // Send the transaction
+    svm.sendTransaction(tx);
+})
+```
+
+<ArticleSection name="Tài khoản" id="accounts" level="h2" />
+
+Khi kiểm thử các chương trình Solana với LiteSVM, bạn sẽ làm việc với một số loại tài khoản phản ánh các kịch bản thực thi chương trình trong thế giới thực.
+
+Hiểu cách xây dựng các tài khoản này một cách đúng đắn là điều cần thiết để kiểm thử hiệu quả.
+
+### System Accounts
+
+Loại tài khoản cơ bản nhất là tài khoản hệ thống, có hai biến thể chính:
+- **Tài khoản thanh toán**: Tài khoản có lamports để tài trợ cho việc tạo tài khoản chương trình hoặc chuyển lamport
+- **Tài khoản chưa khởi tạo**: Tài khoản trống không có lamports, thường được sử dụng để đại diện cho các tài khoản chương trình đang chờ khởi tạo
+
+Tài khoản hệ thống không chứa dữ liệu và thuộc sở hữu của System Program. Sự khác biệt chính giữa tài khoản thanh toán và tài khoản chưa khởi tạo là số dư lamport: tài khoản thanh toán có tiền, trong khi tài khoản chưa khởi tạo bắt đầu với số dư trống.
+
+Đây là cách tạo tài khoản `payer` trong LiteSVM:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair, SystemProgram } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports: 100_000_000,
+        data: Buffer.alloc(0),
+        owner: SystemProgram.programId,
+        executable: false,
+    }); 
+})
+```
+
+> Một tài khoản chưa khởi tạo đơn giản chỉ là một tài khoản được tạo bình thường với `Keypair.generate()` - không cần thiết lập thêm.
+
+### Program Accounts
+
+Đối với tài khoản chương trình chứa cấu trúc dữ liệu tùy chỉnh, bạn có thể sử dụng phương pháp tương tự.
+Bạn cũng cần phải tuần tự hóa dữ liệu tài khoản thành một buffer, điều này có thể được thực hiện thủ công hoặc sử dụng thư viện như `@coral-xyz/borsh` (xem ví dụ [tại đây](https://solana.com/developers/courses/native-onchain-development/serialize-instruction-data-frontend)).
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Populate the data of the Account
+    const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
+
+    // Serialize the account data into the byte buffer defined above
+    // ...
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports,
+        data: accountData,
+        owner: PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+> Trong quá trình kiểm thử, bạn không cần tính toán chính xác tiền thuê. Bạn có thể đặt lamports với một giá trị lớn như `100_000_000_000` và bỏ qua việc tính toán tiền thuê vì đây không phải là tiền thật.
+
+### Token Accounts
+
+Để tuần tự hóa dữ liệu cho tài khoản SPL Token, bạn có thể sử dụng `AccountLayout` và `MintLayout` từ `@solana/spl-token`.
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    const owner = Keypair.generate();
+
+    // Create a new Mint Account
+    const mint = Keypair.generate();
+
+    // Populate the data of the Mint Account
+    let mintData = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+        {
+          mintAuthorityOption: 1,
+          mintAuthority: owner.publicKey,
+          supply: BigInt(0),
+          decimals: 0,
+          isInitialized: true,
+          freezeAuthorityOption: 0,
+          freezeAuthority: PublicKey.default,
+        },
+        mintData
+    )
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(mint.publicKey, {
+        lamports,
+        data: mintData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+
+    // Create a new Token Account
+    const tokenAccount = Keypair.generate();
+
+    // Populate the data of the Token Account
+    const tokenAccountData = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(
+        {
+            mint: mint.publicKey,
+            owner: owner.publicKey,
+            amount: BigInt(100),
+            delegateOption: 0,
+            delegate: PublicKey.default,
+            delegatedAmount: BigInt(0),
+            state: 1,
+            isNativeOption: 0,
+            isNative: BigInt(0),
+            closeAuthorityOption: 0,
+            closeAuthority: PublicKey.default,
+        },
+        tokenAccountData,
+    );
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(tokenAccount.publicKey, {
+        lamports,
+        data: tokenAccountData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+<ArticleSection name="Thực thi" id="execution" level="h2" />
+
+Với các tài khoản đã được tạo và thêm vào phiên bản LiteSVM của bạn, bây giờ bạn có thể gửi các giao dịch và xác thực logic chương trình của mình.
+
+Trước khi gửi một giao dịch, bạn có thể mô phỏng kết quả:
+
+```ts
+// Simulate before executing
+const simulatedResult = svm.simulateTransaction(tx);
+```
+
+Sau đó gửi giao dịch và kiểm tra nhật ký của nó:
+
+```ts
+// Execute and inspect logs
+const result = svm.sendTransaction(tx);
+console.log(result.logs);
+```
+
+### Tính năng nâng cao
+
+Trước và sau khi thực thi, toàn bộ sổ cái chứa trong phiên bản LiteSVM của bạn đều có thể đọc và tùy chỉnh được.
+
+Bạn có thể thao tác với các giá trị sysvar như đồng hồ:
+
+```ts
+// Change the Clock
+const newClock = svm.getClock();
+newClock.unixTimestamp = 50n;
+svm.setClock(newClock);
+
+// Jump to a certain Slot
+svm.warpToSlot(500);
+
+// Expire the current blockhash
+svm.expireBlockhash();
+```
+
+Bạn cũng có thể đọc dữ liệu tài khoản và giao thức:
+
+```ts
+// Get all the information about an account (data, lamports, owner, ...)
+svm.getAccount(account.publicKey);
+
+// Get the lamport balance of an account
+svm.getBalance(account.publicKey);
+```
+
+Hoặc cấu hình cách thức hoạt động của runtime:
+
+```ts
+// Sets the compute budget
+const computeBudget = new ComputeBudget();
+computeBudget.computeUnitLimit = 2_000_000n;
+svm.withComputeBudget(computeBudget);
+
+// Sets Sigverify as active or 
+svm.withSigverify(true);
+
+// Sets the Blockhash check as active or 
+svm.withBlockhashCheck(true);
+
+// Sets the default Sysvars
+svm.withSysvars();
+
+// Set the FeatureSet to use
+svm.withFeatureSet(new FeatureSet(...))
+```

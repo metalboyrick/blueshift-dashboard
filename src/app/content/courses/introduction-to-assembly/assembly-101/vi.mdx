@@ -1,0 +1,84 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# sBPF Assembly 101
+
+![Giới thiệu về Assembly](/graphics/course-banners/introduction-to-assembly.png)
+
+Để hiểu sBPF Assembly và vai trò của nó trong các chương trình Solana, trước tiên chúng ta cần hiểu ngôn ngữ assembly và cách nó kết nối mã cấp cao với quá trình thực thi của máy.
+
+<ArticleSection name="Ngôn ngữ Assembly" id="the-assembly-language" level="h2" />
+
+Assembly là dạng mã máy có thể đọc được: các lệnh thực tế mà bộ xử lý thực hiện. Nó đóng vai trò như cầu nối giữa ngôn ngữ lập trình cấp cao và mã nhị phân mà máy tính hiểu được.
+
+Khi bạn viết mã Rust như thế này:
+
+```rust
+let result = a + b;
+```
+
+Trình biên dịch chuyển đổi qua nhiều giai đoạn:
+1. Mã nguồn Rust → được parse và phân tích
+2. Biểu diễn trung gian → được tối ưu hóa
+3. Mã Assembly → các lệnh có thể đọc được
+4. Mã máy → mã nhị phân mà bộ xử lý sẽ thực thi
+
+Assembly hoạt động ở giai đoạn 3: dạng cuối cùng có thể đọc được trước khi chuyển đổi sang nhị phân. Mỗi lệnh assembly tương ứng với chính xác một thao tác của bộ xử lý: cộng số, tải bộ nhớ, hoặc nhảy đến các phần mã khác nhau.
+
+<ArticleSection name="Máy ảo sBPF" id="the-sbpf-virtual-machine" level="h2" />
+
+Solana sBPF là biến thể tùy chỉnh của Solana từ bộ lệnh Berkeley Packet Filter mở rộng (eBPF) và máy ảo thực thi mọi chương trình trên chuỗi. Nó tạo ra một môi trường thực thi chuyên biệt: một máy tính với thanh ghi 64-bit nằm ở giữa chương trình của bạn và bộ xử lý CPU gốc của trình xác thực.
+
+Hãy coi sBPF như một máy tính được thiết kế đặc biệt cho việc thực thi blockchain: đủ nhanh cho các giao dịch thông lượng cao, nhưng đủ các ràng buộc hạn chế để đảm bảo an ninh và tính xác định trên hàng nghìn trình xác thực.
+
+Không giống như assembly gốc chạy trực tiếp trên CPU của bạn, mã sBPF thực thi trong một môi trường máy ảo có kiểm soát. Máy ảo này đảm bảo an toàn bằng cách xác minh từng lệnh trước khi thực thi, ngăn chặn sự cố, vòng lặp vô hạn và truy cập bộ nhớ trái phép.
+
+Bất chấp những ràng buộc về an toàn này, sBPF vẫn duy trì hiệu suất cao thông qua biên dịch `just-in-time` để đạt được tốc độ thực thi gần như nguyên bản.
+
+Máy ảo cũng đảm bảo việc thực thi được xác định: các chương trình giống hệt nhau với đầu vào giống nhau sẽ tạo ra kết quả giống nhau trên tất cả các trình xác thực trên toàn thế giới. Tính nhất quán này rất quan trọng cho sự đồng thuận blockchain.
+
+Ngoài ra, sBPF bao gồm các syscall để truy cập tài khoản, gọi chéo chương trình và tương tác với runtime.
+
+### Tại sao việc hiểu Assembly sBPF lại quan trọng
+
+Mặc dù trình biên dịch Rust chuyển đổi hiệu quả mã cấp cao thành các lệnh sBPF, việc hiểu assembly mang lại một số lợi ích sau:
+- **Hiểu chi phí tính toán**: Mỗi lệnh sBPF tiêu thụ các đơn vị tính toán (CU). Một dòng Rust có thể biên dịch thành hàng trăm lệnh—assembly cho thấy tại sao một số hoạt động lại tốn kém.
+- **Kích thước chương trình nhỏ hơn**: Các chương trình được viết trực tiếp bằng assembly sBPF nhỏ hơn đáng kể so với các phiên bản Rust được biên dịch, giảm chi phí triển khai và cải thiện thời gian tải.
+- **Khả năng có thể tối ưu hóa**: Trình biên dịch Rust tạo ra mã an toàn, chính xác nhưng không phải lúc nào cũng hiệu quả nhất. Assembly cho thấy các kiểm tra an toàn dư thừa và chuỗi lệnh chưa tối ưu.
+- **Gỡ lỗi và phân tích**: Khi chương trình hoạt động không như mong đợi, assembly cung cấp lỗi rõ ràng. Bạn có thể theo dõi chính xác những lệnh nào đã thực thi và xác định các điểm lỗi.
+
+### Kiến trúc
+
+sBPF sử dụng kiến trúc load-store với 10 thanh ghi đa năng, một con trỏ ngăn xếp chỉ đọc và không có chế độ định địa chỉ phức tạp.
+
+Sự đơn giản này là có chủ đích: ít biến thể lệnh hơn cho phép xác minh nhanh hơn, biên dịch JIT nhanh hơn và hiệu suất dễ dự đoán hơn.
+
+Mỗi khi một chương trình eBPF được tải vào kernel, bytecode của nó được chuyển đổi thành các lệnh máy gốc dành riêng cho kiến trúc CPU máy chủ bởi trình biên dịch JIT và sau đó được thực thi bởi VM.
+
+### Thực thi
+
+Các chương trình sBPF thực thi thông qua một quy trình đơn giản. Program Counter (`PC`) theo dõi lệnh nào sẽ được thực thi tiếp theo, giống như một đánh dấu trang trong danh sách lệnh của bạn.
+
+Chu kỳ thực thi tuân theo các bước sau:
+1. **Fetch**: Đọc lệnh tại PC
+2. **Decode**: Diễn giải định dạng lệnh và toán hạng
+3. **Execute**: Thực hiện thao tác (sửa đổi thanh ghi, truy cập bộ nhớ, hoặc thay đổi luồng điều khiển)
+4. **Advance**: Di chuyển PC đến lệnh tiếp theo (hoặc nhảy đến các nhánh)
+5. **Repeat**: Tiếp tục cho đến khi chương trình kết thúc
+
+Mỗi lệnh thực hiện chính xác một thao tác: số học, truy cập bộ nhớ, so sánh, hoặc gọi hàm. Thiết kế mỗi-lệnh-một-thao-tác này làm cho các chương trình sBPF có thể dự đoán và phân tích được.
+
+<ArticleSection name="Quy trình biên dịch JIT" id="the-jit-compiler-pipeline" level="h2" />
+
+Các chương trình sBPF đạt hiệu suất cao thông qua biên dịch Just-In-Time (JIT).
+
+Khi bạn triển khai một chương trình lên Solana, runtime thực hiện hai thao tác:
+- **Xác minh**: Đảm bảo tính an toàn của chương trình bằng cách kiểm tra các vòng lặp vô hạn, truy cập bộ nhớ không hợp lệ và các sự cố tiềm ẩn. Trình xác minh phân tích mọi đường dẫn thực thi có thể để đảm bảo hoạt động an toàn.
+- **Biên dịch**: Chuyển đổi các lệnh sBPF thành mã máy gốc chạy trực tiếp trên CPU của trình xác thực. Các thao tác đơn giản như `add64 r1, r2` trở thành các lệnh cộng gốc đơn lẻ, trong khi các thao tác phức tạp sẽ có thêm các kiểm tra an toàn nhưng vẫn biên dịch thành mã gốc hiệu quả.
+
+Cách tiếp cận này đánh đổi thời gian triển khai để lấy tốc độ thực thi. Các chương trình được xác minh và biên dịch một lần trong quá trình triển khai nhưng được thực thi hàng nghìn lần, làm cho đây là một sự đánh đổi tuyệt vời cho hiệu suất blockchain.
+
+Quá trình xác minh JIT đi qua mọi đường dẫn chương trình có thể, kiểm tra rằng các truy cập bộ nhớ nằm trong giới hạn, các lệnh nhảy nhắm đến địa chỉ hợp lệ, và việc thực thi kết thúc trong giới hạn tính toán.
+
+Quá trình biên dịch JIT chuyển đổi mỗi lệnh sBPF thành các lệnh CPU gốc tương đương. Vì hầu hết việc thực thi diễn ra trong mã gốc, chi phí máy ảo là tối thiểu.
+
+> Việc hiểu cách sBPF biên dịch thành mã máy giải thích tại sao các phép toán số học nhanh trong khi các syscall đi vào runtime lại có chi phí phụ trội. Kiến thức này bổ trợ cho các quyết định tối ưu hóa.

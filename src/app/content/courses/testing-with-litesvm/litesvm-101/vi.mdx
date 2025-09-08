@@ -1,0 +1,22 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM 101
+
+![Kiểm thử với LiteSVM](/graphics/course-banners/testing-with-litesvm.png)
+
+Kiểm thử chương trình Solana truyền thống buộc bạn phải lựa chọn giữa tốc độ và độ chính xác. LiteSVM loại bỏ sự đánh đổi này bằng cách cung cấp môi trường kiểm thử trong quá trình vừa nhanh như chớp vừa đầy đủ tính năng.
+
+LiteSVM mang đến ba lợi thế quan trọng cho các nhà phát triển Solana:
+- **Thực thi nhanh hơn** so với `solana-program-test` và `solana-test-validator`
+- **Thao tác trạng thái tài khoản trực tiếp** để kiểm thử các trường hợp biên phức tạp
+- **Lập hồ sơ hiệu suất tích hợp** để xác định tối ưu hóa và cải tiến
+
+<ArticleSection name="LiteSVM là gì" id="what-is-litesvm" level="h2" />
+
+[LiteSVM](https://github.com/LiteSVM/litesvm) là một máy ảo Solana nhẹ chạy trực tiếp trong quá trình kiểm thử của bạn. Được tạo ra bởi [Aursen](https://x.com/exoaursen) từ [Exotic Markets](https://x.com/exotic_markets_), nó loại bỏ chi phí của các trình xác thực bên ngoài trong khi vẫn duy trì khả năng tương thích đầy đủ với thời gian chạy của Solana.
+
+Không giống như các phương pháp kiểm thử truyền thống tạo ra các quy trình xác thực riêng biệt, LiteSVM nhúng VM trong các bài kiểm thử của bạn. Kiến trúc này mang lại thời gian biên dịch và thực thi nhanh hơn đáng kể mà không ảnh hưởng đến độ chính xác của việc kiểm thử.
+
+Thư viện cung cấp API trực quan với các giá trị mặc định thông minh để thiết lập nhanh chóng, cùng với các tùy chọn cấu hình mở rộng cho các kịch bản kiểm thử nâng cao.
+
+> LiteSVM hỗ trợ Rust, TypeScript/JavaScript, và Python (thông qua `solders`).

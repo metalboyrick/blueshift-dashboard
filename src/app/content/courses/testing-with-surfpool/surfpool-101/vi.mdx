@@ -1,0 +1,60 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Surfpool 101
+
+![Kiểm thử với Surfpool](/graphics/course-banners/testing-with-surfpool.png)
+
+Việc kiểm thử các chương trình Solana phụ thuộc vào Cross-Program Invocations (CPIs) truyền thống đòi hỏi các nhà phát triển phải trích xuất tài khoản và chương trình từ mạng chính, sau đó tải chúng lên một trình xác thực cục bộ.
+
+Quy trình này hoạt động tốt với một vài tài khoản, nhưng trở nên hoàn toàn không khả thi khi kiểm thử CPIs vào các chương trình phức tạp như Jupiter, vốn có thể phụ thuộc vào hơn 40 tài khoản và hơn 8 chương trình.
+
+Surfpool giải quyết vấn đề này bằng cách cho phép các nhà phát triển mô phỏng chương trình cục bộ sử dụng tài khoản mạng chính được tải theo yêu cầu, cùng với các khả năng bổ sung:
+- **Tùy chỉnh biến hệ thống**: Du hành thời gian (kiểm thử chương trình của bạn tại bất kỳ vị trí hoặc thời điểm lịch sử nào), tạm dừng đồng hồ, hoặc dừng việc tạo khối
+- **Sửa đổi dữ liệu tài khoản**: Thiết lập nguồn cung SOL (tổng, đang lưu hành và không lưu hành), chuyển dữ liệu tài khoản giữa các chương trình, hoặc cập nhật dữ liệu cốt lõi của tài khoản và thông tin tài khoản token
+- **Phân tích dữ liệu chuỗi**: Lập hồ sơ giao dịch cho các đơn vị tính toán, thay đổi tài khoản và chi tiết thực thi, sau đó truy xuất hồ sơ chi tiết theo chữ ký, UUID hoặc thẻ
+
+<ArticleSection name="Surfpool là gì" id="what-is-surfpool" level="h2" />
+
+[Surfpool](https://docs.surfpool.run/) là bộ SDK và bộ công cụ toàn diện, trong khi **Surfnet** là mạng Solana cục bộ mà nó tạo ra. Hãy xem Surfpool như môi trường phát triển của bạn và Surfnet như mạng blockchain chạy bên trong nó.
+
+Surfnet đóng vai trò như một giải pháp thay thế trực tiếp cho solana-test-validator, được xây dựng đặc biệt để mang lại trải nghiệm phát triển tốt nhất cho các nhà xây dựng Solana.
+
+Được phát triển bởi đội ngũ [TxTx](https://x.com/txtx_sol), Surfpool tích hợp liền mạch Infrastructure as Code vào các dự án dựa trên Anchor, cho phép triển khai có thể tái tạo, kiểm toán được và an toàn đến bất kỳ mạng Solana nào—riêng tư hoặc công khai.
+
+<ArticleSection name="Các bước đầu tiên" id="first-steps" level="h2" />
+
+Mọi thứ bạn cần để chạy Surfnet đều được bao gồm trong SDK Surfpool. Vì việc cài đặt khác nhau tùy theo hệ điều hành, hãy làm theo [Trang hướng dẫn cài đặt](https://docs.surfpool.run/install) chính thức cho thiết lập cụ thể của bạn.
+
+Sau khi cài đặt Surfpool SDK, khởi động Surfnet với:
+
+```bash
+surfpool start
+```
+
+Điều này khởi động Surfnet trên cổng validator cục bộ tiêu chuẩn (`http://127.0.0.1:8899`) với giao diện người dùng terminal hiển thị:
+- **Slots và Epoch**: Các slot đang thực thi hiện tại tự động xử lý mỗi 400ms. Sử dụng **Tab** để chuyển thủ công đến slot tiếp theo, hoặc **Spacebar** để tạm dừng/tiếp tục sản xuất khối tự động
+- **Nhật ký giao dịch**: Luồng hoạt động có dấu thời gian hiển thị mọi thứ mà giao dịch của bạn thực thi
+
+Để có trải nghiệm dựa trên trình duyệt, kết nối với Surfpool Studio tại [liên kết này](http://127.0.0.1:8899).
+
+> Surfpool Studio bao gồm tất cả các tính năng giao diện người dùng terminal cùng với các khả năng bổ sung như du hành thời gian và thêm token vào bất kỳ tài khoản nào cho bất kỳ mint nào.
+
+### Triển khai chương trình
+
+Sau khi thiết lập Surfnet, triển khai chương trình của bạn và bắt đầu build.
+
+**Chương trình Anchor**: Sử dụng `anchor deploy` với `Anchor.toml` của bạn được cấu hình cho `[programs.localnet]`.
+
+**Chương trình Pinocchio**: Triển khai thông qua Solana CLI với cấu hình của bạn được đặt thành localnet: `solana program deploy ./target/deploy/your_program.so --program-id ./target/deploy/your_program-keypair.json`
+
+> Chạy `surfpool start` trong một Anchor Workspace sẽ nhắc bạn sử dụng Infrastructure as Code để triển khai tự động chương trình của bạn trên Surfnet một cách liền mạch.
+
+### Kiểm thử chương trình
+
+Sau khi triển khai lên localnet, kết nối với Surfnet bằng cách kết nối vào validator cục bộ:
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```
