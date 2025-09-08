@@ -1,0 +1,193 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 指引
+
+如我們之前所見，使用`TryFrom`特性可以將驗證與業務邏輯清晰地分開，從而提高可維護性和安全性。
+
+<ArticleSection name="指引結構" id="instruction-structure" level="h2" />
+
+當需要處理邏輯時，我們可以創建如下結構：
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_datas: DepositInstructionData,
+}
+```
+
+此結構定義了在邏輯處理期間可訪問的數據。我們隨後使用`try_from`函數對其進行反序列化，該函數可以在`lib.rs`文件中找到：
+
+```rust
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_datas = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_datas,
+        })
+    }
+}
+```
+
+此包裝器提供了三個主要優勢：
+1. 它接受原始輸入（字節和賬戶）
+2. 它將驗證委派給各個`TryFrom`實現
+3. 它返回一個完全類型化、完全驗證的Deposit結構
+
+然後我們可以這樣實現處理邏輯：
+
+```rust
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&self) -> ProgramResult {
+        // deposit logic
+        Ok(())
+    }
+}
+```
+
+- `DISCRIMINATOR`是我們在入口點中用於模式匹配的字節
+- `process()`方法僅包含業務邏輯，因為所有驗證檢查已經完成
+
+結果？我們獲得了Anchor風格的易用性，同時享有完全原生的所有優勢：明確、可預測且快速。
+
+<ArticleSection name="跨程序調用" id="cross-program-invocation" level="h2" />
+
+如前所述，Pinocchio提供了像`pinocchio-system`和`pinocchio-token`這樣的輔助crate，簡化了對原生程序的跨程序調用（CPI）。
+
+這些輔助結構和方法取代了我們之前使用的Anchor的`CpiContext`方法：
+
+```rust
+Transfer {
+    from: self.accounts.owner,
+    to: self.accounts.vault,
+    lamports: self.instruction_datas.amount,
+}
+.invoke()?;
+```
+
+`Transfer`結構（來自`pinocchio-system`）封裝了系統程序所需的所有字段，而`.invoke()`執行了CPI。不需要上下文構建器或額外的樣板代碼。
+
+當調用者必須是程序派生地址（PDA）時，Pinocchio保持了同樣簡潔的API：
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(self.accounts.owner.key().as_ref()),
+    Seed::from(&[bump]),
+];
+let signers = [Signer::from(&seeds)];
+
+Transfer {
+    from: self.accounts.vault,
+    to: self.accounts.owner,
+    lamports: self.accounts.vault.lamports(),
+}
+.invoke_signed(&signers)?;
+```
+
+**以下是其工作原理：**
+1. `Seeds`創建了一個與PDA派生匹配的Seed對象數組
+2. `Signer`將這些種子包裝在一個Signer輔助工具中
+3. `invoke_signed`執行CPI，傳遞簽名者數組以授權轉移
+
+結果？為一般和已簽名的CPI提供一個乾淨、一流的介面：不需要宏，也沒有隱藏的魔法。
+
+<ArticleSection name="多指令結構" id="multiple-instruction-structure" level="h2" />
+
+通常，您會希望在多個指令中重用相同的帳戶結構和驗證邏輯，例如在更新不同的配置欄位時。
+
+與其為每個指令創建一個單獨的識別符，不如使用一種模式，通過數據負載的大小來區分指令。
+
+以下是其工作原理：
+
+我們為所有相關的配置更新使用單一的指令識別符。具體的指令由傳入數據的長度決定。
+
+之後，在您的處理器中，匹配 `self.data.len()`。每種類型的指令都有唯一的數據大小，因此您可以相應地分派到正確的處理程序。
+
+它看起來像這樣：
+
+```rust
+pub struct UpdateConfig<'a> {
+    pub accounts: UpdateConfigAccounts<'a>,
+    pub data: &'a [u8],
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for UpdateConfig<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = UpdateConfigAccounts::try_from(accounts)?;
+
+        // Return the initialized struct
+        Ok(Self { accounts, data })
+    }
+}
+
+impl<'a> UpdateConfig<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &4;
+
+    pub fn process(&mut self) -> ProgramResult {
+        match self.data.len() {
+            len if len == size_of::<UpdateConfigStatusInstructionData>() => {
+                self.process_update_status()
+            }
+            len if len == size_of::<UpdateConfigFeeInstructionData>() => self.process_update_fee(),
+            len if len == size_of::<UpdateConfigAuthorityInstructionData>() => {
+                self.process_update_authority()
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+
+    //..
+}
+```
+
+請注意，我們將指令數據的反序列化推遲到知道要調用哪個處理程序之後。這樣可以避免不必要的解析，並保持入口邏輯的簡潔。
+
+然後每個處理程序可以反序列化其特定的數據類型並執行更新：
+
+```rust
+pub fn process_update_authority(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigAuthorityInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_authority_unchecked(instruction_data.authority) }?;
+
+    Ok(())
+}
+
+pub fn process_update_fee(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigFeeInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_fee_unchecked(instruction_data.fee) }?;
+
+    Ok(())
+}
+
+pub fn process_update_status(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigStatusInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_state_unchecked(instruction_data.status) }?;
+
+    Ok(())
+}
+```
+
+這種方法讓您可以共享帳戶驗證，並為多個相關指令使用單一入口點，減少樣板代碼並使您的代碼庫更易於維護。
+
+通過對數據大小進行模式匹配，您可以高效地路由到正確的邏輯，而無需額外的識別符或複雜的解析。

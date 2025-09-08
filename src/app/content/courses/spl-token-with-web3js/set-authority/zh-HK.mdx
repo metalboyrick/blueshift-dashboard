@@ -1,0 +1,85 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 設置權限指引
+
+更改代幣或帳戶的權限。這允許轉移所有權或更新特定的權限類型。
+
+在我們可以設置任何代幣或代幣帳戶的權限之前，我們需要已經完成以下操作：
+- 初始化一個`Mint`帳戶，並且我們擁有`mintAuthority`或`freezeAuthority`
+- 初始化一個`Token`帳戶或`Associated Token`帳戶，並且我們擁有該帳戶
+
+<ArticleSection name="原始指令" id="raw-instruction" level="h2" />
+
+通過僅使用「原始」指令而不進行任何抽象，以下是更改`Mint`或`Token`帳戶權限的方式：
+
+```ts
+const changeTokenAuthorityInstruction = createSetAuthorityInstruction(
+    tokenAccount // account
+    keypair.publickey // current authority
+    AuthorityType.AccountOwner
+    newAuthority.publiKey // new authority
+);
+
+const changeMintFreezeAuthorityInstruction = createSetAuthorityInstruction(
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.FreezeAccount
+    newAuthority.publiKey // new authority
+);
+
+const changeMintAuthorityInstruction = createSetAuthorityInstruction(
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.MintTokens
+    newAuthority.publiKey // new authority
+);
+
+const transaction = new Transaction().add(
+    changeTokenAuthorityInstruction,
+    changeMintFreezeAuthorityInstruction,
+    changeMintAuthorityInstruction
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token and Mint authority changed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="抽象指令" id="abstracted-instruction" level="h2" />
+
+以下是使用`setAuthority()`指令進行抽象後的相同指令的樣子：
+
+```ts  
+let tx = await setAuthority(
+    connection,
+    keypair,
+    tokenAccount // account
+    keypair.publickey // current authority
+    AuthorityType.AccountOwner
+    newAuthority.publiKey // new authority
+);
+
+console.log(`Token Account Authority Changed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+
+let tx = await setAuthority(
+    connection,
+    keypair,
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.FreezeAccount
+    newAuthority.publiKey // new authority
+);
+
+console.log(`Mint Freeze Authority Changed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+
+let tx = await setAuthority(
+    connection,
+    keypair,
+    mint // account
+    keypair.publickey // current authority
+    AuthorityType.MintTokens
+    newAuthority.publiKey // new authority
+);
+
+console.log(`Mint Authority Changed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

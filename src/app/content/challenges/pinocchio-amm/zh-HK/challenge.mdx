@@ -1,0 +1,353 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# AMM
+
+![Pinocchio AMM 挑戰](/graphics/challenge-banners/pinocchio-amm.png)
+
+自動化做市商（AMM）是去中心化金融的基礎組件，讓用戶可以直接與智能合約交換代幣，而無需依賴傳統的訂單簿或中心化交易所。
+
+可以將 AMM 想像成一個自動運行的流動性池：用戶存入代幣對，AMM 使用數學公式來確定價格並促進代幣之間的交換。這使得任何人都可以隨時即時交易代幣，而無需交易對手。
+
+如果仔細觀察，你會發現 AMM 其實就是一個帶有額外步驟、計算和邏輯的托管服務。所以如果你錯過了，請先完成 [Pinocchio Escrow 挑戰](/zh-HK/challenges/pinocchio-escrow)，再進行本課程。
+
+在這個挑戰中，你將實現一個簡單的 AMM，包含四個核心指令：
+- **初始化**：通過創建其配置帳戶並鑄造代表池中股份的 LP（流動性提供者）代幣來設置 AMM。
+- **存入**：允許用戶向池中提供 `token_x` 和 `token_y`。作為回報，他們將收到與其流動性份額成比例的 LP 代幣。
+- **提取**：允許用戶兌換其 LP 代幣以提取其在池中的 `token_x` 和 `token_y` 份額，從而移除流動性。
+- **交換**：允許任何人使用池來交易 token_x 和 `token_y`（或反之），並向流動性提供者支付少量費用。
+
+**注意**：如果你不熟悉 Pinocchio，應該先閱讀 [Pinocchio 簡介](/zh-HK/courses/introduction-to-pinocchio)，以熟悉我們在此程序中將使用的核心概念。
+
+<ArticleSection name="安裝" id="installation" level="h2" />
+
+首先，讓我們建立一個全新的 Rust 環境：
+
+```bash
+# create workspace
+cargo new blueshift_native_amm --lib --edition 2021
+cd blueshift_native_amm
+```
+
+添加 `pinocchio`、`pinocchio-system`、`pinocchio-token`、`pinocchio-associated-token-account` 和由 [Dean](https://x.com/deanmlittle) 創建的 `constant-product-curve` 來處理我們 AMM 的所有計算：
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
+```
+
+在 `Cargo.toml` 中聲明 crate 類型，以在 `target/deploy` 中生成部署工件：
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+現在您已準備好編寫您的 AMM 程式。
+
+<ArticleSection name="恆定乘積曲線" id="constant-product-curve" level="h2" />
+
+大多數 AMM 的核心是一個簡單但強大的公式，稱為恆定乘積曲線。該公式確保池中兩個代幣儲備的乘積始終保持不變，即使用戶進行交易或提供流動性。
+
+### 該公式
+
+最常見的 AMM 公式是：`x * y = k`，其中：
+- `x` = 池中代幣 X 的數量
+- `y` = 池中代幣 Y 的數量
+- `k` = 一個常數（永不改變）
+
+每當有人將一種代幣兌換為另一種代幣時，池會調整儲備，以確保乘積 `k` 保持不變。這會根據供需自動調整價格曲線。
+
+### 示例
+
+假設池開始時有 100 個代幣 X 和 100 個代幣 Y：`100 * 100 = 10,000`。
+
+如果用戶想用 10 個代幣 X 兌換代幣 Y，池必須保持 `k = 10,000`。因此，如果 `x_new` = 110（存入後），解出 `y_new`：`110 * y_new = 10,000`，因此 `y_new = 10,000 / 110 ≈ 90.91`。
+
+用戶將收到 `100 - 90.91 = 9.09` 個代幣 Y（扣除任何費用）。
+
+### 流動性提供
+
+當用戶將兩種代幣存入池中時，他們成為流動性提供者（LP）。作為回報，他們會收到代表其池中份額的 LP 代幣。
+- LP 代幣的鑄造比例取決於您添加的流動性數量。
+- 當您提取時，您需要銷毀 LP 代幣以取回您在兩種代幣中的份額（加上從兌換中收取的費用份額）。
+
+第一個流動性提供者設定初始比例。例如，如果您存入 100 X 和 100 Y，您可能會收到 100 個 LP 代幣。
+
+之後，如果池中已經有 100 X 和 100 Y，而您再添加 10 X 和 10 Y，您將根據您的貢獻比例獲得 LP 代幣：`share = deposit_x / total_x = 10 / 100 = 10%`，因此 Amm 會向用戶錢包鑄造總 LP 供應量的 10%。
+
+### 費用
+
+每次交換通常會收取少量費用（例如 0.3%），該費用會添加到池中。這意味著 LP 可以分享交易費用，隨著時間的推移增加其 LP 代幣的價值，從而激勵人們提供流動性。
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+這次我們將把程序分成小而專注的模組，而不是將所有內容塞進 `lib.rs`。文件夾結構大致如下：
+
+```
+src
+├── instructions
+│       ├── deposit.rs
+│       ├── initialize.rs
+│       ├── mod.rs
+│       ├── swap.rs
+│       └── withdraw.rs
+├── lib.rs
+└── state.rs
+```
+
+位於 `lib.rs` 的入口點始終保持不變：
+
+```rust
+use pinocchio::{
+    account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
+    ProgramResult,
+};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Initialize::DISCRIMINATOR, data)) => {
+            Initialize::try_from((data, accounts))?.process()
+        }
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, data)) => Withdraw::try_from((data, accounts))?.process(),
+        Some((Swap::DISCRIMINATOR, data)) => Swap::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+我們將進入 `state.rs`，其中存儲了我們的 `AMM` 的所有數據。
+
+我們將其分為三個部分：結構定義、讀取輔助工具和寫入輔助工具。
+
+首先，讓我們看看結構定義：
+
+```rust
+use core::mem::size_of;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+
+#[repr(C)]
+pub struct Config {
+    state: u8,
+    seed: [u8; 8],
+    authority: Pubkey,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    fee: [u8; 2],
+    config_bump: [u8; 1],
+}
+
+#[repr(u8)]
+pub enum AmmState {
+    Uninitialized = 0u8,
+    Initialized = 1u8,
+    Disabled = 2u8,
+    WithdrawOnly = 3u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<Config>();
+
+    //...
+}
+```
+
+`#[repr(C)]` 屬性確保我們的結構具有可預測的、與 C 兼容的內存佈局，該佈局在不同平台和 Rust 編譯器版本之間保持一致。這對於鏈上程序至關重要，因為數據必須可靠地序列化和反序列化。
+
+我們將 `seed`（u64）和 `fee`（u16）存儲為字節數組，而不是它們的原生類型，以確保安全的反序列化。從帳戶存儲中讀取數據時，內存對齊沒有保證，從未對齊的內存地址讀取 `u64` 是未定義的行為。通過使用字節數組並使用 `from_le_bytes()` 進行轉換，我們確保無論對齊如何，數據都可以安全地讀取，同時保證所有平台上的一致小端字節順序。
+
+`Config` 結構中的每個欄位都有其特定用途：
+- **state**：追蹤 AMM 的當前狀態（例如：未初始化、已初始化、已停用或僅限提取）。
+- **seed**：用於程式衍生地址（PDA）生成的唯一值，允許多個 AMM 存在於不同的配置中。
+- **authority**：擁有 AMM 管理控制權的公鑰（例如：用於暫停或升級池）。可以通過傳遞 `[0u8; 32]` 設置為不可變。
+- **mint_x**：池中代幣 X 的 SPL 代幣鑄造地址。
+- **mint_y**：池中代幣 Y 的 SPL 代幣鑄造地址。
+- **fee**：交換費用，以基點表示（1 基點 = 0.01%），在每次交易中收取並分配給流動性提供者。
+- **config_bump**：用於 PDA 衍生的 bump seed，確保配置帳戶地址有效且唯一。保存此值以提高 PDA 衍生效率。
+
+`AmmState` 枚舉定義了 AMM 的可能狀態，方便管理池的生命週期並根據其狀態限制某些操作。
+
+### 閱讀輔助工具
+
+閱讀輔助工具提供安全、高效的方式來訪問 `Config` 數據，並進行適當的驗證和借用：
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load(account_info: &AccountInfo) -> Result<Ref<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes_unchecked(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub unsafe fn load_unchecked(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Self::from_bytes_unchecked(
+            account_info.borrow_data_unchecked(),
+        ))
+    }
+
+    /// Return a `Config` from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`, and
+    /// it is properly aligned to be interpreted as an instance of `Config`.
+    /// At the moment `Config` has an alignment of 1 byte.
+    /// This method does not perform a length validation.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> &Self {
+        &*(bytes.as_ptr() as *const Config)
+    }
+
+    /// Return a mutable `Config` reference from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked_mut(bytes: &mut [u8]) -> &mut Self {
+        &mut *(bytes.as_mut_ptr() as *mut Config)
+    }
+
+    // Getter methods for safe field access
+    #[inline(always)]
+    pub fn state(&self) -> u8 { self.state }
+
+    #[inline(always)]
+    pub fn seed(&self) -> u64 { u64::from_le_bytes(self.seed) }
+
+    #[inline(always)]
+    pub fn authority(&self) -> &Pubkey { &self.authority }
+
+    #[inline(always)]
+    pub fn mint_x(&self) -> &Pubkey { &self.mint_x }
+
+    #[inline(always)]
+    pub fn mint_y(&self) -> &Pubkey { &self.mint_y }
+
+    #[inline(always)]
+    pub fn fee(&self) -> u16 { u16::from_le_bytes(self.fee) }
+
+    #[inline(always)]
+    pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
+}
+```
+
+閱讀輔助工具的主要特點：
+- 安全借用：`load` 方法返回一個 `Ref<Self>`，安全地管理從帳戶數據的借用，防止數據競爭並確保記憶體安全。
+- 驗證：`load` 和 `load_unchecked` 都會在允許訪問結構之前驗證帳戶數據的長度和擁有者。
+- 獲取方法：所有欄位都通過獲取方法訪問，這些方法處理從字節數組到其正確類型的轉換（例如：`u64::from_le_bytes` 用於 `seed`）。
+- 性能：`#[inline(always)]` 屬性確保這些經常調用的方法被內聯以達到最佳性能。
+
+### 編寫輔助工具
+
+編寫輔助工具提供安全且經過驗證的方法，用於修改`Config`數據：
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load_mut(account_info: &AccountInfo) -> Result<RefMut<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
+            Self::from_bytes_unchecked_mut(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub fn set_state(&mut self, state: u8) -> Result<(), ProgramError> {
+        if state.ge(&(AmmState::WithdrawOnly as u8)) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.state = state as u8;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_fee(&mut self, fee: u16) -> Result<(), ProgramError> {
+        if fee.ge(&10_000) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.fee = fee.to_le_bytes();
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_inner(
+        &mut self,
+        seed: u64,
+        authority: Pubkey,
+        mint_x: Pubkey,
+        mint_y: Pubkey,
+        fee: u16,
+        config_bump: [u8; 1],
+    ) -> Result<(), ProgramError> {
+        self.set_state(AmmState::Initialized as u8)?;
+        self.set_seed(seed);
+        self.set_authority(authority);
+        self.set_mint_x(mint_x);
+        self.set_mint_y(mint_y);
+        self.set_fee(fee)?;
+        self.set_config_bump(config_bump);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn has_authority(&self) -> Option<Pubkey> {
+        let bytes = self.authority();
+        let chunks: &[u64; 4] = unsafe { &*(bytes.as_ptr() as *const [u64; 4]) };
+        if chunks.iter().any(|&x| x != 0) {
+            Some(self.authority)
+        } else {
+            None
+        }
+    }
+}
+```
+
+編寫輔助工具的主要功能：
+- 可變借用：`load_mut`方法返回一個`RefMut<Self>`，安全地管理從賬戶數據的可變借用。
+- 輸入驗證：像`set_state`和`set_fee`這樣的方法包含驗證，以確保僅存儲有效值（例如，費用不能超過10,000個基點）。
+- 原子更新：`set_inner`方法允許高效地一次性原子更新所有結構字段，從而最大限度地降低不一致狀態的風險。
+- 權限檢查：`has_authority`方法提供了一種高效的方法來檢查是否設置了權限（非零）或AMM是否不可變（全為零）。
+- 字節轉換：多字節值使用像`to_le_bytes()`這樣的方法正確地轉換為小端字節數組，以確保一致的跨平台行為。

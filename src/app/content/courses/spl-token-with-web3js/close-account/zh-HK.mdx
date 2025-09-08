@@ -1,0 +1,46 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 關閉帳戶指令
+
+關閉一個代幣帳戶，並將其剩餘的 SOL 租金轉移到目標帳戶。該代幣帳戶必須為零餘額，除非它是原生的 SOL 帳戶。
+
+> 從 Token2022 開始，可以關閉供應量為 0 的 `Mint` 帳戶
+
+在我們關閉任何代幣帳戶之前，我們需要已經完成以下操作：
+- 初始化一個 `Mint` 帳戶
+- 初始化一個 `Token` 帳戶或一個沒有任何代幣的 `Associated Token` 帳戶。
+
+<ArticleSection name="原始指令" id="raw-instruction" level="h2" />
+
+僅使用「原始」指令而不進行任何抽象，關閉帳戶的操作如下：
+
+```ts
+// Delegate an ATA 
+const closeAccountInstruction = createCloseAccountInstruction(
+    tokenAccount // account
+    keypair.publickey // destination
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(closeAccountInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="抽象指令" id="abstracted-instruction" level="h2" />
+
+以下是使用 `closeAccount()` 指令進行抽象後的操作：
+
+```ts
+  let tx = await closeAccount(
+    connection,
+    keypair,
+    ata.address, // token Account
+    keypair.publicKey, // destination
+    keypair.publicKey, // authority
+);
+
+console.log(`Succesfully Closed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

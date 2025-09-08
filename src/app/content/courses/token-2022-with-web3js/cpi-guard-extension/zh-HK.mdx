@@ -1,0 +1,94 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Cpi Guard 擴展
+
+`CpiGuard` 擴展是一個 `Token` 賬戶擴展，用於禁止跨程序調用中的某些操作，從而保護用戶免受惡意程序試圖在未經明確同意的情況下操控其代幣賬戶的行為。
+
+<ArticleSection name="初始化代幣賬戶" id="initializing-the-token-account" level="h2" />
+
+要在 `Token` 賬戶上初始化 `CpiGuard` 擴展，我們需要使用 `enableCpiGuard()` 函數。
+
+以下是如何使用 Cpi Guard 擴展創建代幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeAccountInstruction,
+    createEnableCpiGuardInstruction,
+    getAccountLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const tokenAccount = Keypair.generate();
+
+// Calculate the size needed for a Token account with Cpi Guard extension
+const accountLen = getAccountLen([ExtensionType.CpiGuard]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Cpi Guard extension
+const enableCpiGuardInstruction = createEnableCpiGuardInstruction(
+    tokenAccount.publicKey,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the Token account itself
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeAccountInstruction,
+    enableCpiGuardInstruction
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {skipPreflight: false});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="禁用 CPI Guard" id="disabling-the-cpi-guard" level="h2" />
+
+當我們希望啟用被 Cpi Guard 阻止的某些行為時，可以使用 `disableCpiGuard` 指令輕鬆禁用該保護，如下所示：
+
+```ts
+const disableCpiGuardInstruction = createDisableCpiGuardInstruction(
+    tokenAccount,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+```
+
+當我們完成後，想要重新添加安全層時，可以使用 `enableCpiGuard` 指令重新啟用，如下所示：
+
+```ts
+const enableCpiGuardInstruction = createEnableCpiGuardInstruction(
+    tokenAccount,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+```

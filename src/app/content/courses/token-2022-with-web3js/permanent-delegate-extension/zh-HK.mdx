@@ -1,0 +1,99 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 永久委派擴展
+
+`PermanentDelegate` 擴展是一個鑄幣賬戶擴展，允許為該鑄幣的所有代幣設置一個永久委派，該委派可以從任何代幣賬戶轉移或銷毀該鑄幣的任何代幣。
+
+<ArticleSection name="初始化鑄幣賬戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `Mint` 賬戶上初始化 `PermanentDelegate` 擴展，我們需要使用 `initializePermanentDelegate()` 函數。
+
+以下是如何使用永久委派擴展創建鑄幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializePermanentDelegateInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Permanent Delegate extension
+const mintLen = getMintLen([ExtensionType.PermanentDelegate]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Permanent Delegate extension
+const initializePermanentDelegate = createInitializePermanentDelegateInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializePermanentDelegate,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="關閉鑄幣賬戶" id="closing-the-mint-account" level="h2" />
+
+如果 `Mint` 賬戶的供應量為零，`CloseMint Authority` 可以通過使用 `closeAccount` 指令來回收該賬戶的租金，如下所示：
+
+```ts
+const closeMintInstruction = createCloseAccountInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(closeMintInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: false});
+
+console.log(`Mint closed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="有權限的操作" id="permissioned-actions" level="h2" />
+
+與可以被撤銷的普通委派不同，這種委派權限是永久且不可更改的。
+
+這意味著每個普通操作，例如 `transfer()`、`burn()`、`approve()` 和 `freeze()`，都可以在需要時由權限直接執行，而無需實際擁有者的簽名。
+
+這意味著我們可以直接使用普通的 `transferChecked()`、`burnChecked()` 等指令，並在 `authority` 欄位中傳入 `PermanetDelegate` 權限。

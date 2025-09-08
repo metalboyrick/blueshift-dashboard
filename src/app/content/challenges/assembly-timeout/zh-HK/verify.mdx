@@ -1,0 +1,35 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF Assembly 超時</ChallengeTitle>
+
+現在你應該已經開始熟悉撰寫 Assembly，嘗試通過傳入 `Clock` 帳戶來實現相同的目標，而不是使用 `sol_get_clock_sysvar`。
+
+創建一個只有一個指令的程式。它必須：
+- 接收 `Clock` 帳戶（大小為 40）。
+- 接收指令數據中的一個 u64（8 字節）槽位。
+- 使用 `Clock` 帳戶的前 8 字節來獲取當前槽位。
+- 檢查當前槽位是否大於指令中傳遞的槽位。如果是，則返回錯誤代碼 1。
+
+> 要獲取正確的指令數據偏移量，你可以使用我們的 [工具](https://sbpf.xyz)。只需記住添加一個帳戶並將其數據長度設置為 40！
+
+首先按照 Assembly 入門課程 [工具部分](/zh-HK/courses/introduction-to-assembly/tooling) 中的說明安裝 sBPF 套件，然後在終端中使用以下命令構建你的程式：
+
+```
+sbpf build
+```
+
+這將在你的 `target/deploy` 資料夾中生成一個 `.so` 文件。
+
+現在點擊 `take challenge` 按鈕，然後將文件拖放到那裡！
+
+<RequirementList>
+  <Requirement title="挑戰 1：測試超時">
+    當傳遞的槽位高於當前槽位時，你的程式應該成功執行。
+  </Requirement>
+
+  <Requirement title="挑戰 2：測試超時失敗">
+    當傳遞的槽位低於當前槽位時，你的程式應該失敗。
+  </Requirement>
+</RequirementList>

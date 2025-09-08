@@ -1,0 +1,63 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 轉賬請求
+
+轉賬請求是 Solana Pay 最簡單的支付方式，專為簡單的 SOL 或 SPL 代幣轉賬設計，無需任何伺服器交互。當用戶掃描 QR 碼或點擊轉賬請求鏈接時，他們的錢包已具備立即組成並執行交易所需的一切。
+
+轉賬請求的美妙之處在於其簡單性：所有支付信息都直接編碼在 URL 中，使其完全自包含並可立即執行。
+
+<ArticleSection name="URL 結構和參數" id="url-structure" level="h2" />
+
+轉賬請求 URL 遵循任何 Solana 錢包都能解讀的標準格式：
+
+```
+solana:<recipient>?<optional-query-params>
+```
+
+**必需參數：**
+- `recipient`：一個 base58 編碼的公鑰，代表目標錢包地址。這是唯一的必填字段，確保支付直接從客戶到商戶，無需中介。
+
+**可選參數：**
+- **`amount`**：以十進制值指定精確的轉賬金額。如果未提供此參數，錢包會提示用戶手動輸入金額——非常適合捐款或靈活支付場景。
+- **`spl-token`**：用於 SPL 代幣轉賬的鑄幣地址。將 SOL 轉賬轉換為任何代幣轉賬，例如 USDC 支付或自定義忠誠度代幣。
+- **`reference`**：用於鏈上追蹤支付的唯一標識符。由於商戶無法控制交易簽名，參考標識符可作為支付對賬和客戶支持的可搜索標識符。
+- **`label` 和 `message`**：面向用戶的字符串，用於解釋支付背景。Label 通常標識商戶，而 message 描述具體的購買內容。
+- **`memo`**：使用 Solana 的 memo 程式創建鏈上記錄。對於合規、會計或提供永久交易背景非常有價值。
+
+### 示例 
+
+以下是一個 1 SOL 的轉賬請求範例，展示了實際參數的使用：
+
+```
+solana:22222222222222222222222222222222222222222222?amount=1&label=Blueshift%20Subscription&message=1%20Month&memo=Order12345&reference=abc123def456
+```
+
+對於接受穩定幣的商家，以下是一個 USDC 的轉賬請求範例：
+
+```
+solana:22222222222222222222222222222222222222222222?amount=200&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&label=Blueshift%20Subscription&message=1%20Month&memo=Order12345&reference=abc123def456
+```
+
+<ArticleSection name="何時使用轉賬請求" id="when-to-use" level="h2" />
+
+轉賬請求在支付詳情已預先確定且不會更改的情況下表現出色：
+
+**理想使用場景：**
+- **電子商務結帳**，價格固定
+- **捐款活動**，用戶可選擇金額
+- **訂閱付款**，金額已知
+- **銷售點系統**，用於面對面交易
+- **發票付款**，金額具體
+
+**主要優勢：**
+- **非互動性：** 一旦生成，這些 URL 可獨立於您的伺服器運作。非常適合網絡連接可能不穩定的情況，或當您希望減少基礎設施依賴時。
+- **保證執行：** 支付參數被鎖定在 URL 中，確保客戶支付的金額與您預期的完全一致，無需動態價格變更。
+- **離線能力：** URL 可在 POS 終端等設備上本地生成，即使後端系統暫時不可用，也能完成支付。
+- **減少伺服器負載：** 支付處理過程中無需 API 調用，使其在高流量場景下具有高度可擴展性。
+- **通用兼容性：** 任何 Solana 錢包都可以處理這些請求，無需特定錢包的集成。
+
+當您需要保證支付金額、希望減少伺服器依賴或需要一種在所有網絡條件下都能可靠運作的支付方式時，可以考慮使用轉賬請求。
+
+<ArticleSection name="範例" id="example" level="h2" />
+
+作為一個完整的範例，您可以參考 Solana Foundation 的 [Payment Flow Merchant Example](https://github.com/solana-foundation/solana-pay/blob/master/core/example/payment-flow-merchant/main.ts)。

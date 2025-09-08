@@ -1,0 +1,72 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 不可變擁有者擴展
+
+`ImmutableOwner` 擴展是一個 `Token` 賬戶擴展，該擴展可防止 `Token` 賬戶的所有權發生任何變更。這可以保護賬戶免受未經授權的訪問和轉移嘗試。
+
+> 所有 `Token` 擴展程序的 ATA 默認啟用了不可變擁有者功能
+
+<ArticleSection name="初始化代幣賬戶" id="initializing-the-token-account" level="h2" />
+
+要在 `Token` 賬戶上初始化 `ImmutableOwner` 擴展，我們需要使用 `initializeImmutableOwner()` 函數。
+
+以下是如何使用不可變擁有者擴展創建代幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeAccountInstruction,
+    createInitializeImmutableOwnerInstruction,
+    getAccountLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const tokenAccount = Keypair.generate();
+
+// Calculate the size needed for a Token account with Immutable Owner extension
+const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Immutable Owner extension
+const initializeImmutableOwnerInstruction = createInitializeImmutableOwnerInstruction(
+    tokenAccount.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the Token account itself
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeImmutableOwnerInstruction,
+    initializeAccountInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {skipPreflight: false});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+如前所述，如果我們想將此擴展添加到 `Associated Token` 賬戶，我們只需使用 Token2022 程序進行初始化即可。

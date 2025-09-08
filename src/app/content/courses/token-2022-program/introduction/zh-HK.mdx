@@ -1,0 +1,123 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Token2022 計劃
+
+![Token 2022 Program](/graphics/course-banners/token-2022-program.png)
+
+Token2022 計劃，也稱為 Token 擴展，是 Token 計劃所提供功能的超集。
+
+傳統的 Token 計劃通過一組簡單的通用介面和結構滿足了大多數可替代和不可替代代幣的需求。然而，它缺乏一些更具針對性的功能和實現，這些功能和實現可以幫助開發者使用通用介面創建自定義行為，從而使開發更快、更安全。
+
+正因如此，一個名為 `Token2022` 的新 Token 計劃被創建，並配備了一組名為 `Token Extensions` 的新功能。這些擴展提供了可以附加到 `Token Account` 或 `Mint Account` 的特定、可自定義的行為。
+
+> `SPL-Token Program`（開發者通常稱之為 `Tokenkeg`，因為其程式地址為：`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`）和 `Token2022 Program` 是兩個完全不同的程式，但它們共享相同的「起點」。這意味著 `Tokenkeg` 代幣可以被 `Token2022` 反序列化，但不能在該程式中使用，例如為它們添加擴展。
+
+<ArticleSection name="鑄幣和代幣帳戶" id="mint-and-token-accounts" level="h2" />
+
+在上一節中，我們討論了 `Tokenkeg` 和 `Token2022` 程式之間的主要區別是 **Token 擴展**。
+
+為了能夠執行，這些擴展需要直接存在於 `Mint` 和 `Token` 帳戶中，因為這是唯一能確保在直接操作代幣程式時執行規則集的方法。
+
+因此，讓我們來看看這些帳戶中傳統代幣程式和新代幣程式之間的主要區別。
+
+**舊版代幣帳戶**
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If `is_native.is_some`, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+如你所見，這些帳戶並沒有書面上的識別符號。這是因為所有欄位的長度都是固定的，並且空間的差異足夠大，可以僅通過比較它們的不同長度來區分這些不同類型的帳戶。
+
+代幣擴展計劃的問題在於，擴展所需的任何額外數據都會附加在我們熟悉的`Mint`和`Token`帳戶的末尾。
+
+這意味著僅通過長度來區分將無法奏效，因為我們可能會有一個附加了3-4個擴展的`Mint`，其長度超過了`Token`帳戶。因此，當`Mint`和`Token`帳戶有擴展時，會像這樣為它們添加一個識別符號：
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mint {
+    /// Legacy Token Program data
+    /// ...
+    /// Padding (83 empty bytes)
+    pub padding: [u8; 83]
+    /// Discriminator (1)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Account {
+    /// Legacy Token Program data
+    /// ...
+    /// Discriminator (2)
+    pub discriminator: u8
+    /// Extensions data
+    /// ...
+}
+```
+
+為了維持舊版結構，識別符號並不像通常那樣位於第一個字節，而是位於字節`166`。
+
+這是因為`Token`帳戶的長度為165字節，這意味著識別符號會在基礎長度之後添加。對於`Mint`帳戶，這意味著我們需要添加83字節的填充，以確保這兩個帳戶具有相同的基礎長度。
+
+因此，要區分這兩個帳戶，我們只需檢查第166個字節（如果從0開始計算則為data[165]），然後據此操作。
+
+<ArticleSection name="代幣擴展" id="token-extensions" level="h2" />
+
+在下一部分，我們將討論目前在Solana上存在的代幣擴展的優點和不同類型，但在這段介紹性文字中，我們只會討論它們如何被序列化並添加到我們之前提到的兩個狀態帳戶中。
+
+每個擴展都有一個識別符，該識別符會與該擴展的大小一起直接儲存在帳戶上。我們將其稱為擴展的「標頭」，其外觀如下：
+
+```rust
+pub struct ExtensionHeader {
+    /// Extension Discriminator
+    pub discriminator: u16
+    /// Length of the Disriminator
+    pub length: u16
+}
+```
+
+這使得非常容易知道代幣上有哪些擴展，並僅反序列化我們需要的數據，因為我們可以抓取識別符，然後跳到下一個擴展以檢查是否存在。

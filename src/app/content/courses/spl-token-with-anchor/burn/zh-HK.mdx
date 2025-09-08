@@ -1,0 +1,27 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 燒毀指令
+
+透過將代幣從流通中移除來永久銷毀代幣。這會減少代幣的總供應量。
+
+在我們燒毀任何代幣之前，我們需要已經擁有：
+- 已初始化的`Mint`帳戶。
+- 一個`Token`帳戶或`Associated Token`帳戶，該帳戶已經至少擁有我們想要燒毀的數量。
+
+> 我們燒毀的代幣數量是根據小數位數進行「標準化」的。這意味著，如果我們想燒毀一個有6位小數的代幣，我們實際上需要輸入`1_000_000`作為數量。
+
+以下是對`burn()`指令的CPI的樣子：
+
+```rust
+burn(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Burn {
+            mint: ctx.accounts.mint.to_account_info(),
+            from: ctx.accounts.token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+    &1_000_000,
+)?;
+```

@@ -1,0 +1,571 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
+
+# 帳戶
+
+我們已經看過 `#[account]` 宏，但在 Solana 上自然有不同類型的帳戶。因此，我們值得花點時間了解 Solana 上帳戶的一般運作方式，並深入了解它們如何與 Anchor 一起運作。
+
+<ArticleSection name="General Overview" id="general-overview" level="h2" />
+
+在 Solana 上，每一個狀態都存在於一個帳戶中；可以將[分類帳](https://solana.com/docs/references/terminology#ledger)想像成一個巨大的表格，其中每一行都共享相同的基本結構：
+
+```rust
+pub struct Account {
+    /// lamports in the account
+    pub lamports: u64,
+    /// data held in this account
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
+    pub data: Vec<u8>,
+    /// the program that owns this account and can mutate its lamports or data.
+    pub owner: Pubkey,
+    /// `true` if the account is a program; `false` if it merely belongs to one
+    pub executable: bool,
+    /// the epoch at which this account will next owe rent (currently deprecated and is set to `0`)
+    pub rent_epoch: Epoch,
+}
+```
+
+Solana 上的所有帳戶都共享相同的基本佈局。區分它們的是：
+
+1. 擁有者：擁有修改帳戶數據和 lamports 的專有權限的程式。
+2. 數據：由擁有者程式用於區分不同的帳戶類型。
+
+當我們談到代幣程式帳戶時，我們指的是 `owner` 是代幣程式的帳戶。與數據欄位為空的系統帳戶不同，代幣程式帳戶可以是 **Mint** 或 **Token** 帳戶。我們使用區分符來區分它們。
+
+正如代幣程式可以擁有帳戶一樣，任何其他程式甚至我們自己的程式也可以擁有帳戶。
+
+<ArticleSection name="Program Accounts" id="program-accounts" level="h2" />
+
+程式帳戶是 Anchor 程式中狀態管理的基礎。它們允許您創建由您的程式擁有的自定義數據結構。讓我們一起探索如何有效地使用它們。
+
+### 帳戶結構與區分符
+
+在 Anchor 中，每個程式帳戶都需要一種方式來識別其類型。這是通過區分符來處理的，區分符可以是：
+
+1. **預設識別碼**：對於帳戶，使用 `sha256("account:<StructName>")[0..8]` 生成的 8 字節前綴；對於指令，則使用 `sha256("global:<instruction_name>")[0..8]`。種子對於帳戶使用 PascalCase，對於指令使用 snake_case。
+
+<AnchorDiscriminatorCalculator value={"TestAccount"} displayMode="account" />
+
+2. **自定識別碼**：從 Anchor `v0.31.0` 開始，您可以指定自己的識別碼：
+
+```rust
+#[account(discriminator = 1)]              // single-byte
+pub struct Escrow { … }
+```
+
+**關於識別碼的重要注意事項**：
+- 它們必須在您的程式中唯一
+- 使用 `[1]` 會阻止使用 `[1, 2, …]`，因為它們也以 `1` 開頭
+- `[0]` 無法使用，因為它與未初始化的帳戶衝突
+
+### 建立程式帳戶
+
+要建立程式帳戶，您需要先定義您的數據結構：
+
+```rust
+use anchor_lang::prelude::*;
+
+#[derive(InitSpace)]
+#[account(discriminator = 1)]
+pub struct CustomAccountType {
+    data: u64,
+}
+```
+
+關於程式帳戶的關鍵點：
+- 最大大小為 10,240 字節（10 KiB）
+- 對於更大的帳戶，您需要 `zero_copy` 和分塊寫入
+- `InitSpace` 衍生宏會自動計算所需的空間
+- 總空間 = `INIT_SPACE` + `DISCRIMINATOR.len()`
+
+帳戶所需的總字節空間是 `INIT_SPACE`（所有字段的總大小）和識別碼大小（`DISCRIMINATOR.len()`）的總和。
+
+Solana 帳戶需要以 lamports 存入租金，這取決於帳戶的大小。了解大小有助於我們計算需要存入多少 lamports 以開啟帳戶。
+
+以下是我們如何在 `Account` 結構中初始化帳戶：
+
+```rust
+#[account(
+    init,
+    payer = <target_account>,
+    space = <num_bytes>                 // CustomAccountType::INIT_SPACE + CustomAccountType::DISCRIMINATOR.len(),
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+以下是 `#[account]` 宏中使用的一些字段，除了我們已經涵蓋的 `seeds` 和 `bump` 字段之外，以及它們的作用：
+- `init`：告訴 Anchor 建立帳戶
+- `payer`：哪個簽署者資助租金（此處為創建者）
+- `space`：分配多少字節。這也是租金計算的地方
+
+建立後，您可以修改帳戶的數據。如果需要更改其大小，請使用重新分配：
+
+```rust
+#[account(
+    mut,                       // Mark as mutable
+    realloc = <space>,         // New size
+    realloc::payer = <target>, // Who pays for the change
+    realloc::zero = <bool>     // Whether to zero new space
+)]
+```
+
+**注意**：在減小帳戶大小時，請設置 `realloc::zero = true` 以確保舊數據被正確清除。
+
+最後，當帳戶不再需要時，我們可以關閉它以回收租金：
+
+```rust
+#[account(
+    mut,                       // Mark as mutable
+    close = <target_account>,  // Where to send remaining lamports
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+然後，我們可以將 PDA（從種子和程序 ID 派生出的確定性地址）添加到這些約束中，如下所示：
+
+```rust
+#[account(
+    seeds = <seeds>,            // Seeds for derivation
+    bump                        // Standard bump seed
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+**注意**：PDA 是確定性的：相同的種子 + 程序 + bump 總是生成相同的地址，而 bump 確保地址不在 ed25519 曲線上。
+
+由於計算 bump 可能會“消耗”大量的 CU，因此將其保存到帳戶中或傳遞到指令中並進行驗證，而無需像這樣計算，總是更好的做法：
+
+```rust
+#[account(
+    seeds = <seeds>,
+    bump = <expr>
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+通過傳遞其派生自的程序地址，可以從另一個程序派生 PDA，如下所示：
+
+```rust
+#[account(
+    seeds = <seeds>,
+    bump = <expr>,
+    seeds::program = <expr>
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Lazy Account
+
+從 Anchor 0.31.0 開始，`LazyAccount` 提供了一種更高效的方式來讀取帳戶數據。與將整個帳戶反序列化到堆棧上的標準 `Account` 類型不同，`LazyAccount` 是一個只讀的、堆分配的帳戶，只使用 24 字節的堆棧內存，並允許您選擇性地加載特定字段。
+
+首先在您的 `Cargo.toml` 中啟用該功能：
+
+```
+anchor-lang = { version = "0.31.1", features = ["lazy-account"] }
+```
+
+現在我們可以像這樣使用它：
+
+```rust
+#[derive(Accounts)]
+pub struct MyInstruction<'info> {
+    pub account: LazyAccount<'info, CustomAccountType>,
+}
+
+#[account(discriminator = 1)]
+pub struct CustomAccountType {
+    pub balance: u64,
+    pub metadata: String,
+}
+
+pub fn handler(ctx: Context<MyInstruction>) -> Result<()> {
+    // Load specific field
+    let balance = ctx.accounts.account.get_balance()?;
+    let metadata = ctx.accounts.account.get_metadata()?;
+    
+    Ok(())
+}
+```
+
+> `LazyAccount` 是只讀的。嘗試修改字段會導致 panic，因為您處理的是引用，而不是堆棧分配的數據。
+
+當 CPI 修改帳戶時，緩存的值會變得過時。因此，您需要使用 `unload()` 函數來刷新：
+
+```rust
+// Load the initial value
+let initial_value = ctx.accounts.my_account.load_field()?;
+
+// Do CPI...
+
+// We still have a reference to the account from `initial_value`, drop it before `unload`
+drop(initial_value);
+
+// Load the updated value
+let updated_value = ctx.accounts.my_account.unload()?.load_field()?;
+```
+
+<ArticleSection name="代幣帳戶" id="token-program" level="h2" />
+
+代幣程式（Token Program）是 Solana 程式庫（Solana Program Library，簡稱 SPL）的一部分，是鑄造和轉移非原生 SOL 資產的內建工具包。它提供了創建代幣、鑄造新供應量、轉移餘額、銷毀、凍結等指令。
+
+此程式擁有兩種主要的帳戶類型：
+- **鑄幣帳戶（Mint Account）**：儲存特定代幣的元數據，包括供應量、小數位數、鑄幣權限、凍結權限等。
+- **代幣帳戶（Token Account）**：為特定擁有者持有該鑄幣的餘額。只有擁有者可以減少餘額（例如轉移、銷毀等），但任何人都可以向該帳戶發送代幣以增加其餘額。
+
+### Anchor 中的代幣帳戶
+
+本地的核心 Anchor crate 僅包含系統程式（System Program）的 CPI 和帳戶輔助工具。如果您希望對 SPL 代幣有相同的輔助功能，您需要引入 `anchor_spl` crate。
+
+`anchor_spl` 提供：
+- 對 SPL Token 和 Token-2022 程式中每個指令的輔助構建器。
+- 類型包裝器，使驗證和反序列化鑄幣和代幣帳戶變得簡單。
+
+讓我們來看看 `Mint` 和 `Token` 帳戶的結構：
+
+```rust
+#[account(
+    mint::decimals     = <expr>,
+    mint::authority    = <target_account>,
+    mint::freeze_authority = <target_account>
+    mint::token_program = <target_account>
+)]
+pub mint: Account<'info, Mint>,
+
+#[account(
+    mut,
+    associated_token::mint       = <target_account>,
+    associated_token::authority  = <target_account>,
+    associated_token::token_program = <target_account>
+)]
+pub maker_ata_a: Account<'info, TokenAccount>,
+```
+
+`Account<'info, Mint>` 和 `Account<'info, TokenAccount>` 告訴 Anchor：
+- 確認該帳戶確實是鑄幣或代幣帳戶。
+- 反序列化其數據，以便您可以直接讀取字段。
+- 強制執行您指定的任何額外約束（`authority`、`decimals`、`mint`、`token_program` 等）。
+
+這些與代幣相關的帳戶遵循與之前使用的 `init` 模式相同的模式。由於 Anchor 知道它們的固定位元組大小，我們不需要指定 `space` 值，只需指定資助帳戶的付款人即可。
+
+Anchor 亦提供 `init_if_needed` 宏：它會檢查代幣帳戶是否已存在，若不存在則會創建該帳戶。此捷徑並不適用於所有帳戶類型，但對於代幣帳戶來說非常合適，因此我們會在此依賴它。
+
+如前所述，`anchor_spl` 為 **Token** 和 **Token2022** 程式創建了輔助工具，後者引入了代幣擴展功能。主要挑戰在於，儘管這些帳戶實現了相似的目標並具有可比的結構，但由於它們分別由兩個不同的程式擁有，因此無法以相同的方式進行反序列化和檢查。
+
+我們可以創建更「高級」的邏輯來處理這些不同的帳戶類型，但幸運的是，Anchor 通過 **InterfaceAccounts** 支援這種情況：
+
+```rust
+use anchor_spl::token_interface::{Mint, TokenAccount};
+
+#[account(
+    mint::decimals     = <expr>,
+    mint::authority    = <target_account>,
+    mint::freeze_authority = <target_account>
+)]
+pub mint: InterfaceAccounts<'info, Mint>,
+
+#[account(
+    mut,
+    associated_token::mint = <target_account>,
+    associated_token::authority = <target_account>,
+    associated_token::token_program = <target_account>
+)]
+pub maker_ata_a: InterfaceAccounts<'info, TokenAccount>,
+```
+
+這裡的主要區別在於我們使用了 `InterfaceAccounts` 而不是 `Account`。這使得我們的程式可以同時處理 Token 和 Token2022 帳戶，而無需處理它們反序列化邏輯的差異。該介面提供了一種通用方式來與這兩種類型的帳戶互動，同時保持類型安全性和適當的驗證。
+
+當您希望程式與兩種代幣標準兼容時，這種方法特別有用，因為它消除了為每個程式編寫單獨邏輯的需求。該介面在幕後處理了處理不同帳戶結構的所有複雜性。
+
+如果您想了解更多有關如何使用 `anchor-spl` 的資訊，可以參考 [SPL-Token Program with Anchor](/zh-HK/courses/spl-token-with-anchor) 或 [Token2022 Program with Anchor](/zh-HK/courses/token-2022-with-anchor) 課程。
+
+<ArticleSection name="其他帳戶類型" id="additional-accounts-type" level="h2" />
+
+當然，系統帳戶、程式帳戶和代幣帳戶並不是我們在 Anchor 中可以擁有的唯一帳戶類型。因此，我們將在此了解其他可以擁有的帳戶類型：
+
+### 簽署者
+
+`Signer` 類型用於需要驗證某個帳戶是否已簽署交易的情況。這對於安全性至關重要，因為它確保只有授權的帳戶才能執行某些操作。當您需要保證特定帳戶已批准交易時，例如轉賬資金或修改需要明確許可的帳戶數據時，您將使用此類型。以下是使用方法：
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+}
+```
+
+`Signer` 類型會自動檢查帳戶是否已簽署交易。如果未簽署，交易將失敗。這在需要確保只有特定帳戶能執行某些操作時特別有用。
+
+### AccountInfo 與 UncheckedAccount
+
+`AccountInfo` 和 `UncheckedAccount` 是低層次的帳戶類型，提供直接訪問帳戶數據的功能，但不進行自動驗證。它們在功能上是相同的，但 `UncheckedAccount` 是更推薦的選擇，因為其名稱更能反映其用途。
+
+這些類型在以下三種主要情況下非常有用：
+1. 處理缺乏定義結構的帳戶
+2. 實現自定義驗證邏輯
+3. 與其他程序中沒有 Anchor 類型定義的帳戶進行交互
+
+由於這些類型繞過了 Anchor 的安全檢查，因此本質上是不安全的，並需要使用 `/// CHECK` 註解進行明確確認。此註解作為文檔，表明您了解風險並已實施適當的驗證。
+
+以下是使用它們的示例：
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    /// CHECK: This is an unchecked account
+    pub account: UncheckedAccount<'info>,
+
+    /// CHECK: This is an unchecked account
+    pub account_info: AccountInfo<'info>,
+}
+```
+
+### Option
+
+Anchor 中的 `Option` 類型允許您在指令中使帳戶成為可選項。當帳戶被包裹在 `Option` 中時，它可以在交易中提供或省略。這在以下情況中特別有用：
+- 構建可以與某些帳戶一起或不一起工作的靈活指令
+- 實現可能並非總是需要的可選參數
+- 創建可以與新舊帳戶結構兼容的向後兼容指令
+
+當 `Option` 帳戶設置為 `None` 時，Anchor 會使用程式 ID 作為帳戶地址。在處理可選帳戶時，理解這種行為非常重要。
+
+以下是實現方法：
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub optional_account: Option<Account<'info, CustomAccountType>>,
+}
+```
+
+### Box
+
+`Box` 類型用於將帳戶存儲在堆中，而不是堆疊中。在以下幾種情況下是必要的：
+- 當處理大型帳戶結構時，存儲在堆疊中效率低下
+- 當處理遞歸數據結構時
+- 當需要處理在編譯時無法確定大小的帳戶時
+
+在這些情況下，使用 `Box` 可以通過在堆中分配帳戶數據來更有效地管理記憶體。以下是一個示例：
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub boxed_account: Box<Account<'info, LargeAccountType>>,
+}
+```
+
+### Program
+
+`Program` 類型用於驗證和與其他 Solana 程式互動。Anchor 可以輕鬆識別程式帳戶，因為它們的 `executable` 標誌設置為 `true`。此類型特別有用於以下情況：
+
+- 需要進行跨程式調用（CPI）
+- 確保與正確的程式互動
+- 驗證帳戶的程式所有權
+
+使用 `Program` 類型有兩種主要方式：
+
+1. 使用內建程式類型（建議在可用時使用）：
+
+```rust
+use anchor_spl::token::Token;
+
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+2. 當程式類型不可用時，使用自定義程式地址：
+
+```rust
+// Address of the Program
+const PROGRAM_ADDRESS: Pubkey = pubkey!("22222222222222222222222222222222222222222222")
+
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    #[account(address = PROGRAM_ADDRESS)]
+    /// CHECK: this is fine since we're checking the address
+    pub program: UncheckedAccount<'info>,
+}
+```
+
+**注意**：在處理代幣程式時，可能需要同時支持舊版代幣程式和 Token-2022 程式。在這種情況下，請使用 `Interface` 類型，而不是 `Program`：
+
+```rust
+use anchor_spl::token_interface::TokenInterface;
+
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub program: Interface<'info, TokenInterface>,
+}
+```
+
+<ArticleSection name="Custom Account Validation" id="custom-account-validation" level="h2" />
+
+Anchor 提供了一套強大的約束，可以直接應用於 `#[account]` 屬性中。這些約束有助於在執行指令邏輯之前，確保帳戶的有效性並在帳戶層面強制執行程式規則。以下是可用的約束：
+
+### 地址約束
+
+`address` 約束用於驗證帳戶的公鑰是否與特定值匹配。當您需要確保與已知帳戶（例如特定的 PDA 或程式帳戶）互動時，這是必不可少的：
+
+```rust
+#[account(
+    address = <expr>,                    // Basic usage
+    address = <expr> @ CustomError       // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### 擁有者約束
+
+`owner` 約束確保帳戶由特定程式擁有。這是處理程式擁有的帳戶時的一個關鍵安全檢查，因為它可以防止未經授權訪問應由特定程式管理的帳戶：
+
+```rust
+#[account(
+    owner = <expr>,                      // Basic usage
+    owner = <expr> @ CustomError         // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### 可執行約束
+
+`executable` 約束用於驗證帳戶是否為程式帳戶（其 `executable` 標誌設置為 `true`）。這在進行跨程式調用（CPI）時特別有用，以確保您與程式而非數據帳戶互動：
+
+```rust
+#[account(executable)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### 可變約束
+
+`mut` 約束將帳戶標記為可變，允許其數據在指令執行期間被修改。這對於任何將被更新的帳戶都是必需的，因為出於安全考量，Anchor 默認強制執行不可變性：
+
+```rust
+#[account(
+    mut,                                 // Basic usage
+    mut @ CustomError                    // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### 簽名者約束
+
+`signer` 約束用於驗證帳戶是否已簽署交易。當帳戶需要授權某個操作（例如轉移資金或修改數據）時，這對於安全性至關重要。與使用 `Signer` 類型相比，這是一種更明確的要求簽名的方式：
+
+```rust
+#[account(
+    signer,                              // Basic usage
+    signer @ CustomError                 // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Has One Constraint
+
+`has_one` 約束會驗證帳戶結構中的特定欄位是否與另一個帳戶的公鑰匹配。這對於維持帳戶之間的關係非常有用，例如確保代幣帳戶屬於正確的擁有者：
+
+```rust
+#[account(
+    has_one = data @ Error::InvalidField
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Custom Constraint
+
+當內建約束無法滿足您的需求時，您可以編寫自定義驗證表達式。這允許進行其他約束無法表達的複雜驗證邏輯，例如檢查帳戶數據長度或驗證多個欄位之間的關係：
+
+```rust
+#[account(
+    constraint = data == account.data @ Error::InvalidField
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+這些約束可以結合使用，為您的帳戶創建強大的驗證規則。通過在帳戶層級進行驗證，您可以將安全檢查與帳戶定義緊密結合，避免在指令邏輯中分散 `require!()` 調用。
+
+<ArticleSection name="Remaining Accounts" id="remaining-accounts" level="h2" />
+
+有時在編寫程序時，指令帳戶的固定結構無法提供程序所需的靈活性。
+
+剩餘帳戶通過允許您傳遞超出定義指令結構的額外帳戶來解決這個問題，從而根據運行時條件實現動態行為。
+
+### Implementation Guideline
+
+傳統的指令定義要求您明確指定將使用哪些帳戶：
+
+```rust
+#[derive(Accounts)]
+pub struct Transfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+```
+
+這對於單一操作非常有效，但如果您希望在一個指令中執行多個代幣轉移呢？您需要多次調用指令，這會增加交易成本和複雜性。
+
+剩餘帳戶允許您傳遞不屬於固定指令結構的額外帳戶，這意味著您的程序可以遍歷這些帳戶並動態應用重複邏輯。
+
+與其為每次轉移設計單獨的指令，不如設計一個可以處理 "N" 次轉移的指令：
+
+```rust
+#[derive(Accounts)]
+pub struct BatchTransfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+
+pub fn batch_transfer(ctx: Context<BatchTransfer>, amounts: Vec<u64>) -> Result<()> {
+    // Handle the first transfer using fixed accounts
+    transfer_tokens(&ctx.accounts.from, &ctx.accounts.to, amounts[0])?;
+    
+    let remaining_accounts = &ctx.remaining_accounts;
+
+    // CRITICAL: Validate remaining accounts schema
+    // For batch transfers, we expect pairs of accounts
+    require!(
+        remaining_accounts.len() % 2 == 0,
+        TransferError::InvalidRemainingAccountsSchema
+    );
+
+    // Process remaining accounts in groups of 2 (from_account, to_account)
+    for (i, chunk) in remaining_accounts.chunks(2).enumerate() {
+        let from_account = &chunk[0];
+        let to_account = &chunk[1];
+        let amount = amounts[i + 1];
+        
+        // Apply the same transfer logic to remaining accounts
+        transfer_tokens(from_account, to_account, amount)?;
+    }
+    
+    Ok(())
+}
+```
+
+批量處理指令的意思是：
+- 更小的指令大小：重複的帳戶和數據無需包含在內
+- 更高的效率：每次 CPI 消耗 1000 CU，這意味著使用您的程式的人如果需要執行批量指令，只需調用一次而不是三次
+
+> 剩餘的帳戶會作為 `UncheckedAccount` 傳遞，這意味著 Anchor 不會對它們進行任何驗證。請務必驗證 `RemainingAccountSchema` 和底層帳戶。
+
+### 客戶端實現
+
+我們可以在使用 Anchor SDK 生成後，輕鬆傳遞剩餘的帳戶。由於這些是「原始」帳戶，我們需要指定它們是否需要作為簽名者和/或可變的，如下所示：
+
+```ts
+await program.methods.someMethod().accounts({
+  // some accounts
+})
+.remainingAccounts([
+  {
+    isSigner: false,
+    isWritable: true,
+    pubkey: new Pubkey().default
+  }
+])
+.rpc();
+```

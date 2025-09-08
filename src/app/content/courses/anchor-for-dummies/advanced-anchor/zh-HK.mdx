@@ -1,0 +1,370 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 高級 Anchor
+
+有時候，Anchor 的抽象層會使我們的程式無法實現所需的邏輯。因此，在本節中，我們將討論如何使用一些進階概念來處理我們的程式。
+
+<ArticleSection name="功能標誌" id="feature-flags" level="h2" />
+
+軟件工程師經常需要為本地開發、測試和生產環境設置不同的環境。功能標誌提供了一個優雅的解決方案，通過啟用條件編譯和特定環境的配置，而無需維護單獨的代碼庫。
+
+### Cargo 功能
+
+Cargo 功能提供了一種強大的機制，用於條件編譯和可選依賴項。您可以在 `Cargo.toml` 的 `[features]` 表中定義命名功能，然後根據需要啟用或禁用它們：
+- 通過命令行啟用功能：--features feature_name
+- 在 Cargo.toml 中直接為依賴項啟用功能
+
+這讓您可以對最終二進制文件中包含的內容進行細粒度控制。
+
+### Anchor 中的功能標誌
+
+Anchor 程式通常使用功能標誌來根據目標環境創建不同的行為、約束或配置。使用 `cfg` 屬性來條件性地編譯代碼：
+
+```rust
+#[cfg(feature = "testing")]
+fn function_for_testing() {
+   // Compiled only when "testing" feature is enabled
+}
+
+#[cfg(not(feature = "testing"))]
+fn function_for_production() {
+   // Compiled only when "testing" feature is disabled
+}
+```
+
+功能標誌在處理環境差異方面表現出色。由於並非所有代幣都會同時部署在主網和測試網上，您通常需要為不同的網絡設置不同的地址：
+
+```rust
+#[cfg(feature = "localnet")]
+pub const TOKEN_ADDRESS: &str = "Local_Token_Address_Here";
+
+#[cfg(not(feature = "localnet"))]
+pub const TOKEN_ADDRESS: &str = "Mainnet_Token_Address_Here";
+```
+
+這種方法通過在編譯時而非運行時切換環境，消除了部署配置錯誤並簡化了您的開發工作流程。
+
+以下是您在 `Cargo.toml` 文件中設置的方法：
+
+```toml
+[features]
+default = ["localnet"]
+localnet = []
+```
+
+之後，您可以像這樣指定您希望用於構建程式的標誌：
+
+```
+# Uses default (localnet)
+anchor build
+
+# Build for mainnet
+anchor build --no-default-features
+```
+
+> 一旦你構建了程式，二進制檔案將只包含你啟用的條件標誌，這意味著在測試和部署時，它將遵守該條件。
+
+<ArticleSection name="處理原始帳戶" id="working-with-raw-accounts" level="h2" />
+
+Anchor 簡化了帳戶處理，通過帳戶上下文自動反序列化帳戶：
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub account: Account<'info, MyAccount>,
+}
+
+#[account]
+pub struct MyAccount {
+    pub data: u8,
+}
+```
+
+然而，當你需要條件性帳戶處理時，例如僅在滿足特定條件時反序列化和修改帳戶，這種自動反序列化會變得問題重重。
+
+對於條件性場景，使用 `UncheckedAccount` 延遲驗證和反序列化到運行時。這可以防止當帳戶可能不存在或需要以程式方式驗證時出現嚴重錯誤：
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    /// CHECK: Validated conditionally in instruction logic
+    pub account: UncheckedAccount<'info>,
+}
+
+#[account]
+pub struct MyAccount {
+    pub data: u8,
+}
+
+pub fn instruction(ctx: Context<Instruction>, should_process: bool) -> Result<()> {
+    if should_process {
+        // Deserialize the account data
+        let mut account = MyAccount::try_deserialize(&mut &ctx.accounts.account.to_account_info().data.borrow_mut()[..])
+            .map_err(|_| error!(InstructionError::AccountNotFound))?;
+
+        // Modify the account data
+        account.data += 1;
+
+        // Serialize back the data to the account
+        account.try_serialize(&mut &mut ctx.accounts.account.to_account_info().data.borrow_mut()[..])?;
+    }
+
+    Ok(())
+}
+```
+
+<ArticleSection name="零拷貝帳戶" id="zero-copy-accounts" level="h2" />
+
+Solana 的運行時強制執行嚴格的記憶體限制：堆疊記憶體為 4KB，堆記憶體為 32KB。此外，每加載一個帳戶，堆疊會增長 10KB。這些限制使得對於大型帳戶的傳統反序列化變得不可能，需要使用零拷貝技術來實現高效的記憶體管理。
+
+當帳戶超過這些限制時，你將遇到堆疊溢出錯誤，例如：`Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes`
+
+對於中型帳戶，你可以使用 `Box` 將數據從堆疊移動到堆（如介紹中所述），但對於更大的帳戶，需要實現 `zero_copy`。
+
+零拷貝完全繞過自動反序列化，通過使用原始記憶體訪問來實現。要定義使用零拷貝的帳戶類型，請在結構體上註解 `#[account(zero_copy)]`：
+
+```rust
+#[account(zero_copy)]
+pub struct Data {
+    // 10240 bytes - 8 bytes account discriminator
+    pub data: [u8; 10_232],
+}
+```
+
+`#[account(zero_copy)]` 屬性自動實現了零拷貝反序列化所需的幾個特徵：
+- `#[derive(Copy, Clone)]`, 
+- `#[derive(bytemuck::Zeroable)]`, 
+- `#[derive(bytemuck::Pod)]`, 和 
+- `#[repr(C)]`
+
+> 注意：要使用零拷貝，請將 `bytemuck` crate 添加到你的依賴項中，並啟用 `min_const_generics` 功能，以便在零拷貝類型中處理任意大小的數組。
+
+要在指令上下文中反序列化一個零拷貝帳戶，請使用`AccountLoader<'info, T>`，其中`T`是您的零拷貝帳戶類型：
+
+```rust
+#[derive(Accounts)]
+pub struct Instruction<'info> {
+    pub data_account: AccountLoader<'info, Data>,
+}
+```
+
+### 初始化零拷貝帳戶
+
+根據您的帳戶大小，有兩種不同的初始化方法：
+
+對於小於10,240字節的帳戶，直接使用`init`約束：
+
+```rust
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(
+        init,
+        // 10240 bytes is max space to allocate with init constraint
+        space = 8 + 10_232,
+        payer = payer,
+    )]
+    pub data_account: AccountLoader<'info, Data>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+> init約束因CPI限制而限制為10,240字節。在底層，init通過CPI調用系統程序來創建帳戶。
+
+對於需要超過10,240字節的帳戶，您必須首先通過多次調用系統程序來分別創建帳戶，每次交易增加10,240字節。這樣可以創建最大達到Solana最大限制10MB（10,485,760字節）的帳戶，繞過CPI限制。
+
+在外部創建帳戶後，使用`zero`約束代替`init`。`zero`約束通過檢查帳戶的識別符未設置來驗證帳戶尚未初始化：
+
+```rust
+#[account(zero_copy)]
+pub struct Data {
+    // 10,485,780 bytes - 8 bytes account discriminator
+    pub data: [u8; 10_485_752],
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(zero)]
+    pub data_account: AccountLoader<'info, Data>,
+}
+```
+
+對於兩種初始化方法，調用`load_init()`以獲取帳戶數據的可變引用並設置帳戶識別符：
+
+```rust
+pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    let account = &mut ctx.accounts.data_account.load_init()?;
+
+    // Set your account data here
+    // account.data = something;
+
+    Ok(())
+}
+```
+
+### 加載零拷貝帳戶
+
+初始化後，使用`load()`來讀取帳戶數據：
+
+```rust
+#[derive(Accounts)]
+pub struct ReadOnly<'info> {
+    pub data_account: AccountLoader<'info, Data>,
+}
+
+pub fn read_only(ctx: Context<ReadOnly>) -> Result<()> {
+    let account = &ctx.accounts.data_account.load()?;
+
+    // Read your data here
+    // let value = account.data;
+    
+    Ok(())
+}
+```
+
+<ArticleSection name="處理原始CPI" id="working-with-raw-cpis" level="h2" />
+
+Anchor抽象了跨程序調用（CPI）的複雜性，但理解其底層機制對於高級Solana開發至關重要。
+
+每個指令由三個核心組件組成：`program_id`、`accounts`數組和`instruction_data`字節，Solana運行時通過`sol_invoke`系統調用處理這些數據。
+
+在系統層面，Solana通過此系統調用執行CPI：
+
+```rust
+/// Solana BPF syscall for invoking a signed instruction.
+fn sol_invoke_signed_c(
+    instruction_addr: *const u8,
+    account_infos_addr: *const u8,
+    account_infos_len: u64,
+    signers_seeds_addr: *const u8,
+    signers_seeds_len: u64,
+) -> u64;
+```
+
+運行時接收指令數據和帳戶信息的指針，然後使用這些輸入執行目標程序。
+
+以下是如何使用 Solana 原始操作調用 Anchor 程式：
+
+```rust
+pub fn manual_cpi(ctx: Context<MyCpiContext>) -> Result<()> {
+    // Construct instruction discriminator (8-byte SHA256 hash prefix)
+    let discriminator = sha256("global:instruction_name")[0..8]
+    
+    // Build complete instruction data
+    let mut instruction_data = discriminator.to_vec();
+    instruction_data.extend_from_slice(&[additional_instruction_data]); // Your instruction parameters
+    
+    // Define account metadata for the target program
+    let accounts = vec![
+        AccountMeta::new(ctx.accounts.account_1.key(), true),           // Signer + writable
+        AccountMeta::new_readonly(ctx.accounts.account_2.key(), false), // Read-only
+        AccountMeta::new(ctx.accounts.account_3.key(), false),          // Writable
+    ];
+    
+    // Collect account infos for the syscall
+    let account_infos = vec![
+        ctx.accounts.account_1.to_account_info(),
+        ctx.accounts.account_2.to_account_info(),
+        ctx.accounts.account_3.to_account_info(),
+    ];
+    
+    // Create the instruction
+    let instruction = solana_program::instruction::Instruction {
+        program_id: target_program::ID,
+        accounts,
+        data: instruction_data,
+    };
+    
+    // Execute the CPI
+    solana_program::program::invoke(&instruction, &account_infos)?;
+    
+    Ok(())
+}
+
+// For PDA-signed CPIs, use invoke_signed instead:
+pub fn pda_signed_cpi(ctx: Context<PdaCpiContext>) -> Result<()> {
+    // ... instruction construction same as above ...
+    
+    let signer_seeds = &[
+        b"seed",
+        &[bump],
+    ];
+    
+    solana_program::program::invoke_signed(
+        &instruction,
+        &account_infos,
+        &[signer_seeds],
+    )?;
+    
+    Ok(())
+}
+```
+
+### CPI 到另一個 Anchor 程式
+
+Anchor 的 `declare_program!()` 巨集允許進行類型安全的跨程式調用，而無需將目標程式作為依賴項添加。該巨集會從程式的 IDL 生成 Rust 模組，提供 CPI 幫助器和帳戶類型，以實現無縫的程式交互。
+
+將目標程式的 IDL 文件放置在專案結構中任意位置的 `/idls` 目錄中：
+
+```
+project/
+├── idls/
+│   └── target_program.json
+├── programs/
+│   └── your_program/
+└── Cargo.toml
+```
+
+然後使用巨集生成必要的模組：
+
+```
+use anchor_lang::prelude::*;
+
+declare_id!("YourProgramID");
+
+// Generate modules from IDL
+declare_program!(target_program);
+
+// Import the generated types
+use target_program::{
+    accounts::Counter,             // Account types
+    cpi::{self, accounts::*},      // CPI functions and account structs  
+    program::TargetProgram,        // Program type for validation
+};
+
+#[program]
+pub mod your_program {
+    use super::*;
+
+    pub fn call_other_program(ctx: Context<CallOtherProgram>) -> Result<()> {
+        // Create CPI context
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.target_program.to_account_info(),
+            Initialize {
+                payer: ctx.accounts.payer.to_account_info(),
+                counter: ctx.accounts.counter.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+            },
+        );
+
+        // Execute the CPI using generated helper
+        target_program::cpi::initialize(cpi_ctx)?;
+        
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct CallOtherProgram<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut)]
+    pub counter: Account<'info, Counter>,  // Uses generated account type    
+    pub target_program: Program<'info, TargetProgram>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+> 你可以通過在 `[dependencies]` 下添加 `Cargo.toml` 來 CPI 到另一個 Anchor 程式：`callee = { path = "../callee", features = ["cpi"] }`，在構建程式後執行 `anchor build -- --features cpi` 並使用 `callee::cpi::<instruction>()`。不建議這樣做，因為這可能會導致循環依賴錯誤。
+`

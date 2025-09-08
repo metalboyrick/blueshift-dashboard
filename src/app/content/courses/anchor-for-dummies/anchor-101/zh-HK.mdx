@@ -1,0 +1,137 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Anchor 101
+
+![Anchor 簡介](/graphics/course-banners/anchor-for-dummies.png)
+
+<ArticleSection name="什麼是 Anchor" id="what-is-anchor" level="h2" />
+
+Anchor 是 Solana 智能合約開發的首選框架，提供完整的工作流程，用於編寫、測試、部署和與鏈上程序互動。
+
+### 主要優勢
+
+- **減少樣板代碼**：Anchor 抽象化了帳戶管理、指令序列化和錯誤處理等重複性工作，讓您可以專注於核心業務邏輯。
+- **內置安全性**：內置的嚴格檢查（如帳戶所有權驗證和數據驗證）可即時運行，從而在問題出現之前減少許多常見漏洞。
+
+### Anchor 宏
+
+- `declare_id!()`：聲明程序所在的鏈上地址。
+- `#[program]`：標記包含每個指令入口點和業務邏輯函數的模組。
+- `#[derive(Accounts)]`：列出指令所需的帳戶並自動強制執行其約束。
+- `#[error_code]`：定義自訂的、可讀性高的錯誤類型，使調試更清晰、更快速。
+
+這些程序化宏共同抽象了低層次的字節管理，讓您能以更少的努力交付安全的、可投入生產的 Solana 程序。
+
+### 程序結構
+
+讓我們從一個簡單的程序版本開始，詳細解釋每個宏的實際作用：
+
+```rust
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_vault {
+    use super::*;
+
+    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
+        // ...
+        Ok(())
+    }
+
+    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
+        // ...
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+    // ...
+}
+
+#[error_code]
+pub enum VaultError {
+    // ...
+}
+```
+
+這將轉變為專注的模組，而不是將所有內容塞進 `lib.rs`，以實現更結構化的程序。程序文件夾樹大致如下：
+
+```
+src
+├── instructions
+│       ├── instruction1.rs
+│       ├── mod.rs
+│       ├── instruction2.rs
+│       └── instruction3.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+#### `declare_id!()`
+
+`declare_id!()` 宏為您的程序分配其鏈上地址；該地址是一個從項目 `target` 文件夾中的密鑰對派生的唯一公鑰。該密鑰對簽署並部署編譯的 `.so` 二進制文件，其中包含所有程序邏輯和數據。
+
+**注意：** 我們在 Blueshift 的範例中使用了佔位符 `222222...`，這是因為我們的內部測試套件。在生產環境中，當您執行標準的構建和部署命令時，Anchor 會為您生成一個全新的程式 ID。
+
+#### `#[program]` 和 `#[derive(Accounts)]`
+
+每個指令都有其自己的 **Context** 結構，列出所有帳戶，並可選地包括指令所需的任何數據。
+
+在此範例中，`deposit` 和 `withdraw` 共享相同的帳戶；因此，我們將創建一個名為 `VaultAction` 的單一帳戶結構，以提高效率並簡化操作。
+
+#### 深入了解 `#[derive(Accounts)]` 宏
+
+```rust
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+  #[account(mut)]
+  pub signer: Signer<'info>,
+
+  #[account(
+    mut,
+    seeds = [b"vault", signer.key().as_ref()],
+    bump,
+  )]
+  pub vault: SystemAccount<'info>,
+
+  pub system_program: Program<'info, System>,
+}
+```
+
+從代碼片段中可以看出，`#[derive(Accounts)]` 宏執行了三個關鍵職責：
+- 聲明特定指令所需的所有帳戶。
+- 自動執行約束檢查，在運行時阻止許多錯誤和潛在的漏洞。
+- 生成幫助方法，讓您可以安全地訪問和修改帳戶。
+
+它通過結合帳戶類型和內聯屬性來實現這些功能。
+
+**範例中的帳戶類型**
+- `Signer<'info>`：驗證帳戶已簽署交易；這對於安全性和需要簽名的 CPI 至關重要。
+- `SystemAccount<'info>`：確認帳戶由系統程式擁有。
+- `Program<'info, System>`：確保帳戶可執行並匹配系統程式 ID，從而支持如帳戶創建或 lamport 轉移等 CPI。
+
+**您將遇到的內聯屬性**
+- `mut`：將帳戶標記為可變；當其 lamport 餘額或數據可能更改時必須使用。
+- `seeds & bump`：驗證帳戶是由提供的種子加上一個 bump 字節生成的程式衍生地址 (PDA)。
+
+**注意** PDA 之所以重要，是因為：
+- 當由擁有它們的程式使用時，PDA 可以代表程式簽署 CPI。
+- 它們為持久化程式狀態提供了可預測且可驗證的地址。
+
+#### `#[error_code]`
+
+`#[error_code]` 宏允許您在程式內定義清晰的自訂錯誤。
+
+```rust
+#[error_code]
+pub enum VaultError {
+    #[msg("Vault already exists")]
+    VaultAlreadyExists,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+}
+```
+
+每個枚舉變體都可以攜帶一個 `#[msg(...)]` 屬性，該屬性在錯誤發生時記錄描述性字串；這比在調試期間使用原始數字代碼要有用得多。

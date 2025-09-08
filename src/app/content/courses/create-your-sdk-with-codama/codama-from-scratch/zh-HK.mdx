@@ -1,0 +1,230 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 從零開始建立你的 Codama IDL
+
+從零開始建立 Codama IDL 意味著為你的程式創建完整的節點樹。為了高效完成這項工作，讓我們來檢視可用的節點類型。
+
+<ArticleSection name="節點類型" id="node-types" level="h2" />
+
+### 值節點
+
+要將特定值傳遞到節點中，我們使用 `ValueNode`。此類型代表所有可用的值節點，這些節點可以容納不同類型的數據。
+
+[這裡](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/valueNodes/README.md)可以找到所有可用值的詳細文檔。
+
+> `ValueNode` 是一個類型別名，不能直接用作節點。當需要 `ValueNode` 時，請改用特定的值節點類型。
+
+### 類型節點
+
+要定義數據的結構和形狀，我們使用 `TypeNode`。這些節點描述了期望的數據類型，例如數字、字符串、結構、數組或自定義類型。
+
+它們定義了架構而不包含實際值。
+
+[這裡](https://github.com/codama-idl/codama/blob/main/packages/nodes/docs/typeNodes/README.md)可以找到所有可用類型的詳細文檔。
+
+> `TypeNode` 是一個類型別名，不能直接用作節點。當需要 `TypeNode` 時，請改用特定的類型節點類型。
+
+### 判別器節點
+
+為了區分我們程式中的帳戶和指令，我們使用判別器。有不同的方法可以實現這一點，而 `DiscriminatorNode` 提供了所有可用的選項：
+
+- `ConstantDiscriminatorNode`：用於描述在給定偏移量處的常量值。它接受一個 `ConstantValueNode` 作為常量，以及一個 `number` 作為偏移量：
+    
+
+    ```ts
+    const discriminatorNode = constantDiscriminatorNode(constantValueNodeFromString('utf8', 'Hello'), 64);
+    ```
+
+- `FieldDiscriminatorNode`：用於描述在給定偏移量處的結構字段的默認值。它接受一個 `CamelCaseString` 作為字段名稱，以及一個 `number` 作為偏移量：
+    
+
+    ```ts
+    const discriminatorNode = fieldDiscriminatorNode('accountState', 64);
+    ```
+
+    > 該欄位必須在帳戶數據或指令參數中可用，並且必須有一個預設值。例如：
+
+    ```ts
+    accountNode({
+        data: structTypeNode([
+            structFieldTypeNode({
+                name: 'discriminator',
+                type: numberTypeNode('u32'),
+                defaultValue: numberValueNode(42),
+                defaultValueStrategy: 'omitted',
+            }),
+            // ...
+        ]),
+        discriminators: [fieldDiscriminatorNode('discriminator')],
+        // ...
+    });
+    ```
+
+- `SizeDiscriminatorNode`：用於根據數據大小區分帳戶或指令。它以 `number` 作為大小參數：
+
+    ```ts
+    const discriminatorNode = sizeDiscriminatorNode(165);
+    ```
+
+> `DiscriminatorNode` 是一個類型別名，不能直接用作節點。當需要 `DiscriminatorNode` 時，請改用特定的區分符節點類型。
+
+### Pda Seed Node
+
+要為程式衍生地址（PDA）定義種子，我們使用 `PdaSeedNode`。這些節點指定了 PDA 地址應如何衍生，可以來自常量值或變量輸入。`PdaSeedNode` 提供了不同的方法來定義 PDA 種子：
+
+- `ConstantPdaSeedNode`：用於描述程式衍生地址的常量種子。它結合了 `TypeNode` 和 `ValueNode`：
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNode(stringTypeNode('utf8'), stringValueNode('auth'));
+    ```
+
+    > 一個 `constantPdaSeedNodeFromString` 輔助工具也可以用來更輕鬆地定義基於字符串的常量。例如，以下示例等同於上述示例：
+
+    ```ts
+    const pdaSeedNode = constantPdaSeedNodeFromString('utf8', 'auth');
+    ```
+
+- `VariablePdaSeedNode`：用於描述程式衍生地址的變量種子。它需要一個名稱和一個 `TypeNode`：
+
+    ```ts
+    const pdaSeedNode = variablePdaSeedNode('authority', publicKeyTypeNode())
+    ```
+
+以下是它們在 `pdaNode` 中的使用方式：
+
+```ts
+const counterPda = pdaNode({
+    name: 'counter',
+    seeds: [
+        constantPdaSeedNodeFromString('utf8', 'counter'),
+        variablePdaSeedNode('authority', publicKeyTypeNode()),
+    ],
+});
+```
+
+> `PdaSeedNode` 是一個類型別名，不能直接用作節點。當需要 `PdaSeedNode` 時，請改用特定的 PDA 種子節點類型。
+
+<ArticleSection name="撰寫 Codama IDL" id="writing-a-codama-idl" level="h2" />
+
+現在我們已經檢視了程式中可用的最重要節點，讓我們來了解如何從零開始創建一個 Codama IDL。
+
+### 根節點
+
+要建立您的 Codama IDL 的基礎，我們使用 `RootNode`。此節點作為頂層容器，包含您的主要 `ProgramNode` 以及任何主要程式可能引用的其他程式。
+
+```ts
+const node = rootNode(programNode({ ... }));
+```
+
+### 程式節點
+
+要定義整個鏈上程式，我們使用 `ProgramNode`。此節點代表部署在鏈上的完整程式，並定義所有最低可行元素，例如帳戶、指令、PDA 和錯誤。
+
+除了這些核心元素外，此節點還接受程式的名稱、版本、部署公鑰和 Markdown 文件：
+
+```ts
+const node = programNode({
+    name: 'counter',
+    publicKey: '22222222222222222222222222222222222222222222',
+    version: '0.0.1',
+    docs: [],
+    accounts: [],
+    instructions: [],
+    definedTypes: [],
+    pdas: [],
+    errors: [],
+});
+```
+
+在接下來的部分中，我們將詳細檢視所有這些元素。
+
+### 帳戶節點
+
+要定義鏈上帳戶，我們使用 `AccountNode`。此節點的特點是其名稱、數據結構以及可選屬性，例如 PDA 定義和帳戶識別符。
+
+它代表通常對應於程式的 `state.rs` 文件的帳戶。
+
+docs 欄位可用於添加文件，解釋此帳戶在程式中的作用：
+
+```ts
+const node = accountNode({
+    name: 'token',
+    data: structTypeNode([
+        structFieldTypeNode({ name: 'mint', type: publicKeyTypeNode() }),
+        structFieldTypeNode({ name: 'owner', type: publicKeyTypeNode() }),
+        structFieldTypeNode({ name: 'amount', type: numberTypeNode('u64') }),
+    ]),
+    discriminators: [sizeDiscriminatorNode(72)],
+    size: 72,
+    pda: pdaLinkNode("associatedTokenAccount"),
+});
+```
+
+> `AccountNode` 不存儲 `PdaNode` 的數組，而是通過 `PdaLinkNode` 存儲對單個可選 `PdaNode` 的鏈接，因此如果在 `ProgramNode` 中定義了 `PdaNode`，則可以在此處將兩者鏈接在一起。
+
+### 指令節點
+
+要定義程式指令，我們使用 `InstructionNode`。此節點代表程式中的一個指令，並允許您輕鬆指定識別符、所需帳戶和指令數據。
+
+此外，您可以包含可選帳戶。根據程式的設計，這些可選帳戶可以通過兩種方式解決：省略它們或將程式 ID 作為帳戶傳遞。您可以使用 `optionalAccountStrategy: "omitted" | "programId"` 欄位選擇解決方法。
+
+> 當未提供`optionalAccountStrategy`時，預設會採用`programId`策略。
+
+docs欄位可用於添加文件，解釋此指令在程式中完成的功能。
+
+```ts
+const node = instructionNode({
+    name: 'increment',
+    discriminators: [fieldDiscriminatorNode('discriminator')],
+    arguments: [
+        instructionArgumentNode({
+            name: 'discriminator',
+            type: numberTypeNode('u8'),
+            defaultValue: numberValueNode(1),
+            defaultValueStrategy: 'omitted',
+        }),
+    ],
+    accounts: [
+        instructionAccountNode({ name: 'counter', isWritable: true, isSigner: true }),
+        instructionAccountNode({ name: 'authority', isWritable: false, isSigner: false }),
+    ],
+    remainingAccounts: [instructionRemainingAccountsNode(argumentValueNode('authorities'), { isSigner: true })],
+    optionalAccountStrategy: 'omitted',
+});
+```
+
+在`instructionAccountNode`中，你可以使用`isOptional: boolean`欄位指定帳戶的可選性，或者提供一個`defaultValue`，該欄位會解析為`ValueNode`。
+
+> defaultValue功能同樣適用於`instructionArgumentNode`。
+
+instructionArgumentNode中的defaultValueStrategy決定了如何處理預設值：「optional」表示參數的預設值可以被提供的參數覆蓋；「omitted」表示不應提供任何參數，並且應始終使用預設值。
+
+如果未指定，策略預設為「optional」。
+
+### 錯誤節點
+
+為了定義程式可能返回的錯誤，我們使用`ErrorNode`。此節點的特徵包括名稱、將返回的數字代碼以及用於調試的相關可讀訊息。
+
+```ts
+const node = errorNode({
+    name: 'invalidAmountArgument',
+    code: 1,
+    message: 'The amount argument is invalid.',
+});
+```
+
+### PDA節點
+
+為了提供特定程式衍生地址（Program-Derived Addresses, PDA）的定義，我們使用`PdaNode`。此節點的特徵包括名稱和一個種子列表，這些種子可以是常量或變量，從而允許靈活的PDA生成。
+
+```ts
+const node = pdaNode({
+    name: 'counter',
+    seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+    docs: ['The counter PDA derived from its authority.'],
+});
+```
+
+> 如果程式ID與最近的ProgramNode祖先不同，你需要使用programId欄位來指定它。
+
+這可以用於將PDA作為`defaultValue`連結到`instructionAccountNode`中，使用`pdaValueNode`。

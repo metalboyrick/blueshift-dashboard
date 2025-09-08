@@ -1,0 +1,184 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Anchor 閃電貸款
+
+![Anchor 閃電貸款](/graphics/challenge-banners/anchor-flash-loan.png)
+
+指令內省是一個強大的功能，允許區塊鏈程式檢查和分析同一交易包中的其他指令。這包括尚未執行的指令，使您的程式能夠「預見」並根據交易稍後會發生的情況作出決策。
+
+可以將其想像為交易的 X 光視野：您的程式可以透視整個交易，了解完整的操作序列，然後再決定如何進行。
+
+指令內省最引人注目的應用是閃電貸款。這是一種僅存在於單一交易範圍內的獨特貸款類型。
+
+以下是閃電貸款的運作方式：
+- **借款**：在交易開始時，您可以使用 `loan` 指令即時借入大量資金
+- **使用**：您可以在同一交易中使用這些借入的資金進行交易、套利或其他操作
+- **還款**：在交易結束之前，您必須使用 `repay` 指令償還貸款及支付少量費用
+
+關鍵在於閃電貸款依賴於區塊鏈交易的原子性。如果交易的任何部分失敗（包括還款），整個交易將被回滾，就像它從未發生過一樣。這意味著貸方完全沒有風險：要麼他們得到還款，要麼貸款根本不會發生。
+
+在這個挑戰中，您將創建一個簡單的閃電貸款程式，展示指令內省的實際應用。該程式將檢查同一交易中不同指令的指令數據和帳戶，以確保貸款條件得到滿足。
+
+如果你對指令內省（instruction introspection）還不熟悉，我們建議你先從[指令內省課程](/zh-HK/courses/instruction-introspection)開始，了解本程式中使用的基本概念。
+
+<ArticleSection name="安裝" id="installation" level="h2" />
+
+在開始之前，請確保你已安裝 Rust 和 Anchor。如果需要設置指引，請參考[官方 Anchor 文件](https://www.anchor-lang.com/docs/installation)。然後在終端機中執行：
+
+```bash
+anchor init blueshift_anchor_flash_loan
+```
+
+添加所需的依賴項：
+- `anchor-spl`：提供用於處理 SPL 代幣（Solana 的代幣標準）的工具
+
+```bash
+cd blueshift_anchor_flash_loan
+cargo add anchor-spl
+```
+
+現在你已準備好開始構建你的閃電貸款程式了！
+
+<ArticleSection name="模板" id="template" level="h2" />
+
+讓我們通過設置基本結構、帳戶和錯誤處理來構建閃電貸款程式的基礎，這些將用於我們的借款和還款指令。
+
+我們將在 `lib.rs` 中實現所有內容，因為我們只有兩個共享相同帳戶結構的指令。以下是包含所有基本組件的起始模板：
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::{
+  token::{Token, TokenAccount, Mint, Transfer, transfer}, 
+  associated_token::AssociatedToken
+}; 
+use anchor_lang::{
+  Discriminator,
+  solana_program::sysvar::instructions::{
+      ID as INSTRUCTIONS_SYSVAR_ID,
+      load_instruction_at_checked
+  }
+};
+
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_flash_loan {
+  use super::*;
+
+  pub fn borrow(ctx: Context<Loan>, borrow_amount: u64) -> Result<()> {
+    // borrow logic...
+    
+    Ok(())
+  }
+
+  pub fn repay(ctx: Context<Loan>) -> Result<()> {
+    // repay logic...
+
+    Ok(())
+  }
+}
+
+#[derive(Accounts)]
+pub struct Loan<'info> {
+  // loan accounts...
+}
+
+#[error_code]
+pub enum ProtocolError {
+  // error enum..
+}
+```
+
+**注意**：記得將程式 ID 更改為 `22222222222222222222222222222222222222222222`，因為我們在測試程式時會在底層使用它。
+
+<ArticleSection name="帳戶" id="accounts" level="h2" />
+
+由於 `borrow` 和 `repay` 指令使用相同的帳戶，我們可以創建一個單一的 `Loan` 上下文來服務於這兩個功能。這使得我們的程式碼更易於維護和理解。
+
+我們的 `Loan` 帳戶結構需要以下組件：
+- `borrower`：請求閃電貸款的用戶。
+- `protocol`：擁有協議流動性池的程式派生地址（PDA）。
+- `mint`：被借用的特定代幣。
+- `borrower_ata`：借款人的關聯代幣帳戶，將接收借用的代幣。
+- `protocol_ata`：協議的關聯代幣帳戶，將提供借用的代幣。
+- `instructions`：用於內省的指令 Sysvar 帳戶。
+- `token_program`、`associated_token_program` 和 `system_program`：程式所需的其他程式。
+
+以下是我們如何定義帳戶結構：
+
+```rust
+#[derive(Accounts)]
+pub struct Loan<'info> {
+  #[account(mut)]
+  pub borrower: Signer<'info>,
+  #[account(
+    seeds = [b"protocol".as_ref()],
+    bump,
+  )]
+  pub protocol: SystemAccount<'info>,
+
+  pub mint: Account<'info, Mint>,
+  #[account(
+    init_if_needed,
+    payer = borrower,
+    associated_token::mint = mint,
+    associated_token::authority = borrower,
+  )]
+  pub borrower_ata: Account<'info, TokenAccount>,
+  #[account(
+    mut,
+    associated_token::mint = mint,
+    associated_token::authority = protocol,
+  )]
+  pub protocol_ata: Account<'info, TokenAccount>,
+
+  #[account(address = INSTRUCTIONS_SYSVAR_ID)]
+  /// CHECK: InstructionsSysvar account
+  instructions: UncheckedAccount<'info>,
+  pub token_program: Program<'info, Token>,
+  pub associated_token_program: Program<'info, AssociatedToken>,
+  pub system_program: Program<'info, System>
+}
+```
+
+如你所見，此指令所需的帳戶及其約束相當簡單：
+- `protocol`：使用 `seeds = [b"protocol".as_ref()]` 創建一個確定性的地址，該地址擁有所有協議流動性。這確保只有我們的程式可以控制這些資金。
+- `borrower_ata`：使用 `init_if_needed`，因為借款人可能尚未為此特定代幣建立相關的代幣帳戶。該約束會在需要時自動創建一個。
+- `protocol_ata`：必須已存在且可變，因為我們將從中轉移代幣。`associated_token::authority = protocol` 約束確保只有協議 PDA 可以授權轉移。
+- `instructions`：使用 `address` 約束來驗證我們正在訪問包含交易指令數據的正確系統帳戶。
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+閃電貸需要在多個步驟中進行精確的驗證，因此我們需要全面的錯誤處理。以下是我們完整的錯誤枚舉：
+
+```rust
+#[error_code]
+pub enum ProtocolError {
+    #[msg("Invalid instruction")]
+    InvalidIx,
+    #[msg("Invalid instruction index")]
+    InvalidInstructionIndex,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Not enough funds")]
+    NotEnoughFunds,
+    #[msg("Program Mismatch")]
+    ProgramMismatch,
+    #[msg("Invalid program")]
+    InvalidProgram,
+    #[msg("Invalid borrower ATA")]
+    InvalidBorrowerAta,
+    #[msg("Invalid protocol ATA")]
+    InvalidProtocolAta,
+    #[msg("Missing repay instruction")]
+    MissingRepayIx,
+    #[msg("Missing borrow instruction")]
+    MissingBorrowIx,
+    #[msg("Overflow")]
+    Overflow,
+}
+```
+
+有了這個基礎，我們已準備好實現閃電貸指令的核心邏輯。帳戶結構確保了正確的代幣處理，而錯誤系統則提供了清晰的調試和安全驗證反饋。
+
+> 程式尚未完全編譯成功。你能找出原因嗎？

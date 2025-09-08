@@ -1,0 +1,164 @@
+{
+  "metadata": {
+    "title": "Blueshift",
+    "description": "學習如何從 Solana 生態系統中的頂尖導師那裡編寫自己的鏈上程式。",
+    "keywords": "Solana, Blueshift, 學習, 資格, vault, escrow, AMM, native, pinocchio, quantum, SPL token"
+  },
+  "header": {
+    "lessons": "課程",
+    "courses": "課程系列",
+    "challenges": "挑戰",
+    "set_goal": "設定目標",
+    "connect_wallet": "連接錢包"
+  },
+  "lessons": {
+    "title": "選擇一個課程系列開始學習",
+    "subtitle": "歡迎",
+    "subtitle_returning": "歡迎回來",
+    "title_returning": "繼續學習課程系列",
+    "get_started": "開始學習",
+    "continue_learning": "繼續學習",
+    "completed_courses": "已完成的課程系列",
+    "start_course": "開始課程系列",
+    "lessons": "課程",
+    "review_course": "檢視課程系列",
+    "empty_results_title": "未找到結果",
+    "empty_results_description": "嘗試搜尋其他課程系列或使用篩選器。",
+    "empty_filters_title": "您未選擇任何篩選條件",
+    "empty_filters_description": "選擇您想學習的語言以查看結果。",
+    "continue": "繼續",
+    "completed": "已完成的課程",
+    "all_completed": "所有課程已完成",
+    "take_challenge": "參加挑戰",
+    "challenge_completed": "挑戰已完成",
+    "challenge_incomplete": "挑戰未完成",
+    "take_challenge_cta": "準備好參加挑戰了嗎？",
+    "skip_lesson_divider_title": "或跳過到挑戰",
+    "skip_lesson": "跳過課程",
+    "lesson_completed": "恭喜，您已完成此課程系列！",
+    "view_other_courses": "查看其他課程系列"
+  },
+  "ui": {
+    "search_placeholder": "按名稱、類別或等級搜尋...",
+    "search_language_filter__label": "所有類別",
+    "search_language_filter__all_languages": "全部",
+    "search_language_filter__selected_languages": "類別"
+  },
+  "languages": {
+    "anchor": "Anchor",
+    "rust": "Rust",
+    "typescript": "Typescript",
+    "assembly": "Assembly",
+    "general": "一般"
+  },
+  "ChallengeCenter": {
+    "title": "完成挑戰以獲得 NFT",
+    "subtitle": "挑戰",
+    "Unclaimed": "未領取",
+    "claimed": "已鑄造",
+    "claim": "鑄造",
+    "locked": "已鎖定",
+    "empty_title": "未找到挑戰",
+    "empty_description": "嘗試更改篩選條件以查看挑戰。",
+    "locked_description": "連接錢包以鑄造您的 NFT",
+    "claimed_description": "NFT 已在您的錢包中可用",
+    "view_nft": "查看 NFT",
+    "complete_to_share": "完成挑戰以分享",
+    "filter__label": "所有狀態",
+    "filter__all_statuses": "全部",
+    "filter__selected_statuses": "狀態"
+  },
+  "challenge_statuses": {
+    "open": "開放",
+    "completed": "已完成",
+    "claimed": "已領取"
+  },
+  "challenge_status_descriptions": {
+    "locked": "此挑戰已鎖定",
+    "locked_cta": "先完成課程以解鎖挑戰。"
+  },
+  "shift_goal": {
+    "title": "設定您的 Shift 目標",
+    "description": "接收每週提醒，幫助您實現目標！",
+    "connect_discord": "連接 Discord"
+  },
+  "wallet_recommended": {
+    "title": "連接您的錢包",
+    "description": "連接您的錢包以完成課程並獲得 NFT 獎勵！",
+    "connect_wallet": "連接錢包",
+    "dont_show_again": "不再顯示"
+  },
+  "contents": {
+    "contents": "內容",
+    "view_source": "查看來源"
+  },
+  "notifications": {
+    "session_expired_logout": "您的會話已過期。請重新登入。",
+    "errors": {
+      "user_rejected_signature": "您必須在錢包中批准消息以登入。",
+      "auth_unauthorized": "身份驗證失敗。請再試一次。",
+      "network_error": "無法連接到伺服器。請檢查您的網絡連接。",
+      "auth_generic": "發生意外錯誤。請再試一次。"
+    },
+    "content_fallback": "此內容正在翻譯中，準備好後將在此處提供。"
+  },
+  "course_levels": {
+    "1": "初學者",
+    "2": "中級",
+    "3": "高級",
+    "4": "專家"
+  },
+  "ChallengePage": {
+    "pagination_header": "挑戰",
+    "connect_wallet": "連接錢包",
+    "connect_wallet_description": "需要 Solana 錢包才能完成挑戰並解鎖 NFT",
+    "back_to_lessons": "返回課程",
+    "back_to_homepage": "返回主頁",
+    "head_to_challenges": "返回挑戰", 
+    "requirements_title": "挑戰",
+    "upload_program_btn": "上傳程式",
+    "run_program_btn": "執行",
+    "view_logs_btn": "查看日誌",
+    "back_to_editor_btn": "返回編輯器",
+    "running_program_btn": "正在執行...",
+    "num_tests_passed": "測試通過",
+    "test_results": {
+      "passed": "通過",
+      "failed": "失敗",
+      "incomplete": "未完成"
+    },
+    "challenge_completed": {
+      "title": "挑戰完成",
+      "body": "您已完成此挑戰。",
+      "view_other_courses": "查看其他課程系列",
+      "view_other_challenges": "查看其他挑戰",
+      "divider_label": "或",
+      "redo": "重新挑戰"
+    },
+    "mint_modal_title": "恭喜！",
+    "mint_modal_description": "您已完成挑戰並解鎖了一個 NFT 獎勵！",
+    "mint_modal_button": "鑄造 NFT",
+    "minting": "正在鑄造 NFT...",
+    "mint_modal_skip": "暫時跳過",
+    "mint_modal_skip_description": "您可以在挑戰頁面查看您的解鎖內容。",
+    "mint_modal_tweet": "在 X 上分享",
+    "share_on_x": "在 X 上分享",
+    "challenge_share_tweet": "我剛剛完成了 @blueshift_gg 的 {challengeTitle} 挑戰。\n\n在這裡試試看：{challengeUrl}\n\nMake the shift. Build on @solana。",
+    "assistance_prompt": {
+      "title": "需要幫助嗎？",
+      "body": "看起來您遇到了一些困難。如果您卡住了，請隨時在我們的 Discord 社群中尋求幫助。",
+      "link_text": "在 Discord 上詢問"
+    },
+    "reset_code_modal": {
+      "title": "重置程式碼",
+      "description": "您確定要重置程式碼嗎？這將丟棄所有更改並恢復原始模板。",
+      "cancel": "取消",
+      "confirm": "重置程式碼"
+    },
+    "reset_button": "重置",
+    "auto_saved": "自動保存",
+    "unsaved_changes": "未保存的更改",
+    "saving": "正在保存...",
+    "loaded_from_auto_save": "程式碼已從上一個會話加載"
+  }
+}

@@ -1,0 +1,283 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 使用 TypeScript 的 LiteSVM
+
+`litesvm` 套件提供了核心測試基礎設施，讓您可以創建一個輕量級的 Solana 環境，在其中直接操作帳戶狀態並對您的程式執行交易。
+
+<ArticleSection name="First Steps" id="first-steps" level="h2" />
+
+將 LiteSVM 添加到您的項目中：
+
+```bash
+npm i --save-dev litesvm
+```
+
+<ArticleSection name="LiteSVM Basics" id="basics" level="h2" />
+
+首先聲明您的程式 ID 並創建一個 LiteSVM 實例。
+
+使用您在程式中定義的完全相同的程式 ID，以確保交易正確執行並且在測試期間不會拋出 `ProgramMismatch` 錯誤：
+
+```ts
+import { LiteSVM } from "litesvm";
+import { PublicKey } from "@solana/web3.js";
+
+const programId = new PublicKey("22222222222222222222222222222222222222222222");
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Load the program with the right public key
+    svm.addProgramFromFile(programId, "target/deploy/program.so");
+})
+```
+
+要執行測試，請創建一個交易對象並使用 `.sendTransaction(tx)` 函數：
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Transaction } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Transaction
+    const tx = new Transaction();
+
+    // Add the latest blockhash
+    tx.recentBlockhash = svm.latestBlockhash();
+
+    // Add the instructions and the signers
+    // tx.add(...ixs);
+    // tx.sign(...signersKeypair);
+
+    // Send the transaction
+    svm.sendTransaction(tx);
+})
+```
+
+<ArticleSection name="Accounts" id="accounts" level="h2" />
+
+在使用 LiteSVM 測試 Solana 程式時，您將處理多種類型的帳戶，這些帳戶模擬了真實世界的程式執行場景。
+
+正確構建這些帳戶對於有效測試至關重要。
+
+### 系統帳戶
+
+最基本的帳戶類型是系統帳戶，主要有兩種變體：
+- **付款帳戶**：擁有 lamports 的帳戶，用於資助程式帳戶的創建或 lamport 的轉移
+- **未初始化帳戶**：沒有 lamports 的空帳戶，通常用於表示等待初始化的程式帳戶
+
+系統帳戶不包含數據，並且由系統程式擁有。付款帳戶和未初始化帳戶的主要區別在於它們的 lamport 餘額：付款帳戶有資金，而未初始化帳戶則從空開始。
+
+以下是在 LiteSVM 中創建 `payer` 帳戶的方法：
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair, SystemProgram } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports: 100_000_000,
+        data: Buffer.alloc(0),
+        owner: SystemProgram.programId,
+        executable: false,
+    }); 
+})
+```
+
+> 未初始化帳戶只是普通生成的帳戶，具有 `Keypair.generate()` - 無需額外設置。
+
+### 程式帳戶
+
+對於包含自定義數據結構的程式帳戶，您可以使用類似的方法。
+您還需要將帳戶數據序列化到緩衝區中，可以手動完成，也可以使用例如 `@coral-xyz/borsh` 的庫（請參見[此處](https://solana.com/developers/courses/native-onchain-development/serialize-instruction-data-frontend)的示例）。
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Populate the data of the Account
+    const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
+
+    // Serialize the account data into the byte buffer defined above
+    // ...
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports,
+        data: accountData,
+        owner: PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+> 在測試中，您無需計算準確的租金。您可以將 lamports 設置為一個較大的值，例如 `100_000_000_000`，並跳過租金計算，因為這些並不是真實的資金。
+
+### 代幣帳戶
+
+要序列化 SPL 代幣帳戶的數據，您可以使用 `AccountLayout` 和 `MintLayout`，這些來自 `@solana/spl-token`。
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    const owner = Keypair.generate();
+
+    // Create a new Mint Account
+    const mint = Keypair.generate();
+
+    // Populate the data of the Mint Account
+    let mintData = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+        {
+          mintAuthorityOption: 1,
+          mintAuthority: owner.publicKey,
+          supply: BigInt(0),
+          decimals: 0,
+          isInitialized: true,
+          freezeAuthorityOption: 0,
+          freezeAuthority: PublicKey.default,
+        },
+        mintData
+    )
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(mint.publicKey, {
+        lamports,
+        data: mintData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+
+    // Create a new Token Account
+    const tokenAccount = Keypair.generate();
+
+    // Populate the data of the Token Account
+    const tokenAccountData = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(
+        {
+            mint: mint.publicKey,
+            owner: owner.publicKey,
+            amount: BigInt(100),
+            delegateOption: 0,
+            delegate: PublicKey.default,
+            delegatedAmount: BigInt(0),
+            state: 1,
+            isNativeOption: 0,
+            isNative: BigInt(0),
+            closeAuthorityOption: 0,
+            closeAuthority: PublicKey.default,
+        },
+        tokenAccountData,
+    );
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(tokenAccount.publicKey, {
+        lamports,
+        data: tokenAccountData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+<ArticleSection name="Execution" id="execution" level="h2" />
+
+在創建帳戶並將其添加到您的 LiteSVM 實例後，您現在可以發送交易並驗證您的程序邏輯。
+
+在發送交易之前，您可以模擬結果：
+
+```ts
+// Simulate before executing
+const simulatedResult = svm.simulateTransaction(tx);
+```
+
+然後發送交易並檢查其日誌：
+
+```ts
+// Execute and inspect logs
+const result = svm.sendTransaction(tx);
+console.log(result.logs);
+```
+
+### 高級功能
+
+在執行之前和之後，您 LiteSVM 實例中包含的整個分類帳都是可讀和可自定義的。
+
+您可以操作系統變量的值，例如時鐘：
+
+```ts
+// Change the Clock
+const newClock = svm.getClock();
+newClock.unixTimestamp = 50n;
+svm.setClock(newClock);
+
+// Jump to a certain Slot
+svm.warpToSlot(500);
+
+// Expire the current blockhash
+svm.expireBlockhash();
+```
+
+您還可以讀取帳戶和協議數據：
+
+```ts
+// Get all the information about an account (data, lamports, owner, ...)
+svm.getAccount(account.publicKey);
+
+// Get the lamport balance of an account
+svm.getBalance(account.publicKey);
+```
+
+或者配置運行時的行為方式：
+
+```ts
+// Sets the compute budget
+const computeBudget = new ComputeBudget();
+computeBudget.computeUnitLimit = 2_000_000n;
+svm.withComputeBudget(computeBudget);
+
+// Sets Sigverify as active
+svm.withSigverify(true);
+
+// Sets the Blockhash check as active
+svm.withBlockhashCheck(true);
+
+// Sets the default Sysvars
+svm.withSysvars();
+
+// Set the FeatureSet to use
+svm.withFeatureSet(new FeatureSet(...))
+```

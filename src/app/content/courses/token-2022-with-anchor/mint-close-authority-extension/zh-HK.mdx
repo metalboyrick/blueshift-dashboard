@@ -1,0 +1,79 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 鑄幣關閉權限擴展
+
+`MintCloseAuthority` 擴展是一個 `Mint` 擴展，允許權限關閉並回收來自供應量為 0 的 `Mint` 帳戶的租金。
+
+此擴展對於清理未使用的鑄幣並回收用於支付帳戶租金豁免的 SOL 非常有用。只有當沒有代幣在流通時，鑄幣才可以被關閉。
+
+<ArticleSection name="初始化鑄幣帳戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `Mint` 帳戶上初始化 `MintCloseAuthority` 擴展，我們可以簡單地使用 `Anchor` 為我們創建的宏。
+
+以下是如何使用鑄幣關閉擴展創建鑄幣的方法：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+        extensions::close_authority::authority = signer,
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+<ArticleSection name="關閉鑄幣帳戶" id="closing-the-mint-account" level="h2" />
+
+如果 `Mint` 帳戶的供應量為零，`CloseMint Authority` 可以通過使用 `close_account()` 指令來回收該帳戶的租金，如下所示：
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::system_program::{create_account, CreateAccount};
+use anchor_spl::{
+    token_2022::{close_account, CloseAccount},
+    token_interface::{
+        spl_token_2022::{
+            extension::{
+                mint_close_authority::MintCloseAuthority
+            },
+        },
+        Mint, Token2022,
+    },
+};
+
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        extensions::close_authority::authority = authority,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+}
+
+pub fn close(ctx: Context<Close>) -> Result<()> {
+    // cpi to token extensions programs to close mint account
+    // alternatively, this can also be done in the client
+    close_account(CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        CloseAccount {
+            account: ctx.accounts.mint_account.to_account_info(),
+            destination: ctx.accounts.authority.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ))?;
+    Ok(())
+}
+```

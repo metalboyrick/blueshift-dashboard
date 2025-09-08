@@ -1,0 +1,41 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF Assembly Slippage</ChallengeTitle>
+
+現在你應該已經開始熟悉撰寫 Assembly，除了使用普通帳戶外，你的滑點檢查應該同時適用於 SPL-Token 和 Token2022 帳戶。
+
+> `amount` 將會以與範例相同的常數放置於記憶體中。主要的區別在於我們無法使用常數來獲取指令數據，因為帳戶的 `data_len` 是動態的（指令數據位於最後一個帳戶數據的末尾）。
+
+建立一個僅有一個指令的程式。它必須：
+- 接收一個 SPL 或 Token2022 Token 帳戶
+- 接收指令數據中的一個 u64（8 字節）最低餘額
+- 動態計算最低餘額的偏移量
+- 如果滑點超出，記錄字串 `Slippage exceeded` 並返回錯誤代碼 1
+
+> 要獲取正確的指令數據偏移量，你可以使用我們的 [工具](https://sbpf.xyz)。但我們會幫助你：token 帳戶的 `data_len` 位於 `.equ TOKEN_ACCOUNT_DATA_LEN, 0x0058`
+
+首先按照 [工具部分](/zh-HK/courses/introduction-to-assembly/tooling) 中的說明安裝 sBPF 套件，然後在終端中使用以下命令構建你的程式：
+
+```
+sbpf build
+```
+
+這將在你的 `target/deploy` 資料夾中生成一個 `.so` 文件。
+
+現在點擊 `take challenge` 按鈕，然後將文件拖放到那裡！
+
+<RequirementList>
+  <Requirement title="挑戰 1：使用 SPL-Token 測試滑點">
+    當 SPL-Token 帳戶中的代幣數量高於傳入的數量時，你的程式應該成功。
+  </Requirement>
+
+  <Requirement title="挑戰 2：測試滑點失敗">
+    當代幣帳戶中的代幣數量低於傳入的數量時，您的程式應該失敗。
+  </Requirement>
+
+  <Requirement title="挑戰 3：使用 Token2022 測試滑點">
+    當 Token2022 帳戶中的代幣數量高於傳入的數量時，您的程式應該成功。
+  </Requirement>
+</RequirementList>

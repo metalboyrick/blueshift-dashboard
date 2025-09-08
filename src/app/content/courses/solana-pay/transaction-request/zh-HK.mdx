@@ -1,0 +1,185 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 交易請求
+
+交易請求通過啟用動態、由伺服器組成的交易，解鎖了 Solana Pay 的全部功能，能夠處理任何類型的 Solana 操作。
+
+與包含所有支付信息於 URL 中的轉賬請求不同，交易請求使用互動式端點，根據實時數據和業務邏輯構建自定義交易。
+
+這種方法將 Solana Pay 從一個簡單的支付系統轉變為一個完整的商業平台，能夠處理複雜的業務場景、動態定價和高級交易流程。
+
+<ArticleSection name="交易請求的運作方式" id="how-it-works" level="h2" />
+
+交易請求遵循一個簡單的 URL 格式，指向您的伺服器端點：
+
+```
+solana:<link>
+```
+
+`link` 的值應該是指向您的 API 端點的 URL，該端點處理 `GET` 和 `POST` 請求。當用戶掃描交易請求的 QR 碼時，他們的錢包會啟動一個四步驟的過程：
+1. **初始 GET 請求**：檢索顯示信息，例如您的商業名稱和標誌
+2. **用戶確認**：錢包向用戶顯示商業信息
+3. **POST 請求**：將用戶的公鑰發送到您的端點
+4. **交易回應**：您的伺服器構建一個自定義交易並以 base64 編碼字符串的形式返回
+
+然後錢包向用戶展示此交易以供批准和簽署。
+
+> 您可以在 URL 中包含參數，以便從您的端點訪問它們，如下所示：
+
+```
+solana:https://myapi.com/pay?amount=100&product=premium&reference=abc123
+```
+
+<ArticleSection name="構建 API 端點" id="api-endpoint" level="h2" />
+
+創建交易請求端點需要在同一 URL 上處理 GET 和 POST 請求。以下是使用 Next.js App Router 的結構：
+
+```ts
+import { NextRequest, NextResponse } from 'next/server';
+
+// CORS headers for wallet compatibility
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
+export async function GET() {
+  // Implementation details below...
+}
+
+export async function POST(request: NextRequest) {
+  // Implementation details below...
+}
+```
+
+> 由於錢包會向您的端點發出跨來源請求，因此 CORS 標頭是必需的。如果沒有它們，錢包請求將會失敗。
+
+### GET 請求處理器
+
+GET 請求提供顯示資訊，幫助用戶了解他們正在互動的內容：
+
+```ts
+export async function GET() {
+  return NextResponse.json({
+    label: "Coffee Shop Demo",
+    icon: "https://solana.com/src/img/branding/solanaLogoMark.svg",
+  }, { headers: corsHeaders });
+}
+```
+
+**回應格式：**
+
+```json
+{
+  "label": "Coffee Shop Demo",
+  "icon": "https://solana.com/src/img/branding/solanaLogoMark.svg"
+}
+```
+
+這些資訊幫助用戶在進行實際交易組成之前了解他們即將互動的內容。
+
+### POST 請求處理器
+
+POST 請求是交易請求真正發揮作用的地方。您的端點接收用戶的公鑰並構建完全自定義的交易：
+
+```ts
+export async function POST(request: NextRequest) {
+  // Parse user's public key from request body
+  const body = await request.json();
+  const { account } = body;
+
+  // Connect to Solana network
+  const connection = new Connection(clusterApiUrl("devnet"));
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+
+  // Create transaction with user as fee payer
+  const transaction = new Transaction({
+    feePayer: new PublicKey(account),
+    blockhash: blockhash,
+    lastValidBlockHeight: lastValidBlockHeight,
+  });
+
+  // ========================================
+  // ADD YOUR CUSTOM INSTRUCTIONS HERE
+  // ========================================
+  
+  // This is where you build your transaction logic.
+  // You can add any combination of instructions:
+  
+  // Example 1: Simple SOL transfer
+  // const transferInstruction = SystemProgram.transfer({
+  //   fromPubkey: new PublicKey(account),
+  //   toPubkey: new PublicKey("YOUR_MERCHANT_WALLET"),
+  //   lamports: LAMPORTS_PER_SOL * 0.01, // 0.01 SOL
+  // });
+  // transaction.add(transferInstruction);
+
+  // Serialize the transaction for the wallet
+  const serializedTransaction = transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  });
+
+  return NextResponse.json({
+    transaction: serializedTransaction.toString('base64'),
+    message: "Transaction created successfully", // Customize this message
+  }, { headers: corsHeaders });
+}
+```
+
+> 您的應用程式不會將交易提交到網絡，因此您無法獲取交易簽名以進行追蹤。請使用 [介紹課程](/zh-HK/courses/solana-pay/introduction#reference) 中解釋的參考參數。
+
+<ArticleSection name="進階功能" id="advanced-capabilities" level="h2" />
+
+### 受限交易
+
+交易請求通過在構建交易之前驗證條件來實現複雜的訪問控制。由於您控制端點，您可以檢查 NFT 擁有權、白名單成員資格或任何其他條件：
+
+```ts
+// Check NFT ownership before building transaction
+const nfts = await metaplex.nfts().findAllByOwner({ owner: account }).run(); 
+
+const hasRequiredNFT = nfts.some(nft => 
+  nft.collection?.address.toString() === requiredCollection
+);
+
+if (!hasRequiredNFT) {
+  return response.status(403).json({ 
+    error: "Access denied: Required NFT not found" 
+  });
+}
+
+// Build transaction only for verified users
+```
+
+### 部分簽名以增強安全性
+
+對於需要管理員密鑰對或多方身份驗證批准的交易，Solana Pay 支援部分簽名。您的伺服器可以在發送給用戶之前添加其簽名：
+
+```ts
+const transaction = new Transaction({
+  feePayer: account,
+  blockhash,
+  lastValidBlockHeight,
+});
+
+// Add your instructions requiring admin signature
+transaction.add(customInstruction);
+
+// Partially sign with your admin keypair
+transaction.partialSign(adminKeypair);
+
+// Send to user for final signature
+const serializedTransaction = transaction.serialize({
+  requireAllSignatures: false,
+});
+```
+
+<ArticleSection name="範例" id="example" level="h2" />
+
+作為完整的範例，您可以使用 Solana Foundation 提供的 [Solana NFT Minter 範例](https://github.com/solana-developers/solana-pay-nft-minter/tree/main)。

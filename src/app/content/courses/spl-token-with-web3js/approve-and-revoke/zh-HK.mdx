@@ -1,0 +1,112 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 批准和撤銷指令
+
+批准授予代理人代表帳戶擁有者轉移特定數量代幣的權限。這使得程式化的代幣轉移成為可能，而無需授予完整的帳戶控制權。
+
+> 我們設定一個「批准」的數量，代理人只能轉移不超過該數量的代幣
+
+撤銷會移除當前代理人對帳戶的權限，將完整控制權返回給帳戶擁有者。
+
+> 立即取消任何現有的代理權，並且只有帳戶擁有者可以撤銷代理權（代理人本身無法撤銷）
+
+在我們可以代理或撤銷任何代幣帳戶之前，我們需要已經完成以下操作：
+- 初始化了一個`Mint`帳戶
+- 初始化了一個`Token`帳戶或`Associated Token`帳戶，我們將控制該帳戶
+
+> 我們批准的代幣數量是根據小數位數「標準化」的。這意味著，如果我們想批准1個有6位小數的代幣，我們實際上需要輸入`1e6`作為數量
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+僅使用「原始」指令而不進行任何抽象，以下是批准代幣的方式：
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    tokenAccount.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Delegate an ATA 
+const approveInstruction = createApproveInstruction(
+    tokenAccount // account
+    delegate.publicKey, // delegate
+    keypair.publickey // owner
+    1e6, // amount of tokens
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    approveInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and delegated! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+僅使用「原始」指令而不進行任何抽象，以下是撤銷代幣的方式：
+
+```ts
+// Revoke the delegate of an ATA 
+const revokeInstruction = createRevokeInstruction(
+    tokenAccount // account
+    keypair.publickey // owner
+);
+
+const transaction = new Transaction().add(revokeInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token account delegate revoked! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+以下是使用`approve()`指令進行抽象後的相同指令：
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    tokenAccount.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await approve(
+    connection,
+    keypair,
+    ata.address, // token Account
+    delegate-publicKey, // delegate
+    keypair.publicKey, // owner
+    1e6, // amount
+);
+
+console.log(`Succesfully Delegated!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+以下是使用`revoke()`指令進行抽象後的相同指令：
+
+```ts
+let tx = await revoke(
+    connection,
+    keypair,
+    ata.address, // token Account
+    keypair.publicKey, // owner
+);
+
+console.log(`Succesfully Revoked Delegate!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

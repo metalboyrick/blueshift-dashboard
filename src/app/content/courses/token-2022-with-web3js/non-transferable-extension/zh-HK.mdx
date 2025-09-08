@@ -1,0 +1,70 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 不可轉讓擴展
+
+`NonTransferable` 擴展是一個 `Mint` 賬戶擴展，該擴展防止代幣在賬戶之間轉移，使其永久綁定於當前持有人。
+
+<ArticleSection name="初始化鑄幣賬戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `Mint` 賬戶上初始化 `MintCloseAuthority` 擴展，我們需要使用 `initializeNonTransferableMint()` 函數。
+
+以下是如何使用不可轉讓擴展創建鑄幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeNonTransferableMintInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Non Transferable extension
+const mintLen = getMintLen([ExtensionType.NonTransferable]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Non Transferable extension
+const initializeMintNonTransferable = createInitializeNonTransferableMintInstruction(
+    mint.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintNonTransferable,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

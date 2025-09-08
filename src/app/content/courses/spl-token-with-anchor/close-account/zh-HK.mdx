@@ -1,0 +1,26 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 關閉帳戶指令
+
+關閉一個代幣帳戶，並將其剩餘的 SOL 租金轉移到目標帳戶。該代幣帳戶必須為零餘額，除非它是原生的 SOL 帳戶。
+
+> 從 Token2022 開始，可以關閉供應量為 0 的 `Mint` 帳戶
+
+在我們關閉任何代幣帳戶之前，我們需要已經完成以下操作：
+- 初始化一個 `Mint` 帳戶
+- 初始化一個 `Token` 帳戶或一個沒有任何代幣的 `Associated Token` 帳戶。
+
+以下是對 `close_account()` 指令的 CPI 的樣子：
+
+```rust
+close_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        CloseAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            destination: ctx.accounts.authority.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

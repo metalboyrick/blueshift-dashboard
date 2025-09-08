@@ -1,0 +1,132 @@
+# 關閉保險庫
+
+`close` 指令執行從抗量子保險庫的完全提取，將所有 lamports 轉移到單一接收者帳戶。
+
+與 `split` 指令不同，當不需要資金分配時，這提供了一個更簡單的全額提取機制。
+
+<ArticleSection name="所需帳戶" id="required-accounts" level="h2" />
+
+該指令需要三個帳戶：
+
+- `vault`：包含存儲 lamports 的來源保險庫（必須是可變的）
+- `refund`：接收保險庫 lamports 餘額的接收者帳戶（必須是可變的）
+
+以下是代碼中的示例：
+
+```rust
+pub struct CloseVaultAccounts<'a> {
+    pub vault: &'a AccountInfo,
+    pub refund: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for CloseVaultAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [vault, refund] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self { vault, refund })
+    }
+}
+
+```
+
+> 帳戶驗證由運行時處理。如果帳戶不符合要求（可變性），指令將自動失敗。
+
+<ArticleSection name="指令數據" id="instruction-data" level="h2" />
+
+需要兩個數據：
+- `signature`：證明擁有保險庫密鑰對的 Winternitz 簽名
+- `bump`：用於優化的 PDA 衍生 bump（1 字節）
+
+以下是代碼中的示例：
+
+```rust
+pub struct CloseVaultInstructionData {
+    pub signature: WinternitzSignature,
+    pub bump: [u8; 1],
+}
+
+impl<'a> TryFrom<&'a [u8]> for CloseVaultInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != core::mem::size_of::<CloseVaultInstructionData>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let mut signature_array = MaybeUninit::<[u8; 896]>::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(data[0..896].as_ptr(), signature_array.as_mut_ptr() as *mut u8, 896);
+        }
+        
+        Ok(Self { 
+            signature: WinternitzSignature::from(unsafe { signature_array.assume_init() }),
+            bump: data[896..897].try_into().map_err(|_| ProgramError::InvalidInstructionData)?,
+        })
+    }
+}
+```
+
+<ArticleSection name="指令邏輯" id="instruction-logic" level="h2" />
+
+驗證過程遵循以下步驟：
+
+1. 消息組裝：構建一個包含 `refund` 帳戶公鑰的 32 字節消息
+
+2. 簽名驗證：使用 Winternitz 簽名恢復原始公鑰哈希，然後將其與保險庫的 PDA 衍生種子進行比較。
+
+3. PDA 驗證：快速等效性檢查確保恢復的哈希與保險庫的 PDA 匹配，證明簽名者擁有保險庫。
+
+4. 資金分配：如果驗證成功，整個餘額將轉移到 `refund` 帳戶，並關閉 `vault` 帳戶。
+
+> 由於程序擁有 `vault` 帳戶，您可以直接轉移 lamports，而無需調用跨程序調用（CPI）。
+
+以下是代碼中的示例：
+
+```rust
+pub struct CloseVault<'a> {
+    pub accounts: CloseVaultAccounts<'a>,
+    pub instruction_data: CloseVaultInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for CloseVault<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let instruction_data = CloseVaultInstructionData::try_from(data)?;
+        let accounts = CloseVaultAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts, instruction_data })
+    }
+}
+
+impl<'a> CloseVault<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+ 
+    pub fn process(&self) -> ProgramResult {
+        // Recover our pubkey hash from the signature
+        let hash = self.instruction_data.signature.recover_pubkey(self.accounts.refund.key()).merklize();
+
+        // Fast PDA equivalence check
+        if solana_nostd_sha256::hashv(&[
+            hash.as_ref(),
+            self.instruction_data.bump.as_ref(),
+            crate::ID.as_ref(),
+            b"ProgramDerivedAddress",
+        ])
+        .ne(self.accounts.vault.key())
+        {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Close Vault and refund balance to Refund account
+        *self.accounts.refund.try_borrow_mut_lamports()? += self.accounts.vault.lamports();
+        self.accounts.vault.close()
+    }
+}
+```
+
+> 重建訊息可以防止簽名重播攻擊，這種攻擊中惡意行為者會在從內存池捕獲有效簽名時，替換不同的接收帳戶以進行最大可提取價值（MEV）操作。
