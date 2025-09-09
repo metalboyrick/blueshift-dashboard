@@ -1,0 +1,243 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Performance
+
+While many developers turn to Pinocchio for its fine-grained control over account fields, its true strength lies in enabling maximum performance. 
+
+In this section, we’ll explore practical strategies to achieve optimal efficiency in your Solana programs.
+
+<ArticleSection name="Superfluous Checks" id="superfluous-checks" level="h2" />
+
+Developers often add extra account constraints for safety, but these can introduce unnecessary overhead. It’s important to distinguish between essential and redundant checks.
+
+For example, when simply reading from a `Token Account` or `Mint`, deserialization and validation are necessary. But if these same accounts are later used in a CPI (Cross-Program Invocation), any mismatch or error will cause the instruction to fail at that point. Thus, preemptive checks can be redundant.
+
+Similarly, verifying the "owner" of a Token Account is often superfluous; especially if the account is controlled by a PDA (Program Derived Address). If the owner is incorrect, the CPI will fail due to invalid seeds. In cases where the transfer is not executed by a PDA, you should focus on validating the recipient, particularly when depositing into a PDA-controlled account since the interested of the sender is aligned with the one of the program.
+
+Let's take on the example of an `Escrow`:
+
+...
+
+### Associated Token Program
+
+`Associated Token Accounts` (ATAs) are convenient but come with a performance cost. Avoid enforcing their use unless absolutely necessary, and never require their creation within your instruction logic. For most scenarios, the `init-if-needed` pattern adds avoidable complexity and resource usage (like in Amm instruction that are composed by router like Jupiter).
+
+If your program relies on ATAs, ensure they are created externally. Within your program, verify their correctness by deriving the expected address directly like this:
+
+```rust
+let (associated_token_account, _) = find_program_address(
+    &[
+        self.accounts.owner.key(),
+        self.accounts.token_program.key(),
+        self.accounts.mint.key(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+```
+
+By minimizing unnecessary checks and account requirements, you reduce compute costs and streamline your program’s execution; unlocking the full performance potential of native solana development.
+
+> Adding checks to let the instruction fail early has its advantages, since the compute units consumed will definitely be lower. So consider whether the instruction will mainly be used with flags like `{ skipPreflight: true }`.
+
+<ArticleSection name="Perf Flag" id="perf-flag" level="h2" />
+
+Rust’s feature flags provide a powerful way to conditionally compile code, enabling you to toggle functionality for different build profiles; such as development, testing, or maximum performance in production. 
+
+This is especially useful in Solana programs, where every compute unit counts.
+
+### Setting Up Feature Flags
+
+Feature flags are defined in your `Cargo.toml` file under the `[features]` section. For example, you might want a `perf` flag that enables performance optimizations by disabling logging and extra checks:
+
+```
+[features]
+default = ["perf"]
+perf = []
+```
+
+Here, the perf feature is enabled by default, but you can override it when building or testing.
+
+### Using Feature Flags in Code
+
+You can use Rust’s conditional compilation attributes to include or exclude code based on the active feature. For example:
+
+```rust
+pub fn process(ctx: Context<'info>) -> ProgramResult {
+    #[cfg(not(feature = "perf"))]
+    sol_log("Create Class");
+    Self::try_from(ctx)?.execute()
+}
+```
+
+Most programs return the name of the instruction as a log to make debugging easier and to ensure that the correct instruction is called. 
+
+However, this is expensive and not actually needed except to make the explorer more readable and to enhance debugging.
+
+```rust
+#[cfg(not(feature = "perf"))]
+if name.len() > MAX_NAME_LEN {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+Another example is the superfluous checks discussed earlier.
+
+If we know that our instruction is safe without these checks, we shouldn’t make them the default, but instead hide them behind a flag.
+
+> In this example, we created a `perf` flag to indicate that, if we want the program to be as performant as possible, we should use the perf flag while compiling it.
+
+### Building with Different Flags
+
+To build your program with or without the `perf` feature, use:
+
+- With performance optimizations (default):
+
+```
+cargo build-bpf
+```
+
+- With extra checks and logging:
+
+```
+cargo build-bpf --no-default-features
+```
+
+This approach allows you to maintain a single codebase that can be tuned for development safety or production speed simply by toggling a feature flag.
+
+<ArticleSection name="Bitwise Operations" id="bitwise-operations" level="h2" />
+
+When discussing efficient operations, booleans are among the most wasteful. Consider this: they occupy 1 byte to represent just two possible values: 0 or 1.
+
+If you have multiple booleans in your code, you can store them much more efficiently using bit manipulation. With bitwise operations, you can store up to 8 different boolean values in a single byte.
+
+### Flag Definition
+
+Define flags as bit positions using left-shift operations:
+
+```rust
+const FLAG_ACTIVE: u8 = 1 << 0;     // 0000_0001
+const FLAG_VERIFIED: u8 = 1 << 1;   // 0000_0010  
+const FLAG_PREMIUM: u8 = 1 << 2;    // 0000_0100
+const FLAG_LOCKED: u8 = 1 << 3;     // 0000_1000
+```
+
+To set a flag we can simply do:
+
+```rust
+let mut flags = 0u8;           // flags = 0000_0000
+
+flags |= FLAG_ACTIVE;          // flags = 0000_0001
+flags |= FLAG_VERIFIED;        // flags = 0000_0011
+flags |= FLAG_PREMIUM | FLAG_LOCKED;  // flags = 0000_1111
+```
+
+The `|` (OR operator) is perfect for "turning on" specific bits without affecting others since when you OR with 0, the original bit is preserved and when you OR with 1, the result is always 1 (flag gets set)
+
+If we want to check if a flag is active we can do something like this:
+
+```rust
+let flags = 0b0000_0101u8;  // Has ACTIVE and PREMIUM flags set
+
+// Check if a single flag is set
+if flags & FLAG_ACTIVE != 0 {
+    println!("Account is active");
+}
+
+// Check if multiple flags are set
+if (flags & (FLAG_ACTIVE | FLAG_PREMIUM)) == (FLAG_ACTIVE | FLAG_PREMIUM) {
+    println!("Account is both active and premium");
+}
+
+// Check if any of multiple flags are set
+if flags & (FLAG_VERIFIED | FLAG_PREMIUM) != 0 {
+    println!("Account is either verified or premium (or both)");
+}
+```
+
+The `&` (AND operator) is perfect for "masking" specific bits to check their values since when you AND with 0, the result is always 0 and when you AND with 1, the original bit is preserved
+
+To clear or toggle flags, instead we can do something like this: 
+
+```rust
+let mut flags = 0b0000_1111u8;      // All flags set
+
+// Clear a single flag
+flags &= !FLAG_ACTIVE;              // flags = 0000_1110
+
+// Clear multiple flags at once
+flags &= !(FLAG_VERIFIED | FLAG_PREMIUM);   // flags = 0000_1000
+
+// Toggle a single flag
+flags ^= FLAG_ACTIVE;               // flags = 0000_1001 (now has VERIFIED)
+flags ^= FLAG_LOCKED;               // flags = 0000_0001 (LOCKED now cleared)
+
+// Toggle multiple flags at once
+flags ^= FLAG_PREMIUM | FLAG_LOCKED;        // flags = 0000_1011
+```
+
+<ArticleSection name="Memory on Solana" id="memory-on-solana" level="h2" />
+
+The Solana Virtual Machine (SVM) uses a three-tier memory architecture that strictly separates stack memory (local variables), heap memory (dynamic structures), and account space (persistent storage). 
+
+Understanding this architecture is crucial for writing high-performance Solana programs.
+
+Programs operate within fixed virtual address spaces with predictable memory mapping:
+- **Program Code**: `0x100000000` - Where your compiled program bytecode lives
+- **Stack Data**: `0x200000000` - Local variables and function call frames  
+- **Heap Data**: `0x300000000` - Dynamic allocations (expensive!)
+
+This deterministic layout enables powerful optimizations but also creates strict performance constraints.
+
+> Solana imposes strict memory limitations: 4KB stack frames per function call and 32KB total heap space per program execution.
+
+### The Zero-Allocation Advantage
+
+Pinocchio's main performance breakthrough comes from using references instead of heap allocations for everything. 
+
+This approach leverages a key insight: **the SVM already loads all your program inputs into memory**, so copying that data into new heap allocations is pure waste.
+
+Heap allocation isn't inherently bad, but on Solana it's expensive and complex because every allocation consumes precious compute units: each allocation fragments the limited heap space and cleanup operations consume additional compute units.  
+
+### Zero-Allocation Techniques
+
+1. Reference-Based Data Structures - Transform owned data into borrowed references:
+    ```rust
+    // HEAP ALLOCATION:
+    struct AccountInfo {
+        key: Pubkey,        // Owned data - copied to heap
+        data: Vec<u8>,      // Vector - definitely heap allocated
+    }
+
+    // ZERO ALLOCATION:
+    struct AccountInfo<'a> {
+        key: &'a Pubkey,    // Reference - no allocation
+        data: &'a [u8],     // Slice reference - no allocation
+    }
+    ```
+
+2. Zero-Copy Data Access - Access data in-place without deserialization:
+    ```rust
+    // Instead of deserializing, access data in-place:
+    pub fn process_transfer(accounts: &[u8], instruction_data: &[u8]) {
+        // Parse accounts directly from byte slice - NO HEAP ALLOCATION
+        let source_account = &accounts[0..36];  // Just slice references
+        let dest_account = &accounts[36..72];
+        
+        // Access fields through pointer arithmetic - NO ALLOCATION
+        let amount = u64::from_le_bytes(instruction_data[0..8].try_into().unwrap());
+    }
+    ```
+
+3. No-Std Constraints - Prevent accidental heap usage at compile time:
+    ```rust
+    // Enforces no-std to prevents accidental heap usage:
+    #![no_std]
+    ```
+
+### Pinocchio Memory Allocator
+
+If you want to make sure that you don't allocate any heap, Pinocchio provide a specialized macro to make sure that this happen: `no_allocator!()`
+
+> If not set, Pinocchio will use the `default_allocator!()` for programs requiring traditional heap operations.
+
+Other than this, you can always write a better heap allocator that knows how to clean up after itself. If you're interested in this approach, [here's an example](https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/custom-heap/src/entrypoint.rs).

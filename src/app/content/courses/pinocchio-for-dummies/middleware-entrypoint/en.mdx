@@ -1,0 +1,182 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Middleware entrypoint
+
+Not all instructions are created equal. Some instructions are called more frequently than others, creating performance bottlenecks. 
+
+To prioritize efficiency and optimization, we need a different approach for handling these high-frequency instructions.
+
+This is where the "hot" and "cold" path strategy comes into play.
+
+The "hot" path creates an optimized entrypoint for frequently-called instructions, designed to reach a "fail" state as quickly as possible so we can fall back to the standard Pinocchio entrypoint when necessary.
+
+<ArticleSection name="The Hot Path" id="the-hot-path" level="h2" />
+
+The hot path bypasses the standard entrypoint logic that deserializes all account data before processing. Instead, it works directly with raw data for maximum performance.
+
+### Standard vs. Hot Path Processing
+
+In the Standard Entrypoint, the loader packs everything an instruction needs into a flat, C-style record stored on the BPF VM's input page. The entrypoint macro unpacks this record and provides three safe slices: `program_id`, accounts, and `instruction_data`.
+
+In the Hot Path, since we know exactly what to expect, we can check and manipulate accounts directly from the raw entrypoint data, eliminating unnecessary deserialization overhead.
+
+The raw input structure looks like this:
+
+```rust
+pub struct Entrypoint {
+    account_len: u64,
+    account_info: [AccountRaw; account_len]
+    instruction_len: u64,
+    instruction_data: [u8; instruction_len]
+    program_id: [u8; 32],
+}
+
+pub struct AccountRaw {
+    is_duplicate: u8,
+    is_signer: u8,
+    is_writable: u8,
+    executable: u8,
+    alignment: u32,
+    key: [u8; 32],
+    owner: [u8; 32],
+    lamports: u64,
+    data_len: usize,
+    data: [u8; data_len],
+    padding: [u8; 10_240],
+    alignment_padding: [u8; ?],
+    rent_epoch: i64,
+}
+```
+
+### Hot Path Discriminators
+
+When designing the hot path, we need a reliable way to determine whether the current instruction should be handled by the hot path or routed to the cold path as fast as possible. 
+
+Traditional discriminators won't work here since they appear at different offsets each time based on the number of accounts and data inside of them.
+
+We need to check something that's always at the same offset. Currently, we have two approaches for discriminating these instructions:
+- Account Count: Since the account count is the first input in the raw entrypoint, we can discriminate based on the number of accounts passed: `if *input == 4u64`. 
+    This works because the account count has a fixed position at the very beginning of the input data.
+
+- First Account Publickey: Since the public key of the first account appears at a fixed offset, we can design our program to always place a constant keypair (like an authority, or a program) in the first position and discriminate based on that key.
+
+> Currently there is a SIMD open to have in the registry `r2` the instruction data. Meaning that after that gets implemented, we're going to be able to use the discriminator for our hot path.
+
+<ArticleSection name="Entrypoint Design" id="entrypoint-design" level="h2" />
+
+With [this PR](https://github.com/anza-xyz/pinocchio/pull/241), [Dean](https://x.com/deanmlittle) introduced a new entrypoint called `middleware_entrypoint` into Pinocchio, enabling easy hot path creation for programs.
+
+Here's how to implement it:
+
+```rust
+/// A "dummy" function with a hint to the compiler that it is unlikely to be
+/// called.
+///
+/// This function is used as a hint to the compiler to optimize other code paths
+/// instead of the one where the function is used.
+#[cold]
+pub const fn cold_path() {}
+
+/// Return the given `bool` value with a hint to the compiler that `true` is the
+/// likely case.
+#[inline(always)]
+pub const fn likely(b: bool) -> bool {
+    if b {
+        true
+    } else {
+        cold_path();
+        false
+    }
+}
+
+middleware_entrypoint!(hot, process_instruction);
+
+#[inline(always)]
+pub fn hot(input: *mut u8) -> u64 {
+    unsafe { *input as u64 }
+}
+
+#[inline(always)]
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((Instruction1::DISCRIMINATOR, data)) => Instruction1::try_from((data, accounts))?.process(),
+        Some((Instruction2::DISCRIMINATOR, _)) => Instruction2::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+### How It Works
+
+The entrypoint calls the "hot" function first, checks if it returns an error, and if so, falls back to the default Pinocchio entrypoint. This creates a fast path for common operations while maintaining compatibility.
+
+The `#[cold]` attribute tells the compiler that this function is rarely called. During optimization, the compiler deprioritizes cold code paths and focuses resources on optimizing the hot path.
+
+### Hot Path Design Principles
+
+When designing the hot path, rigorous validation is essential since we're working with raw inputs. Any undefined behavior could compromise the entire program.
+
+Always verify that account offsets and lengths match expectations. Use [sbpf.xyz](https://sbpf.xyz/) to determine the correct offsets, then validate like this:
+
+```rust
+if *input == 4
+    && (*input.add(ACCOUNT1_DATA_LEN).cast::<u64>() == 165)
+    && (*input.add(ACCOUNT2_DATA_LEN).cast::<u64>() == 82)
+    && (*input.add(IX12_ACCOUNT3_DATA_LEN).cast::<u64>() == 165)
+{
+    //...
+}
+```
+
+When accounts have variable data lengths, generate dynamic offsets to locate instruction data like this: 
+
+```rust
+/// Align an address to the next multiple of 8.
+#[inline(always)]
+fn align(input: u64) -> u64 {
+    (input + 7) & (!7)
+}
+
+//...
+
+// The `authority` account can have variable data length.
+    let account_4_data_len_aligned =
+        align(*input.add(IX12_ACCOUNT4_DATA_LEN).cast::<u64>()) as usize;
+    let offset = IX12_EXPECTED_INSTRUCTION_DATA_LEN_OFFSET + account_4_data_len_aligned;
+```
+
+Once validation passes, extract instruction data, transmute accounts, and process normally:
+
+```rust
+// Check that we have enough instruction data.
+if input.add(offset).cast::<usize>().read() >= INSTRUCTION_DATA_SIZE {
+    let discriminator = input.add(offset + size_of::<u64>()).cast::<u8>().read();
+
+    // Check for instruction discriminator.
+    if likely(discriminator == 12) {
+        // instruction data length (u64) + discriminator (u8)
+        let instruction_data = unsafe { from_raw_parts(input.add(offset + size_of::<u64>() + size_of::<u8>()), INSTRUCTION_DATA_SIZE - size_of::<u8>()) };
+
+        let accounts = unsafe {
+            [
+                transmute::<*mut u8, AccountInfo>(input.add(ACCOUNT1_HEADER_OFFSET)),
+                transmute::<*mut u8, AccountInfo>(input.add(ACCOUNT2_HEADER_OFFSET)),
+                transmute::<*mut u8, AccountInfo>(input.add(IX12_ACCOUNT3_HEADER_OFFSET)),
+                transmute::<*mut u8, AccountInfo>(input.add(IX12_ACCOUNT4_HEADER_OFFSET)),
+            ]
+        };
+
+        return match Instruction1::try_from((instruction_data, accounts))?.process() {
+            Ok(()) => SUCCESS,
+            Err(error) => {
+                log_error(&error);
+                error.into()
+            }
+        };
+    }
+}
+```

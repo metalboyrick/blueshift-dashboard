@@ -1,0 +1,517 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Accounts
+
+As we saw in the previous section, account validation with Pinocchio differs from Anchor since we can't use Account Types that automatically perform owner, signer, and discriminator checks.
+
+In Native Rust, we need to perform these validations manually. While this requires more attention to detail, it's straightforward to implement:
+
+```rust
+// SignerAccount type
+if !account.is_signer() {
+    return Err(PinocchioError::NotSigner.into());
+}
+```
+
+Or for an owner check:
+
+```rust
+// SystemAccount type
+if !account.is_owned_by(&pinocchio_system::ID) {
+    return Err(PinocchioError::InvalidOwner.into());
+}
+```
+
+By wrapping all validations in the `TryFrom` implementation we covered earlier, we can easily identify missing checks and ensure we're writing secure code.
+
+However, writing these checks for each instruction can become repetitive. To address this, we created a `helper.rs` file that defines similar types to Anchor's to streamline these validations.
+
+<ArticleSection name="Signer and System Account" id="signer-and-system-account" level="h2" />
+
+As we saw in the previous examples, `SystemAccount` and `SignerAccount` checks are straightforward and don't require any additional validation, so we're going to add the following to our `helper.rs`:
+
+```rust
+fn signer_check(account: &AccountInfo) -> Result<(), ProgramError> {
+    if !account.is_signer() {
+        return Err(PinocchioError::NotSigner.into());
+    }
+
+    Ok(())
+}
+
+fn system_account_check(account: &AccountInfo) -> Result<(), ProgramError> {
+    if !account.is_owned_by(&pinocchio_system::ID) {
+        return Err(PinocchioError::InvalidOwner.into());
+    }
+
+    Ok(())
+}
+```
+
+Here we simply check if the account is a signer or if it's owned by the system program. 
+
+<ArticleSection name="Mint and Token Accounts" id="mint-and-token-accounts" level="h2" />
+
+Now things get more interesting. We start with the usual account check (ownership and lenght check), but we also add other specific functions to provide additional helpers that resemble Anchor macros like `init` and `init_if_needed`.
+
+```rust
+pub struct Mint;
+
+impl Mint {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_token::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        if account.data_len() != pinocchio_token::state::Mint::LEN {
+            return Err(PinocchioError::InvalidAccountData.into());
+        }
+
+        Ok(())
+    }
+
+    //...
+}
+```
+
+For the `init` and `init_if_needed` functionality, we use `CreateAccount` and `InitializeMint2` CPIs under the hood to initialize the `Mint` account:
+
+```rust
+impl Mint {
+    //...
+
+    fn init(
+        account: &AccountInfo, 
+        payer: &AccountInfo, 
+        decimals: u8, 
+        mint_authority: &[u8; 32], 
+        freeze_authority: Option<&[u8; 32]>
+    ) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::Mint::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::Mint::LEN as u64,
+            owner: &pinocchio_token::ID,
+        }.invoke()?;
+
+        InitializeMint2 {
+            mint: account,
+            decimals,
+            mint_authority,
+            freeze_authority,
+        }.invoke()
+    }
+
+    fn init_if_needed(
+        account: &AccountInfo, 
+        payer: &AccountInfo, 
+        decimals: u8, 
+        mint_authority: &[u8; 32], 
+        freeze_authority: Option<&[u8; 32]>
+    ) -> ProgramResult {
+        mint_account_check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => init_mint_account(account, payer, decimals, mint_authority, freeze_authority),
+        }
+    }
+}
+```
+
+We then do exactly the same for the `Token` account:
+
+```rust
+pub struct Token;
+
+impl Token {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&pinocchio_token::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        if account.data_len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+            return Err(PinocchioError::InvalidAccountData.into());
+        }
+
+        Ok(())
+    }
+
+    fn init(
+        account: &AccountInfo, 
+        mint: &AccountInfo, 
+        payer: &AccountInfo, 
+        owner: &[u8; 32]
+    ) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::TokenAccount::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::TokenAccount::LEN as u64,
+            owner: &pinocchio_token::ID,
+        }.invoke()?;
+
+        // Initialize the Token Account
+        InitializeAccount3 {
+            account,
+            mint,
+            owner,
+        }.invoke()
+    }
+
+    fn init_if_needed(
+        account: &AccountInfo, 
+        mint: &AccountInfo, 
+        payer: &AccountInfo, 
+        owner: &[u8; 32]
+    ) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => init_token_account(account, mint, payer, owner),
+        }
+    }
+}
+```
+
+### Token2022
+
+You might have noticed that for the Legacy SPL Token Program, we only performed a length check on the `Mint` and `Token` account. This approach works because when you have just two account types with fixed sizes, you can distinguish between them using their length alone.
+
+For Token2022, this simple approach doesn't work. The `Mint` size can grow and potentially exceed the `Token` account size when token extensions are added directly to the `Mint` data. This means we can't rely solely on size to differentiate between account types.
+
+For Token2022, we can distinguish between a `Mint` and a `Token` account in two ways:
+- **By size**: Similar to the Legacy Token Program (when accounts have standard sizes)
+- **By discriminator**: A special byte located at position 165 (one byte larger than the legacy Token account to avoid conflicts)
+
+This leads to modified validation checks:
+
+```rust
+// TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
+pub const TOKEN_2022_PROGRAM_ID: [u8; 32] = [
+    0x06, 0xdd, 0xf6, 0xe1, 0xee, 0x75, 0x8f, 0xde, 0x18, 0x42, 0x5d, 0xbc, 0xe4, 0x6c, 0xcd, 0xda,
+    0xb6, 0x1a, 0xfc, 0x4d, 0x83, 0xb9, 0x0d, 0x27, 0xfe, 0xbd, 0xf9, 0x28, 0xd8, 0xa1, 0x8b, 0xfc,
+];
+
+const TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET: usize = 165;
+pub const TOKEN_2022_MINT_DISCRIMINATOR: u8 = 0x01;
+pub const TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR: u8 = 0x02;
+
+pub struct Mint2022;
+
+impl Mint2022 {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        let data = account.try_borrow_data()?;
+
+        if data.len().ne(&pinocchio_token::state::Mint::LEN) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+
+            if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn init(
+        account: &AccountInfo, 
+        payer: &AccountInfo, 
+        decimals: u8, 
+        mint_authority: &[u8; 32], 
+        freeze_authority: Option<&[u8; 32]>
+    ) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::Mint::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::Mint::LEN as u64,
+            owner: &TOKEN_2022_PROGRAM_ID,
+        }.invoke()?;
+
+        InitializeMint2 {
+            mint: account,
+            decimals,
+            mint_authority,
+            freeze_authority,
+        }.invoke()
+    }
+
+    fn init_if_needed(
+        account: &AccountInfo, 
+        payer: &AccountInfo, 
+        decimals: u8, 
+        mint_authority: &[u8; 32], 
+        freeze_authority: Option<&[u8; 32]>
+    ) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, payer, decimals, mint_authority, freeze_authority),
+        }
+    }
+}
+
+pub struct Token2022;
+
+impl Token2022 {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        let data = account.try_borrow_data()?;
+
+        if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+            if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+            if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR) {
+                return Err(PinocchioError::InvalidAccountData.into());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn init(
+        account: &AccountInfo, 
+        mint: &AccountInfo,
+        payer: &AccountInfo, 
+        owner: &[u8; 32]
+    ) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(pinocchio_token::state::TokenAccount::LEN);
+
+        // Fund the account with the required lamports
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: pinocchio_token::state::TokenAccount::LEN as u64,
+            owner: &TOKEN_2022_PROGRAM_ID,
+        }.invoke()?;
+
+        InitializeAccount3 {
+            account,
+            mint,
+            owner,
+        }.invoke()
+    }
+
+    fn init_if_needed(
+        account: &AccountInfo, 
+        mint: &AccountInfo, 
+        payer: &AccountInfo, 
+        owner: &[u8; 32]
+    ) -> ProgramResult {
+        match Self::check(account) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, mint, payer, owner),
+        }
+    }
+}
+```
+
+### Token Interface
+
+Since we want to make it easy to work with both Token2022 and Legacy Token Programs without having to discriminate between them, we created a helper that follows the same basic principle:
+
+```rust
+pub struct MintInterface;
+
+impl MintInterface {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            if !account.is_owned_by(&pinocchio_token::ID) {
+                return Err(PinocchioError::InvalidOwner.into());
+            } else {
+                if account.data_len().ne(&pinocchio_token::state::Mint::LEN) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        } else {
+            let data = account.try_borrow_data()?;
+
+            if data.len().ne(&pinocchio_token::state::Mint::LEN) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+                if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET].ne(&TOKEN_2022_MINT_DISCRIMINATOR) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub struct TokenInterface;
+
+impl TokenInterface {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&TOKEN_2022_PROGRAM_ID) {
+            if !account.is_owned_by(&pinocchio_token::ID) {
+                return Err(PinocchioError::InvalidOwner.into());
+            } else {
+                if account.data_len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        } else {
+            let data = account.try_borrow_data()?;
+
+            if data.len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+                if data.len().le(&TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET) {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+                if data[TOKEN_2022_ACCOUNT_DISCRIMINATOR_OFFSET]
+                    .ne(&TOKEN_2022_TOKEN_ACCOUNT_DISCRIMINATOR)
+                {
+                    return Err(PinocchioError::InvalidAccountData.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+```
+
+### Associated Token Account
+
+We can create some checks for the Associated Token Program. These are very similar to the normal Token Program checks, but they include an additional derivation check to ensure the account is derived correctly.
+
+```rust
+pub struct AssociatedToken;
+
+impl AssociatedToken {
+    fn check(
+        account: &AccountInfo,
+        authority: &AccountInfo,
+        mint: &AccountInfo,
+        token_program: &AccountInfo,
+    ) -> Result<(), ProgramError> {
+        TokenAccount::check(account)?;
+
+        if find_program_address(
+            &[authority.key(), token_program.key(), mint.key()],
+            &pinocchio_associated_token_account::ID,
+        ).0.ne(account.key()) {
+            return Err(PinocchioError::InvalidAddress.into());
+        }
+
+        Ok(())
+    }
+
+    fn init(
+        account: &AccountInfo, 
+        mint: &AccountInfo, 
+        payer: &AccountInfo, 
+        owner: &AccountInfo, 
+        system_program: &AccountInfo, 
+        token_program: &AccountInfo
+    ) -> ProgramResult {
+        Create {
+            funding_account: payer,
+            account,
+            wallet: owner,
+            mint,
+            system_program,
+            token_program,
+        }.invoke()
+    }
+
+    fn init_if_needed(
+        account: &AccountInfo, 
+        mint: &AccountInfo, 
+        payer: &AccountInfo, 
+        owner: &AccountInfo, 
+        system_program: &AccountInfo, 
+        token_program: &AccountInfo
+    ) -> ProgramResult {
+        match Self::check(account, payer, mint) {
+            Ok(_) => Ok(()),
+            Err(_) => Self::init(account, mint, payer, owner, system_program, token_program),
+        }
+    }
+}
+```
+
+<ArticleSection name="Program Accounts" id="program-accounts" level="h2" />
+
+Finally, we implement checks and helpers for program accounts, including `init` and `close` functionality.
+
+You might notice something interesting in our `close` implementation: we resize the account to almost nothing, leaving only the first byte and setting it to 255. This is a security measure to prevent reinitialization attacks.
+
+A reinitialization attack occurs when an attacker attempts to reuse a closed account by reinitializing it with malicious data. By setting the first byte to 255 and shrinking the account to nearly zero size, we make it impossible for the account to be mistaken for any valid account type in the future. This is a common security pattern in Solana programs.
+
+```rust
+pub struct ProgramAccount;
+
+impl ProgramAccount {
+    fn check(account: &AccountInfo) -> Result<(), ProgramError> {
+        if !account.is_owned_by(&crate::ID) {
+            return Err(PinocchioError::InvalidOwner.into());
+        }
+
+        if account.data_len().ne(&crate::state::ProgramAccount::LEN) {
+            return Err(PinocchioError::InvalidAccountData.into());
+        }
+
+        Ok(())
+    }
+    
+    fn init<'a, T: Sized>(
+        payer: &AccountInfo,
+        account: &AccountInfo,
+        seeds: &[Seed<'a>],
+        space: usize,
+    ) -> ProgramResult {
+        // Get required lamports for rent
+        let lamports = Rent::get()?.minimum_balance(space);
+
+        // Create signer with seeds slice
+        let signer = [Signer::from(seeds)];
+
+        // Create the account
+        CreateAccount {
+            from: payer,
+            to: account,
+            lamports,
+            space: space as u64,
+            owner: &crate::ID,
+        }
+        .invoke_signed(&signer)?;
+
+        Ok(())
+    }
+
+    fn close(account: &AccountInfo, destination: &AccountInfo) -> ProgramResult {
+        {
+            let mut data = account.try_borrow_mut_data()?;
+            data[0] = 0xff;
+        }
+
+        *destination.try_borrow_mut_lamports()? += *account.try_borrow_lamports()?;
+        account.realloc(1, true)?;
+        account.close()
+    }
+}
+```

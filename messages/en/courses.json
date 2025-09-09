@@ -23,8 +23,8 @@
         "conclusion": "Conclusion"
       }
     },
-    "introduction-to-pinocchio": {
-      "title": "Introduction to Pinocchio",
+    "pinocchio-for-dummies": {
+      "title": "Pinocchio for Dummies",
       "lessons": {
         "pinocchio-101": "Pinocchio 101",
         "pinocchio-accounts": "Pinocchio Accounts",
@@ -33,6 +33,8 @@
         "reading-and-writing-data": "Reading and Writing Data",
         "testing-your-program": "Testing your Program",
         "performance": "Performance",
+        "middleware-entrypoint": "Middleware Entrypoint",
+        "batch-instructions": "Batch Instructions",
         "conclusion": "Conclusion"
       }
     },
