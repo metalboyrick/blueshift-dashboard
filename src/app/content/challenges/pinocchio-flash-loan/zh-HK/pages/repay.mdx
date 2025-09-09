@@ -1,0 +1,113 @@
+# 還款
+
+`repay` 指令是我們閃電貸系統的第二部分。由於 `loan` 指令的設計，`repay` 的邏輯相對簡單，因為它只需要：
+1. 使用 `loan` 帳戶檢查所有餘額是否已正確償還。
+2. 關閉 `loan` 帳戶，因為它已不再需要。
+
+<ArticleSection name="所需帳戶" id="required-accounts" level="h2" />
+- `borrower`：請求閃電貸的用戶。他們提供建立 `loan` 帳戶所需的 lamports。必須是可變的。
+- `loan`：用於存儲 `protocol_token_account` 和最終所需 `balance` 的臨時帳戶。必須是可變的，因為它將在指令結束時被關閉。
+
+以下是實現：
+
+```rust
+pub struct RepayAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, loan, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self {
+            borrower,
+            loan,
+            token_accounts,
+        })
+    }
+}
+```
+
+`token_accounts` 欄位是一個動態帳戶數組，表示與借款人貸款相關的協議代幣帳戶。
+
+<ArticleSection name="指令數據" id="instruction-data" level="h2" />
+
+不需要指令數據，因為我們使用 `balance` 欄位在 `loan` 帳戶中驗證貸款是否已償還。
+
+<ArticleSection name="指令邏輯" id="instruction-logic" level="h2" />
+
+我們首先將帳戶解析為 `RepayAccounts` 結構。
+
+```rust
+pub struct Repay<'a> {
+    pub accounts: RepayAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let accounts = RepayAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts })
+    }
+}
+
+```
+
+接下來，我們檢查所有貸款是否已償還。我們通過從 `loan` 帳戶中檢索貸款數量並逐一迭代來完成此操作。對於每筆貸款，我們驗證 `protocol_token_account` 是否正確，並且其餘額是否大於或等於貸款金額。
+
+```rust
+impl<'a> Repay<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        let loan_data = self.accounts.loan.try_borrow_data()?;
+        let loan_num = loan_data.len() / size_of::<LoanData>();
+
+        if loan_num.ne(&self.accounts.token_accounts.len()) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Process each pair of token accounts (protocol, borrower) with corresponding amounts
+        for i in 0..loan_num {
+            // Validate that protocol_ata is the same as the one in the loan account
+            let protocol_token_account = &self.accounts.token_accounts[i];
+
+            if unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>()) as *const [u8; 32]) } != *protocol_token_account.key() {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            // Check if the loan is already repaid
+            let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+            let loan_balance = unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>() + size_of::<[u8; 32]>()) as *const u64) };
+
+            if balance < loan_balance {
+                return Err(ProgramError::InvalidAccountData);
+            }
+        }
+
+        //..
+    }
+}
+```
+
+然後，我們可以關閉 `loan` 帳戶並回收租金，因為它已不再需要：
+
+```rust
+drop(loan_data);
+// Close the loan account and give back the lamports to the borrower
+unsafe {
+    *self.accounts.borrower.borrow_mut_lamports_unchecked() += *self.accounts.loan.borrow_lamports_unchecked();
+    // There is no need to manually zero out lamports in the loan account because it is done in the close_unchecked function
+    self.accounts.loan.close_unchecked();
+}
+```
+
+> 如你所見，為了優化性能並基於設計考量，還款並不會在此指令中完成。這是因為`borrower`可以選擇在其他指令中償還代幣賬戶，例如在執行交換操作或從其套利程序執行一系列CPI時。

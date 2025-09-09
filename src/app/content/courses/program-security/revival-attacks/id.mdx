@@ -1,0 +1,135 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Serangan Revival
+
+Serangan revival memanfaatkan mekanisme penutupan akun Solana dengan menghidupkan kembali akun "mati" dalam transaksi yang sama.
+
+Ketika Anda menutup akun dengan mentransfer keluar lamports-nya, Solana tidak langsung membersihkannya; akun hanya dibersihkan setelah transaksi selesai. Penundaan ini menciptakan celah berbahaya di mana penyerang dapat "menghidupkan kembali" akun yang ditutup dengan mengirimkan lamports kembali ke akun tersebut, meninggalkan akun zombie dengan data usang yang mungkin masih dipercaya oleh program Anda.
+
+Serangan ini berhasil karena kesalahpahaman mendasar tentang siklus hidup akun. Pengembang berasumsi bahwa menutup akun membuatnya langsung tidak dapat digunakan, tetapi pada kenyataannya, akun tetap dapat diakses sampai transaksi berakhir. Penyerang dapat mengapit instruksi penutupan Anda dengan transfer yang mengembalikan rent exemption akun, mencegah garbage collection dan mempertahankan akun dalam keadaan yang dapat dieksploitasi.
+
+Ini sangat merusak dalam protokol di mana penutupan akun mewakili finalisasi seperti: menyelesaikan escrow, menyelesaikan sengketa, atau membakar aset. Akun yang dihidupkan kembali dapat menipu program Anda sehingga percaya bahwa operasi ini tidak pernah selesai, berpotensi memungkinkan double-spending, akses tidak sah, atau manipulasi protokol.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Perhatikan instruksi rentan ini yang menutup akun program:
+
+```rust
+#[program]
+pub mod insecure_close{
+    use super::*;
+
+    //..
+
+    pub fn close(ctx: Context<Close>) -> Result<()> {
+        let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+        **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+            .checked_add(ctx.accounts.account_to_close.to_account_info().lamports())
+            .unwrap();
+        **ctx.accounts.account_to_close.to_account_info().lamports.borrow_mut() = 0;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct Close<'info> {
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+```
+
+Kode ini tampak benar: ia mentransfer semua lamports dari akun ke tujuan, yang seharusnya memicu garbage collection. Namun, data akun tetap tidak tersentuh, dan akun masih dapat diakses dalam transaksi yang sama.
+
+Penyerang dapat mengeksploitasi ini dengan membuat transaksi dengan beberapa instruksi:
+- Instruksi 1: Memanggil fungsi close Anda untuk menguras lamports akun
+- Instruksi 2: Mentransfer lamports kembali ke akun yang "ditutup" (revival)
+- Instruksi 3: Menggunakan akun yang dihidupkan kembali dalam operasi berikutnya
+
+Hasilnya adalah akun zombie yang tampak ditutup dalam logika program Anda tetapi tetap berfungsi dengan semua data aslinya utuh. Ini dapat menyebabkan:
+- Pengeluaran ganda: Menggunakan akun escrow "yang ditutup" beberapa kali
+- Bypass otorisasi: Menghidupkan kembali akun admin yang seharusnya dinonaktifkan
+- Korupsi status: Mengoperasikan akun yang seharusnya tidak lagi ada
+
+Solusi teraman adalah menggunakan constraint `close` dari Anchor, yang menangani penutupan aman secara otomatis:
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+   #[account(
+        mut,
+        close = owner,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Atau Anda dapat menambahkan constraint akun `signer` seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct Close<'info> {
+    #[account(signer)]
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Untuk logika penutupan kustom, implementasikan pola penutupan aman secara lengkap:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    let account = ctx.accounts.account.to_account_info();
+
+    let dest_starting_lamports = ctx.accounts.destination.lamports();
+
+    **ctx.accounts.destination.lamports.borrow_mut() = dest_starting_lamports
+        .checked_add(account.lamports())
+        .unwrap();
+    **account.lamports.borrow_mut() = 0;
+
+    let mut data = account.try_borrow_mut_data()?;
+    for byte in data.deref_mut().iter_mut() {
+        *byte = 0;
+    }
+
+    let dst: &mut [u8] = &mut data;
+    let mut cursor = std::io::Cursor::new(dst);
+    cursor
+        .write_all(&anchor_lang::__private::CLOSED_ACCOUNT_DISCRIMINATOR)
+        .unwrap();
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dalam Pinocchio, implementasikan pola penutupan secara manual:
+
+```rust
+self.program_account.realloc(0, true)?;
+self.program_account.close()?;
+
+let mut data_ref = self.program_account.try_borrow_mut_data()?;
+data_ref[0] = 0xff;
+```

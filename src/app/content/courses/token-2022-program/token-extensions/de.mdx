@@ -1,0 +1,380 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Token-Erweiterungen
+
+Während das ursprüngliche Token-Programm wesentliche Funktionen wie das Prägen, Übertragen und Einfrieren von Tokens bot, erschließen Token-Erweiterungen ein neues Paradigma programmierbarer Tokens.
+
+Dieses erweiterte Programm bleibt vollständig kompatibel mit bestehenden SPL-Token-Operationen und fügt gleichzeitig anspruchsvolle Funktionen hinzu, wie Transfer-Hooks für die Ausführung benutzerdefinierter Logik, integrierte Gebührenmechanismen, erweiterte Metadaten-Unterstützung, Zinsberechnungen und fortschrittliche Sicherheitskontrollen.
+
+### Kompatibilität der Erweiterungen
+
+Token-Erweiterungen sind so konzipiert, dass sie kombinierbar sind und es ermöglichen, mehrere Erweiterungen zu kombinieren, um Tokens zu erstellen, die perfekt zu den Anforderungen deines Projekts passen.
+
+Allerdings sind bestimmte Kombinationen aufgrund widersprüchlicher Funktionalität oder logischer Widersprüche nicht kompatibel, wie zum Beispiel:
+- Nicht-übertragbar + Transfer-Hooks / Übertragungsgebühren / vertrauliche Übertragung
+- Vertrauliche Übertragung + Übertragungsgebühren (bis 1.18)
+- Vertrauliche Übertragung + Transfer-Hooks (diese Übertragungen können nur Quell-/Zielkonten sehen und können daher nicht auf den übertragenen Betrag reagieren)
+- Vertrauliche Übertragung + permanenter Delegierter
+
+<ArticleSection name="Transfer Fee Extension" id="transfer-fee-config" level="h2" />
+
+Die `TransferFee` Erweiterung ist eine `Mint` Erweiterung, die es dem Ersteller ermöglicht, eine "Steuer" auf den Token zu setzen, die jedes Mal erhoben wird, wenn jemand einen Swap durchführt.
+
+Um sicherzustellen, dass der Gebührenempfänger nicht bei jedem Swap schreibgeschützt wird, und um zu gewährleisten, dass wir Transaktionen mit einem Mint mit dieser Erweiterung parallelisieren können, wird die Gebühr im Token-Konto des Empfängers zurückgestellt, auf das nur der `Withdraw Authority` zugreifen kann.
+
+Aus genau diesem Grund benötigen wir für die Verwendung der `TransferFee` Erweiterung zwei verschiedene Arten von Erweiterungen: eine, die direkt auf das `Mint` Konto geht, genannt `TransferFeeConfig`, die alle Daten enthält, die für einen Swap benötigt werden, und eine andere, die auf das `Token` Konto geht, genannt `TransferFeeAmount`, die "registriert", wie viel Token vom Token-Konto einbehalten wird.
+
+So sehen die Daten der `TransferFee` Erweiterung aus:
+
+```rust
+/// TransferFeeConfig Extension
+pub const transfer_fee_config_header: [u8; 4] = [1, 0, 108, 0];
+
+pub struct TransferFeeConfig {
+    pub transfer_fee_config_authority: Pubkey,
+    pub withdraw_withheld_authority: Pubkey,
+    pub withheld_amount: u64,
+    pub older_transfer_fee: TransferFee,
+    pub newer_transfer_fee: TransferFee,
+}
+
+pub struct TransferFee {
+    pub epoch: u64,
+    pub maximum_fee: u64,
+    pub transfer_fee_basis_point: u16,
+}
+```
+
+Einige Punkte, die hervorzuheben sind:
+- Der `config_authority` kann sich von demjenigen unterscheiden, der tatsächlich die Token aus den `Token` Konten abheben kann.
+- Wir haben sowohl eine `older` als auch eine `newer` Überweisungsgebührenstruktur.
+
+Der letzte Punkt ist darauf zurückzuführen, dass es eine "Abkühlungsphase" von 2 Epochen gibt, wenn wir eine neue `TransferFee` festlegen, um Rug Pulls am Ende einer Epoche zu vermeiden. Das bedeutet, dass für die ersten 2 Epochen einer neuen `TransferFee` die ältere `TransferFee` diejenige ist, die tatsächlich aktiv ist.
+
+Zusätzlich kann man sehen, dass der `TransferFeeConfig` ein `withheld_amount` Feld hat. Das mag seltsam klingen, da wir gerade gesagt haben, dass die Token-Gebühren im `Token Account` anfallen, aber in Wirklichkeit ist das Beanspruchen dieser Gebühren ein zweistufiger Prozess:
+- Gebühren vom `Token Account` zum `Mint` beanspruchen. Dies kann ohne Berechtigung erfolgen
+- Gebühren vom `Mint` zum Zielkonto beanspruchen. Dies ist eine berechtigungspflichtige Aktion, die nur der `Withdraw Authority` ausführen kann.
+
+Für diese Erweiterung benötigen wir einen zweistufigen Prozess, um den Grenzfall zu berücksichtigen, in dem jemand ein `Token Account` schließen möchte, in dem sich noch Gebühren befinden. Da das Ziel dieser Gebühren "anders" sein könnte als der `Withdraw Authority`, müssen wir berücksichtigen, dass diese Gebühren irgendwohin gesendet werden müssen, bevor das `Token Account` geschlossen wird
+
+Und so sehen die Daten der `TransferFeeAmount` Erweiterung aus
+
+```rust
+/// TransferFeeAmount Extension
+pub const transfer_amount_config_header: [u8; 4] = [2, 0, 8, 0];
+
+pub struct TransferFeeAmount {
+    pub withheld_amount: u64,
+}
+```
+
+<ArticleSection name="Mint Close Authority Extension" id="mint-close-authority-config" level="h2" />
+
+Die `MintCloseAuthority` Erweiterung ist eine `Mint` Erweiterung, die der Autorität erlaubt, ein `Mint` Konto zu schließen und die Miete zurückzuerhalten, wenn es einen aktuellen Bestand von 0 hat.
+
+Diese Erweiterung ist nützlich, um ungenutzte Mints zu bereinigen und das SOL zurückzugewinnen, das für die Mietbefreiung des Kontos verwendet wurde. Der Mint kann nur geschlossen werden, wenn keine Token im Umlauf sind.
+
+So sehen die Daten der `MintCloseAuthority` Erweiterung aus:
+
+```rust
+/// MintCloseAuthority Extension
+pub const mint_close_authority_extension_header: [u8; 4] = [3, 0, 32, 0];
+
+pub struct MintCloseAuthority {
+    pub close_authority: Pubkey,
+}
+```
+
+<ArticleSection name="Default Account State Extension" id="default-account-state-extension" level="h2" />
+
+Die `DefaultAccountState` Erweiterung ist eine `Mint` Erweiterung, die es ermöglicht, dass alle neu erstellten Token-Konten für diesen spezifischen Mint standardmäßig eingefroren werden. Der `Freeze Authority` des Mints kann dann diese `Token` Konten auftauen (entsperren), damit sie nutzbar werden.
+
+Diese Funktion gewährt Token-Erstellern die Möglichkeit, eine größere Kontrolle über die Token-Verteilung zu haben, indem sie einschränken, wer die Token halten kann. Dies ist besonders nützlich für Compliance-Szenarien, KYC/AML-Anforderungen oder für die Erstellung von Allowlist-basierten Token-Verteilungen, bei denen Konten ausdrücklich genehmigt werden müssen, bevor sie Token empfangen oder übertragen können.
+
+So sehen die Daten der `DefaultAccountState` Erweiterung aus:
+
+```rust
+/// DefaultAccountState Extension
+pub const default_account_state_extension_header: [u8; 4] = [6, 0, 1, 0];
+
+pub struct DefaultAccountState {
+    pub account_state: AccountState,
+}
+
+pub enum AccountState {
+    Uninitialized,
+    Initialized,
+    Frozen,
+}
+```
+
+<ArticleSection name="Immutable Owner Extension" id="immutable-owner-extension" level="h2" />
+
+Die `ImmutableOwner` Erweiterung ist eine `Token` Konto-Erweiterung, die jede Änderung der Eigentümerschaft des Token-Kontos verhindert. Dies schützt Konten vor unbefugtem Zugriff und Übertragungsversuchen.
+
+Diese Erweiterung ist besonders wertvoll für Associated Token Accounts (ATAs) und andere Konten, bei denen sich die Eigentümerschaft niemals ändern sollte. Sie schützt vor bösartigen Programmen, die versuchen könnten, die Eigentümerschaft von Token-Konten zu stehlen, und bietet zusätzliche Sicherheitsgarantien für Benutzer und Anwendungen.
+
+> Alle Token Extensions Program ATAs haben standardmäßig unveränderliche Eigentümer aktiviert
+
+So sehen die Daten der `ImmutableOwner` Erweiterung aus:
+
+```rust
+/// ImmutableOwner Extension
+pub const immutable_owner_extension_header: [u8; 4] = [7, 0, 0, 0];
+```
+
+<ArticleSection name="Memo Transfer Extension" id="memo-transfer-extension" level="h2" />
+
+Die `MemoTranfer Extension` ist eine `Token` Kontoerweiterung, die sicherstellt, dass alle eingehenden Überweisungen auf ein Token-Konto einen Memo enthalten, was eine verbesserte Transaktionsverfolgung und Benutzeridentifikation ermöglicht.
+
+Diese Erweiterung ist besonders nützlich für Börsen, regulierte Institutionen und Anwendungen, die den Zweck oder die Quelle eingehender Überweisungen für Compliance, Buchhaltung oder Kundenservice verfolgen müssen. Wenn aktiviert, schlägt jede Überweisung auf das Konto fehl, es sei denn, sie enthält eine Memo-Anweisung in derselben Transaktion.
+
+So sieht die `MemoTranfer` Erweiterungsdaten aus:
+
+```rust
+/// MemoTranfer Extension
+pub const memo_transfer_extension_header: [u8; 4] = [8, 0, 1, 0];
+
+pub struct MemoTranfer {
+    pub require_incoming_transfer_memos: bool,
+}
+```
+
+<ArticleSection name="Non Transferable Extension" id="non-transferable-extension" level="h2" />
+
+Die `NonTransferable` Erweiterung ist eine `Mint` Kontoerweiterung, die verhindert, dass Tokens zwischen Konten übertragen werden können, wodurch sie dauerhaft an ihre aktuellen Besitzer gebunden sind.
+
+Diese Erweiterung ist nützlich für die Erstellung von Soulbound-Tokens, Erfolgsabzeichen, Zertifikaten oder jedem Token, der ein nicht übertragbares Recht oder einen Status repräsentiert. Sobald sie einem Konto zugewiesen wurden, können diese Tokens nicht verschoben, verkauft oder an eine andere Wallet übertragen werden, wodurch sichergestellt wird, dass sie dauerhaft mit dem ursprünglichen Empfänger verbunden bleiben.
+
+Zusätzlich wird das `Token` Konto, das mit einem `Mint` verbunden ist und die `NonTransferable` Erweiterung hat, mit der `NonTransferableAccount` Erweiterung ausgestattet.
+
+So sehen die `NonTransferable` und `NonTransferableAccount` Erweiterungsdaten aus:
+
+```rust
+/// NonTransferable Extension
+pub const non_transferable_extension_header: [u8; 4] = [9, 0, 0, 0];
+
+/// NonTransferableAccount Extension
+pub const non_transferable_account_extension_header: [u8; 4] = [13, 0, 0, 0];
+```
+
+Beide Erweiterungen sind nur Flags; ihre bloße Präsenz erzwingt die Einschränkung.
+
+<ArticleSection name="Interest Bearing Extension" id="interest-bearing-extension" level="h2" />
+
+Die `InterestBearing` Erweiterung ist eine `Mint` Kontoerweiterung, die es Benutzern ermöglicht, einen Zinssatz auf ihre Tokens anzuwenden und die aktualisierte Gesamtsumme einschließlich Zinsen zu jedem beliebigen Zeitpunkt abzurufen.
+
+> Dieser Mechanismus generiert keine neuen Tokens; der angezeigte Betrag enthält lediglich die angesammelten Zinsen durch die `amount_to_ui_amount` Funktion, wodurch die Änderung rein ästhetisch ist. Das bedeutet jedoch, dass es sich um einen Wert handelt, der im Mint-Konto gespeichert wird, und Programme können dies nutzen, um Funktionalitäten zu schaffen, die über reine Ästhetik hinausgehen.
+
+So sehen die Daten der `InterestBearing` Erweiterung aus:
+
+```rust
+/// InterestBearing Extension
+pub const interest_bearing_extension_header: [u8; 4] = [10, 0, 52, 0];
+
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+Da der Kurs aktualisiert werden kann, gibt es ein `pre_update_average_rate` Feld, das während der Berechnung verwendet wird, um festzulegen, wie im Fall eines aktualisierten Kurses vorzugehen ist.
+
+<ArticleSection name="Cpi Guard Extension" id="cpi-guard-extension" level="h2" />
+
+Die `CpiGuard` Erweiterung ist eine `Token` Kontoerweiterung, die bestimmte Aktionen innerhalb von programmübergreifenden Aufrufen (CPI) verbietet und Benutzer vor bösartigen Programmen schützt, die versuchen könnten, ihre Token-Konten ohne ausdrückliche Zustimmung zu manipulieren.
+
+Diese Erweiterung ist entscheidend für die Sicherheit bei der Interaktion mit DeFi-Protokollen, DEXs oder jedem Programm, das Zugriff auf Token-Konten anfordert. Sie verhindert, dass Programme während programmübergreifender Aufrufe unbefugte Aktionen wie Änderung der Eigentümerschaft, Einrichtung unerwünschter Delegierter oder Umleitung von Geldern an unbeabsichtigte Empfänger durchführen.
+
+Wenn die `CpiGuard` Erweiterung aktiviert ist, funktioniert der folgende CPI wie beschrieben:
+- Überweisung: Die signierende Autorität muss der Eigentümer oder ein zuvor festgelegter Konto-Delegierter sein
+- Burn: Die signierende Autorität muss der Eigentümer oder ein zuvor festgelegter Konto-Delegierter sein
+- Genehmigung: verboten - keine Delegierten können innerhalb des CPI genehmigt werden
+- Konto schließen: Das Lamport-Ziel muss der Kontoinhaber sein
+- Schließberechtigung festlegen: verboten, es sei denn, sie wird aufgehoben
+- Eigentümer festlegen: immer verboten, auch außerhalb von CPI
+
+So sehen die `CpiGuard` Erweiterungsdaten aus:
+
+```rust
+/// CpiGuard Extension
+pub const cpi_guard_extension_header: [u8; 4] = [11, 0, 1, 0];
+
+pub struct CpiGuard {
+    pub lock_cpi: bool,
+}
+```
+
+<ArticleSection name="Permanent Delegate Extension" id="permanent-delegate-extension" level="h2" />
+
+Die `PermanentDelegate` Erweiterung ist eine `Mint` Kontoerweiterung, die einen permanenten Delegierten für alle Tokens der Mint ermöglicht, der in der Lage ist, jeden Token dieser Mint von jedem Token-Konto zu übertragen oder zu verbrennen.
+
+Diese Erweiterung ist nützlich für die Erstellung von Tokens mit eingebauter administrativer Kontrolle, wie Stablecoins, die Notfall-Einfrierungsfunktionen benötigen, Spiel-Tokens, die eine zentralisierte Verwaltung erfordern, oder Compliance-Tokens, bei denen eine Aufsichtsbehörde permanente Überwachung benötigt.
+
+> Im Gegensatz zu regulären Delegierten, die widerrufen werden können, ist diese Delegierungsbefugnis permanent und unveränderlich.
+
+So sehen die Daten der `PermanentDelegate` Erweiterung aus:
+
+```rust
+/// PermanentDelegate Extension
+pub const permanent_delegate_extension_header: [u8; 4] = [12, 0, 32, 0];
+
+pub struct PermanentDelegate {
+    delegate: Pubkey,
+}
+```
+
+<ArticleSection name="Transfer Hook Extension" id="transfer-hook-extension" level="h2" />
+
+Die `TransferHook` Erweiterung ist eine `Mint` Kontoerweiterung, die die Möglichkeit bietet, `Mint` Konten zu erstellen, die bei jedem Token-Transfer benutzerdefinierte Anweisungslogik ausführen.
+
+Diese Erweiterung ermöglicht leistungsstarke Anwendungsfälle wie automatische Steuererhebung, Lizenzgebührenzahlungen, Transferbeschränkungen basierend auf benutzerdefinierter Logik, Compliance-Prüfungen oder jedes andere programmierbare Verhalten, das während Transfers stattfinden soll. Das Hook-Programm wird automatisch von der Erweiterung aufgerufen, wenn ein Transfer stattfindet.
+
+Um dies zu erreichen, müssen Entwickler ein Programm erstellen, das die [Transfer Hook Interface](https://github.com/solana-program/transfer-hook/tree/main/program) implementiert und ein `Mint` Konto mit aktivierter `Transfer Hook` Erweiterung initialisieren.
+
+Zusätzlich wird das Token-Konto, das mit einem `Mint` verknüpft ist und die `TransferHook` Erweiterung hat, mit der `TransferHookAccount` Erweiterung ausgestattet.
+
+So sehen die Daten der `TransferHook` und `TransferHookAccount` Erweiterungen aus:
+
+```rust
+/// TransferHook Extension
+pub const transfer_hook_extension_header: [u8; 4] = [14, 0, 64, 0];
+
+pub struct TransferHook {
+    // The transfer hook update authority
+    authority: Pubkey,
+    // The transfer hook program account
+    programId: Pubkey,
+}
+
+/// TransferHookAccount Extension
+pub const transfer_hook_account_extension_header: [u8; 4] = [15, 0, 1, 0];
+
+pub struct TransferHookAccount {
+    // Whether or not this account is currently transferring tokens
+    transferring: bool,
+}
+```
+
+<ArticleSection name="Metadata Extension" id="metadata-extension" level="h2" />
+
+Die `Metadata` Erweiterung ist eine `Mint` Kontoerweiterung, die die Möglichkeit bietet, Metadaten direkt in Mint-Konten nativ und ohne die Verwendung eines anderen Programms einzubetten.
+
+Diese Erweiterung ist besonders nützlich für NFTs, Tokens und andere Assets, die On-Chain-Metadaten wie Namen, Symbole, Bilder und benutzerdefinierte Attribute benötigen. Durch die direkte Einbettung von Metadaten in das Mint-Konto entfällt die Notwendigkeit externer Metadaten-Programme und es wird sichergestellt, dass die Metadaten permanent mit dem Token verknüpft sind.
+
+Die `Metadata` Erweiterung besteht aus 2 verschiedenen Erweiterungen, die beide auf ein Mint-Konto angewendet werden:
+- Die `Metadata` Erweiterung, die alle Metadaten-Informationen wie Name, Symbol, URI und zusätzliche Konten enthält.
+- Die `MetadataPointer` Erweiterung, die auf das `Mint` Konto verweist, auf dem die `Metadata` Erweiterung existiert.
+
+Normalerweise befinden sich diese beiden Erweiterungen auf demselben `Mint` Konto. Es könnte jedoch Fälle geben, in denen dieselben Metadaten für verschiedene Assets verwendet werden, und aus diesem Grund wäre es kostengünstiger, die beiden Erweiterungen zu trennen und auf das `Mint` mit der `Metadata` Erweiterung zu verweisen.
+
+> Anders als bei anderen Erweiterungen müssen wir für die Erstellung der `Metadata` Erweiterung das [Token Metadata Interface](https://github.com/solana-program/token-metadata/tree/main) verwenden. Die Metadata Pointer Extension verwendet das klassische Token2022 Programm
+
+Diesmal können wir keinen festgelegten Erweiterungs-Header für die `Metadata` Erweiterung erstellen, da sie variable Daten enthält, was bedeutet, dass die Länge je nach Feld unterschiedlich sein wird.
+
+So sehen die Daten der `Metadata` und `MetadataPointer` Erweiterung aus:
+
+```rust
+/// Metadata Pointer Extension
+pub const metadata_pointer_extension_header: [u8; 4] = [18, 0, 64, 0]
+
+pub struct MetadataPointer {
+    // Authority that can set the metadata address
+    authority: Pubkey;
+    // Account Address that holds the metadata
+    metadata_address: Pubkey;
+}
+
+/// Metadata Extension (Discriminator: 19)
+pub struct TokenMetadata {
+    /// The authority that can sign to update the metadata
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that metadata
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The longer name of the token
+    pub name: String,
+    /// The shortened symbol for the token
+    pub symbol: String,
+    /// The URI pointing to richer metadata
+    pub uri: String,
+    /// Any additional metadata about the token as key-value pairs. The program
+    /// must avoid storing the same key twice.
+    pub additional_metadata: Vec<(String, String)>,
+}
+```
+
+<ArticleSection name="Group and Member Extension" id="group-and-member-extension" level="h2" />
+
+Die `Group` und `Member` Erweiterungen sind `Mint` Kontoerweiterungen, die die Möglichkeit bieten, Gruppen zu erstellen, wie Sammlungen für NFTs, die mit mehreren Assets verknüpft sind.
+
+Dieses Erweiterungssystem ist perfekt für die Erstellung von NFT-Sammlungen, Token-Familien oder jede Gruppierung verwandter Assets, bei denen die Mitgliedschaft verfolgt und Sammlungslimits durchgesetzt werden müssen. Gruppen können Sammlungen repräsentieren, während Mitglieder einzelne Elemente innerhalb dieser Sammlungen darstellen.
+
+Sowohl die Group- als auch die Member-Erweiterungen bestehen aus 2 verschiedenen Erweiterungen, die beide auf ein `Mint` Konto angewendet werden, ähnlich wie die `Metadata` Erweiterung:
+- Die `Extension`, die alle Informationen über die Gruppe oder das Mitglied enthält.
+- Die `Pointer Extension`, die auf das Mint-Konto verweist, auf dem die `Group` oder `Member` Erweiterung existiert.
+
+Die Beziehung zwischen einer Gruppe und einem Mitglied besteht darin, dass eine Gruppe mehrere Mitglieder haben kann, aber nicht umgekehrt.
+
+Wie bei der Metadata-Erweiterung platzieren wir hier sowohl die `Extension` als auch die `Pointer` normalerweise im selben `Mint`Konto, und um die `Group` und `Member`Erweiterung zu erstellen, müssen wir die [Token Group Interface](https://github.com/solana-program/token-group/tree/main) verwenden.
+
+> Wir können die `Group`Erweiterung nicht im selben `Mint`Konto haben, in dem es eine `Member`Erweiterung gibt.
+
+So sehen die Daten der `Group` und `GroupPointer`Erweiterung aus:
+
+```rust
+/// GroupPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [20, 0, 64, 0]
+
+pub struct GroupPointer {
+    // Authority that can set the group address
+    authority: Pubkey;
+    // Account Address that holds the group
+    group_address: Pubkey;
+}
+
+/// Group Extension
+pub const group_extension_header: [u8; 4] = [21, 0, 80, 0]
+
+pub struct TokenGroup {
+    /// The authority that can sign to update the group
+    pub update_authority: Pubkey,
+    /// The associated mint, used to counter spoofing to be sure that group
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The current number of group members
+    pub size: u64,
+    /// The maximum number of group members
+    pub max_size: u64,
+}
+```
+
+So sehen die Daten der `Member` und `MemberPointer`Erweiterung aus:
+
+```rust
+/// MemberPointer Extension
+pub const group_pointer_extension_header: [u8; 4] = [22, 0, 64, 0]
+
+pub struct MemberPointer {
+    // Authority that can set the member address
+    authority: Pubkey;
+    // Account Address that holds the member
+    member_address: Pubkey;
+}
+
+/// Member Extension
+pub const group_extension_header: [u8; 4] = [23, 0, 72, 0]
+
+pub struct TokenGroupMember {
+    /// The associated mint, used to counter spoofing to be sure that member
+    /// belongs to a particular mint
+    pub mint: Pubkey,
+    /// The pubkey of the `TokenGroup`
+    pub group: Pubkey,
+    /// The member number
+    pub member_number: u64,
+}
+```

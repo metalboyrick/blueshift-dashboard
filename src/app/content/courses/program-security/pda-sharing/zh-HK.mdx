@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# PDA 共用
+
+PDA 共用攻擊利用了在多個用戶或域之間使用相同的程序衍生地址（PDA）的程序，讓攻擊者可以訪問不屬於他們的資金、數據或權限。雖然使用全局 PDA 似乎是程序範圍操作的一種優雅方法，但它會產生危險的交叉污染，使一個用戶的行為可能影響到其他用戶的資產。
+
+這種漏洞源於在衍生 PDA 時種子特異性不足。當多個帳戶共用相同的 PDA 權限時，程序無法區分合法和非法的訪問嘗試。攻擊者可以創建自己的帳戶，引用相同的共用 PDA，然後利用該 PDA 的簽名權限操控其他用戶的資產。
+
+這在 DeFi 協議中特別具有破壞性，因為 PDA 控制著代幣金庫、用戶餘額或提款權限。共用 PDA 本質上創建了一把主鑰匙，可以解鎖多個用戶的資產，將個別用戶的操作變成對整個協議的潛在攻擊。
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+以下是一個使用基於鑄幣的 PDA 簽名的易受攻擊的提款系統：
+
+```rust
+#[program]
+pub mod insecure_withdraw{
+    use super::*;
+    //..
+
+    pub fn withdraw(ctx: Context<WithdrawTokens>) -> Result<()> {
+
+        //..
+        // other conditions/actions...
+        //..
+
+        let amount = ctx.accounts.vault.amount;
+        
+        let seeds = &[
+            ctx.accounts.pool.mint.as_ref(),
+            &[ctx.accounts.pool.bump],
+        ];
+
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.withdraw_destination.to_account_info(),
+                    authority: ctx.accounts.pool.to_account_info(),
+                },
+            ),
+            &amount,
+            seeds,
+        )?;
+
+        Ok(())
+    }
+        
+    //..
+}
+
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        seeds = [b"pool", pool.mint.as_ref()],
+        bump = pool.bump,                                        
+    )]
+    pool: Account<'info, TokenPool>,
+    vault: Account<'info, TokenAccount>,
+    withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool {
+    pub mint: Pubkey,
+    pub bump: u8,
+}
+```
+
+這段代碼有一個關鍵缺陷：PDA 僅使用鑄幣地址進行衍生。這意味著相同代幣類型的所有金庫共用相同的簽名權限，從而形成了一個危險的攻擊向量。
+
+攻擊者可以通過以下方式利用這一點：
+- 為相同的鑄幣創建自己的金庫
+- 使用自己的地址作為 `withdraw_destination` 調用指令
+- 使用共用的 PDA 權限從任何使用相同鑄幣的金庫中提取代幣
+- 將其他用戶的資金轉移到自己的目的地
+
+攻擊之所以成功，是因為PDA授權並未區分不同的資金池實例，它只關注代幣類型，而不考慮應該有權訪問這些資金的具體用戶。
+
+一個可能的解決方案是將PDA設計為針對個別用戶和目的地，並使用Anchor的種子（seeds）和偏移量（bump）約束來驗證PDA的派生：
+
+```rust
+#[derive(Accounts)]
+pub struct WithdrawTokens<'info> {
+    #[account(
+        has_one = vault,
+        has_one = withdraw_destination,
+        seeds = [b"pool", vault.key().as_ref(), withdraw_destination.key().as_ref()],
+        bump = pool.bump,                                        
+    )]
+    pool: Account<'info, TokenPool>, // Authority for the vault
+    #[account(mut)]
+    vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    withdraw_destination: Account<'info, TokenAccount>,
+    //..
+    // other accounts..
+    //..
+    token_program: Program<'info, Token>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenPool{
+    pub vault:Pubkey,
+    pub withdraw_destination:Pubkey,
+    pub bump:u8
+}
+```
+
+對於指令處理器也進行了相同的更改，一個可能的情況是槓桿交易程序允許用戶的交易在損失達到一定金額時被清算，例如用戶自己設置止損，然後代碼會檢查是否達到該條件，並允許任何人停止交易並將剩餘資金提取到目的地，即提款賬戶。
+
+單一PDA控制特定代幣的所有資金可能會導致這樣的情況：如果多個用戶同時達到條件，例如許多用戶接近止損/清算，那麼任何單一用戶都可以提取所有這些用戶的資金，可能通過一個或多個包含針對不同用戶的多個指令的交易來完成。

@@ -1,0 +1,205 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+![Anchor Vault Challenge](/graphics/challenge-banners/anchor-vault.png)
+
+# Der Vault
+
+Ein Vault ermöglicht Benutzern, ihre Assets sicher zu speichern. Ein Vault ist ein grundlegender Baustein im DeFi-Bereich, der es Benutzern im Kern ermöglicht, ihre Assets (in diesem Fall Lamports) sicher zu speichern, sodass nur derselbe Benutzer sie später abheben kann.
+
+In dieser Challenge werden wir einen einfachen Lamport-Vault erstellen, der zeigt, wie man mit grundlegenden Konten, Program Derived Addresses (PDAs) und Cross-Program Invocation (CPI) arbeitet. Wenn du mit Anchor nicht vertraut bist, solltest du zunächst die [Einführung in Anchor](/de/courses/introduction-to-anchor) lesen, um dich mit den Kernkonzepten vertraut zu machen, die wir in diesem Programm verwenden werden.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Bevor du beginnst, stelle sicher, dass Rust und Anchor installiert sind (siehe die [offizielle Dokumentation](https://www.anchor-lang.com/docs/installation), falls du eine Auffrischung benötigst). Führe dann in deinem Terminal aus:
+
+```bash
+anchor init blueshift_anchor_vault
+```
+
+Für diese Challenge benötigen wir keine zusätzlichen Crates, also kannst du jetzt den neu erstellten Ordner öffnen und bist bereit, mit dem Programmieren zu beginnen!
+
+<ArticleSection name="Vorlage" id="template" level="h2" />
+
+Beginnen wir mit der grundlegenden Programmstruktur. Wir werden alles in `lib.rs` implementieren, da es sich um ein unkompliziertes Programm handelt. Hier ist die anfängliche Vorlage mit den Kernkomponenten, die wir benötigen werden:
+
+```rust
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_vault {
+    use super::*;
+
+    pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
+        // deposit logic
+        Ok(())
+    }
+
+    pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
+        // withdraw logic
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", signer.key().as_ref()],
+        bump,
+    )]
+    pub vault: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[error_code]
+pub enum VaultError {
+    // error enum
+}
+```
+
+**Hinweis**: Denke daran, die Programm-ID auf `22222222222222222222222222222222222222222222` zu ändern, da wir diese im Hintergrund verwenden, um dein Programm zu testen.
+
+<ArticleSection name="Konten" id="accounts" level="h2" />
+
+Da beide Anweisungen die gleichen Konten verwenden, können wir zur Vereinfachung und besseren Lesbarkeit einfach einen Kontext namens `VaultAction` erstellen und ihn sowohl für `deposit` als auch für `withdraw` verwenden.
+
+Die `VaultAction` Kontostruktur muss Folgendes enthalten:
+- `signer`: Dies ist der Eigentümer des Vaults und die einzige Person, die die Lamports nach der Erstellung des Vaults abheben kann.
+- `vault`: Eine PDA, die aus den folgenden Seeds abgeleitet wird: `[b"vault", signer.key().as_ref()]`, die die Lamports für den Unterzeichner hält.
+- `system_program`: Das System-Programmkonto, das einbezogen werden muss, da wir die Transfer-Anweisung CPI vom System-Programm verwenden werden
+
+So definieren wir die Account-Struktur:
+
+```rust
+#[derive(Accounts)]
+pub struct VaultAction<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", signer.key().as_ref()],
+        bump,
+    )]
+    pub vault: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+Lassen Sie uns jede Account-Einschränkung genauer betrachten:
+
+1. `signer`: Die `mut`-Einschränkung ist notwendig, da wir dessen Lamports während der Übertragungen ändern werden.
+2. `vault`: 
+  - `mut` weil wir dessen Lamports ändern werden
+  - `seeds` & `bumps` definiert, wie ein gültiger PDA aus den Seeds abgeleitet wird
+3. `system_program`: prüft, ob das Konto als ausführbar markiert ist und ob die Adresse die des System-Programms ist
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+Für dieses kleine Programm benötigen wir nicht viele Fehler, daher erstellen wir nur 2 Enums:
+- `VaultAlreadyExists`: informiert uns, wenn bereits Lamports im Account vorhanden sind, was bedeuten würde, dass der Tresor bereits existiert.
+- `InvalidAmount`: wir können keinen Betrag einzahlen, der geringer ist als die Mindestmiete für ein einfaches Konto, daher prüfen wir, ob der Betrag größer ist.
+
+Es wird ungefähr so aussehen:
+
+```rust
+#[error_code]
+pub enum VaultError {
+    #[msg("Vault already exists")]
+    VaultAlreadyExists,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+}
+```
+
+<ArticleSection name="Deposit" id="deposit" level="h2" />
+
+Die Einzahlungsanweisung führt folgende Schritte aus:
+1. Überprüft, ob der Tresor leer ist (keine Lamports hat), um Doppeleinzahlungen zu verhindern
+2. Stellt sicher, dass der Einzahlungsbetrag das mietfreie Minimum für ein `SystemAccount` überschreitet
+3. Überträgt Lamports vom Unterzeichner zum Tresor mittels eines CPI an das System-Programm
+
+Implementieren wir zuerst diese Prüfungen:
+
+```rust
+// Check if vault is empty
+require_eq!(ctx.accounts.vault.lamports(), 0, VaultError::VaultAlreadyExists);
+
+// Ensure amount exceeds rent-exempt minimum
+require_gt!(amount, Rent::get()?.minimum_balance(0), VaultError::InvalidAmount);
+```
+
+Die beiden `require`Makros fungieren als benutzerdefinierte Schutzklauseln:
+- `require_eq!` bestätigt, dass der Tresor leer ist (verhindert Doppeleinzahlungen).
+- `require_gt!` prüft, ob der Betrag die mietfreie Schwelle überschreitet.
+
+Sobald die Prüfungen bestanden sind, ruft Anchors System-Programm-Helfer den `Transfer`CPI wie folgt auf:
+
+```rust
+use anchor_lang::system_program::{transfer, Transfer};
+
+transfer(
+    CpiContext::new(
+        ctx.accounts.system_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.signer.to_account_info(),
+            to: ctx.accounts.vault.to_account_info(),
+        },
+    ),
+    amount,
+)?;
+```
+
+<ArticleSection name="Withdraw" id="withdraw" level="h2" />
+
+Die Withdraw-Anweisung führt folgende Schritte aus:
+1. Überprüft, ob das Vault Lamports enthält (nicht leer ist)
+2. Verwendet die PDA des Vaults, um die Überweisung in seinem eigenen Namen zu signieren
+3. Überweist alle Lamports vom Vault zurück an den Unterzeichner
+
+Zuerst prüfen wir, ob das Vault Lamports zum Abheben hat:
+
+```rust
+// Check if vault has any lamports
+require_neq!(ctx.accounts.vault.lamports(), 0, VaultError::InvalidAmount);
+```
+
+Dann müssen wir die PDA-Signatur-Seeds erstellen und die Überweisung durchführen:
+
+```rust
+// Create PDA signer seeds
+let signer_key = ctx.accounts.signer.key();
+let signer_seeds = &[b"vault", signer_key.as_ref(), &[ctx.bumps.vault]];
+
+// Transfer all lamports from vault to signer
+transfer(
+    CpiContext::new_with_signer(
+        ctx.accounts.system_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.vault.to_account_info(),
+            to: ctx.accounts.signer.to_account_info(),
+        },
+        &[&signer_seeds[..]]
+    ),
+    ctx.accounts.vault.lamports()
+)?;
+```
+
+Die Sicherheit dieser Abhebung wird durch zwei Faktoren gewährleistet:
+1. Die PDA des Vaults wird unter Verwendung des öffentlichen Schlüssels des Unterzeichners abgeleitet, wodurch sichergestellt wird, dass nur der ursprüngliche Einzahler abheben kann
+2. Die Fähigkeit der PDA, die Überweisung zu signieren, wird durch die Seeds überprüft, die wir an `CpiContext::new_with_signer` übergeben
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Du kannst jetzt dein Programm gegen unsere Unit-Tests testen und deine NFTs beanspruchen!
+
+Beginne damit, dein Programm mit dem folgenden Befehl in deinem Terminal zu erstellen
+
+```bash
+anchor build
+```
+
+Dadurch wurde eine `.so`-Datei direkt in deinem `target/deploy`Ordner erstellt.
+
+Klicke jetzt auf die Schaltfläche `take challenge` und lege die Datei dort ab!

@@ -1,0 +1,22 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM 101
+
+![使用 LiteSVM 進行測試](/graphics/course-banners/testing-with-litesvm.png)
+
+Solana 程式的測試傳統上需要在速度和準確性之間作出選擇。LiteSVM 通過提供一個既快速又功能完整的內部測試環境，消除了這種取捨。
+
+LiteSVM 為 Solana 開發者提供了三大關鍵優勢：
+- **比 `solana-program-test` 和 `solana-test-validator` 更快的執行速度**
+- **直接操控帳戶狀態**，以測試複雜的邊界情況
+- **內建性能分析工具**，用於識別優化和改進的機會
+
+<ArticleSection name="什麼是 LiteSVM" id="what-is-litesvm" level="h2" />
+
+[LiteSVM](https://github.com/LiteSVM/litesvm) 是一個輕量級的 Solana 虛擬機，直接在您的測試過程中運行。由 [Aursen](https://x.com/exoaursen) 和 [Exotic Markets](https://x.com/exotic_markets_) 創建，它在保持與 Solana 運行時完全兼容的同時，消除了外部驗證器的開銷。
+
+與傳統的測試方法需要啟動單獨的驗證器進程不同，LiteSVM 將虛擬機嵌入到您的測試中。這種架構在不犧牲測試準確性的情況下，顯著提高了編譯和執行速度。
+
+該庫提供了一個直觀的 API，具有智能預設以便快速設置，並提供廣泛的配置選項以應對高級測試場景。
+
+> LiteSVM 支援 Rust、TypeScript/JavaScript 和 Python（通過 `solders`）。

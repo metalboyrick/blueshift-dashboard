@@ -1,0 +1,128 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Token2022 程式
+
+![Token 2022 with Anchor](/graphics/course-banners/token-2022-with-anchor.png)
+
+Token2022 程式，也稱為 Token 擴展，是 Token 程式所提供功能的超集。
+
+如果你想了解更多關於額外功能以及與傳統 Token 程式的差異，請參考[這個課程](/zh-HK/courses/token-2022-program)。
+
+> 如果你對 Anchor 不熟悉，我們建議你先完成我們的 [Anchor for Dummies](/zh-HK/courses/anchor-for-dummies) 課程再繼續。
+
+對於 Anchor，所有與 Token 相關的內容都可以在 `anchor-spl` crate 中找到。因此，在初始化 `Anchor` 工作區後，我們可以這樣做：
+
+```bash
+cargo add anchor-spl
+```
+
+> `anchor-spl` 的版本需要與我們的 `anchor-lang` crate 相同。而 Token2022 擴展僅從 0.30.0 版本開始提供。
+
+別忘了更新 `idl-build` 功能，該功能可以在我們程式的 `[features]` 部分的 `Cargo.toml` 文件中找到，並使用 `idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]`。
+
+<ArticleSection name="鑄幣和 Token 帳戶" id="mint-and-token-accounts" level="h2" />
+
+如果你熟悉 `Anchor`，你會知道它們有一組宏，幫助用戶抽象掉與初始化帳戶相關的許多複雜性。
+
+對於 `Mint`、`Token` 和 `Associated Token` 帳戶，這裡的操作方式相同。
+
+### 帶擴展的鑄幣帳戶
+
+由於帶擴展的 `Mint` 帳戶具有不同的大小，並且由不同的程式擁有，`Anchor` 創建了一種新型帳戶，無論 `Mint` 帳戶是來自傳統 Token 還是 Token2022 程式，都可以獨立運作。
+
+要使用它們，我們只需要從 `anchor_spl::token_interface` 中導入 `TokenInterface` 和 `Mint`，如下所示：
+
+```rust
+use anchor_spl::token_interface::{TokenInterface, Mint};
+```
+
+之後，我們只需要執行 `pub mint: InterfaceAccount<'info, Mint>,`，並指定我們希望鑄幣使用我們在帳戶結構中定義的 token_program 帳戶，如下所示：`mint::token_program = token_program`，這樣就完成了！
+
+> token 介面提供了一種通用方式來與兩種類型的帳戶互動，無需處理它們反序列化邏輯的差異，同時保持類型安全性和適當的驗證。
+
+在深入了解如何為鑄幣帳戶添加擴展之前，以下是使用 Token2022 程式創建鑄幣的方法：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+        mint::token_program = token_program
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+現在，幸運的是，`Anchor` 幫助我們，創建了一些宏，可以在初始化步驟中直接添加最受歡迎的擴展，如下所示：
+
+```rust
+#[account(
+    // ...init
+    extensions::metadata_pointer::authority = <target_account>,
+    extensions::metadata_pointer::metadata_address = <target_account>,
+    extensions::group_pointer::authority = <target_account>,
+    extensions::group_pointer::group_address = <target_account>,
+    extensions::group_member_pointer::authority = <target_account>,
+    extensions::group_member_pointer::member_address = <target_account>,
+    extensions::transfer_hook::authority = <target_account>,
+    extensions::transfer_hook::program_id = <target_pubkey>
+    extensions::close_authority::authority = <target_account>,
+    extensions::permanent_delegate::delegate = <target_account>,
+)]
+pub mint: InterfaceAccount<'info, Mint>,
+```
+
+### 帶有擴展的關聯代幣帳戶
+
+`Associated Token` 帳戶默認帶有 `ImmutableOwner` 擴展。因此，創建 Legacy 或 Token2022 `Token Account` 的唯一區別僅在於使用 `Interface Account`。
+
+以下是創建關聯代幣帳戶的方法：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateAssociatedToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program,
+    )]
+    pub associated_token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+### 帶有擴展的代幣帳戶
+
+`Token` 帳戶默認不帶有任何擴展，也沒有任何幫助我們的宏。因此，使用宏我們只能創建一個普通的 Token2022 `Token` 帳戶。
+
+以下是創建代幣帳戶的方法：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+        token::token_program = token_program,
+    )]
+    pub token: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```

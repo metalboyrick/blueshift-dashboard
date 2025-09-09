@@ -1,0 +1,149 @@
+# 提取
+
+`withdraw` 指令執行三個主要任務：
+- 根據用戶希望 `burn` 的 LP 數量，提取 `mint_x` 和 `mint_y` 代幣。
+- 計算提取數量，並檢查該數量是否不少於用戶指定的 `mint_x` 和 `mint_y`。
+- 從用戶的 ata 中銷毀正確數量的 `mint_lp`。
+
+> 如 `initialize` 指令部分所述；為了優化，我們將在指令之外初始化所有 `Associated Token Accounts`。
+
+<ArticleSection name="所需帳戶" id="required-accounts" level="h2" />
+
+以下是此情境所需的帳戶：
+- `user`：將代幣提取到 AMM 流動性中的用戶。必須是 `signer`。
+- `mint_lp`：代表池流動性的 Mint 帳戶。必須作為 `mutable` 傳遞。
+- `vault_x`：持有存入池中的所有 X 代幣的代幣帳戶。必須作為 `mutable` 傳遞。
+- `vault_y`：持有存入池中的所有 Y 代幣的代幣帳戶。必須作為 `mutable` 傳遞。
+- `user_x_ata`：用戶的 X 代幣關聯代幣帳戶。這是用戶的 X 代幣將從池中轉移到的目標帳戶。必須作為 `mutable` 傳遞。
+- `user_y_ata`：用戶的 Y 代幣關聯代幣帳戶。這是用戶的 Y 代幣將從池中轉移到的目標帳戶。必須作為 `mutable` 傳遞。
+- `user_lp_ata`：用戶的 LP 代幣關聯代幣帳戶。這是將銷毀 LP 代幣的來源帳戶。必須作為 `mutable` 傳遞。
+- `config`：AMM 池的配置帳戶。存儲所有相關的池參數和狀態。
+- `token program`：SPL 代幣程式帳戶。這是執行代幣操作（如轉移和鑄造）所需的。必須是 `executable`。
+
+在這裡，我會再次將實現部分留給你：
+
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub user: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub vault_x: &'a AccountInfo,
+    pub vault_y: &'a AccountInfo,
+    pub user_x_ata: &'a AccountInfo,
+    pub user_y_ata: &'a AccountInfo,
+    pub user_lp_ata: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+    pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+以下是我們需要傳遞的指令數據：
+- `amount`：用戶希望銷毀的 LP 代幣數量。必須是 `[u64]`
+- `min_x`：用戶願意提取的最小 X 代幣數量。必須是 `[u64]`
+- `min_y`：用戶願意提取的最小 Y 代幣數量。必須是 `[u64]`
+- `expiration`：此訂單的到期時間。確保交易必須在一定時間內完成非常重要。必須是 `[i64]`
+
+我們將以與初始化相同的方式處理 `WithdrawInstructionData` 的實現。所以我會將實現部分留給你：
+
+```rust
+pub struct WithdrawInstructionData {
+    pub amount: u64,
+    pub min_x: u64,
+    pub min_y: u64,
+    pub expiration: i64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        //..
+    }
+}
+```
+
+> 確保任何數量，例如 `amount`、`min_y` 和 `min_x` 都大於零，並且使用 `Clock` sysvar 確保訂單尚未過期。
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+我們首先需要反序列化 `instruction_data` 和 `accounts`。
+
+接下來我們需要：
+- 加載 `Config` 賬戶以獲取其中的所有數據。我們可以使用 `Config::load()` 幫助器來完成。
+- 驗證 `AmmState` 是否有效（例如它是否不等於 `AmmState::Disabled`）。
+- 檢查 `vault_x` 和 `vault_y` 是否為關聯代幣賬戶。
+- 反序列化所有涉及的代幣賬戶，並使用其中的數據通過 `constant-product-curve` crate 計算提取數量，並像這樣檢查滑點：
+
+```rust
+let mint_lp = unsafe { Mint::from_account_info_unchecked(self.accounts.mint_lp)? };
+let vault_x = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_x)? };
+let vault_y = unsafe { TokenAccount::from_account_info_unchecked(self.accounts.vault_y)? };
+
+let (x, y) = match mint_lp.supply() == self.instruction_data.amount {
+    true => (vault_x.amount(), vault_y.amount()),
+    false => {
+        let amounts = ConstantProduct::xy_withdraw_amounts_from_l(
+            vault_x.amount(),
+            vault_y.amount(),
+            mint_lp.supply(),
+            self.instruction_data.amount,
+            6,
+        )
+        .map_err(|_| ProgramError::InvalidArgument)?;
+
+        (amounts.x, amounts.y)
+    }
+};
+
+// Check for slippage
+if !(x >= self.instruction_data.min_x && y >= self.instruction_data.min_y) {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+- 將金額從保管庫轉移到用戶的代幣帳戶，並從用戶的代幣帳戶中銷毀相應數量的 LP 代幣
+
+> `authority` 的 `vault_x` 和 `vault_y` 是 `config` 帳戶
+
+你應該已經足夠熟練可以自行完成這個操作，所以我將實現部分留給你：
+
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+    pub instruction_data: WithdrawInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+        let instruction_data = WithdrawInstructionData::try_from(data)?;
+
+        // Return the initialized struct
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &2;
+
+    pub fn process(&mut self) -> ProgramResult {
+        //..
+
+        Ok(())
+    }
+}
+```

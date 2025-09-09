@@ -1,0 +1,193 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Anweisungen
+
+Wie wir zuvor gesehen haben, ermöglicht uns die Verwendung des `TryFrom`Traits eine saubere Trennung von Validierung und Geschäftslogik, was sowohl die Wartbarkeit als auch die Sicherheit verbessert.
+
+<ArticleSection name="Instruction Structure" id="instruction-structure" level="h2" />
+
+Wenn es Zeit ist, die Logik zu verarbeiten, können wir eine Struktur wie diese erstellen:
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_datas: DepositInstructionData,
+}
+```
+
+Diese Struktur definiert, welche Daten während der Logikverarbeitung zugänglich sein werden. Wir deserialisieren dies dann mit der Funktion `try_from`, die Sie in der Datei `lib.rs` finden können:
+
+```rust
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_datas = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_datas,
+        })
+    }
+}
+```
+
+Dieser Wrapper bietet drei wesentliche Vorteile:
+1. Er akzeptiert sowohl Roheingaben (Bytes und Konten)
+2. Er delegiert die Validierung an die einzelnen `TryFrom`Implementierungen
+3. Er gibt eine vollständig typisierte, vollständig validierte Deposit-Struktur zurück
+
+Wir können dann die Verarbeitungslogik wie folgt implementieren:
+
+```rust
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&self) -> ProgramResult {
+        // deposit logic
+        Ok(())
+    }
+}
+```
+
+- Das `DISCRIMINATOR` ist das Byte, das wir für Pattern Matching im Entrypoint verwenden
+- Die `process()`Methode enthält nur Geschäftslogik, da alle Validierungsprüfungen bereits abgeschlossen sind
+
+Das Ergebnis? Wir erhalten Anchor-ähnliche Ergonomie mit allen Vorteilen einer vollständig nativen Implementierung: explizit, vorhersehbar und schnell.
+
+<ArticleSection name="Cross Program Invocation" id="cross-program-invocation" level="h2" />
+
+Wie bereits erwähnt, bietet Pinocchio Hilfscrates wie `pinocchio-system` und `pinocchio-token`, die Cross-Program Invocations (CPIs) zu nativen Programmen vereinfachen.
+
+Diese Hilfsstrukturen und -methoden ersetzen den `CpiContext`Ansatz von Anchor, den wir zuvor verwendet haben:
+
+```rust
+Transfer {
+    from: self.accounts.owner,
+    to: self.accounts.vault,
+    lamports: self.instruction_datas.amount,
+}
+.invoke()?;
+```
+
+Die `Transfer`Struktur (aus `pinocchio-system`) kapselt alle vom System-Programm benötigten Felder ein, und `.invoke()` führt den CPI aus. Kein Context-Builder oder zusätzlicher Boilerplate-Code erforderlich.
+
+Wenn der Aufrufer eine Program-Derived Address (PDA) sein muss, behält Pinocchio die gleiche präzise API bei:
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(self.accounts.owner.key().as_ref()),
+    Seed::from(&[bump]),
+];
+let signers = [Signer::from(&seeds)];
+
+Transfer {
+    from: self.accounts.vault,
+    to: self.accounts.owner,
+    lamports: self.accounts.vault.lamports(),
+}
+.invoke_signed(&signers)?;
+```
+
+**So funktioniert es:**
+1. `Seeds` erstellt ein Array von Seed-Objekten, die der PDA-Ableitung entsprechen
+2. `Signer` verpackt diese Seeds in einen Signer-Helper
+3. `invoke_signed` führt den CPI aus und übergibt das Signer-Array zur Autorisierung der Überweisung
+
+Das Ergebnis? Eine saubere, erstklassige Schnittstelle für reguläre und signierte CPIs: keine Makros erforderlich und keine versteckte Magie.
+
+<ArticleSection name="Multiple Instruction Structure" id="multiple-instruction-structure" level="h2" />
+
+Oft möchte man dieselbe Kontostruktur und Validierungslogik für mehrere Anweisungen wiederverwenden; zum Beispiel beim Aktualisieren verschiedener Konfigurationsfelder.
+
+Anstatt für jede Anweisung einen separaten Diskriminator zu erstellen, können Sie ein Muster verwenden, das Anweisungen anhand der Größe ihrer Datennutzlast unterscheidet.
+
+So funktioniert es:
+
+Wir verwenden einen einzigen Anweisungsdiskriminator für alle verwandten Konfigurationsaktualisierungen. Die spezifische Anweisung wird durch die Länge der eingehenden Daten bestimmt.
+
+Danach vergleichen Sie in Ihrem Prozessor mit `self.data.len()`. Jeder Anweisungstyp hat eine eindeutige Datengröße, sodass Sie entsprechend zum richtigen Handler weiterleiten können.
+
+Es wird so aussehen:
+
+```rust
+pub struct UpdateConfig<'a> {
+    pub accounts: UpdateConfigAccounts<'a>,
+    pub data: &'a [u8],
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for UpdateConfig<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = UpdateConfigAccounts::try_from(accounts)?;
+
+        // Return the initialized struct
+        Ok(Self { accounts, data })
+    }
+}
+
+impl<'a> UpdateConfig<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &4;
+
+    pub fn process(&mut self) -> ProgramResult {
+        match self.data.len() {
+            len if len == size_of::<UpdateConfigStatusInstructionData>() => {
+                self.process_update_status()
+            }
+            len if len == size_of::<UpdateConfigFeeInstructionData>() => self.process_update_fee(),
+            len if len == size_of::<UpdateConfigAuthorityInstructionData>() => {
+                self.process_update_authority()
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+
+    //..
+}
+```
+
+Beachten Sie, dass wir die Deserialisierung der Anweisungsdaten erst durchführen, nachdem wir wissen, welchen Handler wir aufrufen sollen. Dies vermeidet unnötiges Parsen und hält die Einstiegspunktlogik sauber.
+
+Jeder Handler kann dann seinen spezifischen Datentyp deserialisieren und führt die Aktualisierung durch:
+
+```rust
+pub fn process_update_authority(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigAuthorityInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_authority_unchecked(instruction_data.authority) }?;
+
+    Ok(())
+}
+
+pub fn process_update_fee(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigFeeInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_fee_unchecked(instruction_data.fee) }?;
+
+    Ok(())
+}
+
+pub fn process_update_status(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigStatusInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_state_unchecked(instruction_data.status) }?;
+
+    Ok(())
+}
+```
+
+Dieser Ansatz ermöglicht es Ihnen, die Kontovalidierung gemeinsam zu nutzen und einen einzigen Einstiegspunkt für mehrere verwandte Anweisungen zu verwenden, wodurch Boilerplate-Code reduziert und Ihre Codebasis leichter zu warten wird.
+
+Durch Pattern-Matching auf Datengröße können Sie effizient zur richtigen Logik weiterleiten, ohne zusätzliche Diskriminatoren oder komplexes Parsing.

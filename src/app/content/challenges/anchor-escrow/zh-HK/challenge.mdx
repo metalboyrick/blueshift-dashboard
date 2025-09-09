@@ -1,0 +1,155 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
+
+# Escrow（第三方託管）
+
+第三方託管是一種強大的金融工具，能夠在雙方之間實現安全的代幣交換。
+
+可以將其想像成一個數碼保險箱，第一位用戶可以將代幣 A 鎖定在其中，等待另一位用戶存入代幣 B，然後完成交換。
+
+這創造了一個無需信任的環境，雙方都不需要擔心對方會退出交易。
+
+在這個挑戰中，我們將通過三個簡單但強大的指令來實現這個概念：
+- **Make（創建）**：創建者（第一位用戶）定義交易條款，並將約定數量的代幣 A 存入安全保險庫。這就像將你的物品放入保險箱並設定交換條件。
+- **Take（接受）**：接受者（第二位用戶）通過向創建者轉移約定數量的代幣 B 來接受交易，並獲得鎖定的代幣 A。這是雙方完成交易的時刻。
+- **Refund（退款）**：如果創建者改變主意或未找到合適的接受者，他們可以取消交易並取回代幣 A。這就像在交易失敗時從保險箱中取回你的物品。
+
+**注意**：如果你不熟悉 Anchor，應該先閱讀 [Anchor for Dummies](/zh-HK/courses/anchor-for-dummies)，以熟悉我們在此程序中將使用的核心概念。
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+讓我們從創建一個全新的 Anchor 工作區開始：
+
+```bash
+anchor init blueshift_anchor_escrow
+cd blueshift_anchor_escrow
+```
+
+然後，我們繼續在`anchor-lang` crate 上啟用`init-if-needed`，並添加`anchor-spl` crate：
+
+```bash
+cargo add anchor-lang --features init-if-needed
+cargo add anchor-spl
+```
+
+由於我們使用了`anchor-spl`，我們還需要更新`programs/blueshift_anchor_escrow/Cargo.toml`文件，將`anchor-spl/idl-build`包含在`idl-build`功能中。
+
+打開`Cargo.toml`，您會看到一行現有的`idl-build`，看起來像這樣：
+
+```toml
+idl-build = ["anchor-lang/idl-build"]
+```
+
+將其修改以添加`anchor-spl/idl-build`：
+
+```toml
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+```
+
+現在，您可以打開新生成的文件夾，準備開始編碼了！
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+這次，由於程式相當複雜，我們將其拆分為小型、專注的模組，而不是將所有內容塞進`lib.rs`中。
+
+文件夾結構大致如下：
+
+```
+src
+├── instructions
+│       ├── make.rs
+│       ├── mod.rs
+│       ├── refund.rs
+│       └── take.rs
+├── errors.rs
+├── lib.rs
+└── state.rs
+```
+
+而`lib.rs`大致如下：
+
+```rust
+use anchor_lang::prelude::*;
+
+mod state;
+mod errors;
+mod instructions;
+use instructions::*;
+
+declare_id!("22222222222222222222222222222222222222222222");
+
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    #[instruction(discriminator = 0)]
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        //...
+    }
+
+    #[instruction(discriminator = 1)]
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        //...
+    }
+
+    #[instruction(discriminator = 2)]
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        //...
+    }
+}
+```
+
+如您所見，我們為指令實現了自定義的 discriminator。因此，請確保使用 0.31.0 或更新版本的 anchor。
+
+<ArticleSection name="State" id="state" level="h2" />
+
+我們將進入`state.rs`，其中存放了我們`Escrow`的所有數據。為此，我們將為其提供自定義的 discriminator，並將結構包裝到`#[account]`巨集中，如下所示：
+
+```rust
+use anchor_lang::prelude::*;
+
+#[derive(InitSpace)]
+#[account(discriminator = 1)]
+pub struct Escrow {
+    pub seed: u64,
+    pub maker: Pubkey,
+    pub mint_a: Pubkey,
+    pub mint_b: Pubkey,
+    pub receive: u64,
+    pub bump: u8,
+}
+  ```
+
+每個字段的作用：
+- **seed**：在種子推導過程中使用的隨機數，因此一個 maker 可以使用相同的代幣對開啟多個 escrow；存儲在鏈上，以便我們始終可以重新推導 PDA。
+- **maker**：創建 escrow 的錢包；需要用於退款和接收付款。
+- **mint_a** 和 **mint_b**：交換中“給予”和“獲取”兩側的 SPL 鑄幣地址。
+- **receive**：maker 想要的代幣 B 的數量。（金庫的餘額本身顯示了存入的代幣 A 的數量，因此我們不存儲該數據。）
+- **bump**：緩存的 bump 字節；即時推導成本較高，因此我們將其保存一次。
+
+我們可以加入更多資訊，但額外的位元組意味著額外的租金。只儲存必要的內容可以保持存款便宜，同時仍然讓程式執行所需的每一條規則。
+
+我們最後加入了`#[derive(InitSpace)]`巨集，這樣我們就不需要手動計算這個結構的租金。
+
+<ArticleSection name="Errors" id="errors" level="h2" />
+
+我們現在可以移動到`errors.rs`檔案，在那裡我們將新增一些稍後會用到的錯誤，像這樣：
+
+```rust
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum EscrowError {
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Invalid maker")]
+    InvalidMaker,
+    #[msg("Invalid mint a")]
+    InvalidMintA,
+    #[msg("Invalid mint b")]
+    InvalidMintB,
+}
+```
+
+每個列舉都對應一個清晰、易於理解的訊息，當約束或`require!()`失敗時，Anchor 會顯示這些訊息。

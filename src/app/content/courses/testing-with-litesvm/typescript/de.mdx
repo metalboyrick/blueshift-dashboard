@@ -1,0 +1,283 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM mit TypeScript
+
+Das `litesvm` Paket bietet die grundlegende Testinfrastruktur zum Erstellen einer leichtgewichtigen Solana-Umgebung, in der Sie den Kontozustand direkt manipulieren und Transaktionen für Ihre Programme ausführen können.
+
+<ArticleSection name="Erste Schritte" id="first-steps" level="h2" />
+
+Fügen Sie LiteSVM zu Ihrem Projekt hinzu:
+
+```bash
+npm i --save-dev litesvm
+```
+
+<ArticleSection name="LiteSVM Grundlagen" id="basics" level="h2" />
+
+Beginnen Sie mit der Deklaration Ihrer Programm-ID und der Erstellung einer LiteSVM-Instanz.
+
+Verwenden Sie genau dieselbe Programm-ID, die Sie in Ihrem Programm definiert haben, um sicherzustellen, dass Transaktionen korrekt ausgeführt werden und keine `ProgramMismatch` Fehler während des Testens auftreten:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { PublicKey } from "@solana/web3.js";
+
+const programId = new PublicKey("22222222222222222222222222222222222222222222");
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Load the program with the right public key
+    svm.addProgramFromFile(programId, "target/deploy/program.so");
+})
+```
+
+Um Tests auszuführen, erstellen Sie ein Transaktionsobjekt und verwenden Sie die `.sendTransaction(tx)` Funktion:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Transaction } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Transaction
+    const tx = new Transaction();
+
+    // Add the latest blockhash
+    tx.recentBlockhash = svm.latestBlockhash();
+
+    // Add the instructions and the signers
+    // tx.add(...ixs);
+    // tx.sign(...signersKeypair);
+
+    // Send the transaction
+    svm.sendTransaction(tx);
+})
+```
+
+<ArticleSection name="Konten" id="accounts" level="h2" />
+
+Beim Testen von Solana-Programmen mit LiteSVM arbeiten Sie mit verschiedenen Kontotypen, die reale Programmausführungsszenarien widerspiegeln.
+
+Das Verständnis, wie man diese Konten richtig konstruiert, ist entscheidend für effektives Testen.
+
+### System-Konten
+
+Der grundlegendste Kontotyp ist das System-Konto, das in zwei Hauptvarianten vorkommt:
+- **Zahler-Konten**: Konten mit Lamports, die die Erstellung von Programmkonten oder Lamport-Überweisungen finanzieren
+- **Nicht initialisierte Konten**: Leere Konten ohne Lamports, typischerweise verwendet, um Programmkonten darzustellen, die auf Initialisierung warten
+
+System-Konten enthalten keine Daten und gehören dem System-Programm. Der Hauptunterschied zwischen Zahlern und nicht initialisierten Konten ist ihr Lamport-Guthaben: Zahler haben Guthaben, während nicht initialisierte Konten leer beginnen.
+
+Hier ist, wie man ein `payer` Konto in LiteSVM erstellt:
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair, SystemProgram } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports: 100_000_000,
+        data: Buffer.alloc(0),
+        owner: SystemProgram.programId,
+        executable: false,
+    }); 
+})
+```
+
+> Ein nicht initialisiertes Konto ist einfach ein normal generiertes Konto mit `Keypair.generate()` - keine zusätzliche Einrichtung erforderlich.
+
+### Programm-Konten
+
+Für Programmkonten, die benutzerdefinierte Datenstrukturen enthalten, können Sie einen ähnlichen Ansatz verwenden.
+Sie müssen auch die Kontodaten in einen Puffer serialisieren, was entweder manuell oder mit einer Bibliothek wie `@coral-xyz/borsh` erfolgen kann (siehe Beispiel [hier](https://solana.com/developers/courses/native-onchain-development/serialize-instruction-data-frontend)).
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    // Create a new Account
+    const account = Keypair.generate();
+
+    // Populate the data of the Account
+    const accountData = Buffer.alloc(SIZE_OF_THE_ACCOUNT);
+
+    // Serialize the account data into the byte buffer defined above
+    // ...
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.setAccount(account.publicKey, {
+        lamports,
+        data: accountData,
+        owner: PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+> Beim Testen müssen Sie keine exakte Miete berechnen. Sie können Lamports auf einen hohen Wert wie `100_000_000_000` setzen und die Mietberechnung überspringen, da es sich nicht um echte Gelder handelt.
+
+### Token-Konten
+
+Um Daten für SPL-Token-Konten zu serialisieren, können Sie `AccountLayout` und `MintLayout` aus `@solana/spl-token` verwenden.
+
+```ts
+import { LiteSVM } from "litesvm";
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, AccountLayout, MintLayout, ACCOUNT_SIZE, MINT_SIZE } from "@solana/spl-token"
+
+describe("test", () => {
+    // Create a new instance of LiteSVM
+    const svm = new LiteSVM();
+
+    const owner = Keypair.generate();
+
+    // Create a new Mint Account
+    const mint = Keypair.generate();
+
+    // Populate the data of the Mint Account
+    let mintData = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+        {
+          mintAuthorityOption: 1,
+          mintAuthority: owner.publicKey,
+          supply: BigInt(0),
+          decimals: 0,
+          isInitialized: true,
+          freezeAuthorityOption: 0,
+          freezeAuthority: PublicKey.default,
+        },
+        mintData
+    )
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(MINT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(mint.publicKey, {
+        lamports,
+        data: mintData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+
+    // Create a new Token Account
+    const tokenAccount = Keypair.generate();
+
+    // Populate the data of the Token Account
+    const tokenAccountData = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(
+        {
+            mint: mint.publicKey,
+            owner: owner.publicKey,
+            amount: BigInt(100),
+            delegateOption: 0,
+            delegate: PublicKey.default,
+            delegatedAmount: BigInt(0),
+            state: 1,
+            isNativeOption: 0,
+            isNative: BigInt(0),
+            closeAuthorityOption: 0,
+            closeAuthority: PublicKey.default,
+        },
+        tokenAccountData,
+    );
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    const lamports = svm.minimumBalanceForRentExemption(ACCOUNT_SIZE);
+
+    // Add the Account with the modified data
+    svm.setAccount(tokenAccount.publicKey, {
+        lamports,
+        data: tokenAccountData,
+        owner: TOKEN_PROGRAM_ID,
+        executable: false,
+    });
+})
+```
+
+<ArticleSection name="Ausführung" id="execution" level="h2" />
+
+Mit erstellten Konten, die zu Ihrer LiteSVM-Instanz hinzugefügt wurden, können Sie jetzt Transaktionen senden und Ihre Programmlogik validieren.
+
+Bevor Sie eine Transaktion senden, können Sie das Ergebnis simulieren:
+
+```ts
+// Simulate before executing
+const simulatedResult = svm.simulateTransaction(tx);
+```
+
+Dann senden Sie die Transaktion und prüfen deren Logs:
+
+```ts
+// Execute and inspect logs
+const result = svm.sendTransaction(tx);
+console.log(result.logs);
+```
+
+### Erweiterte Funktionen
+
+Vor und nach der Ausführung ist das gesamte Ledger in Ihrer LiteSVM-Instanz lesbar und anpassbar.
+
+Sie können Sysvar-Werte wie die Uhr manipulieren:
+
+```ts
+// Change the Clock
+const newClock = svm.getClock();
+newClock.unixTimestamp = 50n;
+svm.setClock(newClock);
+
+// Jump to a certain Slot
+svm.warpToSlot(500);
+
+// Expire the current blockhash
+svm.expireBlockhash();
+```
+
+Sie können auch Konto- und Protokolldaten lesen:
+
+```ts
+// Get all the information about an account (data, lamports, owner, ...)
+svm.getAccount(account.publicKey);
+
+// Get the lamport balance of an account
+svm.getBalance(account.publicKey);
+```
+
+Oder konfigurieren, wie sich die Laufzeitumgebung verhält:
+
+```ts
+// Sets the compute budget
+const computeBudget = new ComputeBudget();
+computeBudget.computeUnitLimit = 2_000_000n;
+svm.withComputeBudget(computeBudget);
+
+// Sets Sigverify as active
+svm.withSigverify(true);
+
+// Sets the Blockhash check as active
+svm.withBlockhashCheck(true);
+
+// Sets the default Sysvars
+svm.withSysvars();
+
+// Set the FeatureSet to use
+svm.withFeatureSet(new FeatureSet(...))
+```

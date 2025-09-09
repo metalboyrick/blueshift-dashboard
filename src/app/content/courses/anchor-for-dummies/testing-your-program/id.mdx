@@ -1,0 +1,160 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Menguji Program Anda
+
+Pengujian yang menyeluruh mencegah kerugian finansial, membangun kepercayaan pengguna, dan memastikan program Anda berperilaku dengan benar dalam semua kondisi. 
+
+> Uji dengan teliti sebelum penerapan di mainnet.
+
+<ArticleSection name="TypeScript Tests" id="typescript-tests" level="h2" />
+
+Pengujian TypeScript adalah pendekatan yang paling umum karena Anda akan membutuhkan TypeScript untuk klien dApp Anda. Ini memungkinkan Anda mengembangkan kode pengujian dan klien secara bersamaan.
+
+Kami telah membahas pengaturan sisi klien secara detail [di sini](/id/courses/anchor-for-dummies/client-side-development).
+
+> Setiap proyek Anchor CLI menyertakan folder test dengan file TypeScript yang siap untuk pengujian.
+
+Pengujian TypeScript menawarkan keunggulan utama:
+- Mencerminkan interaksi klien yang sebenarnya
+- Menguji alur kerja yang kompleks dan kasus-kasus khusus  
+- Memberikan umpan balik langsung tentang perubahan API
+- Memvalidasi skenario keberhasilan dan kesalahan
+
+Jalankan pengujian dengan:
+
+```bash
+anchor test
+```
+
+> Jalankan di localnet dengan mengatur cluster ke localnet dalam konfigurasi Anda. Ini akan menjalankan validator lokal dan menambahkan 1.000 SOL ke dompet penyedia. Jika Anda membutuhkan akun tambahan dengan data di dalamnya, lihat cara menjalankan [Validator Lokal](/id/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)
+
+<ArticleSection name="Mollusk Tests" id="mollusk-tests" level="h2" />
+
+Ketika Anda membutuhkan kontrol yang lebih detail atas lingkungan pengujian atau pengaturan status program yang kompleks, Mollusk menyediakan solusinya.
+
+Mollusk adalah framework pengujian Rust yang dibuat khusus untuk program Solana. Ini memungkinkan Anda untuk:
+- Menguji logika program secara terisolasi tanpa overhead jaringan
+- Mengatur status akun yang kompleks dengan mudah
+- Menjalankan pengujian lebih cepat daripada pengujian integrasi penuh
+- Mensimulasikan kondisi blockchain tertentu dan kasus-kasus khusus
+
+Kami telah membahas pengujian Mollusk secara menyeluruh [di sini](/id/courses/testing-with-mollusk).
+
+Buat program Anchor baru dengan Mollusk:
+
+```bash
+anchor init <name-of-the-project> --test-template mollusk
+```
+
+Jalankan pengujian menggunakan:
+
+```bash
+anchor test
+```
+
+<ArticleSection name="Tes LiteSVM" id="litesvm-tests" level="h2" />
+
+Ketika Anda membutuhkan kontrol yang sama terperinci atas status program Anda, seperti Mollusk, tetapi dalam Typescript, LiteSVM menyediakan solusi yang optimal.
+
+LiteSVM adalah kerangka pengujian ringan yang menjalankan Solana Virtual Machine langsung dalam proses pengujian Anda. Ini memungkinkan Anda untuk:
+- Menjalankan tes jauh lebih cepat daripada kerangka tradisional seperti `solana-program-test`
+- Memanipulasi status akun dan sysvars dengan presisi
+- Menguji dalam beberapa bahasa: TypeScript, Rust, dan Python
+- Mensimulasikan kondisi blockchain yang kompleks dan kasus-kasus khusus dengan mudah
+
+LiteSVM menghilangkan overhead validator dengan menanamkan VM di dalam tes Anda, memberikan kecepatan yang dibutuhkan untuk siklus pengembangan yang cepat tanpa mengorbankan akurasi pengujian.
+
+Kami telah membahas pengujian LiteSVM secara menyeluruh [di sini](/id/courses/testing-with-litesvm).
+
+Anda dapat mengatur provider Anchor Anda dan menggunakan pengaturan sisi klien yang telah kita lihat [sebelumnya](/id/courses/anchor-for-dummies/client-side-development) dengan paket `anchor-litesvm`.
+
+Instal paket `anchor-litesvm`.
+
+```bash
+npm install git:https://github.com/LiteSVM/anchor-litesvm
+```
+
+Kemudian ubah provider Anchor default ke `LiteSVMProvider` seperti ini:
+
+```ts
+import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
+
+test("anchor", async () => {
+	const client = fromWorkspace("target/types/<program-name>.ts");
+	const provider = new LiteSVMProvider(client);
+	const program = new Program<Puppet>(IDL, provider);
+
+    // program.methods..
+})
+```
+
+<ArticleSection name="Menjalankan Validator Lokal" id="running-a-local-validator" level="h2" />
+
+Cerminkan perilaku mainnet secara lokal menggunakan validator yang bertindak sebagai sandbox blockchain pribadi Anda. Ini terjadi secara otomatis ketika Anda mengatur cluster ke localnet.
+
+Validator lokal mengoperasikan buku besar Solana yang disederhanakan dengan program native yang sudah terpasang. Secara default, validator hanya menyimpan data pengujian dan tidak memiliki akses ke akun mainnet yang ada—membatasi pengujian dengan protokol yang sudah mapan.
+
+### Mengonfigurasi Validator Lokal Anda
+
+Sesuaikan validator Anda di `Anchor.toml` di bawah bagian `[test]`:
+
+```
+[test]
+startup_wait = 10000
+```
+
+Flag `startup_wait` menunda startup validator, berguna ketika mengkloning beberapa akun yang meningkatkan waktu pemuatan.
+
+### Mengkloning Akun Mainnet
+
+Kloning akun dan program mainnet yang ada menggunakan konfigurasi `[test.validator]`:
+
+```
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+[[test.validator.clone]]
+address = "7NL2qWArf2BbEBBH1vTRZCsoNqFATTddH6h8GkVvrLpG"
+[[test.validator.clone]]
+address = "2RaN5auQwMdg5efgCaVqpETBV8sacWGR8tkK4m9kjo5r"
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+```
+
+Bagian `clone` menyalin akun dari cluster yang ditentukan. Ketika sebuah akun terhubung ke program yang dikelola oleh "BPF upgradeable loader", Anchor secara otomatis mengkloning akun data program terkait.
+
+### Memuat Data Akun Lokal
+
+Muat akun lokal dari file JSON menggunakan flag `account`:
+
+```
+[[test.validator.account]]
+address = "Ev8WSPQsGb4wfjybqff5eZNcS3n6HaMsBkMk9suAiuM"
+filename = "some_account.json"
+```
+
+Pendekatan ini bekerja dengan baik untuk pengujian dengan status akun yang telah dikonfigurasi sebelumnya atau konfigurasi spesifik yang tidak ada di mainnet.
+
+<ArticleSection name="Running Surfnet" id="running-surfnet" level="h2" />
+
+Pengujian program Solana yang bergantung pada Cross-Program Invocations (CPIs) secara tradisional mengharuskan pengembang untuk mengambil akun dan program dari mainnet, seperti yang kita lihat di bagian Local Validator.
+
+Proses ini berfungsi untuk beberapa akun, tetapi menjadi sangat tidak layak ketika menguji CPI ke dalam program kompleks seperti Jupiter, yang dapat bergantung pada lebih dari 40 akun dan lebih dari 8 program.
+
+Surfnet berfungsi sebagai pengganti langsung untuk solana-test-validator yang memungkinkan pengembang mensimulasikan program secara lokal menggunakan akun mainnet yang diambil sesuai permintaan
+
+Untuk menggunakannya, cukup instal surfpool menggunakan [Halaman Instalasi](https://docs.surfpool.run/install) resmi dan kemudian jalankan:
+
+```bash
+surfpool start
+```
+
+Sekarang Anda dapat terhubung ke Surfnet dengan menargetkan validator lokal:
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```
+
+Kami telah membahas pengaturan dan penggunaan Surfnet secara menyeluruh [di sini](/id/courses/testing-with-surfpool).

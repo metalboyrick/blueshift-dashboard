@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Einfrieren und Auftauen: Anweisungen
+
+Die Freeze-Funktion verhindert alle Token-Operationen auf einem Konto, bis es wieder aufgetaut wird. Nur die Freeze-Autorität der Mint kann diese Operation durchführen.
+
+> Deaktiviert vollständig Überweisungen, Genehmigungen und Burns und betrifft nur das spezifisch eingefrorene Konto
+
+Die Thaw-Funktion aktiviert Token-Operationen auf einem zuvor eingefrorenen Konto wieder. Nur die Freeze-Autorität der Mint kann Konten auftauen.
+
+> Stellt die volle Funktionalität eines eingefrorenen Kontos wieder her und kann nur von der Freeze-Autorität der Mint durchgeführt werden
+
+Bevor wir einen Token einfrieren und auftauen können, benötigen wir bereits:
+- Ein initialisiertes `Mint` Konto, für das wir die `freezeAuthority` besitzen
+- Ein initialisiertes `Token` Konto oder `Associated Token` Konto, das wir einfrieren oder auftauen möchten
+
+<ArticleSection name="Raw Instruction" id="raw-instruction" level="h2" />
+
+Bei Verwendung einer "rohen" Anweisung ohne Abstraktion würde das Einfrieren eines Tokens so aussehen:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const tokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey,
+    tokenAccount.publicKey,
+);
+
+// Create ATA creation instruction
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    tokenAccount, // associated token account address
+    destination.publicKey, // owner
+    mint.publicKey, // mint
+);
+
+// Freeze an ATA 
+const freezeInstruction = createFreezeAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    freezeInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token accounts created and frozen! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Bei Verwendung einer "rohen" Anweisung ohne Abstraktion würde das Widerrufen eines Tokens so aussehen:
+
+```ts
+// Thaw an ATA 
+const thawInstruction = createThawAccountInstruction(
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+const transaction = new Transaction().add(thawInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Token account thawed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="Abstracted Instruction" id="abstracted-instruction" level="h2" />
+
+So würden die gleichen Anweisungen aussehen, wenn sie mit der `freezeAccount()` Anweisung abstrahiert werden:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    mint,
+    tokenAccount.publicKey
+);
+
+console.log(`This is your ATA: ${ata.address}!`)
+  
+let tx = await freezeAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Frozen!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```
+
+So würden die gleichen Anweisungen aussehen, wenn sie mit der `thawAccount()` Anweisung abstrahiert werden:
+
+```ts
+let tx = await thawAccount(
+    connection,
+    keypair,
+    tokenAccount // account
+    mint // mint
+    keypair.publickey // authority
+);
+
+console.log(`Token Account succesfully Thawed!. Transaction Here: https://explorer.solana.com/tx/${tx}?cluster=devnet`)
+```

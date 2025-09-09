@@ -1,0 +1,183 @@
+# 接受
+
+`take` 指令完成交換的最後步驟：
+  - 關閉托管記錄，將其租金 lamports 返回給創建者。
+  - 將 Token A 從保管庫移至接受者，然後關閉保管庫。
+  - 將商定數量的 Token B 從接受者移至創建者。
+
+<ArticleSection name="所需帳戶" id="required-accounts" level="h2" />
+
+以下是上下文所需的帳戶：
+
+- 接受者：希望接受交易的人。必須是簽署者且可變。
+- 創建者：托管的創建者。必須可變。
+- 托管：我們正在初始化的托管帳戶。必須可變。
+- mint_a：我們存入托管的代幣。
+- mint_b：我們希望接收的代幣。
+- 保管庫：由托管擁有的關聯代幣帳戶。必須可變。
+- taker_ata_a：由接受者擁有的 mint_a 的關聯代幣帳戶。必須可變。
+- taker_ata_b：由接受者擁有的 mint_b 的關聯代幣帳戶。必須可變。
+- maker_ata_b：由創建者擁有的 mint_b 的關聯代幣帳戶。必須可變。
+- system_program：系統程序。必須可執行。
+- token_program：代幣程序。必須可執行。
+
+我們對其進行以下檢查：
+
+```rust
+pub struct TakeAccounts<'a> {
+  pub taker: &'a AccountInfo,
+  pub maker: &'a AccountInfo,
+  pub escrow: &'a AccountInfo,
+  pub mint_a: &'a AccountInfo,
+  pub mint_b: &'a AccountInfo,
+  pub vault: &'a AccountInfo,
+  pub taker_ata_a: &'a AccountInfo,
+  pub taker_ata_b: &'a AccountInfo,
+  pub maker_ata_b: &'a AccountInfo,
+  pub system_program: &'a AccountInfo,
+  pub token_program: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for TakeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    let [taker, maker, escrow, mint_a, mint_b, vault, taker_ata_a, taker_ata_b, maker_ata_b, system_program, token_program, _] = accounts else {
+      return Err(ProgramError::NotEnoughAccountKeys);
+    };
+
+    // Basic Accounts Checks
+    SignerAccount::check(taker)?;
+    ProgramAccount::check(escrow)?;
+    MintInterface::check(mint_a)?;
+    MintInterface::check(mint_b)?;
+    AssociatedTokenAccount::check(taker_ata_b, taker, mint_b, token_program)?;
+    AssociatedTokenAccount::check(vault, escrow, mint_a, token_program)?;
+
+    // Return the accounts
+    Ok(Self {
+      taker,
+      maker,
+      escrow,
+      mint_a,
+      mint_b,
+      taker_ata_a,
+      taker_ata_b,
+      maker_ata_b,
+      vault,
+      system_program,
+      token_program,
+    })
+  }
+}
+```
+
+<ArticleSection name="指令數據" id="instruction-data" level="h2" />
+
+執行邏輯所需的所有數據已經存在於托管帳戶或我們正在反序列化的帳戶中。因此，這個指令不需要任何 `instruction_data`。
+
+<ArticleSection name="指令邏輯" id="instruction-logic" level="h2" />
+
+我們首先在 `TryFrom` 實現中初始化所需的帳戶，並在反序列化帳戶後進行操作。
+
+在此步驟中，我們會使用`AssociatedTokenAccount::init_if_needed`來確保接收方的 Token A 帳戶和提供方的 Token B 帳戶已初始化，因為我們無法確定它們是否已存在。
+
+```rust
+pub struct Take<'a> {
+  pub accounts: TakeAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Take<'a> {
+  type Error = ProgramError;
+  
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    let accounts = TakeAccounts::try_from(accounts)?;
+
+    // Initialize necessary accounts
+    AssociatedTokenAccount::init_if_needed(
+      accounts.taker_ata_a,
+      accounts.mint_a,
+      accounts.taker,
+      accounts.taker,
+      accounts.system_program,
+      accounts.token_program,
+    )?;
+
+    AssociatedTokenAccount::init_if_needed(
+      accounts.maker_ata_b,
+      accounts.mint_b,
+      accounts.taker,
+      accounts.maker,
+      accounts.system_program,
+      accounts.token_program,
+    )?;
+
+    Ok(Self {
+      accounts,
+    })
+  }
+}
+```
+
+現在我們可以專注於邏輯本身，該邏輯將：
+- 從`taker_ata_b`轉移代幣到`maker_ata_b`。
+- 從`vault`轉移代幣到`taker_ata_a`。
+- 關閉現在已空的`vault`並提取該帳戶的租金。
+
+```rust
+impl<'a> Take<'a> {
+  pub const DISCRIMINATOR: &'a u8 = &1;
+  
+  pub fn process(&mut self) -> ProgramResult {
+    let data = self.accounts.escrow.try_borrow_data()?;
+    let escrow = Escrow::load(&data)?;
+
+    // Check if the escrow is valid
+    let escrow_key = create_program_address(&[b"escrow", self.accounts.maker.key(), &escrow.seed.to_le_bytes(), &escrow.bump], &crate::ID)?;
+    if &escrow_key != self.accounts.escrow.key() {
+      return Err(ProgramError::InvalidAccountOwner);
+    }
+    
+    let seed_binding = escrow.seed.to_le_bytes();
+    let bump_binding = escrow.bump;
+    let escrow_seeds = [
+      Seed::from(b"escrow"),
+      Seed::from(self.accounts.maker.key().as_ref()),
+      Seed::from(&seed_binding),
+      Seed::from(&bump_binding),
+    ];
+    let signer = Signer::from(&escrow_seeds);
+    
+    let amount = TokenAccount::get_amount(self.accounts.vault);
+    
+    // Transfer from the Vault to the Taker
+    Transfer {
+      from: self.accounts.vault,
+      to: self.accounts.taker_ata_a,
+      authority: self.accounts.escrow,
+      amount,
+    }.invoke_signed(&[signer.clone()])?;
+
+    // Close the Vault
+    CloseAccount {
+      account: self.accounts.vault,
+      destination: self.accounts.maker,
+      authority: self.accounts.escrow,
+    }.invoke_signed(&[signer.clone()])?;
+
+    // Transfer from the Taker to the Maker
+    Transfer {
+      from: self.accounts.taker_ata_b,
+      to: self.accounts.maker_ata_b,
+      authority: self.accounts.taker,
+      amount: escrow.receive,
+    }.invoke()?;
+
+    // Close the Escrow
+    drop(data);
+    ProgramAccount::close(self.accounts.escrow, self.accounts.taker)?;
+
+    Ok(())
+  }
+}
+```

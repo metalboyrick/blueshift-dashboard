@@ -1,0 +1,110 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Tanda Tangan Winternitz di Solana
+
+![Tanda Tangan Winternitz di Solana](/graphics/course-banners/winternitz-signatures-on-solana.png)
+
+Tidak seperti tanda tangan RSA atau ECDSA yang mengandalkan masalah matematis seperti faktorisasi bilangan bulat atau logaritma diskrit—keduanya rentan terhadap serangan kuantum, tanda tangan Winternitz memperoleh keamanannya semata-mata dari sifat satu arah fungsi hash kriptografi.
+
+Perbedaan mendasar ini menjadikannya sebagai landasan kriptografi pasca-kuantum.
+
+<ArticleSection name="What is a Winternitz Signature" id="what-is-a-winternitz-signature" level="h2" />
+
+Tanda Tangan Sekali Pakai Winternitz (WOTS) berkembang dari karya revolusioner Leslie Lamport pada tahun 1970-an. Lamport menunjukkan bahwa Anda dapat membuat tanda tangan digital hanya dengan menggunakan fungsi hash kriptografi, tanpa memerlukan asumsi matematis yang kompleks.
+
+Skema asli Lamport menandatangani satu bit menggunakan dua nilai rahasia. Untuk menandatangani bit `b`, Anda mengungkapkan preimage dari nilai hash `H₀` (jika b=0) atau `H₁` (jika b=1). Keamanan sepenuhnya bergantung pada ketidakmungkinan komputasi untuk menemukan preimage hash: pada dasarnya, bekerja mundur dari output hash untuk menemukan inputnya.
+
+Namun, tanda tangan Lamport sangat tidak efisien. Menandatangani pesan `n-bit` membutuhkan `2n` nilai rahasia dan menghasilkan tanda tangan `2n`nilai. Untuk pesan 256-bit, ini berarti mengelola 512 nilai rahasia dan menghasilkan tanda tangan 512-nilai.
+
+Robert Winternitz menyadari pada tahun 1990-an bahwa alih-alih menandatangani bit individual dalam basis-2, Anda dapat menandatangani "digit" yang lebih besar dalam basis yang lebih tinggi seperti basis-16 atau basis-256. Inovasi ini secara dramatis mengurangi ukuran kunci dan tanda tangan sekaligus mempertahankan jaminan keamanan yang sama.
+
+<ArticleSection name="Mathematical Foundations" id="mathematical-foundations" level="h2" />
+
+### Parameter Winternitz dan Representasi Basis
+
+Parameter penting dalam tanda tangan Winternitz adalah `w`, yang menentukan bagaimana kita mengelompokkan bit pesan:
+- Basis: `b = 2^w`
+- Rentang digit: Setiap digit mewakili `w` bit dan dapat memiliki nilai dari `0` hingga `2^w - 1`
+
+Pilihan parameter umum:
+- `w = 1`: Setiap posisi mewakili 1 bit (nilai 0 atau 1), setara dengan tanda tangan Lamport dalam basis-2
+- `w = 4`: Setiap posisi mewakili 4 bit (nilai 0-15), representasi basis-16
+- `w = 8`: Setiap posisi mewakili 8 bit (nilai 0-255). representasi basis-256
+
+> Nilai `w` yang lebih besar menciptakan tanda tangan yang lebih kecil tetapi membutuhkan lebih banyak komputasi untuk keamanan. Trade-off ini fundamental untuk memahami karakteristik kinerja WOTS.
+
+### Rantai Hash
+
+Tanda tangan Winternitz menggunakan rantai hash—rangkaian aplikasi hash berulang yang dimulai dari nilai rahasia: `H⁰(s) = s`, `H¹(s) = H(s)`, `H²(s) = H(H(s))`, ..., `Hⁱ(s) = H(H^(i-1)(s))`
+
+Properti keamanannya asimetris: dengan `Hⁱ(s)`, menghitung `Hʲ(s)` di mana `j > i` itu mudah (cukup hash `j-i` lebih banyak kali), tetapi menghitung `Hʲ(s)` di mana `j < i` secara komputasi tidak mungkin karena akan memerlukan pembalikan fungsi hash.
+
+### Mekanisme Checksum
+
+Mekanisme checksum mencegah jenis serangan pemalsuan tertentu. Tanpa itu, penyerang yang melihat tanda tangan berpotensi memodifikasi pesan menjadi pesan yang memerlukan lebih banyak operasi hash pada beberapa rantai, kemudian memalsukan komponen-komponen tersebut.
+
+Checksum memastikan bahwa total "anggaran hash" di semua rantai tetap konstan: jika penyerang memodifikasi digit pesan menjadi nilai yang lebih besar (memerlukan lebih banyak hash), digit checksum secara otomatis menjadi lebih kecil (memerlukan lebih sedikit hash di nilai lain, yang tidak mungkin dipalsukan tanpa kunci privat).
+
+### Proses Pembuatan Kunci
+
+Untuk panjang pesan `n` bit dengan parameter Winternitz `w`:
+
+1. Hitung panjang tanda tangan: Pertama, tentukan berapa banyak "potongan" yang Anda butuhkan untuk merepresentasikan pesan. Jika pesan Anda panjangnya 256 bit dan Anda memilih parameter Winternitz `w = 4`, Anda akan membutuhkan total 64 potongan: `l₁ = ⌈n/w⌉`. Menggunakan rumus `l₂ = ⌊log₂(l₁ × (2^w - 1))/w⌋ + 1` kita kemudian menemukan bahwa untuk `w = 4`, di mana checksum maksimum adalah 960, `l₂ = 3` dan ukuran tanda tangan akan menjadi `l = l₁ + l₂`
+
+> Selama pembuatan kunci, Anda tidak tahu berapa nilai checksum karena Anda belum memilih pesan yang akan ditandatangani, tetapi Anda tetap memerlukan `l₂` komponen kunci privat yang dicadangkan untuk checksum.
+
+2. Buat titik awal acak: Hasilkan satu nilai rahasia acak untuk setiap rantai hash yang Anda butuhkan. Nilai-nilai acak ini menjadi komponen kunci privat Anda. Anggap masing-masing sebagai "titik awal" dari rantai hash terpisah: `sk = (sk₁, sk₂, ..., skₗ)`
+
+3. Untuk setiap komponen kunci privat, terapkan fungsi hash berulang kali sampai Anda telah melakukan hash sebanyak jumlah maksimum yang mungkin (`2^w - 1`):`pk = (H^(2^w-1)(sk₁), H^(2^w-1)(sk₂), ..., H^(2^w-1)(skₗ))`
+
+### Proses Penandatanganan
+
+Untuk menandatangani pesan `M`:
+
+1. Konversi pesan ke representasi basis: `M → (m₁, m₂, ..., m_l₁)` di mana setiap `mᵢ ∈ [0, 2^w - 1]`
+
+2. Hitung checksum: `c = Σ((2^w - 1) - mᵢ) for i = 1 to l₁` dan konversi c ke representasi basis: `c → (c₁, c₂, ..., c_l₂)`
+
+> Untuk menghitung nilai checksum aktual untuk pesan tersebut, kita dapat menggunakan komponen kunci privat checksum yang sesuai dan melakukan hash sebanyak jumlah yang tepat berdasarkan digit checksum
+
+3. Hasilkan tanda tangan: Di mana representasi basis menunjukkan berapa kali kunci privat perlu di-hash.
+
+### Proses Verifikasi
+
+Untuk memverifikasi tanda tangan σ pada pesan `M` dengan kunci publik `pk`:
+
+1. Hitung ulang representasi pesan: `M → (m₁, m₂, ..., m_l₁)`
+
+2. Hitung ulang checksum: `c = Σ((2^w - 1) - mᵢ) → (c₁, c₂, ..., c_l₂)`
+
+3. Untuk setiap komponen tanda tangan, lakukan hash untuk sisa kali:
+   - Untuk bagian pesan: verifikasi `H^((2^w-1)-mᵢ)(σᵢ) = pkᵢ`
+   - Untuk bagian checksum: verifikasi `H^((2^w-1)-cⱼ)(σ_(l₁+j)) = pk_(l₁+j)`
+
+> Verifikator "melanjutkan" setiap rantai hash dari tempat penandatangan berhenti, mencapai titik akhir kunci publik yang diketahui jika tanda tangan valid.
+
+<ArticleSection name="Security" id="security" level="h2" />
+
+### Batasan Penggunaan Satu Kali
+
+Tanda tangan Winternitz adalah Tanda Tangan Satu Kali (OTS): hanya dapat digunakan dengan aman satu kali per pasangan kunci.
+
+Serangan ini bekerja sebagai berikut: ketika Anda menandatangani beberapa pesan dengan kunci privat yang sama, Anda mengungkapkan nilai-nilai perantara dalam rantai hash Anda.
+
+Mekanisme checksum mengharuskan bahwa peningkatan beberapa digit pesan (lebih banyak hash) harus diimbangi dengan pengurangan digit checksum (lebih sedikit hash). Dengan beberapa tanda tangan yang mengungkapkan nilai perantara pada posisi yang berbeda, penyerang dapat membuat pemalsuan di mana mereka menggunakan posisi perantara yang lebih tinggi untuk mencapai posisi yang lebih tinggi lagi untuk komponen pesan, sambil menggunakan posisi perantara yang lebih rendah untuk menyeimbangkan checksum sehingga tetap mematuhi batasan anggaran hash total.
+
+### Keamanan Post-Quantum
+
+Tanda tangan Winternitz memperoleh keamanannya semata-mata dari ketahanan preimage fungsi hash. Komputer kuantum tidak dapat secara efisien membalikkan fungsi hash kriptografi seperti SHA-256 atau SHA-3—tidak seperti algoritma kuantum waktu polinomial (algoritma Shor) yang dapat memecahkan RSA dan ECDSA.
+
+Menggunakan SHA-256 dengan parameter yang tepat memberikan keamanan post-quantum 128 bit, menjadikan tanda tangan ini cocok untuk aplikasi kriptografi jangka panjang bahkan di dunia post-quantum.
+
+<ArticleSection name="Winternitz Signatures on Solana" id="winternitz-on-solana" level="h2" />
+
+Fondasi kriptografi Solana saat ini sepenuhnya bergantung pada tanda tangan Ed25519, yang rentan terhadap serangan kuantum melalui algoritma Shor.
+
+Ketika komputer kuantum menjadi praktis, setiap dompet, otoritas program, dan transaksi di Solana dapat dipalsukan.
+
+Migrasi post-quantum bukanlah sesuatu yang dapat dilakukan dalam semalam. Sistem perlu dirancang saat ini dengan ketahanan kuantum dalam pikiran, menciptakan pendekatan hibrida yang berfungsi di dunia pra-kuantum dan post-kuantum.
+
+Meskipun lapisan dasar Solana tetap rentan terhadap kuantum, pengembang dapat membangun aplikasi tahan kuantum di atasnya menggunakan tanda tangan Winternitz.

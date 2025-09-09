@@ -1,0 +1,66 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Refund" id="refund" level="h2" />
+
+Sekarang kita dapat beralih ke instruksi `refund`, yang berada di `refund.rs` dan akan melakukan tindakan-tindakan berikut:
+- Menutup escrow PDA dan mengirimkan lamports sewanya kembali ke pembuat.
+- Memindahkan seluruh saldo Token A keluar dari vault dan kembali ke pembuat, kemudian menutup akun vault.
+
+### Akun 
+
+Akun-akun yang dibutuhkan dalam konteks ini adalah:
+- `maker`: pengguna yang menentukan persyaratan pertukaran
+- `escrow`: akun tempat semua persyaratan pertukaran ini berada
+- `mint_a`: token yang telah disimpan oleh `maker`
+- `vault`: akun token yang terkait dengan `escrow` dan `mint_a` tempat token-token telah disimpan
+- `maker_ata_a`: akun token yang terkait dengan `maker` dan `mint_a` yang akan menerima token dari `vault`
+- `associated_token_program`: program token terkait yang digunakan untuk membuat akun token terkait
+- `token_program`: program token yang digunakan untuk CPI transfer
+- `system_program`: program sistem yang digunakan untuk membuat `Escrow`
+
+Kali ini kami tidak akan membantu Anda dengan membuat `Context`, jadi cobalah melakukannya sendiri! Pastikan untuk menggunakan urutan akun yang benar atau tes kami akan gagal.
+
+### Logika 
+
+Logikanya mirip dengan instruksi `take` tetapi kali ini kita hanya memindahkan token dari `vault` ke `maker_ata_a` sebelum menutup vault yang sekarang kosong. 
+
+Kali ini giliran Anda untuk belajar melakukannya sendiri, jadi kami tidak akan memberitahu Anda apa solusinya.
+
+Ketahuilah bahwa setelah ini dieksekusi, penawaran menjadi tidak berlaku, vault hilang, dan pembuat mendapatkan Token A mereka beserta biaya sewa kembali ke dompet mereka.
+
+<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+
+Sekarang setelah kita membuat semua fungsi di berbagai instruksi, akhirnya kita dapat mengisi `lib.rs` dengan semua fungsi yang telah kita buat; seperti ini:
+
+```rust
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        instructions::make::handler(ctx, seed, receive, amount)
+    }
+
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        instructions::take::handler(ctx)
+    }
+
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        instructions::refund::handler(ctx)
+    }
+}
+```
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Sekarang Anda dapat menguji program Anda dengan unit test kami dan mengklaim NFT Anda!
+
+Mulailah dengan membangun program Anda menggunakan perintah berikut di terminal Anda
+
+```bash
+anchor build
+```
+
+Ini akan menghasilkan file `.so` langsung di folder `target/deploy` Anda. 
+
+Sekarang klik tombol `take challenge` dan letakkan file tersebut di sana!

@@ -1,0 +1,113 @@
+# Rückzahlung
+
+Die `repay`Anweisung ist die zweite Hälfte unseres Flash-Loan-Systems. Dank des Designs der `loan`Anweisung ist die Logik für `repay` recht einfach, da sie nur Folgendes tun muss:
+1. Überprüfen, dass alle Guthaben korrekt zurückgezahlt wurden, indem das `loan`Konto verwendet wird.
+2. Schließen des `loan`Kontos, da es nicht mehr benötigt wird.
+
+<ArticleSection name="Erforderliche Konten" id="required-accounts" level="h2" />
+- `borrower`: Der Benutzer, der den Flash-Loan angefordert hat. Er stellt die Lamports für die Erstellung des `loan`Kontos bereit. Muss veränderbar sein.
+- `loan`: Das temporäre Konto, das verwendet wird, um die `protocol_token_account` und die erforderliche finale `balance` zu speichern. Muss veränderbar sein, da es am Ende der Anweisung geschlossen wird.
+
+Hier ist die Implementierung:
+
+```rust
+pub struct RepayAccounts<'a> {
+    pub borrower: &'a AccountInfo,
+    pub loan: &'a AccountInfo,
+    pub token_accounts: &'a [AccountInfo],
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for RepayAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [borrower, loan, token_accounts @ ..] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        Ok(Self {
+            borrower,
+            loan,
+            token_accounts,
+        })
+    }
+}
+```
+
+Das Feld `token_accounts` ist ein dynamisches Array von Konten, die die Protokoll-Token-Konten darstellen, die mit dem Darlehen des Kreditnehmers verbunden sind.
+
+<ArticleSection name="Anweisungsdaten" id="instruction-data" level="h2" />
+
+Es werden keine Anweisungsdaten benötigt, da wir das Feld `balance` im `loan`Konto verwenden, um zu überprüfen, ob das Darlehen zurückgezahlt wurde.
+
+<ArticleSection name="Anweisungslogik" id="instruction-logic" level="h2" />
+
+Wir beginnen damit, die Konten in die Struktur `RepayAccounts` zu parsen.
+
+```rust
+pub struct Repay<'a> {
+    pub accounts: RepayAccounts<'a>,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for Repay<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let accounts = RepayAccounts::try_from(accounts)?;
+
+        Ok(Self { accounts })
+    }
+}
+
+```
+
+Als Nächstes überprüfen wir, ob alle Darlehen zurückgezahlt wurden. Wir tun dies, indem wir die Anzahl der Darlehen aus dem `loan`Konto abrufen und durch sie iterieren. Für jedes Darlehen überprüfen wir, ob die `protocol_token_account` korrekt ist und ob ihr Guthaben größer oder gleich dem geliehenen Betrag ist.
+
+```rust
+impl<'a> Repay<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        let loan_data = self.accounts.loan.try_borrow_data()?;
+        let loan_num = loan_data.len() / size_of::<LoanData>();
+
+        if loan_num.ne(&self.accounts.token_accounts.len()) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Process each pair of token accounts (protocol, borrower) with corresponding amounts
+        for i in 0..loan_num {
+            // Validate that protocol_ata is the same as the one in the loan account
+            let protocol_token_account = &self.accounts.token_accounts[i];
+
+            if unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>()) as *const [u8; 32]) } != *protocol_token_account.key() {
+                return Err(ProgramError::InvalidAccountData);
+            }
+
+            // Check if the loan is already repaid
+            let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+            let loan_balance = unsafe { *(loan_data.as_ptr().add(i * size_of::<LoanData>() + size_of::<[u8; 32]>()) as *const u64) };
+
+            if balance < loan_balance {
+                return Err(ProgramError::InvalidAccountData);
+            }
+        }
+
+        //..
+    }
+}
+```
+
+Wir können dann fortfahren, das `loan`Konto zu schließen und die Miete zurückzufordern, da es nicht mehr benötigt wird:
+
+```rust
+drop(loan_data);
+// Close the loan account and give back the lamports to the borrower
+unsafe {
+    *self.accounts.borrower.borrow_mut_lamports_unchecked() += *self.accounts.loan.borrow_lamports_unchecked();
+    // There is no need to manually zero out lamports in the loan account because it is done in the close_unchecked function
+    self.accounts.loan.close_unchecked();
+}
+```
+
+> Wie Sie sehen können, erfolgt die Rückzahlung aus Optimierungsgründen und durch das Design nicht in dieser Anweisung. Dies liegt daran, dass der `borrower` wählen kann, das Token-Konto in einer anderen Anweisung zurückzuzahlen, beispielsweise beim Durchführen eines Swaps oder beim Ausführen einer Reihe von CPIs aus ihrem Arbitrage-Programm.

@@ -1,0 +1,116 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Secp256r1 auf Solana
+
+![Secp256r1 auf Solana](/graphics/course-banners/secp256r1-on-solana.png)
+
+Secp256r1 ist eine der am weitesten verbreiteten elliptischen Kurven in der modernen Kryptographie und bildet die Grundlage für alles von TLS-Verbindungen bis hin zu Hardware-Sicherheitsschlüsseln. Diese Kurve bildet das Rückgrat der digitalen Sicherheit in unzähligen Anwendungen.
+
+Das Secp256r1-Precompile-Feature-Gate, vorgeschlagen von [Orion](https://x.com/BasedOrion_) in [SIMD 75](https://github.com/solana-foundation/solana-improvement-documents/blob/main/proposals/0075-precompile-for-secp256r1-sigverify.md), wurde auf Solana bei Block 800 aktiviert.
+
+<ArticleSection name="Was ist Secp256r1" id="what-is-secp256r1" level="h2" />
+
+Die Kurve, die wir als Secp256r1 kennen, wurde Anfang der 2000er Jahre von der Standards for Efficient Cryptography Group (SECG) standardisiert. Die Namenskonvention verrät uns alles, was wir wissen müssen:
+- `sec`: Standards for Efficient Cryptography
+- `p`: Die Kurve ist über einem Primzahlkörper definiert
+- `256`: Der Primzahlmodul ist ungefähr 2^256
+- `r`: Zufällige Kurve (im Gegensatz zu Koblitz-Kurven)
+- `1`: Die erste Kurve in dieser Kategorie
+
+Secp256r1 wurde später vom NIST als P-256 übernommen und wurde Teil von FIPS 186-2. Diese doppelte Standardisierung durch sowohl SECG als auch NIST verlieh der Kurve weitreichende Legitimität und führte zu ihrer Einführung in zahlreichen Protokollen und Anwendungen – was sie zu einer der am besten erprobten Kurven in Produktionssystemen weltweit macht.
+
+<ArticleSection name="Mathematische Grundlagen" id="mathematical-foundations" level="h2" />
+
+### Primzahlkörper und endliche Arithmetik
+
+Um Secp256r1 zu verstehen, müssen wir zunächst das Konzept der Arbeit in endlichen Körpern erfassen. Im Gegensatz zur regulären Arithmetik, bei der Zahlen unendlich wachsen können, operiert die Kryptographie mit elliptischen Kurven in einem begrenzten mathematischen Raum.
+
+Die Kurve operiert über dem Primzahlkörper 𝔽p, wobei: `p = 2^256 - 2^224 + 2^192 + 2^96 - 1`.
+
+Dies ist nicht irgendeine zufällige 256-Bit-Primzahl; es handelt sich um eine sogenannte Pseudo-Mersenne-Primzahl. Mersenne-Primzahlen haben die Form `2^n - 1`, was eine extrem schnelle modulare Reduktion mittels Bit-Verschiebungen und Subtraktionen anstelle von teuren Divisionsoperationen ermöglicht. Pseudo-Mersenne-Primzahlen erweitern dieses Konzept auf Zahlen, die "nahe" an Potenzen von 2 liegen, und behalten dabei viel vom rechnerischen Vorteil bei, während sie zusätzliche Sicherheitseigenschaften hinzufügen.
+
+Für die Primzahl von secp256r1 können wir sie umschreiben als: `p = 2^256 - c`, wobei `c = 2^224 - 2^192 - 2^96 + 1`
+
+Diese Struktur bedeutet, dass wir bei der Reduzierung einer Zahl `mod p` (was bei Operationen mit elliptischen Kurven ständig vorkommt) schnelle Reduktionsalgorithmen anstelle von langsamen Divisionsverfahren für allgemeine Zwecke verwenden können.
+
+> Dies macht secp256r1-Operationen deutlich schneller als Kurven mit beliebigen Primzahlen: ein entscheidender Vorteil für leistungskritische Anwendungen wie TLS-Handshakes und Hardware-Sicherheitsmodule.
+
+### Die Gleichung der elliptischen Kurve
+
+Secp256r1 folgt der kurzen Weierstrass-Form einer elliptischen Kurve: `y² = x³ + ax + b (mod p)`
+
+Für secp256r1 sind die Parameter:
+- `a = -3` (oder äquivalent, p-3)
+- `b = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
+
+> `a = -3` ist keine willkürliche Zahl, sondern ermöglicht erhebliche Optimierungen bei Punktadditions- und Verdopplungsoperationen, wodurch die Anzahl der erforderlichen Feldmultiplikationen reduziert wird.
+ 
+Jedes Kryptosystem mit elliptischen Kurven benötigt einen Generatorpunkt G mit bekannter Ordnung. Für secp256r1:
+
+```
+G = (Gx, Gy) where:
+Gx = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+Gy = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
+```
+
+> Diese Werte wurden durch einen "nachweisbar zufälligen" Prozess generiert, um sicherzustellen, dass keine versteckten Hintertüren vorhanden sind. Wenn Kurvendesigner einfach beliebige Werte auswählen könnten, könnten sie Parameter wählen, die geheime mathematische Beziehungen enthalten, die nur sie kennen, wodurch Hintertüren entstehen würden, die jedes System, das die Kurve verwendet, kompromittieren würden.
+
+### Kurvenordnung und Sicherheitsstufe
+
+Die **Kurvenordnung (n)** repräsentiert die Gesamtzahl der Punkte auf der elliptischen Kurve, einschließlich des Punktes im Unendlichen: `n = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551`
+
+Die Kurvenordnung bestimmt die Größe des privaten Schlüsselraums und beeinflusst direkt die Sicherheit. Obwohl sie als "256-Bit" bezeichnet wird, bietet secp256r1 tatsächlich nur etwa 128 Bit Sicherheit, nicht 256 Bit. Dies liegt daran, dass die besten bekannten Angriffe gegen diskrete Logarithmusprobleme auf elliptischen Kurven eine Komplexität von ungefähr `√n` haben, was bedeutet, dass eine Kurve mit der Ordnung `~2^256` eine Sicherheit von `~2^128` bietet.
+
+Der **Kofaktor (h)** ist 1, was bedeutet, dass secp256r1 eine Kurve mit Primordnung ist. Dies ist wichtig, weil:
+- Jeder Nicht-Identitätspunkt die gleiche Ordnung n hat
+- Keine Small-Subgroup-Angriffe möglich sind
+- Die Implementierung vereinfacht wird, da wir uns keine Sorgen um Punkte niedriger Ordnung machen müssen
+
+### Das Skalarfeld
+
+Während die Kurve selbst über dem Koordinatenfeld 𝔽p definiert ist, befinden sich private Schlüssel in einem anderen mathematischen Raum: dem Skalarfeld 𝔽n, wobei n die Kurvenordnung ist.
+
+```
+Private key ∈ [1, n-1]
+Public key = private_key × G (scalar multiplication)
+```
+
+Diese Unterscheidung ist entscheidend, weil:
+- Private Schlüssel Skalare sind (Ganzzahlen `mod n`)
+- Kurvenkoordinaten Feldelemente sind (Ganzzahlen `mod p`)
+- Dies unterschiedliche Moduli sind: `n ≠ p`
+
+Bei der Generierung privater Schlüssel nehmen wir eine gleichmäßige Stichprobe aus `[1, n-1]`, nicht aus `[1, p-1]`. Dies stellt sicher, dass jeder private Schlüssel einer gültigen Skalarmultiplikationsoperation entspricht und verhindert bestimmte mathematische Angriffe.
+
+<ArticleSection name="Warum Secp256r1 dominiert" id="why-secp256r1-dominates" level="h2" />
+
+Trotz der Existenz potenziell überlegener Kurven wie Curve25519 erreichte secp256r1 universelle Akzeptanz durch eine Kombination aus früher Standardisierung, behördlicher Genehmigung und umfangreicher Hardware-Optimierung.
+
+Im Gegensatz zu neueren Kurven, die mathematisch überlegen sein könnten, repräsentiert secp256r1 die optimale Balance zwischen kryptografischer Stärke, Implementierungseffizienz und Ökosystem-Kompatibilität, die reale Systeme benötigen.
+
+Nachdem Hardwarehersteller, Betriebssysteme und Sicherheitsstandards alle auf secp256r1 konvergierten, wurden die Wechselkosten prohibitiv.
+
+Die spezifischen mathematischen Eigenschaften, die wir untersucht haben (die Pseudo-Mersenne-Primzahl, die a = -3 Optimierung und die verifizierbare Parametergenerierung), ermöglichten hochoptimierte Implementierungen in allem, von Smartphone-Sicherheitselementen bis hin zu Hochleistungsservern.
+
+Dieser Hardware-Ökosystem-Effekt schuf einen selbstverstärkenden Zyklus der Adoption.
+
+<ArticleSection name="Secp256r1 auf Solana" id="secp256r1-on-solana" level="h2" />
+
+Solana bietet native Unterstützung für secp256r1-Signaturverifizierung durch seinen integrierten Precompile, der mit [SIMD-0075](https://github.com/solana-foundation/solana-improvement-documents/pull/75) von [Orion](https://x.com/BasedOrion_) eingeführt wurde.
+
+Dieser Precompile ermöglicht moderne Authentifizierungsmethoden wie Passkeys auf Solana, da secp256r1 die gleiche elliptische Kurve ist, die von WebAuthn und Passkey-Implementierungen verwendet wird.
+
+Die mathematischen Eigenschaften, die wir detailliert beschrieben haben, insbesondere die optimierte Feldarithmetik und standardisierten Parameter, machen secp256r1 zur universellen Wahl für Hardware-Sicherheitsmodule und Secure Enclaves, die diese Authentifizierungssysteme antreiben.
+
+### Brückenschlag zwischen Web2- und Web3-Authentifizierung
+
+Traditionelles Wallet-Onboarding verzeichnet Nutzerabbruchraten von 60-80%, weil Seed-Phrasen perfekte Sicherheit von unvollkommenen Menschen verlangen. Nutzer müssen 12-24 zufällige Wörter auswendig lernen, sie für immer sicher aufbewahren und dürfen niemals Opfer von Phishing werden – ein unmöglicher Standard für die Mainstream-Adoption.
+
+Moderne Authentifizierungsmethoden wie Passkeys eliminieren menschliche Fehler, indem sie private Schlüssel in dedizierte Sicherheitshardware verlagern.
+
+ Diese Systeme haben sich jedoch auf secp256r1 standardisiert, aufgrund der spezifischen mathematischen und implementierungstechnischen Vorteile, die wir untersucht haben:
+- **Hardware-Kompatibilität:** Die Pseudo-Mersenne-Primzahl ermöglicht eine effiziente Implementierung in eingeschränkten Secure-Element-Umgebungen
+- **Regulatorische Konformität:** Die NIST-Standardisierung erlaubt die Verwendung in staatlichen und Unternehmens-Sicherheitsanforderungen
+- **Plattformübergreifende Konsistenz:** Die nachweisbar zufälligen Parameter stellen sicher, dass dieselbe Kurve bei allen Hardwareherstellern identisch funktioniert
+
+Mit nativer secp256r1-Unterstützung können Solana-Entwickler jetzt Anwendungen erstellen, die bestehende Hardware-Sicherheitsinfrastruktur nutzen und ein nahtloses Onboarding durch vertraute Authentifizierungsmethoden ermöglichen, während die Sicherheitsgarantien erhalten bleiben, die die spezifischen mathematischen Eigenschaften dieser Kurve so wichtig machen.

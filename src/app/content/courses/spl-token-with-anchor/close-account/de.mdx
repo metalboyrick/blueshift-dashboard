@@ -1,0 +1,26 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Close Account Instruction
+
+Schließt ein Token-Konto und überträgt die verbleibende SOL-Miete auf ein Zielkonto. Das Token-Konto muss einen Nullsaldo aufweisen, es sei denn, es handelt sich um ein natives SOL-Konto.
+
+> Ab Token2022 ist es möglich, ein `Mint` Konto zu schließen, das einen Bestand von 0 hat
+
+Bevor wir ein Token-Konto schließen können, müssen wir bereits Folgendes haben:
+- Ein initialisiertes `Mint` Konto
+- Ein initialisiertes `Token` Konto oder `Associated Token` Konto, das keine Token enthält.
+
+So sieht der CPI-Aufruf für die `close_account()` Instruction aus:
+
+```rust
+close_account(
+    CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        CloseAccount {
+            account: ctx.accounts.token_account.to_account_info(),
+            destination: ctx.accounts.authority.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        },
+    ),
+)?;
+```

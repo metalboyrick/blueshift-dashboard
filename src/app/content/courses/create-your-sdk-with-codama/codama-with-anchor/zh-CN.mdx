@@ -1,0 +1,25 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 从 Anchor IDL 构建 Codama IDL
+
+从 Anchor 创建 Codama IDL 非常简单。在使用 anchor build 生成 Anchor IDL 后，我们需要安装 '@codama/nodes-from-anchor' 包：
+
+```
+pnpm install codama @codama/nodes-from-anchor
+```
+
+然后直接使用 `rootNodeFromAnchor ` 函数转换 Anchor IDL：
+
+```ts
+import { createFromRoot } from 'codama';
+import { rootNodeFromAnchor } from '@codama/nodes-from-anchor';
+import anchorIdl from 'anchor-idl.json';
+
+const codama = createFromRoot(rootNodeFromAnchor(anchorIdl));
+```
+
+这将为您提供一个完全可用的 Codama IDL，准备好用于客户端生成。然而，Codama 的真正强大之处在于它能够增强和自定义您的 IDL，超越原始 Anchor 定义的限制。
+
+由于转换过程专注于结构翻译，您通常会希望添加一些对开发者友好的功能，例如自定义命名约定、额外的类型信息或专用的客户端方法。Codama 的访问器系统使这些增强功能变得简单而强大。
+
+您可以在 [更新 Codama IDL](/en/courses/create-your-sdk-with-codama/updating-codama-idl) 课程中了解更多关于如何使用访问器自定义和增强转换后的 IDL 的信息。

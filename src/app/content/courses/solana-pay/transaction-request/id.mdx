@@ -1,0 +1,185 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Permintaan Transaksi
+
+Permintaan transaksi membuka kekuatan penuh Solana Pay dengan memungkinkan transaksi dinamis yang disusun server yang dapat menangani segala jenis operasi Solana.
+
+Tidak seperti permintaan transfer yang berisi semua informasi pembayaran dalam URL, permintaan transaksi menggunakan endpoint interaktif untuk membangun transaksi kustom berdasarkan data real-time dan logika bisnis.
+
+Pendekatan ini mengubah Solana Pay dari sistem pembayaran sederhana menjadi platform perdagangan lengkap yang mampu menangani skenario bisnis kompleks, penetapan harga dinamis, dan alur transaksi yang canggih.
+
+<ArticleSection name="Cara Kerja Permintaan Transaksi" id="how-it-works" level="h2" />
+
+Permintaan transaksi mengikuti format URL sederhana yang mengarah ke endpoint server Anda:
+
+```
+solana:<link>
+```
+
+Nilai `link` harus berupa URL ke endpoint API Anda yang menangani permintaan `GET` dan `POST`. Ketika pengguna memindai kode QR permintaan transaksi, dompet mereka memulai proses empat langkah:
+1. **Permintaan GET Awal**: Mengambil informasi tampilan seperti nama bisnis dan logo Anda
+2. **Konfirmasi Pengguna**: Dompet menampilkan informasi bisnis kepada pengguna
+3. **Permintaan POST**: Mengirim kunci publik pengguna ke endpoint Anda
+4. **Respons Transaksi**: Server Anda membangun transaksi kustom dan mengembalikannya sebagai string yang dikodekan base64
+
+Dompet kemudian menampilkan transaksi ini kepada pengguna untuk persetujuan dan penandatanganan.
+
+> Anda dapat menyertakan parameter dalam URL untuk mengaksesnya dari endpoint Anda seperti ini:
+
+```
+solana:https://myapi.com/pay?amount=100&product=premium&reference=abc123
+```
+
+<ArticleSection name="Membangun Endpoint API" id="api-endpoint" level="h2" />
+
+Membuat endpoint permintaan transaksi memerlukan penanganan permintaan GET dan POST pada URL yang sama. Berikut strukturnya menggunakan Next.js App Router:
+
+```ts
+import { NextRequest, NextResponse } from 'next/server';
+
+// CORS headers for wallet compatibility
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
+export async function GET() {
+  // Implementation details below...
+}
+
+export async function POST(request: NextRequest) {
+  // Implementation details below...
+}
+```
+
+> Karena dompet membuat permintaan lintas-asal ke endpoint Anda, header CORS wajib ada. Tanpa header tersebut, permintaan dari dompet akan gagal.
+
+### Penangan Permintaan GET
+
+Permintaan GET menyediakan informasi tampilan yang membantu pengguna memahami apa yang sedang mereka interaksikan:
+
+```ts
+export async function GET() {
+  return NextResponse.json({
+    label: "Coffee Shop Demo",
+    icon: "https://solana.com/src/img/branding/solanaLogoMark.svg",
+  }, { headers: corsHeaders });
+}
+```
+
+**Format Respons:**
+
+```json
+{
+  "label": "Coffee Shop Demo",
+  "icon": "https://solana.com/src/img/branding/solanaLogoMark.svg"
+}
+```
+
+Informasi ini membantu pengguna memahami apa yang akan mereka interaksikan sebelum melanjutkan ke komposisi transaksi yang sebenarnya.
+
+### Penangan Permintaan POST
+
+Permintaan POST adalah tempat permintaan transaksi benar-benar bersinar. Endpoint Anda menerima kunci publik pengguna dan membangun transaksi yang sepenuhnya kustom:
+
+```ts
+export async function POST(request: NextRequest) {
+  // Parse user's public key from request body
+  const body = await request.json();
+  const { account } = body;
+
+  // Connect to Solana network
+  const connection = new Connection(clusterApiUrl("devnet"));
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+
+  // Create transaction with user as fee payer
+  const transaction = new Transaction({
+    feePayer: new PublicKey(account),
+    blockhash: blockhash,
+    lastValidBlockHeight: lastValidBlockHeight,
+  });
+
+  // ========================================
+  // ADD YOUR CUSTOM INSTRUCTIONS HERE
+  // ========================================
+  
+  // This is where you build your transaction logic.
+  // You can add any combination of instructions:
+  
+  // Example 1: Simple SOL transfer
+  // const transferInstruction = SystemProgram.transfer({
+  //   fromPubkey: new PublicKey(account),
+  //   toPubkey: new PublicKey("YOUR_MERCHANT_WALLET"),
+  //   lamports: LAMPORTS_PER_SOL * 0.01, // 0.01 SOL
+  // });
+  // transaction.add(transferInstruction);
+
+  // Serialize the transaction for the wallet
+  const serializedTransaction = transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  });
+
+  return NextResponse.json({
+    transaction: serializedTransaction.toString('base64'),
+    message: "Transaction created successfully", // Customize this message
+  }, { headers: corsHeaders });
+}
+```
+
+> Aplikasi Anda tidak mengirimkan transaksi ke jaringan, jadi Anda tidak akan memiliki akses ke tanda tangan transaksi untuk tujuan pelacakan. Gunakan parameter referensi seperti yang dijelaskan dalam [Pelajaran Pengantar](/id/courses/solana-pay/introduction#reference)
+
+<ArticleSection name="Kemampuan Lanjutan" id="advanced-capabilities" level="h2" />
+
+### Transaksi Terbatas
+
+Permintaan transaksi memungkinkan kontrol akses yang canggih dengan memverifikasi kondisi sebelum membangun transaksi. Karena Anda mengendalikan endpoint, Anda dapat memeriksa kepemilikan NFT, keanggotaan whitelist, atau kriteria lainnya:
+
+```ts
+// Check NFT ownership before building transaction
+const nfts = await metaplex.nfts().findAllByOwner({ owner: account }).run(); 
+
+const hasRequiredNFT = nfts.some(nft => 
+  nft.collection?.address.toString() === requiredCollection
+);
+
+if (!hasRequiredNFT) {
+  return response.status(403).json({ 
+    error: "Access denied: Required NFT not found" 
+  });
+}
+
+// Build transaction only for verified users
+```
+
+### Penandatanganan Parsial untuk Keamanan yang Ditingkatkan
+
+Untuk transaksi yang memerlukan persetujuan dari keypair admin atau autentikasi multi-pihak, Solana Pay mendukung penandatanganan parsial. Server Anda dapat menambahkan tanda tangannya sebelum mengirim ke pengguna:
+
+```ts
+const transaction = new Transaction({
+  feePayer: account,
+  blockhash,
+  lastValidBlockHeight,
+});
+
+// Add your instructions requiring admin signature
+transaction.add(customInstruction);
+
+// Partially sign with your admin keypair
+transaction.partialSign(adminKeypair);
+
+// Send to user for final signature
+const serializedTransaction = transaction.serialize({
+  requireAllSignatures: false,
+});
+```
+
+<ArticleSection name="Contoh" id="example" level="h2" />
+
+Sebagai contoh lengkap, Anda dapat menggunakan [Contoh Solana NFT Minter](https://github.com/solana-developers/solana-pay-nft-minter/tree/main) dari Solana Foundation

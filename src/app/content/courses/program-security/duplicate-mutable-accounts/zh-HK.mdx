@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 重複的可變賬戶
+
+重複的可變賬戶攻擊利用了程序接受多個相同類型的可變賬戶的特性，通過多次傳遞相同的賬戶，導致程序無意中覆蓋了自己的更改。這在單個指令中創建了一個競爭條件，後續的更改可能會悄悄地取消之前的更改。
+
+這種漏洞主要影響修改程序擁有的賬戶數據的指令，而不是像 lamport 轉賬這樣的系統操作。攻擊之所以成功，是因為 Solana 的運行時不會阻止同一賬戶多次傳遞給不同的參數；檢測和處理重複賬戶是程序的責任。
+
+危險在於指令執行的順序性。當同一賬戶被傳遞兩次時，程序會先執行第一次更改，然後立即用第二次更改覆蓋，導致賬戶處於一個意外的狀態，可能無法反映用戶的意圖或程序的邏輯。
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+考慮以下這個易受攻擊的指令，它更新了兩個程序賬戶的所有權字段：
+
+```rust
+#[program]
+pub mod unsafe_update_account{
+    use super::*;
+    
+    //..
+
+    pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+        ctx.accounts.program_account_1.owner = pubkey_a;
+        ctx.accounts.program_account_2.owner = pubkey_b;
+        
+        Ok(())
+    }
+
+    //..
+
+}
+
+#[derive(Accounts)]
+pub struct UpdateAccount<'info> {
+   #[account(mut)]
+    pub program_account_1: Account<'info, ProgramAccount>,
+    #[account(mut)]
+    pub program_account_2: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+這段代碼有一個關鍵缺陷：它從未驗證 `program_account_1` 和 `program_account_2` 是否是不同的賬戶。
+
+攻擊者可以通過為兩個參數傳遞相同的賬戶來利用這一點。以下是發生的情況：
+- 程序設置 `program_account_1.owner = pubkey_a`
+- 由於兩個參數引用的是同一個賬戶，程序立即用 `program_account_2.owner = pubkey_b` 覆蓋了它
+
+最終結果：賬戶的所有者被設置為 `pubkey_b`，完全忽略了 `pubkey_a`
+
+這看起來可能無害，但考慮其影響。一個期望為兩個不同賬戶分配特定所有權的用戶會發現只有一個賬戶被修改，且不是他們預期的方式。在複雜的協議中，這可能導致狀態不一致、多步操作失敗，甚至財務損失。
+
+解決方案非常簡單。您只需要在繼續之前驗證帳戶是否唯一：
+
+```rust
+pub fn update_account(ctx: Context<UpdateAccount>, pubkey_a: Pubkey, pubkey_b: Pubkey) -> Result<()> {
+    if ctx.accounts.program_account_1.key() == ctx.accounts.program_account_2.key() {
+        return Err(ProgramError::InvalidArgument)
+    }
+
+    ctx.accounts.program_account_1.owner = pubkey_a;
+    ctx.accounts.program_account_2.owner = pubkey_b;
+
+    Ok(())
+}
+```
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+在 Pinocchio 中，適用相同的驗證模式：
+
+```rust
+if self.accounts.program_account_1.key() == self.accounts.program_account_2.key() {
+    return Err(ProgramError::InvalidArgument)
+}
+```

@@ -1,0 +1,60 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Surfpool 101
+
+![Testing with Surfpool](/graphics/course-banners/testing-with-surfpool.png)
+
+Pengujian program Solana yang bergantung pada Cross-Program Invocations (CPIs) secara tradisional mengharuskan pengembang untuk mengambil akun dan program dari mainnet, kemudian mengunggahnya ke validator lokal.
+
+Proses ini berfungsi untuk beberapa akun, tetapi menjadi sangat tidak layak ketika menguji CPIs ke dalam program kompleks seperti Jupiter, yang dapat bergantung pada lebih dari 40 akun dan 8+ program.
+
+Surfpool menyelesaikan masalah ini dengan memungkinkan pengembang mensimulasikan program secara lokal menggunakan akun mainnet yang diambil sesuai kebutuhan, plus kemampuan tambahan:
+- **Kustomisasi variabel sistem**: Perjalanan waktu (uji program Anda pada slot atau timestamp historis), jeda waktu, atau hentikan produksi blok
+- **Modifikasi data akun**: Atur pasokan SOL (total, beredar, dan tidak beredar), transfer data akun antar program, atau perbarui data inti akun dan informasi akun token
+- **Analisis data rantai**: Profil transaksi untuk unit komputasi, perubahan akun, dan detail eksekusi, kemudian ambil profil terperinci berdasarkan tanda tangan, UUID, atau tag
+
+<ArticleSection name="What is Surfpool" id="what-is-surfpool" level="h2" />
+
+[Surfpool](https://docs.surfpool.run/) adalah SDK komprehensif dan rangkaian alat, sementara **Surfnet** adalah jaringan Solana lokal yang diciptakannya. Anggap Surfpool sebagai lingkungan pengembangan Anda dan Surfnet sebagai jaringan blockchain yang berjalan di dalamnya.
+
+Surfnet berfungsi sebagai pengganti langsung untuk solana-test-validator, yang dibuat khusus untuk memberikan pengalaman pengembangan terbaik bagi para pengembang Solana.
+
+Dikembangkan oleh tim [TxTx](https://x.com/txtx_sol), Surfpool mengintegrasikan Infrastructure as Code ke dalam proyek berbasis Anchor dengan mulus, memungkinkan deployment yang dapat direproduksi, dapat diaudit, dan aman ke jaringan Solana mana pun—baik privat maupun publik.
+
+<ArticleSection name="First Steps" id="first-steps" level="h2" />
+
+Semua yang Anda butuhkan untuk menjalankan Surfnet sudah termasuk dalam SDK Surfpool. Karena instalasi bervariasi berdasarkan sistem operasi, ikuti [Halaman Instalasi](https://docs.surfpool.run/install) resmi untuk pengaturan spesifik Anda.
+
+Setelah menginstal Surfpool SDK, mulai Surfnet dengan:
+
+```bash
+surfpool start
+```
+
+Ini memulai Surfnet pada port validator lokal standar (`http://127.0.0.1:8899`) dengan UI terminal yang menampilkan:
+- **Slot dan Epoch**: Proses slot yang sedang dijalankan secara otomatis setiap 400ms. Gunakan **Tab** untuk maju secara manual ke slot berikutnya, atau **Spacebar** untuk menjeda/melanjutkan produksi blok otomatis
+- **Log transaksi**: Aliran aktivitas dengan stempel waktu yang menunjukkan semua yang dijalankan oleh transaksi Anda
+
+Untuk pengalaman berbasis browser, hubungkan ke Surfpool Studio di [tautan ini](http://127.0.0.1:8899).
+
+> Surfpool Studio mencakup semua fitur UI terminal plus kemampuan tambahan seperti perjalanan waktu dan menambahkan token ke akun apa pun untuk mint apa pun.
+
+### Menerapkan Program
+
+Setelah menyiapkan Surfnet, terapkan program Anda dan mulai membangun.
+
+**Program Anchor**: Gunakan `anchor deploy` dengan `Anchor.toml` Anda yang dikonfigurasi untuk `[programs.localnet]`.
+
+**Program Pinocchio**: Deploy melalui Solana CLI dengan konfigurasi Anda diatur ke localnet: `solana program deploy ./target/deploy/your_program.so --program-id ./target/deploy/your_program-keypair.json`
+
+> Menjalankan `surfpool start` ke dalam Anchor Workspace akan meminta Anda untuk menggunakan Infrastructure as Code untuk penerapan otomatis program Anda di Surfnet secara mulus.
+
+### Menguji Program
+
+Setelah men-deploy ke localnet, hubungkan ke Surfnet dengan menargetkan validator lokal:
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```

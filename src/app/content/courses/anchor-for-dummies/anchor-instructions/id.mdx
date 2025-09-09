@@ -1,0 +1,313 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
+
+# Instruksi & CPI
+
+Instruksi adalah blok dasar dari program Solana, yang mendefinisikan tindakan yang dapat dilakukan. Dalam Anchor, instruksi diimplementasikan sebagai fungsi dengan atribut dan batasan tertentu. Mari kita eksplorasi cara bekerja dengan instruksi secara efektif.
+
+<ArticleSection name="Struktur Instruksi" id="instruction-structure" level="h2" />
+
+Dalam Anchor, instruksi didefinisikan menggunakan modul `#[program]` dan fungsi instruksi individual. Berikut adalah struktur dasarnya:
+
+```rust
+use anchor_lang::prelude::*;
+
+#[program]
+pub mod my_program {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>, data: u64) -> Result<()> {
+        // Instruction logic here
+        Ok(())
+    }
+}
+```
+
+<ArticleSection name="Konteks Instruksi" id="instruction-context" level="h3" />
+
+Setiap fungsi instruksi menerima struct `Context` sebagai parameter pertamanya. Konteks ini berisi:
+- `accounts`: Akun yang diteruskan ke instruksi
+- `program_id`: Kunci publik program
+- `remaining_accounts`: Akun tambahan yang tidak didefinisikan secara eksplisit dalam struct konteks
+- `bumps`: Bidang `bumps` sangat berguna ketika bekerja dengan PDA, karena menyediakan bump seed yang digunakan untuk menurunkan alamat PDA (hanya jika Anda menurunkannya dalam struct akun)
+
+Itu dapat diakses dengan cara:
+
+```rust
+// Accessing accounts
+ctx.accounts.account_1
+ctx.accounts.account_2
+
+// Accessing program ID
+ctx.program_id
+
+// Accessing remaining accounts
+for remaining_account in ctx.remaining_accounts {
+    // Process remaining account
+}
+
+// Accessing bumps for PDAs
+let bump = ctx.bumps.pda_account;
+```
+
+<ArticleSection name="Diskriminator Instruksi" id="instruction-discriminator" level="h3" />
+
+Seperti akun, instruksi dalam Anchor menggunakan diskriminator untuk mengidentifikasi jenis instruksi yang berbeda. Diskriminator default adalah awalan 8-byte yang dihasilkan menggunakan `sha256("global:<instruction_name>")[0..8]`. Nama instruksi harus dalam format snake_case.
+
+<AnchorDiscriminatorCalculator value={"initialize_account"} displayMode="instruction" />
+
+<ArticleSection name="Diskriminator Instruksi Kustom" id="custom-instruction-discriminator" level="h3" />
+
+Anda juga dapat menentukan diskriminator kustom untuk instruksi Anda:
+
+```rust
+#[instruction(discriminator = 1)]
+pub fn custom_discriminator(ctx: Context<Custom>) -> Result<()> {
+    // Instruction logic
+    Ok(())
+}
+```
+
+<ArticleSection name="Kerangka Instruksi" id="instruction-scaffold" level="h2" />
+
+Anda dapat menulis instruksi Anda dengan cara yang berbeda, di bagian ini kami akan mengajarkan beberapa gaya dan cara yang dapat Anda gunakan untuk menyiapkannya
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h3" />
+
+Logika instruksi dapat diorganisir dengan berbagai cara, tergantung pada kompleksitas program Anda dan gaya pengkodean yang Anda sukai. Berikut adalah pendekatan utama:
+
+1. **Logika Instruksi Inline**
+
+Untuk instruksi sederhana, Anda dapat menulis logika langsung di dalam fungsi instruksi:
+
+```rust
+pub fn initialize(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    // Transfer tokens logic
+
+    // Close token account logic
+    
+    Ok(())
+}
+```
+
+2. **Implementasi Modul Terpisah**
+
+Untuk program yang sangat kompleks, Anda dapat mengorganisir logika dalam modul terpisah:
+
+```rust
+// In a separate file: transfer.rs
+pub fn execute(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    // Transfer tokens logic
+
+    // Close token account logic
+ 
+    Ok(())
+}
+
+// In your lib.rs
+pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    transfer::execute(ctx, amount)
+}
+```
+
+3. **Implementasi Konteks Terpisah**
+
+Untuk instruksi yang lebih kompleks, Anda dapat memindahkan logika ke implementasi struct konteks:
+
+```rust
+// In a separate file: transfer.rs
+pub fn execute(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    ctx.accounts.transfer_tokens(amount)?;
+    ctx.accounts.close_token_account()?;
+ 
+    Ok(())
+}
+
+impl<'info> Transfer<'info> {
+    /// Transfers tokens from source to destination account
+    pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
+        // Transfer tokens logic
+
+        Ok(())
+    }
+
+    /// Closes the source token account after transfer
+    pub fn close_token_account(&mut self) -> Result<()> {
+        // Close token account logic
+
+    }
+}
+
+// In your lib.rs
+pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    transfer::execute(ctx, amount)
+}
+```
+
+<ArticleSection name="Instruction Parameters" id="instruction-parameters" level="h3" />
+
+Instruksi dapat menerima parameter di luar konteks. Parameter ini diserialisasi dan dideserialisasi secara otomatis oleh Anchor. Berikut adalah poin-poin penting tentang parameter instruksi:
+
+1. **Tipe Dasar**
+
+Anchor mendukung semua tipe primitif Rust dan tipe Solana yang umum:
+
+```rust
+pub fn complex_instruction(
+    ctx: Context<Complex>,
+    amount: u64,
+    pubkey: Pubkey,
+    vec_data: Vec<u8>,
+) -> Result<()> {
+    // Instruction logic
+    Ok(())
+}
+```
+
+2. **Tipe Kustom**
+
+Anda dapat menggunakan tipe kustom sebagai parameter, tetapi mereka harus mengimplementasikan `AnchorSerialize` dan `AnchorDeserialize`:
+
+```rust
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct InstructionData {
+    pub field1: u64,
+    pub field2: String,
+}
+
+pub fn custom_type_instruction(
+    ctx: Context<Custom>,
+    data: InstructionData,
+) -> Result<()> {
+    // Instruction logic
+    Ok(())
+}
+```
+
+<ArticleSection name="Best Practices" id="best-practices" level="h3" />
+
+1. **Jaga Instruksi Tetap Fokus**: Setiap instruksi harus melakukan satu hal dengan baik. Jika sebuah instruksi melakukan terlalu banyak, pertimbangkan untuk membaginya menjadi beberapa instruksi.
+
+2. **Gunakan Implementasi Konteks**: Untuk instruksi kompleks, gunakan pendekatan implementasi konteks untuk:
+   - Menjaga kode Anda terorganisir
+   - Memudahkan pengujian
+   - Meningkatkan kemampuan penggunaan ulang
+   - Menambahkan dokumentasi yang tepat
+
+3. **Penanganan Kesalahan**: Selalu gunakan penanganan kesalahan yang tepat dan kembalikan pesan kesalahan yang bermakna:
+
+```rust
+#[error_code]
+pub enum TransferError {
+    #[msg("Insufficient balance")]
+    InsufficientBalance,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+}
+
+impl<'info> Transfer<'info> {
+    pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
+        require!(amount > 0, TransferError::InvalidAmount);
+        require!(
+            self.source.amount >= amount,
+            TransferError::InsufficientBalance
+        );
+
+        // Transfer logic
+        Ok(())
+    }
+}
+```
+
+4. **Dokumentasi**: Selalu dokumentasikan logika instruksi Anda, terutama saat menggunakan implementasi konteks:
+
+```rust
+impl<'info> Transfer<'info> {
+    /// # Transfers tokens
+    /// 
+    /// Transfers tokens from source to destination account
+    pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
+        // Implementation
+        Ok(())
+    }
+}
+```
+
+<ArticleSection name="Cross-Program Invocations (CPIs)" id="cross-program-invocations" level="h2" />
+
+Cross Program Invocations (CPI) mengacu pada proses di mana satu program memanggil instruksi dari program lain, yang memungkinkan komposabilitas program Solana. Anchor menyediakan cara yang nyaman untuk membuat CPI melalui `CpiContext` dan builder khusus program.
+
+**Catatan**: Anda dapat menemukan semua CPI System Program dengan menggunakan crate anchor utama dan melakukan: `use anchor_lang::system_program::*`; dan untuk yang terkait dengan program SPL token, kita perlu mengimpor crate anchor_spl dan melakukan: `use anchor_spl::token::*`
+
+<ArticleSection name="Struktur CPI Dasar" id="basic-cpi-structure" level="h3" />
+
+Berikut cara membuat CPI dasar:
+
+```rust
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::system_program::{transfer, Transfer};
+
+pub fn transfer_lamport(ctx: Context<TransferLamport>, amount: u64) -> Result<()> {
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.from.to_account_info(),
+        to: ctx.accounts.to.to_account_info(),
+    };
+    
+    let cpi_program = ctx.accounts.system_program.to_account_info();
+    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    
+    transfer(cpi_ctx, amount)?;
+    
+    Ok(())
+}
+```
+
+<ArticleSection name="CPI dengan PDA Signers" id="cpi-with-pda-signers" level="h3" />
+
+Saat membuat CPI yang memerlukan tanda tangan PDA, gunakan `CpiContext::new_with_signer`:
+
+```rust
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::system_program::{transfer, Transfer};
+
+pub fn transfer_lamport_with_pda(ctx: Context<TransferLamportWithPda>, amount: u64) -> Result<()> {
+    let seeds = &[
+        b"vault".as_ref(),
+        &[ctx.bumps.vault],
+    ];
+    let signer = &[&seeds[..]];
+    
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.vault.to_account_info(),
+        to: ctx.accounts.recipient.to_account_info(),
+    };
+    
+    let cpi_program = ctx.accounts.system_program.to_account_info();
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+    
+    transfer(cpi_ctx, amount)?;
+    
+    Ok(())
+}
+```
+
+<ArticleSection name="Penanganan Error" id="error-handling" level="h2" />
+
+Anchor menyediakan sistem penanganan error yang kuat untuk instruksi. Berikut cara mengimplementasikan error kustom dan menanganinya dalam instruksi Anda:
+
+```rust
+#[error_code]
+pub enum MyError {
+    #[msg("Custom error message")]
+    CustomError,
+    #[msg("Another error with value: {0}")]
+    ValueError(u64),
+}
+
+pub fn handle_errors(ctx: Context<HandleErrors>, value: u64) -> Result<()> {
+    require!(value > 0, MyError::CustomError);
+    require!(value < 100, MyError::ValueError(value));
+    
+    Ok(())
+}
+```

@@ -71,7 +71,7 @@ call sol_get_clock_sysvar
 ldxdw r1, [r1+0x0000]
 ```
 
-The `sol_get_clock_sysvar` syscall writes current `Clock` data to `r1`. 
+The `sol_get_clock_sysvar` syscall writes current `Clock` data to the memory address specified in `r1`.
 
 Since the Clock structure is 40 bytes (too large for registers that hold only 8 bytes each), we use the stack for fast, allocation-free storage with automatic cleanup.
 

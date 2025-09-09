@@ -1,0 +1,102 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Mint- und Token-Konten
+
+Wie wir im vorherigen Abschnitt erwähnt haben, sind die Bausteine des `SPL Token` Programms die Konten: die Mint-Konten, die alle Informationen über die Tokens enthalten, und die Token-Konten, die alle Informationen über den Besitz dieser spezifischen Tokens darstellen.
+
+Für jede einzigartige Mint gibt es Tausende verschiedener Token-Konten, die darstellen, wie viele Inhaber dieses Tokens im Ledger vorhanden sind.
+
+In diesem Abschnitt werden wir ausführlicher über diese verschiedenen Konten sprechen:
+
+<ArticleSection name="Das Mint-Konto" id="the-mint-account" level="h2" />
+
+Tokens auf Solana werden eindeutig durch die Adresse eines Mint-Kontos identifiziert, das dem Token-Programm gehört. Dieses Konto fungiert als globaler Zähler für einen bestimmten Token und speichert Daten wie:
+- Supply: Gesamtangebot des Tokens
+- Decimals: Dezimalpräzision des Tokens
+- Mint authority: Das Konto, das berechtigt ist, neue Einheiten des Tokens zu erstellen und damit das Angebot zu erhöhen
+- Freeze authority: Das Konto, das berechtigt ist, Tokens in einem Token-Konto einzufrieren und damit deren Übertragung oder Verbrennung zu verhindern
+
+So sehen diese Daten in der Blockchain aus:
+
+```rust
+pub struct Mint {
+    /// Optional authority used to mint new tokens. The mint authority may only
+    /// be provided during mint creation. If no mint authority is present
+    /// then the mint has a fixed supply and no further tokens may be
+    /// minted.
+    pub mint_authority: COption<Pubkey>,
+    /// Total supply of tokens.
+    pub supply: u64,
+    /// Number of base 10 digits to the right of the decimal place.
+    pub decimals: u8,
+    /// Is `true` if this structure has been initialized
+    pub is_initialized: bool,
+    /// Optional authority to freeze token accounts.
+    pub freeze_authority: COption<Pubkey>,
+}
+```
+
+### Metadaten
+
+In Explorern und Wallets erscheinen Tokens in der Regel erkennbar und menschenlesbar dank eines spezifischen Namens und Bildes, die mit ihnen verknüpft sind.
+
+Wir bezeichnen diesen Namen, Symbol und Bild als die `Metadata` eines Tokens. Denn in seiner nativen Form ist ein `Mint`Konto nur ein 32 Bytes langer öffentlicher Schlüssel ohne angehängte menschenlesbare Informationen.
+
+Nativ ist es im ursprünglichen SPL-Token-Programm nicht möglich, Metadaten direkt auf dem Token zu setzen. Aus diesem Grund haben Protokolle wie [Metaplex](https://www.metaplex.com/) das [MPL-token-metadata](https://github.com/metaplex-foundation/mpl-token-metadata) Programm entwickelt, um jedem Token eine Möglichkeit zu bieten, zugehörige Metadaten zu haben.
+
+> Mit Token Extensions und dem [Token2022-Programm](/de/courses/token-2022-program) ändert sich das komplett. Die Metadata-Erweiterung ermöglicht es, Metadaten direkt in das Mint-Konto selbst einzubetten und macht externe Programme überflüssig.
+
+### Non-fungible Tokens
+
+Während die Nutzbarkeit von Tokens speziell dem Ersteller überlassen wird, der entscheiden kann, ob dieser spezifische Token ein Governance-Token, ein Utility-Token oder ein Community-Token sein soll, gibt es einige Merkmale, anhand derer wir zwischen fungiblen und nicht-fungiblen Tokens unterscheiden können:
+
+Non-fungible Tokens müssen folgende Eigenschaften haben:
+- Eine Versorgung von 1, da sie einzigartig sind
+- 0 Dezimalstellen, da sie unteilbar sind
+- Keine Mint-Autorität, da wir keine weiteren Tokens mit denselben Eigenschaften hinzufügen möchten, da dies die Einzigartigkeit eines Tokens "zerstören" würde
+
+Nativ ist es unmöglich, diese Eigenschaften im Token-Programm durchzusetzen. Aus diesem Grund bieten Programme wie das `MPL-token-metadata` nicht nur eine Implementierung für die Metadaten, sondern auch eine Implementierung, um diese Einschränkungen durchzusetzen und NFTs einfach zu erstellen.
+
+<ArticleSection name="Das Token-Konto" id="the-token-account" level="h2" />
+
+Das Token-Programm erstellt Token-Konten, um den individuellen Besitz jeder Token-Einheit zu verfolgen. Ein Token-Konto speichert Daten wie:
+- Mint: Der Token, von dem das Token-Konto Einheiten hält
+- Besitzer: Das Konto, das berechtigt ist, Tokens vom Token-Konto zu übertragen
+- Menge: Anzahl der Tokens, die das Token-Konto derzeit hält
+
+So sehen diese Daten in der Blockchain aus:
+
+```rust
+pub struct Account {
+    /// The mint associated with this account
+    pub mint: Pubkey,
+    /// The owner of this account.
+    pub owner: Pubkey,
+    /// The amount of tokens this account holds.
+    pub amount: u64,
+    /// If `delegate` is `Some` then `delegated_amount` represents
+    /// the amount authorized by the delegate
+    pub delegate: COption<Pubkey>,
+    /// The account's state
+    pub state: AccountState,
+    /// If is_native.is_some, this is a native token, and the value logs the
+    /// rent-exempt reserve. An Account is required to be rent-exempt, so
+    /// the value is used by the Processor to ensure that wrapped SOL
+    /// accounts do not drop below this threshold.
+    pub is_native: COption<u64>,
+    /// The amount delegated
+    pub delegated_amount: u64,
+    /// Optional authority to close the account.
+    pub close_authority: COption<Pubkey>,
+}
+```
+
+Jede Wallet benötigt ein Token-Konto für jeden Token (Mint), den sie halten möchte, wobei die Wallet-Adresse als Besitzer des Token-Kontos festgelegt ist. Jede Wallet kann mehrere Token-Konten für denselben Token (Mint) besitzen, aber ein Token-Konto kann nur einen Besitzer haben und nur Einheiten eines Tokens (Mint) halten.
+
+<ArticleSection name="Das zugehörige Token-Konto" id="the-associated-token-account" level="h2" />
+
+Zugehörige Token-Konten (Associated Token Accounts) vereinfachen den Prozess, die Adresse eines Token-Kontos für eine bestimmte Prägung und einen bestimmten Besitzer zu finden. Betrachten Sie das zugehörige Token-Konto als das "Standard"-Token-Konto für eine bestimmte Prägung und einen bestimmten Besitzer.
+
+Ein zugehöriges Token-Konto wird mit einer Adresse erstellt, die aus der Adresse des Besitzers und der Adresse des Prägekontos abgeleitet wird. Es ist wichtig zu verstehen, dass ein zugehöriges Token-Konto einfach ein Token-Konto mit einer spezifischen Adresse ist.
+
+Dies führt ein Schlüsselkonzept in der Solana-Entwicklung ein: [Program Derived Address](https://solana.com/docs/core/pda) (PDA). Eine PDA leitet eine Adresse deterministisch unter Verwendung vordefinierter Eingaben ab, was es einfach macht, die Adresse eines Kontos zu finden.

@@ -1,0 +1,164 @@
+{
+  "metadata": {
+    "title": "Blueshift",
+    "description": "Lerne, wie du deine eigenen On-Chain-Programme von den besten Ausbildern im Solana-Ökosystem schreibst.",
+    "keywords": "Solana, Blueshift, lernen, Qualifikation, Vault, Escrow, AMM, native, Pinocchio, Quantum, SPL Token"
+  },
+  "header": {
+    "lessons": "Lektionen",
+    "courses": "Kurse",
+    "challenges": "Herausforderungen",
+    "set_goal": "Ziel setzen",
+    "connect_wallet": "Wallet verbinden"
+  },
+  "lessons": {
+    "title": "Wähle einen Kurs, um zu beginnen",
+    "subtitle": "Willkommen",
+    "subtitle_returning": "Willkommen zurück",
+    "title_returning": "Setze einen Kurs fort",
+    "get_started": "Loslegen",
+    "continue_learning": "Weiterlernen",
+    "completed_courses": "Abgeschlossene Kurse",
+    "start_course": "Kurs starten",
+    "lessons": "Lektionen",
+    "review_course": "Kurs wiederholen",
+    "empty_results_title": "Keine Ergebnisse gefunden",
+    "empty_results_description": "Versuche, nach einem anderen Kurs zu suchen oder verwende stattdessen Filter.",
+    "empty_filters_title": "Du hast keine Filter ausgewählt",
+    "empty_filters_description": "Wähle eine Sprache aus, die du lernen möchtest, um hier Ergebnisse zu sehen.",
+    "continue": "Fortfahren",
+    "completed": "Lektionen abgeschlossen",
+    "all_completed": "Alle Lektionen abgeschlossen",
+    "take_challenge": "Herausforderung annehmen",
+    "challenge_completed": "Herausforderung abgeschlossen",
+    "challenge_incomplete": "Herausforderung nicht abgeschlossen",
+    "take_challenge_cta": "Bereit für die Herausforderung?",
+    "skip_lesson_divider_title": "Oder direkt zur Herausforderung",
+    "skip_lesson": "Lektion überspringen",
+    "lesson_completed": "Glückwunsch, du hast diesen Kurs abgeschlossen!",
+    "view_other_courses": "Andere Kurse ansehen"
+  },
+  "ui": {
+    "search_placeholder": "Suche nach Name, Kategorie oder Level...",
+    "search_language_filter__label": "Alle Kategorien",
+    "search_language_filter__all_languages": "Alle",
+    "search_language_filter__selected_languages": "Kategorien"
+  },
+  "languages": {
+    "anchor": "Anchor",
+    "rust": "Rust",
+    "typescript": "Typescript",
+    "assembly": "Assembly",
+    "general": "Allgemein"
+  },
+  "ChallengeCenter": {
+    "title": "Abschließen, um NFTs zu verdienen",
+    "subtitle": "Herausforderungen",
+    "Unclaimed": "Nicht beansprucht",
+    "claimed": "Geprägt",
+    "claim": "Prägen",
+    "locked": "Gesperrt",
+    "empty_title": "Keine Herausforderungen gefunden",
+    "empty_description": "Versuche, deine Filter zu ändern, um hier Herausforderungen zu sehen.",
+    "locked_description": "Verbinde dein Wallet, um dein NFT zu prägen",
+    "claimed_description": "NFT ist in deinem Wallet verfügbar",
+    "view_nft": "NFT anzeigen",
+    "complete_to_share": "Schließe die Herausforderung ab, um zu teilen",
+    "filter__label": "Alle Status",
+    "filter__all_statuses": "Alle",
+    "filter__selected_statuses": "Status"
+  },
+  "challenge_statuses": {
+    "open": "Offen",
+    "completed": "Abgeschlossen",
+    "claimed": "Beansprucht"
+  },
+  "challenge_status_descriptions": {
+    "locked": "Diese Herausforderung ist gesperrt",
+    "locked_cta": "Schließe zuerst die Lektionen ab, um die Herausforderung freizuschalten."
+  },
+  "shift_goal": {
+    "title": "Richte dein Shift-Ziel ein",
+    "description": "Erhalte wöchentliche Erinnerungen, um dich auf dem Weg zu deinen Zielen zu halten!",
+    "connect_discord": "Discord verbinden"
+  },
+  "wallet_recommended": {
+    "title": "Verbinde dein Wallet",
+    "description": "Verbinde dein Wallet, um durch Kurse voranzuschreiten und NFT-Belohnungen zu verdienen!",
+    "connect_wallet": "Wallet verbinden",
+    "dont_show_again": "Nicht mehr anzeigen"
+  },
+  "contents": {
+    "contents": "Inhalt",
+    "view_source": "Quellcode anzeigen"
+  },
+  "notifications": {
+    "session_expired_logout": "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.",
+    "errors": {
+      "user_rejected_signature": "Du musst die Nachricht in deinem Wallet genehmigen, um dich anzumelden.",
+      "auth_unauthorized": "Authentifizierung fehlgeschlagen. Bitte versuche es erneut.",
+      "network_error": "Verbindung zum Server konnte nicht hergestellt werden. Bitte überprüfe deine Internetverbindung.",
+      "auth_generic": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuche es erneut."
+    },
+    "content_fallback": "Dieser Inhalt wird übersetzt und wird hier verfügbar sein, sobald er fertig ist."
+  },
+  "course_levels": {
+    "1": "Anfänger",
+    "2": "Fortgeschritten",
+    "3": "Experte",
+    "4": "Profi"
+  },
+  "ChallengePage": {
+    "pagination_header": "Herausforderungen",
+    "connect_wallet": "Wallet verbinden",
+    "connect_wallet_description": "Ein Solana-Wallet wird benötigt, um die Herausforderung abzuschließen und NFTs freizuschalten",
+    "back_to_lessons": "Zurück zu den Lektionen",
+    "back_to_homepage": "Zurück zur Startseite",
+    "head_to_challenges": "Zurück zu den Herausforderungen", 
+    "requirements_title": "Herausforderung",
+    "upload_program_btn": "Programm hochladen",
+    "run_program_btn": "Ausführen",
+    "view_logs_btn": "Logs anzeigen",
+    "back_to_editor_btn": "Zurück zum Editor",
+    "running_program_btn": "Wird ausgeführt...",
+    "num_tests_passed": "Tests bestanden",
+    "test_results": {
+      "passed": "Bestanden",
+      "failed": "Fehlgeschlagen",
+      "incomplete": "Unvollständig"
+    },
+    "challenge_completed": {
+      "title": "Herausforderung abgeschlossen",
+      "body": "Du hast diese Herausforderung bereits abgeschlossen.",
+      "view_other_courses": "Andere Kurse ansehen",
+      "view_other_challenges": "Andere Herausforderungen ansehen",
+      "divider_label": "Oder",
+      "redo": "Herausforderung wiederholen"
+    },
+    "mint_modal_title": "Glückwunsch!",
+    "mint_modal_description": "Du hast die Herausforderung abgeschlossen und eine NFT-Belohnung freigeschaltet!",
+    "mint_modal_button": "NFT prägen",
+    "minting": "NFT wird geprägt...",
+    "mint_modal_skip": "Vorerst überspringen",
+    "mint_modal_skip_description": "Du kannst deine freigeschalteten Belohnungen auf der Herausforderungsseite sehen.",
+    "mint_modal_tweet": "Auf X teilen",
+    "share_on_x": "Auf X teilen",
+    "challenge_share_tweet": "Ich habe gerade die Herausforderung {challengeTitle} von @blueshift_gg abgeschlossen.\n\nProbier es hier aus: {challengeUrl}\n\nMake the shift. Build on @solana.",
+    "assistance_prompt": {
+      "title": "Brauchst du Hilfe?",
+      "body": "Es sieht so aus, als hättest du Schwierigkeiten. Wenn du nicht weiterkommst, kannst du gerne in unserer Discord-Community um Hilfe bitten.",
+      "link_text": "Auf Discord fragen"
+    },
+    "reset_code_modal": {
+      "title": "Code zurücksetzen",
+      "description": "Bist du sicher, dass du deinen Code zurücksetzen möchtest? Dies verwirft alle Änderungen und stellt die ursprüngliche Vorlage wieder her.",
+      "cancel": "Abbrechen",
+      "confirm": "Code zurücksetzen"
+    },
+    "reset_button": "Zurücksetzen",
+    "auto_saved": "Automatisch gespeichert",
+    "unsaved_changes": "Ungespeicherte Änderungen",
+    "saving": "Wird gespeichert...",
+    "loaded_from_auto_save": "Code aus vorheriger Sitzung geladen"
+  }
+}

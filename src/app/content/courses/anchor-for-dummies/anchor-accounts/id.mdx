@@ -1,0 +1,571 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
+
+# Akun
+
+Kita telah melihat makro `#[account]`, tetapi tentu saja di Solana ada berbagai jenis akun. Karena alasan ini, penting untuk menyempatkan waktu melihat bagaimana umumnya akun di Solana bekerja, dan lebih mendalam, bagaimana akun bekerja dengan Anchor.
+
+<ArticleSection name="Gambaran Umum" id="general-overview" level="h2" />
+
+Di Solana, setiap bagian state berada dalam sebuah akun; bayangkan [ledger](https://solana.com/docs/references/terminology#ledger) sebagai satu tabel besar di mana setiap baris berbagi skema dasar yang sama:
+
+```rust
+pub struct Account {
+    /// lamports in the account
+    pub lamports: u64,
+    /// data held in this account
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
+    pub data: Vec<u8>,
+    /// the program that owns this account and can mutate its lamports or data.
+    pub owner: Pubkey,
+    /// `true` if the account is a program; `false` if it merely belongs to one
+    pub executable: bool,
+    /// the epoch at which this account will next owe rent (currently deprecated and is set to `0`)
+    pub rent_epoch: Epoch,
+}
+```
+
+Semua akun di Solana berbagi tata letak dasar yang sama. Yang membedakan mereka adalah:
+
+1. Pemilik: Program yang memiliki hak eksklusif untuk memodifikasi data dan lamports akun.
+2. Data: Digunakan oleh program pemilik untuk membedakan antara berbagai jenis akun.
+
+Ketika kita berbicara tentang Akun Program Token, yang kita maksud adalah akun di mana `owner` adalah Program Token. Tidak seperti Akun Sistem yang bidang datanya kosong, Akun Program Token bisa berupa akun **Mint** atau akun **Token**. Kita menggunakan diskriminator untuk membedakan di antara keduanya.
+
+Sama seperti Program Token dapat memiliki akun, begitu juga dengan program lain bahkan program kita sendiri.
+
+<ArticleSection name="Akun Program" id="program-accounts" level="h2" />
+
+Akun program adalah dasar dari manajemen state dalam program Anchor. Akun program memungkinkan Anda membuat struktur data kustom yang dimiliki oleh program Anda. Mari kita jelajahi cara bekerja dengan akun program secara efektif.
+
+### Struktur Akun dan Diskriminator
+
+Setiap akun program di Anchor membutuhkan cara untuk mengidentifikasi jenisnya. Ini ditangani melalui diskriminator, yang dapat berupa:
+
+1. **Diskriminator Default**: Awalan 8-byte yang dihasilkan menggunakan `sha256("account:<StructName>")[0..8]` untuk akun, atau `sha256("global:<instruction_name>")[0..8]` untuk instruksi. Seed menggunakan PascalCase untuk akun dan snake_case untuk instruksi.
+
+<AnchorDiscriminatorCalculator value={"TestAccount"} displayMode="account" />
+
+2. **Diskriminator Kustom**: Mulai dari Anchor `v0.31.0`, Anda dapat menentukan diskriminator Anda sendiri:
+
+```rust
+#[account(discriminator = 1)]              // single-byte
+pub struct Escrow { … }
+```
+
+**Catatan Penting tentang Diskriminator**:
+- Harus unik di seluruh program Anda
+- Menggunakan `[1]` mencegah penggunaan `[1, 2, …]` karena keduanya dimulai dengan `1`
+- `[0]` tidak dapat digunakan karena bertentangan dengan akun yang belum diinisialisasi
+
+### Membuat Akun Program
+
+Untuk membuat akun program, pertama-tama Anda mendefinisikan struktur data Anda:
+
+```rust
+use anchor_lang::prelude::*;
+
+#[derive(InitSpace)]
+#[account(discriminator = 1)]
+pub struct CustomAccountType {
+    data: u64,
+}
+```
+
+Poin-poin penting tentang akun program:
+- Ukuran maksimum adalah 10.240 byte (10 KiB)
+- Untuk akun yang lebih besar, Anda akan memerlukan `zero_copy` dan penulisan terbagi
+- Makro `InitSpace` derive secara otomatis menghitung ruang yang diperlukan
+- Total ruang = `INIT_SPACE` + `DISCRIMINATOR.len()`
+
+Total ruang dalam byte yang diperlukan untuk akun adalah jumlah dari `INIT_SPACE` (ukuran semua bidang yang digabungkan) dan ukuran diskriminator (`DISCRIMINATOR.len()`).
+
+Akun Solana memerlukan deposit sewa dalam lamports, yang bergantung pada ukuran akun. Mengetahui ukurannya membantu kita menghitung berapa banyak lamports yang perlu kita deposit untuk membuka akun.
+
+Berikut cara kita akan menginisiasi akun dalam struct `Account` kita:
+
+```rust
+#[account(
+    init,
+    payer = <target_account>,
+    space = <num_bytes>                 // CustomAccountType::INIT_SPACE + CustomAccountType::DISCRIMINATOR.len(),
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+Berikut adalah beberapa bidang yang digunakan dalam makro `#[account]`, selain bidang `seeds` dan `bump` yang telah kita bahas, dan fungsinya:
+- `init`: memberi tahu Anchor untuk membuat akun
+- `payer`: penandatangan mana yang mendanai sewa (di sini, pembuat)
+- `space`: berapa banyak byte yang akan dialokasikan. Di sinilah perhitungan sewa juga terjadi
+
+Setelah pembuatan, Anda dapat memodifikasi data akun. Jika Anda perlu mengubah ukurannya, gunakan realokasi:
+
+```rust
+#[account(
+    mut,                       // Mark as mutable
+    realloc = <space>,         // New size
+    realloc::payer = <target>, // Who pays for the change
+    realloc::zero = <bool>     // Whether to zero new space
+)]
+```
+
+**Catatan**: Saat mengurangi ukuran akun, atur `realloc::zero = true` untuk memastikan data lama dibersihkan dengan benar.
+
+Terakhir, ketika akun tidak lagi diperlukan, kita dapat menutupnya untuk mendapatkan kembali biaya sewa:
+
+```rust
+#[account(
+    mut,                       // Mark as mutable
+    close = <target_account>,  // Where to send remaining lamports
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+Kemudian kita dapat menambahkan PDA, alamat deterministik yang diturunkan dari seed dan ID program yang sangat berguna untuk membuat alamat akun yang dapat diprediksi, ke dalam batasan-batasan ini seperti ini:
+
+```rust
+#[account(
+    seeds = <seeds>,            // Seeds for derivation
+    bump                        // Standard bump seed
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+**Catatan**: bahwa PDA bersifat deterministik: seed + program + bump yang sama selalu menghasilkan alamat yang sama dan bump tersebut memastikan alamat berada di luar kurva ed25519
+
+Karena menghitung bump dapat "membakar" banyak CU, selalu baik untuk menyimpannya ke dalam akun atau meneruskannya ke dalam instruksi dan memvalidasinya tanpa harus menghitung seperti ini:
+
+```rust
+#[account(
+    seeds = <seeds>,
+    bump = <expr>
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+Dan dimungkinkan untuk menurunkan PDA dari program lain dengan meneruskan alamat program yang diturunkan seperti ini:
+
+```rust
+#[account(
+    seeds = <seeds>,
+    bump = <expr>,
+    seeds::program = <expr>
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Lazy Account
+
+Mulai dari Anchor 0.31.0, `LazyAccount` menyediakan cara yang lebih efisien untuk membaca data akun. Tidak seperti tipe `Account` standar yang mendeserialkan seluruh akun ke stack, `LazyAccount` adalah akun hanya-baca, yang dialokasikan di heap yang hanya menggunakan 24 byte memori stack dan memungkinkan Anda memuat bidang tertentu secara selektif.
+
+Mulailah dengan mengaktifkan fitur ini di `Cargo.toml` Anda:
+
+```
+anchor-lang = { version = "0.31.1", features = ["lazy-account"] }
+```
+
+Sekarang kita dapat menggunakannya seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct MyInstruction<'info> {
+    pub account: LazyAccount<'info, CustomAccountType>,
+}
+
+#[account(discriminator = 1)]
+pub struct CustomAccountType {
+    pub balance: u64,
+    pub metadata: String,
+}
+
+pub fn handler(ctx: Context<MyInstruction>) -> Result<()> {
+    // Load specific field
+    let balance = ctx.accounts.account.get_balance()?;
+    let metadata = ctx.accounts.account.get_metadata()?;
+    
+    Ok(())
+}
+```
+
+> `LazyAccount` bersifat hanya-baca. Mencoba mengubah bidang akan menyebabkan panic karena Anda bekerja dengan referensi, bukan data yang dialokasikan di stack.
+
+Ketika CPI memodifikasi akun, nilai yang di-cache menjadi basi. Karena alasan ini Anda perlu menggunakan fungsi `unload()` untuk menyegarkan:
+
+```rust
+// Load the initial value
+let initial_value = ctx.accounts.my_account.load_field()?;
+
+// Do CPI...
+
+// We still have a reference to the account from `initial_value`, drop it before `unload`
+drop(initial_value);
+
+// Load the updated value
+let updated_value = ctx.accounts.my_account.unload()?.load_field()?;
+```
+
+<ArticleSection name="Token Accounts" id="token-program" level="h2" />
+
+Token Program, bagian dari Solana Program Library (SPL), adalah toolkit bawaan untuk mencetak dan memindahkan aset apa pun yang bukan SOL asli. Program ini memiliki instruksi untuk membuat token, mencetak pasokan baru, mentransfer saldo, membakar, membekukan, dan lainnya.
+
+Program ini memiliki dua jenis akun utama:
+- **Mint Account**: menyimpan metadata untuk satu token tertentu: pasokan, desimal, otoritas pencetakan, otoritas pembekuan, dan sebagainya
+- **Token Account**: menyimpan saldo dari mint tersebut untuk pemilik tertentu. Hanya pemilik yang dapat mengurangi saldo (transfer, burn, dll.), tetapi siapa pun dapat mengirim token ke akun tersebut, meningkatkan saldonya
+
+### Token Accounts di Anchor
+
+Secara native, crate Anchor inti hanya menyertakan pembantu CPI dan Accounts untuk System Program. Jika Anda menginginkan bantuan yang sama untuk token SPL, Anda perlu mengimpor crate `anchor_spl`.
+
+`anchor_spl` menambahkan:
+- Pembantu builder untuk setiap instruksi di program SPL Token dan Token-2022
+- Pembungkus tipe yang memudahkan verifikasi dan deserialisasi akun Mint dan Token
+
+Mari kita lihat bagaimana struktur akun `Mint` dan `Token`:
+
+```rust
+#[account(
+    mint::decimals     = <expr>,
+    mint::authority    = <target_account>,
+    mint::freeze_authority = <target_account>
+    mint::token_program = <target_account>
+)]
+pub mint: Account<'info, Mint>,
+
+#[account(
+    mut,
+    associated_token::mint       = <target_account>,
+    associated_token::authority  = <target_account>,
+    associated_token::token_program = <target_account>
+)]
+pub maker_ata_a: Account<'info, TokenAccount>,
+```
+
+`Account<'info, Mint>` dan `Account<'info, TokenAccount>` memberi tahu Anchor untuk:
+- mengonfirmasi bahwa akun tersebut benar-benar akun Mint atau Token
+- mendeserialkan datanya sehingga Anda dapat membaca field secara langsung
+- menerapkan batasan tambahan yang Anda tentukan (`authority`, `decimals`, `mint`, `token_program`, dll.)
+
+Akun terkait token ini mengikuti pola `init` yang sama seperti yang digunakan sebelumnya. Karena Anchor mengetahui ukuran byte tetap mereka, kita tidak perlu menentukan nilai `space`, hanya pembayar yang mendanai akun.
+
+Anchor juga menawarkan makro `init_if_needed`: makro ini memeriksa apakah akun token sudah ada dan, jika belum, akan membuatnya. Jalan pintas ini tidak aman untuk setiap jenis akun, tetapi sangat cocok untuk akun token, jadi kita akan menggunakannya di sini.
+
+Seperti yang disebutkan, `anchor_spl` membuat helper untuk program **Token** dan **Token2022**, dengan yang terakhir memperkenalkan Ekstensi Token. Tantangan utamanya adalah meskipun akun-akun ini mencapai tujuan yang serupa dan memiliki struktur yang sebanding, mereka tidak dapat di-deserialisasi dan diperiksa dengan cara yang sama karena dimiliki oleh dua program yang berbeda.
+
+Kita bisa membuat logika yang lebih "canggih" untuk menangani jenis akun yang berbeda ini, tetapi untungnya Anchor mendukung skenario ini melalui **InterfaceAccounts**:
+
+```rust
+use anchor_spl::token_interface::{Mint, TokenAccount};
+
+#[account(
+    mint::decimals     = <expr>,
+    mint::authority    = <target_account>,
+    mint::freeze_authority = <target_account>
+)]
+pub mint: InterfaceAccounts<'info, Mint>,
+
+#[account(
+    mut,
+    associated_token::mint = <target_account>,
+    associated_token::authority = <target_account>,
+    associated_token::token_program = <target_account>
+)]
+pub maker_ata_a: InterfaceAccounts<'info, TokenAccount>,
+```
+
+Perbedaan utama di sini adalah kita menggunakan `InterfaceAccounts` alih-alih `Account`. Ini memungkinkan program kita bekerja dengan akun Token dan Token2022 tanpa perlu menangani perbedaan dalam logika deserialisasi mereka. Interface ini menyediakan cara umum untuk berinteraksi dengan kedua jenis akun sambil mempertahankan keamanan tipe dan validasi yang tepat.
+
+Pendekatan ini sangat berguna ketika Anda ingin program Anda kompatibel dengan kedua standar token, karena menghilangkan kebutuhan untuk menulis logika terpisah untuk setiap program. Interface menangani semua kompleksitas dalam berurusan dengan struktur akun yang berbeda di balik layar.
+
+Jika Anda ingin mempelajari lebih lanjut tentang cara menggunakan `anchor-spl` Anda dapat mengikuti kursus [Program SPL-Token dengan Anchor](/id/courses/spl-token-with-anchor) atau [Program Token2022 dengan Anchor](/id/courses/token-2022-with-anchor).
+
+<ArticleSection name="Tipe Akun Tambahan" id="additional-accounts-type" level="h2" />
+
+Tentu saja, Akun Sistem, Akun Program, dan Akun Token bukanlah satu-satunya jenis akun yang dapat kita miliki di Anchor. Jadi kita akan melihat jenis Akun lain yang dapat kita miliki:
+
+### Signer
+
+Tipe `Signer` digunakan ketika Anda perlu memverifikasi bahwa sebuah akun telah menandatangani transaksi. Ini sangat penting untuk keamanan karena memastikan bahwa hanya akun yang berwenang yang dapat melakukan tindakan tertentu. Anda akan menggunakan tipe ini kapan pun Anda perlu menjamin bahwa akun tertentu telah menyetujui transaksi, seperti saat mentransfer dana atau memodifikasi data akun yang memerlukan izin eksplisit. Berikut cara menggunakannya:
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+}
+```
+
+Tipe `Signer` secara otomatis memeriksa apakah akun telah menandatangani transaksi. Jika belum, transaksi akan gagal. Ini sangat berguna ketika Anda perlu memastikan bahwa hanya akun tertentu yang dapat melakukan operasi tertentu.
+
+### AccountInfo & UncheckedAccount
+
+`AccountInfo` dan `UncheckedAccount` adalah tipe akun tingkat rendah yang memberikan akses langsung ke data akun tanpa validasi otomatis. Keduanya identik dalam fungsinya, tetapi `UncheckedAccount` adalah pilihan yang lebih disukai karena namanya lebih mencerminkan tujuannya.
+
+Tipe-tipe ini berguna dalam tiga skenario utama:
+1. Bekerja dengan akun yang tidak memiliki struktur yang terdefinisi
+2. Mengimplementasikan logika validasi kustom
+3. Berinteraksi dengan akun dari program lain yang tidak memiliki definisi tipe Anchor
+
+Karena tipe-tipe ini melewati pemeriksaan keamanan Anchor, secara inheren tidak aman dan memerlukan pengakuan eksplisit menggunakan komentar `/// CHECK`. Komentar ini berfungsi sebagai dokumentasi bahwa Anda memahami risikonya dan telah mengimplementasikan validasi yang sesuai.
+
+Berikut contoh cara menggunakannya:
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    /// CHECK: This is an unchecked account
+    pub account: UncheckedAccount<'info>,
+
+    /// CHECK: This is an unchecked account
+    pub account_info: AccountInfo<'info>,
+}
+```
+
+### Option
+
+Tipe `Option` di Anchor memungkinkan Anda membuat akun menjadi opsional dalam instruksi Anda. Ketika sebuah akun dibungkus dalam `Option`, akun tersebut dapat disediakan atau dihilangkan dalam transaksi. Ini sangat berguna untuk:
+- Membangun instruksi fleksibel yang dapat bekerja dengan atau tanpa akun tertentu
+- Mengimplementasikan parameter opsional yang mungkin tidak selalu dibutuhkan
+- Membuat instruksi yang kompatibel dengan struktur akun baru atau lama
+
+Ketika akun `Option` diatur ke `None`, Anchor akan menggunakan Program ID sebagai alamat akun. Perilaku ini penting untuk dipahami saat bekerja dengan akun opsional.
+
+Berikut cara mengimplementasikannya:
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub optional_account: Option<Account<'info, CustomAccountType>>,
+}
+```
+
+### Box
+
+Tipe `Box` digunakan untuk menyimpan akun di heap daripada di stack. Ini diperlukan dalam beberapa skenario:
+- Ketika berurusan dengan struktur akun besar yang tidak efisien jika disimpan di stack
+- Ketika bekerja dengan struktur data rekursif
+- Ketika Anda perlu bekerja dengan akun yang ukurannya tidak dapat ditentukan pada waktu kompilasi
+
+Menggunakan `Box` membantu mengelola memori lebih efisien dalam kasus-kasus ini dengan mengalokasikan data akun di heap. Berikut contohnya:
+
+```rust
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub boxed_account: Box<Account<'info, LargeAccountType>>,
+}
+```
+
+### Program
+
+Tipe `Program` digunakan untuk memvalidasi dan berinteraksi dengan program Solana lainnya. Anchor dapat dengan mudah mengidentifikasi akun program karena mereka memiliki flag `executable` yang diatur ke `true`. Tipe ini sangat berguna ketika:
+
+- Anda perlu membuat Cross-Program Invocations (CPI)
+- Anda ingin memastikan Anda berinteraksi dengan program yang benar
+- Anda perlu memverifikasi kepemilikan program atas akun
+
+Ada dua cara utama untuk menggunakan tipe `Program`:
+
+1. Menggunakan tipe program bawaan (direkomendasikan jika tersedia):
+
+```rust
+use anchor_spl::token::Token;
+
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+2. Menggunakan alamat program kustom ketika tipe program tidak tersedia:
+
+```rust
+// Address of the Program
+const PROGRAM_ADDRESS: Pubkey = pubkey!("22222222222222222222222222222222222222222222")
+
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    #[account(address = PROGRAM_ADDRESS)]
+    /// CHECK: this is fine since we're checking the address
+    pub program: UncheckedAccount<'info>,
+}
+```
+
+**Catatan**: Saat bekerja dengan program token, Anda mungkin perlu mendukung baik Program Token Lama maupun Program Token-2022. Dalam kasus seperti itu, gunakan tipe `Interface` alih-alih `Program`:
+
+```rust
+use anchor_spl::token_interface::TokenInterface;
+
+#[derive(Accounts)]
+pub struct InstructionAccounts<'info> {
+    pub program: Interface<'info, TokenInterface>,
+}
+```
+
+<ArticleSection name="Validasi Akun Kustom" id="custom-account-validation" level="h2" />
+
+Anchor menyediakan serangkaian batasan yang kuat yang dapat diterapkan langsung dalam atribut `#[account]`. Batasan-batasan ini membantu memastikan validitas akun dan menegakkan aturan program di tingkat akun, sebelum logika instruksi Anda berjalan. Berikut adalah batasan-batasan yang tersedia:
+
+### Batasan Alamat
+
+Batasan `address` memverifikasi bahwa kunci publik akun cocok dengan nilai tertentu. Ini penting ketika Anda perlu memastikan bahwa Anda berinteraksi dengan akun yang dikenal, seperti PDA tertentu atau akun program:
+
+```rust
+#[account(
+    address = <expr>,                    // Basic usage
+    address = <expr> @ CustomError       // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Batasan Pemilik
+
+Batasan `owner` memastikan bahwa akun dimiliki oleh program tertentu. Ini adalah pemeriksaan keamanan penting ketika bekerja dengan akun yang dimiliki program, karena mencegah akses tidak sah ke akun yang seharusnya dikelola oleh program tertentu:
+
+```rust
+#[account(
+    owner = <expr>,                      // Basic usage
+    owner = <expr> @ CustomError         // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Batasan Dapat Dieksekusi
+
+Batasan `executable` memverifikasi bahwa akun adalah akun program (memiliki flag `executable` yang diatur ke `true`). Ini sangat berguna ketika melakukan Cross-Program Invocations (CPI) untuk memastikan Anda berinteraksi dengan program daripada akun data:
+
+```rust
+#[account(executable)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Batasan Dapat Diubah
+
+Batasan `mut` menandai akun sebagai dapat diubah, memungkinkan datanya dimodifikasi selama instruksi. Ini diperlukan untuk akun apa pun yang akan diperbarui, karena Anchor menerapkan ketidakmampuan untuk diubah secara default demi keamanan:
+
+```rust
+#[account(
+    mut,                                 // Basic usage
+    mut @ CustomError                    // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Batasan Penandatangan
+
+Batasan `signer` memverifikasi bahwa akun telah menandatangani transaksi. Ini sangat penting untuk keamanan ketika akun perlu mengotorisasi tindakan, seperti mentransfer dana atau memodifikasi data. Ini adalah cara yang lebih eksplisit untuk meminta tanda tangan dibandingkan dengan menggunakan tipe `Signer`:
+
+```rust
+#[account(
+    signer,                              // Basic usage
+    signer @ CustomError                 // With custom error
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Constraint Has One
+
+Constraint `has_one` memverifikasi bahwa bidang tertentu pada struct akun cocok dengan kunci publik akun lainnya. Ini berguna untuk menjaga hubungan antar akun, seperti memastikan akun token milik pemilik yang benar:
+
+```rust
+#[account(
+    has_one = data @ Error::InvalidField
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+### Constraint Kustom
+
+Ketika constraint bawaan tidak memenuhi kebutuhan Anda, Anda dapat menulis ekspresi validasi kustom. Ini memungkinkan logika validasi kompleks yang tidak dapat diekspresikan dengan constraint lain, seperti memeriksa panjang data akun atau memvalidasi hubungan antara beberapa bidang:
+
+```rust
+#[account(
+    constraint = data == account.data @ Error::InvalidField
+)]
+pub account: Account<'info, CustomAccountType>,
+```
+
+Constraint ini dapat dikombinasikan untuk membuat aturan validasi yang kuat untuk akun Anda. Dengan menempatkan validasi di tingkat akun, Anda menjaga pemeriksaan keamanan dekat dengan definisi akun dan menghindari penyebaran panggilan `require!()` di seluruh logika instruksi Anda.
+
+<ArticleSection name="Remaining Accounts" id="remaining-accounts" level="h2" />
+
+Terkadang saat menulis program, struktur tetap dari akun instruksi tidak memberikan fleksibilitas yang dibutuhkan program Anda.
+
+Remaining accounts menyelesaikan masalah ini dengan memungkinkan Anda meneruskan akun tambahan di luar struktur instruksi yang telah ditentukan, memungkinkan perilaku dinamis berdasarkan kondisi runtime.
+
+### Panduan Implementasi
+
+Definisi instruksi tradisional mengharuskan Anda menentukan dengan tepat akun mana yang akan digunakan:
+
+```rust
+#[derive(Accounts)]
+pub struct Transfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+```
+
+Ini bekerja dengan baik untuk operasi tunggal, tetapi bagaimana jika Anda ingin melakukan beberapa transfer token dalam satu instruksi? Anda perlu memanggil instruksi beberapa kali, meningkatkan biaya transaksi dan kompleksitas.
+
+Remaining accounts memungkinkan Anda meneruskan akun tambahan yang bukan bagian dari struktur instruksi tetap, artinya program Anda dapat melakukan iterasi melalui akun-akun ini dan menerapkan logika berulang secara dinamis.
+
+Alih-alih memerlukan instruksi terpisah untuk setiap transfer, Anda dapat merancang satu instruksi yang menangani "N" transfer:
+
+```rust
+#[derive(Accounts)]
+pub struct BatchTransfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+
+pub fn batch_transfer(ctx: Context<BatchTransfer>, amounts: Vec<u64>) -> Result<()> {
+    // Handle the first transfer using fixed accounts
+    transfer_tokens(&ctx.accounts.from, &ctx.accounts.to, amounts[0])?;
+    
+    let remaining_accounts = &ctx.remaining_accounts;
+
+    // CRITICAL: Validate remaining accounts schema
+    // For batch transfers, we expect pairs of accounts
+    require!(
+        remaining_accounts.len() % 2 == 0,
+        TransferError::InvalidRemainingAccountsSchema
+    );
+
+    // Process remaining accounts in groups of 2 (from_account, to_account)
+    for (i, chunk) in remaining_accounts.chunks(2).enumerate() {
+        let from_account = &chunk[0];
+        let to_account = &chunk[1];
+        let amount = amounts[i + 1];
+        
+        // Apply the same transfer logic to remaining accounts
+        transfer_tokens(from_account, to_account, amount)?;
+    }
+    
+    Ok(())
+}
+```
+
+Batching instructions berarti: 
+- Ukuran instruksi lebih kecil: akun dan data yang berulang tidak perlu disertakan
+- Efisiensi: setiap CPI membutuhkan 1000 CU, artinya seseorang yang menggunakan program Anda dapat memanggilnya hanya satu kali alih-alih 3 kali jika mereka perlu melakukan instruksi batch
+
+> Remaining accounts diteruskan sebagai `UncheckedAccount`, artinya Anchor tidak melakukan validasi apa pun pada akun tersebut. Selalu validasi `RemainingAccountSchema` dan akun yang mendasarinya.
+
+### Implementasi Sisi Klien
+
+Kita dapat dengan mudah meneruskan remaining accounts menggunakan SDK Anchor yang dihasilkan setelah kita melakukan `anchor build`. Karena akun tersebut adalah akun "mentah", kita perlu menentukan apakah mereka perlu diteruskan sebagai penandatangan dan/atau dapat diubah seperti ini:
+
+```ts
+await program.methods.someMethod().accounts({
+  // some accounts
+})
+.remainingAccounts([
+  {
+    isSigner: false,
+    isWritable: true,
+    pubkey: new Pubkey().default
+  }
+])
+.rpc();
+```

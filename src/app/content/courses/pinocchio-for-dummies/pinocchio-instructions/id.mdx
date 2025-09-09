@@ -1,0 +1,193 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruksi
+
+Seperti yang telah kita lihat sebelumnya, menggunakan trait `TryFrom` memungkinkan kita untuk memisahkan validasi dari logika bisnis dengan bersih, meningkatkan pemeliharaan dan keamanan.
+
+<ArticleSection name="Struktur Instruksi" id="instruction-structure" level="h2" />
+
+Ketika saatnya memproses logika, kita dapat membuat struktur seperti ini:
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_datas: DepositInstructionData,
+}
+```
+
+Struktur ini mendefinisikan data apa yang akan dapat diakses selama pemrosesan logika. Kemudian kita mendeserialkan ini menggunakan fungsi `try_from` yang dapat Anda temukan di file `lib.rs`:
+
+```rust
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_datas = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_datas,
+        })
+    }
+}
+```
+
+Wrapper ini memberikan tiga manfaat utama:
+1. Menerima input mentah (byte dan akun)
+2. Mendelegasikan validasi ke implementasi `TryFrom` individual
+3. Mengembalikan struct Deposit yang sepenuhnya diketik dan divalidasi
+
+Kemudian kita dapat mengimplementasikan logika pemrosesan seperti ini:
+
+```rust
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&self) -> ProgramResult {
+        // deposit logic
+        Ok(())
+    }
+}
+```
+
+- `DISCRIMINATOR` adalah byte yang kita gunakan untuk pencocokan pola di entrypoint
+- Metode `process()` hanya berisi logika bisnis, karena semua pemeriksaan validasi sudah selesai
+
+Hasilnya? Kita mendapatkan ergonomi gaya Anchor dengan semua manfaat menjadi sepenuhnya native: eksplisit, dapat diprediksi, dan cepat.
+
+<ArticleSection name="Cross Program Invocation" id="cross-program-invocation" level="h2" />
+
+Seperti yang disebutkan sebelumnya, Pinocchio menyediakan crate pembantu seperti `pinocchio-system` dan `pinocchio-token` yang menyederhanakan Cross-Program Invocations (CPI) ke program native.
+
+Struct dan metode pembantu ini menggantikan pendekatan `CpiContext` Anchor yang kita gunakan sebelumnya:
+
+```rust
+Transfer {
+    from: self.accounts.owner,
+    to: self.accounts.vault,
+    lamports: self.instruction_datas.amount,
+}
+.invoke()?;
+```
+
+Struct `Transfer` (dari `pinocchio-system`) mengenkapsulasi semua bidang yang diperlukan oleh System Program, dan `.invoke()` mengeksekusi CPI. Tidak diperlukan context builder atau boilerplate tambahan.
+
+Ketika pemanggil harus berupa Program-Derived Address (PDA), Pinocchio mempertahankan API yang ringkas yang sama:
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(self.accounts.owner.key().as_ref()),
+    Seed::from(&[bump]),
+];
+let signers = [Signer::from(&seeds)];
+
+Transfer {
+    from: self.accounts.vault,
+    to: self.accounts.owner,
+    lamports: self.accounts.vault.lamports(),
+}
+.invoke_signed(&signers)?;
+```
+
+**Begini cara kerjanya:**
+1. `Seeds` membuat array objek Seed yang cocok dengan derivasi PDA
+2. `Signer` membungkus seed ini dalam helper Signer
+3. `invoke_signed` mengeksekusi CPI, meneruskan array signer untuk mengotorisasi transfer
+
+Hasilnya? Antarmuka yang bersih dan kelas satu untuk CPI biasa dan bertanda tangan: tidak memerlukan makro, dan tidak ada keajaiban tersembunyi.
+
+<ArticleSection name="Multiple Instruction Structure" id="multiple-instruction-structure" level="h2" />
+
+Seringkali, Anda ingin menggunakan kembali struktur akun dan logika validasi yang sama di beberapa instruksi; seperti saat memperbarui bidang konfigurasi yang berbeda.
+
+Alih-alih membuat diskriminator terpisah untuk setiap instruksi, Anda dapat menggunakan pola yang membedakan instruksi berdasarkan ukuran muatan datanya.
+
+Begini cara kerjanya:
+
+Kami menggunakan satu diskriminator instruksi untuk semua pembaruan konfigurasi terkait. Instruksi spesifik ditentukan oleh panjang data yang masuk.
+
+Setelah itu, dalam prosesor Anda, cocokkan pada `self.data.len()`. Setiap jenis instruksi memiliki ukuran data yang unik, sehingga Anda dapat mengarahkan ke handler yang tepat.
+
+Ini akan terlihat seperti ini:
+
+```rust
+pub struct UpdateConfig<'a> {
+    pub accounts: UpdateConfigAccounts<'a>,
+    pub data: &'a [u8],
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for UpdateConfig<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = UpdateConfigAccounts::try_from(accounts)?;
+
+        // Return the initialized struct
+        Ok(Self { accounts, data })
+    }
+}
+
+impl<'a> UpdateConfig<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &4;
+
+    pub fn process(&mut self) -> ProgramResult {
+        match self.data.len() {
+            len if len == size_of::<UpdateConfigStatusInstructionData>() => {
+                self.process_update_status()
+            }
+            len if len == size_of::<UpdateConfigFeeInstructionData>() => self.process_update_fee(),
+            len if len == size_of::<UpdateConfigAuthorityInstructionData>() => {
+                self.process_update_authority()
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+
+    //..
+}
+```
+
+Perhatikan bahwa kita menunda deserialisasi data instruksi sampai setelah kita tahu handler mana yang akan dipanggil. Ini menghindari parsing yang tidak perlu dan menjaga logika entrypoint tetap bersih.
+
+Setiap handler kemudian dapat mendeserialkan tipe data spesifiknya dan melakukan pembaruan:
+
+```rust
+pub fn process_update_authority(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigAuthorityInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_authority_unchecked(instruction_data.authority) }?;
+
+    Ok(())
+}
+
+pub fn process_update_fee(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigFeeInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_fee_unchecked(instruction_data.fee) }?;
+
+    Ok(())
+}
+
+pub fn process_update_status(&mut self) -> ProgramResult {
+    let instruction_data = UpdateConfigStatusInstructionData::try_from(self.data)?;
+
+    let mut data = self.accounts.config.try_borrow_mut_data()?;
+    let config = Config::load_mut_unchecked(&mut data)?;
+
+    unsafe { config.set_state_unchecked(instruction_data.status) }?;
+
+    Ok(())
+}
+```
+
+Pendekatan ini memungkinkan Anda berbagi validasi akun dan menggunakan satu entrypoint untuk beberapa instruksi terkait, mengurangi boilerplate dan membuat basis kode Anda lebih mudah dikelola.
+
+Dengan pencocokan pola pada ukuran data, Anda dapat secara efisien mengarahkan ke logika yang benar tanpa diskriminator tambahan atau parsing yang kompleks.

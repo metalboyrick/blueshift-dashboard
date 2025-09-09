@@ -4,14 +4,11 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 ![Instruction Introspection](/graphics/course-banners/instruction-introspection.png)
 
-Instruction introspection is a powerful capability on Solana that allows a program to analyze other instructions
-within the same transaction, including those not yet executed. This enables you to dynamically respond to or augment
-these instructions — for example, by injecting safeguards, validating behavior, or integrating instructions from
-external programs into your own logic.
+Instruction introspection is a powerful capability on Solana that allows a program to analyze other instructions within the same transaction, including those not yet executed. This enables you to dynamically respond to or augment these instructions — for example, by injecting safeguards, validating behavior, or integrating instructions from external programs into your own logic.
 
 This is made possible by a special system account called the `Instructions` sysvar. Sysvars are read-only accounts maintained by the Solana runtime that expose internal state to programs (e.g., clock, rent, epoch schedule, etc.). The Instructions sysvar specifically exposes the full list of instructions in the current transaction, along with their metadata and serialized data.
 
-Here’s how Solana serializes this information at runtime:
+Here's how Solana serializes this information at runtime:
 
 ```rust
 // First encode the number of instructions:
@@ -63,7 +60,7 @@ fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
 
 This means that by reading the `Instructions` sysvar account inside your program, you can access all the instructions included in the current transaction.
 
-You don’t need to parse the raw bytes manually. Solana provides helper functions:
+You don't need to parse the raw bytes manually. Solana provides helper functions:
 - `load_current_index_checked`: returns the index of the currently executing instruction.
 - `load_instruction_at_checked`: lets you load a specific instruction by its index in a parsed, deserialized format.
 
@@ -101,7 +98,6 @@ When using instruction introspection, it’s essential to enforce strict constra
 
 By applying these constraints, you ensure that your program is responding only to valid and trusted instructions, making your logic more robust, composable, and secure.
 
-Together with transaction atomicity, these checks allow you to build robust, composable logic that can safely interact
-with other programs and instructions within the same transaction.
+Together with transaction atomicity, these checks allow you to build robust, composable logic that can safely interact with other programs and instructions within the same transaction.
 
 > Remember, transactions in Solana are atomic. If any instruction fails, the entire transaction is rolled back.

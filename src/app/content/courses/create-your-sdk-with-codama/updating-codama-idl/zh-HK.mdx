@@ -1,0 +1,186 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 更新你的 Codama IDL
+
+Codama 的訪客系統允許你在創建後以程式化方式轉換和增強你的 IDL。
+
+無論你是從 Anchor IDL 開始還是從零構建，訪客都可以讓你在生成客戶端之前進一步增強和自定義 Codama IDL，例如優化開發者體驗。
+
+<ArticleSection name="Essential Visitors" id="essential-visitors" level="h2" />
+
+訪客遵循訪客模式，遍歷你的 IDL 節點並應用轉換。
+
+讓我們探索一些對於創建生產就緒 SDK 最具影響力的訪客：
+
+### 添加 PDA 訪客
+
+要向你的程序添加 PDA 定義，我們使用 `addPdasVisitor`。當你的 Anchor IDL 不包含 PDA 資訊但你的程序邏輯依賴於特定的程序衍生地址時，這個訪客是必不可少的。
+
+它接受一個物件，其中鍵是程序名稱，值是要添加的 PDA 定義的數組。
+
+```ts
+codama.update(
+    addPdasVisitor({
+        // Add a PDA to the 'token' program.
+        token: [
+            {
+                name: 'associatedToken',
+                seeds: [
+                    variablePdaSeedNode('mint', publicKeyTypeNode()),
+                    constantPdaSeedNode(
+                        publicKeyTypeNode(),
+                        publicKeyValueNode('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+                    ),
+                    variablePdaSeedNode('owner', publicKeyTypeNode()),
+                ],
+            },
+        ],
+        // Add two PDAs to the 'counter' program.
+        counter: [
+            {
+                name: 'counter',
+                seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+            },
+            {
+                name: 'counterConfig',
+                seeds: [variablePdaSeedNode('counter', publicKeyTypeNode())],
+            },
+        ],
+    }),
+);
+```
+
+### 更新帳戶訪客
+
+要修改現有的帳戶定義或移除不需要的帳戶，我們使用 `updateAccountsVisitor`。這個訪客對於將帳戶重命名為符合你的命名規範或添加缺失的 PDA 關聯至關重要。
+
+當 Anchor 生成的帳戶名稱不符合你的客戶端命名偏好，或者當你需要將 PDA 與特定帳戶關聯以改進代碼生成時，應該使用此功能。
+
+```ts
+codama.update(
+    updateAccountsVisitor({
+        vault: {
+            // Rename the 'vault' account to 'safe'.
+            name: 'safe',
+            // Rename the 'owner' field to 'authority'.
+            data: { owner: 'authority' },
+            // Create a new PDA node and link it to this account.
+            seeds: [variablePdaSeedNode('authority', publicKeyTypeNode())],
+        },
+        counter: {
+            // Delete the 'counter' account.
+            delete: true,
+        },
+    }),
+);
+```
+
+### 更新指令訪客
+
+要通過更好的默認值、命名或帳戶配置來增強指令定義，我們使用 `updateInstructionsVisitor`。這是改善生成客戶端的開發者體驗最強大的訪客之一。
+
+當你希望為指令參數提供合理的默認值、重命名指令或帳戶以提高清晰度，或者將帳戶標記為可選以簡化客戶端使用時，應該使用此功能。
+
+```ts
+codama.update(
+    updateInstructionsVisitor({
+        send: {
+            // Rename the 'send' instruction to 'transfer'.
+            name: 'transfer',
+            accounts: {
+                // Rename the 'owner' instruction account to 'authority'.
+                owner: { name: 'authority' },
+                // Set a default value for the 'associatedToken' instruction account.
+                associatedToken: { defaultValue: pdaValueNode('associatedToken') },
+                // Update the signer status of the 'payer' instruction account to `true`.
+                payer: { isSigner: true },
+                // Mark the 'mint' instruction account as optional.
+                mint: { isOptional: true },
+            },
+            arguments: {
+                // Set a default value for the 'amount' instruction argument to 1.
+                amount: { defaultValue: numberValueNode(1) },
+                // Rename the 'decimals' instruction argument to 'mintDecimals'.
+                decimals: { name: 'mintDecimals' },
+            },
+        },
+        burn: {
+            // Delete the 'burn' instruction.
+            delete: true,
+        },
+    }),
+);
+```
+
+### 更新已定義類型訪問器
+
+若要修改自定義類型定義或清理未使用的類型，我們使用`updateDefinedTypesVisitor`。此訪問器有助於在生成的客戶端中維持乾淨且命名良好的類型。
+
+當 Anchor 生成的類型名稱不符合您的首選命名規範，或當您需要從 IDL 中移除已棄用的類型時，應使用此功能。
+
+```ts
+codama.update(
+    updateDefinedTypesVisitor({
+        options: {
+            // Rename the 'options' type to 'configs'.
+            name: 'configs',
+            // Rename the 'sol' field to 'lamports'.
+            data: { sol: 'lamports' },
+        },
+        player: {
+            // Delete the 'player' type.
+            delete: true,
+        },
+    }),
+);
+```
+
+### 更新錯誤訪問器
+
+若要通過更清晰的名稱、訊息或代碼改進錯誤定義，我們使用`updateErrorsVisitor`。此訪問器確保您的錯誤處理具有描述性並遵循一致的模式。
+
+當您希望比 Anchor 生成的錯誤名稱或訊息更具描述性，或需要在您的程式套件中統一錯誤代碼時，應使用此功能。
+
+```ts
+codama.update(
+    updateErrorsVisitor({
+        invalidPda: {
+            // Rename the 'invalidPda' error to 'invalidProgramDerivedAddress'.
+            name: 'invalidProgramDerivedAddress',
+            // Change the error message.
+            message: 'The program-derived address is invalid.',
+            // Change the error code.
+            code: 123,
+        },
+        accountMismatch: {
+            // Delete the 'accountMismatch' error.
+            delete: true,
+        },
+    }),
+);
+```
+
+### 更新程式訪問器
+
+若要修改程式層級的資訊，例如名稱、版本或公鑰，我們使用`updateProgramsVisitor`。此訪問器對於維持準確的程式元數據至關重要。
+
+當您需要更新程式版本、在不同環境中統一程式名稱，或從 IDL 中移除已棄用的程式時，應使用此功能。
+
+```ts
+codama.update(
+    updateProgramsVisitor({
+        splToken: {
+            // Rename the 'splToken' program to 'token'.
+            name: 'token',
+            // Change the program version.
+            version: '3.0.0',
+            // Change the program's public key.
+            publicKey: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+        },
+        splAssociatedToken: {
+            // Delete the 'splAssociatedToken' program.
+            delete: true,
+        },
+    }),
+);
+```

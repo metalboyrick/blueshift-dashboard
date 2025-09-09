@@ -1,0 +1,140 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 利息承載擴展
+
+`InterestBearing` 擴展是一個 `Mint` 賬戶擴展，允許用戶為其代幣應用利率，並在任何時刻檢索包括利息在內的更新總額。
+
+<ArticleSection name="初始化鑄幣賬戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `InterestBearing` 擴展上初始化 `Mint` 賬戶，我們需要使用 `interestBearingMint()` 函數。
+
+以下是如何使用利息承載擴展創建鑄幣的方法：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeInterestBearingMintInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Interest Bearing extension
+const mintLen = getMintLen([ExtensionType.InterestBearingConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Interest Bearing extension
+const initializeMintInterestBearing = createInitializeInterestBearingMintInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    500,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintNonTransferable,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="計算利息" id="calculating-the-interest" level="h2" />
+
+`InterestBearing` 擴展不會生成新代幣；顯示的金額僅通過 `amount_to_ui_amount` 函數包括累積的利息，這使得更改僅僅是視覺上的。
+
+因此，在 `unpacking` `Token` 賬戶以計算利息後，我們可以輕鬆獲取執行計算所需的所有信息以獲得利息金額。
+
+幸運的是，我們甚至不需要這樣做，因為我們可以像這樣使用 `amountToUiAmount` 函數：
+
+```ts
+const tokenInfo = await getAccount(
+    connection,
+    tokenAccount,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+console.log("Token Amount: ", tokenInfo.amount);
+    
+const uiAmount = await amountToUiAmount(
+    connection,
+    keypair,
+    mint.publicKey,
+    tokenInfo.amount,
+    TOKEN_2022_PROGRAM_ID,
+);
+    
+console.log("UI Amount: ", uiAmount);
+```
+
+<ArticleSection name="更新利息承載擴展" id="updating-the-interest-bearing-extension" level="h2" />
+
+通過 `InterestBearing` 擴展，可以更改代幣賬戶產生的利息，這得益於其數據結構的設計：
+
+```rust
+pub struct InterestBearing {
+    pub rate_authority: Pubkey,
+    pub initialization_timestamp: i64,
+    pub pre_update_average_rate: u16,
+    pub last_update_timestamp: i64,
+    pub current_rate: u16,
+}
+```
+
+為此，我們可以像這樣使用 `updateRateInterestBearingMint` 函數：
+
+```ts
+const updateRateInstruction = await createUpdateRateInterestBearingMintInstruction(
+    mint.publicKey,
+    newRateAuthority.publicKey,
+    1000, // updated rate
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+```
+
+如果我們希望更改設置利息的權限，可以使用 `setAuthority` 函數並傳入正確的 `AuthorityType`，像這樣：
+
+```ts
+const setAuthorityInstruction = await createSetAuthorityInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    AuthorityType.InterestRate,
+    newRateAuthority.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+);
+```

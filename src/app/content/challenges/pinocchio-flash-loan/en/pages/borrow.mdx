@@ -195,7 +195,7 @@ for (i, amount) in self.instruction_data.amounts.iter().enumerate() {
     let borrower_token_account = &self.accounts.token_accounts[i * 2 + 1];
 
     // Get the balance of the protocol's token account and add the fee to it so we can save it to the loan account
-    let balance = get_token_amount(&protocol_token_account.try_borrow_data()?);
+    let balance = get_token_amount(&protocol_token_account.try_borrow_data()?)?;
     let balance_with_fee = balance.checked_add(
         amount.checked_mul(self.instruction_data.fee as u64)
             .and_then(|x| x.checked_div(10_000))

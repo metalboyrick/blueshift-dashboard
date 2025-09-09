@@ -1,0 +1,111 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# sBPF Register und Speichermodell
+
+Wenn dein sBPF-Programm ausgeführt wird, arbeitet es mit zwei primären Speichermechanismen: 11 Hochgeschwindigkeitsregistern, die direkt in den Prozessor eingebaut sind, und organisierten Speicherbereichen, die alles andere enthalten.
+
+<ArticleSection name="Register" id="registers" level="h2" />
+
+Register sind wie 11 nummerierte Speicherplätze (`r0` bis `r10`), die direkt in den Prozessor eingebaut sind. Jedes Register enthält einen einzelnen 64-Bit-Wert und bietet sofortigen Zugriff ohne Verzögerungen. Wenn du `add64 r1, r2` ausführst, ruft der Prozessor sofort Werte aus beiden Registern ab und führt die Berechnung durch.
+
+Der Kompromiss ist einfach: du hast insgesamt nur 11 Register zur Verfügung, daher musst du sie strategisch für die Werte nutzen, mit denen du aktiv arbeitest.
+
+sBPF weist jedem Register bestimmte Rollen zu:
+
+| Register | Rolle                | Callee-saved?  | Nutzungshinweise                            |
+|----------|----------------------|----------------|---------------------------------------------|
+| `r0`     | Rückgabewert         | Nein           | Funktionsergebnisse, Syscall-Rückgabewerte  |
+| `r1`     | Eingabepuffer-Zeiger | Nein           | Zeigt bei Eintritt auf 0x400000000          |
+| `r2-r5`  | Scratch/Argumente    | Nein           | Hilfsfunktionsargumente, temporäre Werte    |
+| `r6-r9`  | Allzweck             | Ja             | Muss über Aufrufe hinweg erhalten bleiben   |
+| `r10`    | Frame-Pointer        | Ja, schreibgeschützt | Stack-Basis, kann nicht direkt modifiziert werden |
+
+Register `r6` bis `r9` sind _callee-saved_, was bedeutet, dass ihre Werte über Funktionsaufrufe hinweg bestehen bleiben. Verwende diese für wichtige Daten, die Funktionsaufrufe überleben müssen.
+
+Die übrigen Register (`r0`-`r5`) werden während Syscalls und Funktionsaufrufen überschrieben.
+
+Register `r10` ist "speziell", da es als Frame-Pointer dient, der auf die Basis deines Stack-Bereichs zeigt und schreibgeschützt bleibt. Du greifst auf Stack-Variablen mit negativen Offsets wie `[r10 - 8]` und `[r10 - 16]` zu.
+
+<ArticleSection name="Speicher" id="memory" level="h2" />
+
+Während Register aktiv genutzte Werte enthalten, speichert der Speicher alles andere. sBPF organisiert den Speicher in feste Bereiche mit identischen Layouts in allen Programmen:
+
+| Bereich | Startadresse  | Zweck                   | Größe/Hinweise                                          |
+|---------|---------------|-------------------------|--------------------------------------------------------|
+| Text    | 0x100000000   | Code und schreibgeschützte Daten | Programmbinärdatei                                     |
+| Stack   | 0x200000000   | Lokale Variablen        | 4 KiB pro Stack-Frame, mit einer maximalen Aufruftiefe von 64 |
+| Heap    | 0x300000000   | Dynamische Zuweisung    | 32 KiB                                                 |
+| Input   | 0x400000000   | Programmparameter       | Serialisierte Konten und Anweisungsdaten              |
+
+- Der **Textbereich** enthält deinen ausführbaren Code und schreibgeschützte Daten wie String-Konstanten. Daten, die mit `.quad` Direktiven definiert werden, befinden sich typischerweise hier.
+- Der **Stackbereich** beherbergt lokale Variablen. Mit `r10`, der auf die Stack-Basis zeigt, greifst du auf lokale Variablen mit negativen Offsets zu: `[r10 - 16]`, `[r10 - 24]`, usw.
+- Der **Inputbereich** enthält die Parameter deines Programms. Beim Eintritt zeigt `r1` auf diesen Bereich (`0x400000000`), was dir ermöglicht, serialisierte Kontodaten und Anweisungsparameter zu lesen, die an dein Programm übergeben wurden.
+
+Dieses feste Layout bietet drei wesentliche Vorteile: Sicherheit durch Speicherisolierung zwischen Programmen, Determinismus mit identischen Adressen auf allen Validatoren und Leistung durch Compiler-Optimierungen für bekannte Speicherorte.
+
+> Der Versuch, auf nicht zugeordnete Adressen zuzugreifen, löst einen AccessViolation-Fehler aus und die Transaktion schlägt fehl.
+
+<ArticleSection name="Register und Speicher verwenden" id="using-registers-and-memory" level="h2" />
+
+Hier ist, wie Register und Speicher in der Praxis zusammenarbeiten:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    // On entry: r1 points to input data at 0x400000000
+    
+    ldxdw r0, [r1 + 0]      // Load first 8 bytes from input into r0
+    mov64 r2, 42            // Put 42 in register r2
+    add64 r0, r2            // Add them: r0 = r0 + r2
+    
+    stxdw [r10 - 8], r0     // Store result on stack
+    mov64 r0, 0             // Return success
+    exit
+```
+
+Dieses Programm demonstriert das typische Muster:
+- Verwendet Register `r1` (Input-Zeiger) zum Lesen aus dem Speicher
+- Verwendet Register `r0` und `r2` für Berechnungen
+- Verwendet Register `r10` (Frame-Pointer) für den Zugriff auf den Stack-Speicher
+- Gibt das Ergebnis in Register `r0` zurück
+
+Der Arbeitsablauf folgt einem konsistenten Muster: Daten aus dem Speicher in Register laden, Berechnungen mit Registern durchführen und dann bei Bedarf Ergebnisse zurück in den Speicher schreiben.
+
+### Stack-Nutzung
+
+Der Stack arbeitet mit `r10` als Frame-Pointer, der auf die Basis des aktuellen Stack-Frames zeigt (die höchste Adresse). Lokale Variablen verwenden negative Offsets:
+
+```sbpf
+// Store a value on the stack
+mov64 r0, 42
+stxdw [r10 - 8], r0         // Store at first stack slot
+
+// Load it back
+ldxdw r1, [r10 - 8]         // Load from first stack slot
+```
+
+Stack-Slots sind typischerweise 8 Bytes breit, sodass aufeinanderfolgende Variablen Offsets wie `[r10 - 8]`, `[r10 - 16]`, `[r10 - 24]` usw. verwenden.
+
+### Programmeinstieg und -ausstieg
+
+Die Programmausführung beginnt am Symbol, das mit `.globl` markiert ist (typischerweise entrypoint). Der anfängliche Registerzustand ist minimal und vorhersehbar:
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    // On entry:
+    // r1 = 0x400000000 (input buffer pointer)
+    // r10 = 0x200001000 (0x200000000 stack start + 0x1000 4KiB frame size)
+    // r0, r2-r9 = 0 (all other registers zeroed)
+
+    // Your program logic here
+
+    mov64 r0, 0     // Success code (0 = SUCCESS)
+    exit            // Return to runtime
+```
+
+Das Ausstiegsverhalten hängt von der Aufruftiefe ab:
+- Bei Aufruftiefe 0 beendet der Ausstieg das Programm mit `r0` als Ergebniscode. 
+- Bei tieferen Aufrufebenen wirkt der Ausstieg wie eine Return-Anweisung, stellt vom Aufrufer gespeicherte Register (`r6`-`r9`) und den Frame-Pointer des Aufrufers (`r10`) wieder her, bevor die Ausführung an der Rücksprungadresse fortgesetzt wird.
+
+Die Laufzeitumgebung übernimmt automatisch die Einrichtung und den Abbau durch impliziten Prolog- und Epilog-Code, einschließlich der Konfiguration des anfänglichen Registerzustands und der abschließenden Rückgabeverarbeitung.

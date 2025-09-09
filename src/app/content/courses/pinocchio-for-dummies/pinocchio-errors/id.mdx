@@ -1,0 +1,86 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Error
+
+Jenis error yang jelas dan deskriptif sangat penting dalam program Solana yang dibangun dengan Pinocchio. Error tersebut membuat debugging lebih mudah dan memberikan umpan balik yang bermakna kepada pengguna dan klien yang berinteraksi dengan program Anda.
+
+### Enum PinocchioError
+
+Saat mendefinisikan jenis error kustom di Rust, Anda memiliki beberapa pilihan, seperti `thiserror`, `anyhow`, dan `failure`. Untuk program Pinocchio, `thiserror` adalah pilihan yang diutamakan karena:
+- Memungkinkan Anda menganotasi setiap varian error dengan pesan yang mudah dibaca manusia menggunakan atribut `#[error("...")]`.
+- Secara otomatis mengimplementasikan trait `core::error::Error` dan `Display`, membuat error Anda mudah dicetak dan di-debug.
+- Semua pesan error dan pemformatan diperiksa pada waktu kompilasi, mengurangi risiko masalah saat runtime.
+- Yang terpenting, `thiserror` mendukung lingkungan `no_std` ketika Anda menonaktifkan fitur defaultnya, yang diperlukan untuk program Pinocchio.
+
+Untuk menggunakan thiserror dalam program Pinocchio, tambahkan ke `Cargo.toml` Anda seperti ini:
+
+```
+[dependencies]
+thiserror = { version = "1.0", default-features = false }
+```
+
+Berikut cara Anda dapat mendefinisikan jenis error kustom untuk program Pinocchio Anda:
+
+```rust
+use {
+    num_derive::FromPrimitive,
+    pinocchio::program_error::{ProgramError, ToStr},
+    thiserror::Error,
+};
+
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum PinocchioError {
+    // 0
+    /// Lamport balance below rent-exempt threshold.
+    #[error("Lamport balance below rent-exempt threshold")]
+    NotRentExempt,
+}
+```
+
+Setiap varian dianotasi dengan pesan yang akan ditampilkan ketika error terjadi.
+
+Untuk mengembalikan error kustom Anda dari instruksi Solana, implementasikan `From<PinocchioError>` untuk `ProgramError`:
+
+```rust
+impl From<PinocchioError> for ProgramError {
+    fn from(e: PinocchioError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+```
+
+Ini memungkinkan Anda menggunakan operator `?` dan mengembalikan error kustom Anda dengan mulus.
+
+### Deserialisasi Error dari Nilai Mentah
+
+Jika Anda perlu mengonversi kode error mentah (seperti dari log atau invokasi lintas program) kembali ke enum error Anda, implementasikan `TryFrom<u32>`:
+
+```rust
+impl TryFrom<u32> for PinocchioError {
+    type Error = ProgramError;
+    fn try_from(error: u32) -> Result<Self, Self::Error> {
+        match error {
+            0 => Ok(PinocchioError::NotRentExempt),
+            _ => Err(ProgramError::InvalidArgument),
+        }
+    }
+}
+```
+
+> Ini bersifat opsional, tetapi berguna untuk penanganan error tingkat lanjut dan pengujian.
+
+### Error yang Mudah Dibaca Manusia
+
+Untuk pencatatan log dan debugging, Anda mungkin ingin menyediakan representasi string dari error Anda. Mengimplementasikan trait `ToStr` memungkinkan Anda melakukan ini:
+
+```rust
+impl ToStr for PinocchioError {
+    fn to_str<E>(&self) -> &'static str {
+        match self {
+            PinocchioError::NotRentExempt => "Error: Lamport balance below rent-exempt threshold",
+        }
+    }
+}
+```
+
+> Langkah ini juga opsional, tetapi dapat membuat pelaporan error lebih ramah pengguna.

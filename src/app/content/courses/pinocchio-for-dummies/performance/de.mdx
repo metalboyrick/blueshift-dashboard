@@ -1,0 +1,105 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Performance
+
+Während viele Entwickler Pinocchio wegen seiner feingranularen Kontrolle über Kontofelder nutzen, liegt seine wahre Stärke darin, maximale Leistung zu ermöglichen.
+
+In diesem Abschnitt werden wir praktische Strategien erkunden, um optimale Effizienz in Ihren Solana-Programmen zu erreichen.
+
+<ArticleSection name="Superfluous Checks" id="superfluous-checks" level="h2" />
+
+Entwickler fügen oft zusätzliche Kontoeinschränkungen für mehr Sicherheit hinzu, aber diese können unnötigen Overhead verursachen. Es ist wichtig, zwischen wesentlichen und redundanten Prüfungen zu unterscheiden.
+
+Zum Beispiel sind beim einfachen Lesen aus einem `Token Account` oder `Mint` Deserialisierung und Validierung notwendig. Wenn diese gleichen Konten jedoch später in einem CPI (Cross-Program Invocation) verwendet werden, wird jede Nichtübereinstimmung oder jeder Fehler dazu führen, dass die Anweisung an diesem Punkt fehlschlägt. Daher können vorbeugende Prüfungen redundant sein.
+
+Ähnlich ist die Überprüfung des "Eigentümers" eines Token-Kontos oft überflüssig, besonders wenn das Konto von einer PDA (Program Derived Address) kontrolliert wird. Wenn der Eigentümer falsch ist, wird der CPI aufgrund ungültiger Seeds fehlschlagen. In Fällen, in denen die Übertragung nicht von einer PDA ausgeführt wird, sollten Sie sich auf die Validierung des Empfängers konzentrieren, insbesondere beim Einzahlen in ein von PDA kontrolliertes Konto, da das Interesse des Absenders mit dem des Programms übereinstimmt.
+
+Nehmen wir das Beispiel eines `Escrow`:
+
+...
+
+### Associated Token Program
+
+`Associated Token Accounts` (ATAs) sind praktisch, bringen aber Leistungskosten mit sich. Vermeiden Sie es, ihre Verwendung zu erzwingen, es sei denn, es ist absolut notwendig, und fordern Sie niemals ihre Erstellung innerhalb Ihrer Anweisungslogik. Für die meisten Szenarien fügt das `init-if-needed`Muster vermeidbare Komplexität und Ressourcennutzung hinzu (wie bei Amm-Anweisungen, die von Routern wie Jupiter zusammengesetzt werden).
+
+Wenn dein Programm auf ATAs angewiesen ist, stelle sicher, dass sie extern erstellt werden. Innerhalb deines Programms überprüfe ihre Korrektheit, indem du die erwartete Adresse direkt so ableitest:
+
+```rust
+let (associated_token_account, _) = find_program_address(
+    &[
+        self.accounts.owner.key(),
+        self.accounts.token_program.key(),
+        self.accounts.mint.key(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+```
+
+Durch die Minimierung unnötiger Prüfungen und Kontoanforderungen reduzierst du die Rechenkosten und optimierst die Ausführung deines Programms; so entfaltest du das volle Leistungspotenzial der nativen Solana-Entwicklung.
+
+> Das Hinzufügen von Prüfungen, um den Befehl frühzeitig fehlschlagen zu lassen, hat seine Vorteile, da die verbrauchten Recheneinheiten definitiv niedriger sein werden. Überlege also, ob der Befehl hauptsächlich mit Flags wie `{ skipPreflight: true }` verwendet wird.
+
+<ArticleSection name="Perf Flag" id="perf-flag" level="h2" />
+
+Rusts Feature-Flags bieten eine leistungsstarke Möglichkeit, Code bedingt zu kompilieren und ermöglichen es dir, Funktionalitäten für verschiedene Build-Profile zu aktivieren; wie Entwicklung, Tests oder maximale Leistung in der Produktion.
+
+Dies ist besonders nützlich in Solana-Programmen, wo jede Recheneinheit zählt.
+
+### Einrichten von Feature-Flags
+
+Feature-Flags werden in deiner `Cargo.toml`Datei unter dem Abschnitt `[features]` definiert. Du könntest beispielsweise ein `perf`Flag einrichten, das Leistungsoptimierungen ermöglicht, indem es Logging und zusätzliche Prüfungen deaktiviert:
+
+```
+[features]
+default = ["perf"]
+perf = []
+```
+
+Hier ist das Perf-Feature standardmäßig aktiviert, aber du kannst es beim Bauen oder Testen überschreiben.
+
+### Verwendung von Feature-Flags im Code
+
+Du kannst Rusts bedingte Kompilierungsattribute verwenden, um Code basierend auf dem aktiven Feature ein- oder auszuschließen. Zum Beispiel:
+
+```rust
+pub fn process(ctx: Context<'info>) -> ProgramResult {
+    #[cfg(not(feature = "perf"))]
+    sol_log("Create Class");
+    Self::try_from(ctx)?.execute()
+}
+```
+
+Die meisten Programme geben den Namen der Anweisung als Log zurück, um das Debugging zu erleichtern und sicherzustellen, dass die richtige Anweisung aufgerufen wird.
+
+Dies ist jedoch kostspielig und wird eigentlich nur benötigt, um den Explorer lesbarer zu machen und das Debugging zu verbessern.
+
+```rust
+#[cfg(not(feature = "perf"))]
+if name.len() > MAX_NAME_LEN {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+Ein weiteres Beispiel sind die zuvor besprochenen überflüssigen Prüfungen.
+
+Wenn wir wissen, dass unsere Anweisung ohne diese Prüfungen sicher ist, sollten wir sie nicht als Standard festlegen, sondern stattdessen hinter einem Flag verbergen.
+
+> In diesem Beispiel haben wir ein `perf`Flag erstellt, um anzuzeigen, dass wir das Perf-Flag beim Kompilieren verwenden sollten, wenn wir möchten, dass das Programm so leistungsfähig wie möglich ist.
+
+### Bauen mit verschiedenen Flags
+
+Um dein Programm mit oder ohne die `perf`Funktion zu bauen, verwende:
+
+- Mit Leistungsoptimierungen (Standard):
+
+```
+cargo build-bpf
+```
+
+- Mit zusätzlichen Prüfungen und Logging:
+
+```
+cargo build-bpf --no-default-features
+```
+
+Dieser Ansatz ermöglicht es dir, eine einzige Codebasis zu pflegen, die einfach durch Umschalten eines Feature-Flags für Entwicklungssicherheit oder Produktionsgeschwindigkeit optimiert werden kann.

@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Program Metaplex Token Metadata
+
+Program Metaplex Token Metadata mengatasi keterbatasan mendasar dalam program SPL-Token dengan memungkinkan penambahan data deskriptif yang kaya pada token yang bersifat fungible maupun non-fungible.
+
+Meskipun program SPL-Token secara efisien menangani mekanisme inti token seperti kepemilikan dan pasokan, token tanpa metadata muncul di dompet dan explorer sebagai kunci publik anonim.
+
+Metaplex mengubah entri blockchain dasar ini menjadi aset digital yang bermakna dengan menyediakan informasi kontekstual yang dibutuhkan oleh aplikasi dan pengguna.
+
+<ArticleSection name="Metadata Account" id="metadata-account" level="h2" />
+
+Akun `Metadata` berfungsi sebagai lapisan deskriptif yang memberikan konteks dan kegunaan pada token blockchain. Struktur akun ini menggunakan sistem Program Derived Address Solana untuk menciptakan hubungan yang dapat diandalkan antara setiap token dan informasi terkaitnya.
+
+Pembuatan alamat deterministik memastikan bahwa setiap akun mint memiliki tepat satu akun metadata yang sesuai, sehingga menetapkan kepemilikan data yang jelas dan mencegah konflik.
+
+Akun `Metadata` mendapatkan alamatnya menggunakan proses deterministik yang menggabungkan nilai-nilai seed tertentu dengan kunci publik akun mint:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+
+let (metadata, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+    ], 
+    &ID  
+);
+```
+
+Akun `Metadata` menyimpan informasi komprehensif yang jauh melampaui pengidentifikasi token dasar.
+
+Sistem verifikasi kreator mempertahankan daftar kreator token, masing-masing dengan atribut terverifikasi yang memberikan bukti kriptografis otorisasi kreator yang otentik. Verifikasi ini mencegah peniruan dan membangun pelacakan asal-usul yang dapat diandalkan untuk aset digital.
+
+Sistem royalti terintegrasi memungkinkan distribusi pendapatan otomatis melalui atribut pembagian yang ditetapkan untuk setiap kreator. Marketplace dapat secara terprogram mereferensikan persentase ini untuk mendistribusikan hasil penjualan sekunder sesuai dengan perjanjian yang telah ditentukan sebelumnya, menghilangkan perhitungan manual dan ketergantungan kepercayaan.
+
+Ini menciptakan model ekonomi berkelanjutan di mana kreator terus mendapatkan penghasilan dari karya mereka melampaui penjualan awal.
+
+Program Token Metadata berhasil menjembatani kesenjangan antara data blockchain mentah dan aset digital yang dapat diakses pengguna. Dengan memperkaya akun mint dengan informasi kontekstual yang kaya, program ini memungkinkan aplikasi untuk menampilkan, mengkategorikan, dan berinteraksi dengan token dengan cara yang bermakna.
+
+Lapisan metadata ini menyediakan fondasi bagi ekosistem aset digital yang beragam yang ada di Solana saat ini.
+
+<ArticleSection name="Master Edition Account" id="master-edition-account" level="h2" />
+
+Meskipun akun Metadata efektif melayani token fungible dan non-fungible, memastikan karakteristik NFT yang otentik memerlukan mekanisme kontrol tambahan.
+
+Akun `Master Edition` mengatasi kebutuhan ini sebagai PDA khusus yang mengatur manajemen otoritas token. Akun ini dibuat hanya setelah program Token Metadata memverifikasi bahwa properti token non-fungible yang tepat telah ditetapkan.
+
+Sistem Master Edition menggunakan pendekatan canggih untuk manajemen otoritas. Alih-alih menghancurkan otoritas mint secara permanen, program ini mentransfer otoritas mint dan freeze ke PDA Master Edition. Desain ini memberikan keamanan dan fungsionalitas yang lebih baik dibandingkan dengan otoritas yang dibatalkan secara permanen sambil mempertahankan kontrol ketat atas pembuatan dan pengelolaan token.
+
+> Baca [FAQ](https://developers.metaplex.com/token-metadata/faq#why-are-the-mint-and-freeze-authorities-transferred-to-the-edition-pda) untuk memahami alasan di balik pilihan ini.
+
+Seeds dari akun `Master Edition` adalah sebagai berikut:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+const EDITION: &str = "edition";
+
+let (master_edition, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+        EDITION.as_bytes(),
+    ], 
+    &ID  
+);
+```
+
+<ArticleSection name="Programmable NFTs" id="programmable-nfts" level="h2" />
+
+Programmable NFTs (pNFTs) merepresentasikan standar token tingkat lanjut yang menerapkan perilaku dan batasan yang dapat disesuaikan pada tingkat protokol.
+
+Kelas aset ini mengatasi keterbatasan NFT tradisional dengan memungkinkan kreator untuk menentukan aturan siklus hidup spesifik yang secara otomatis dieksekusi selama interaksi token, memastikan kepatuhan bagi kreator tanpa bergantung pada mekanisme penegakan eksternal.
+
+Arsitektur penegakan beroperasi melalui sistem akun token yang dibekukan. Ketika NFT menjadi dapat diprogram, akun token terkaitnya tetap dibekukan secara permanen, mengharuskan semua operasi dirutekan melalui program Token Metadata.
+
+Desain ini menciptakan titik pemeriksaan validasi wajib di mana aturan diverifikasi sebelum tindakan apa pun dapat dilanjutkan, sehingga tidak mungkin untuk melewati pembatasan yang ditentukan oleh kreator.
+
+Aturan yang ditentukan kreator disimpan dalam akun `RuleSet` yang terhubung ke akun `Token Record`, jenis akun baru yang terkait dengan mint yang menandakan status NFT yang dapat diprogram.
+
+Akun `Token Record` mendapatkan alamatnya menggunakan seed khusus yang menghubungkannya ke akun mint dan token:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+const TOKEN_RECORD_SEED: &str = "token_record";
+
+let (master_edition, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+        TOKEN_RECORD_SEED.as_bytes(),
+        token.as_ref(),
+    ], 
+    &ID  
+);
+```
+
+`RuleSets` ini memungkinkan logika kondisional yang canggih termasuk daftar izin marketplace yang menghormati pembayaran royalti, persyaratan multi-signature untuk transfer, pembatasan berbasis waktu pada operasi, atau alur kerja persetujuan yang kompleks.
+
+Program [Token Auth Rules](https://developers.metaplex.com/token-auth-rules) mengelola akun `RuleSet` ini dan menangani logika validasinya, menyediakan kerangka kerja yang fleksibel untuk mengimplementasikan mekanisme tata kelola khusus.
+
+Interaksi pengembang dengan pNFT terjadi melalui program Token Metadata daripada program SPL-Token secara langsung. Program ini menyediakan instruksi yang efisien seperti `Create` dan `Update` yang menggantikan operasi tradisional seperti `CreateMetadataAccount` dan `UpdateMetadata`.
+
+Setiap instruksi memerlukan parameter akun `authorization_rules` yang mereferensikan `RuleSet` yang berlaku, yang dapat ditemukan melalui derivasi on-chain atau melalui Metaplex Read API.
+
+Kerangka kerja yang dapat diprogram ini memungkinkan kreator untuk mengimplementasikan model ekonomi dan struktur tata kelola yang bernuansa dengan penegakan yang terjamin.
+
+Baik mengimplementasikan transfer bersyarat, struktur royalti dinamis, atau persyaratan kepemilikan yang kompleks, pNFT memastikan bahwa semua perilaku dieksekusi secara otomatis di tingkat protokol tanpa bergantung pada kerja sama marketplace atau kepatuhan sukarela pengguna.
+
+> Untuk mempelajari lebih lanjut tentang cara menggunakan program `Token Metadata`, lihat [dokumentasi resmi](https://developers.metaplex.com/token-metadata)

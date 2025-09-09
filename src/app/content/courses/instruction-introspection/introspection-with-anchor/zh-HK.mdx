@@ -1,0 +1,80 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 使用 Anchor 進行指令內省
+
+Anchor 並沒有內建的輔助工具來處理 `Instruction` sysvar，但所有來自 `solana_program` crate 的類型和函數在 Anchor 中都被固有地支援。
+
+要在 Anchor 中使用指令內省，您需要將 `solana_program` crate 添加到您的項目中：
+
+```sh
+cargo add solana-program
+```
+
+添加 crate 後，您可以通過導入它們來訪問所需的函數：
+
+```rust
+use solana_program::sysvar::instructions::{
+    self,
+    load_current_index_checked, 
+    load_instruction_at_checked
+}; 
+```
+
+<ArticleSection name="如何使用內省" id="how-to-use-introspection" level="h2" />
+
+如介紹中所述，指令內省通過從 `Instruction` sysvar 帳戶反序列化數據來提供有關交易中指令的詳細信息。
+
+即使 `load_instruction_at_checked` 函數驗證了被反序列化的帳戶是正確的，最好在您的帳戶結構中添加一個額外的檢查：
+
+```rust
+#[account(address = instructions::ID)]
+/// CHECK: InstructionsSysvar account
+instructions: UncheckedAccount<'info>,
+```
+
+現在您可以開始使用指令內省了。
+
+首先，使用 `load_current_index_checked` 函數檢查當前指令的索引：
+
+```rust
+// Check the index of the currently executing instruction. This could be in a different position than [0]).
+let index = load_current_index_checked(&ctx.accounts.instructions.to_account_info())?;
+```
+
+接下來，您可以使用 `load_instruction_at_checked` 檢查相對索引的指令。在這裡，我們將檢查當前指令的下一個指令：
+
+```rust
+// Load the next instruction to check its input.
+let ix = load_instruction_at_checked(index as usize + 1, &ctx.accounts.instructions.to_account_info())?;
+```
+
+在進入下一步之前，重要的是要考慮哪些信息對防止惡意攻擊至關重要。
+
+我們通常從檢查被調用的程序是否是預期的程序開始。在此示例中，我們正在內省同一程序的另一個指令：
+
+```rust
+require_keys_eq!(ix.program_id, ID, EscrowError::InvalidProgram);
+```
+
+接下來，檢查指令是否是您預期的指令。為此，將指令的識別符與預期的識別符進行比較。在此情況下，由於它是另一個 Anchor 指令，您可以這樣做：
+
+```rust
+require!(ix.data[0..8].eq(instruction::TakeEnd::DISCRIMINATOR.as_slice()), EscrowError::InvalidIx);
+```
+
+> Anchor 透過在指令上直接提供 `Discriminator` trait `anchor_lang::Discriminator`，使這個過程變得更簡單。
+
+然後，您可以根據被檢查指令的邏輯執行更多特定於程式的檢查。
+
+在此範例中，我們檢查指令數據（例如一個數量）是否正確。指令數據總是在識別符之後進行反序列化，因此您可以這樣做：
+
+```rust
+require!(ix.data[8..16].eq(&escrow.take_amount.to_le_bytes()), EscrowError::InvalidAmount);
+```
+
+最後，檢查內省指令中存在的帳戶。此步驟需要您了解 `Account` 結構的確切結構，因為您將需要在特定索引處請求帳戶的數據或公鑰：
+
+```rust
+let maker_ata = get_associated_token_address(&ctx.accounts.maker.key(), &escrow.mint_b);
+require_keys_eq!(ix.accounts.get(3).unwrap().pubkey, maker_ata, EscrowError::InvalidMakerATA);
+```

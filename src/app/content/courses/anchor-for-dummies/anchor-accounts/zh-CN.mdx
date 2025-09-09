@@ -154,13 +154,63 @@ pub account: Account<'info, CustomAccountType>,
 pub account: Account<'info, CustomAccountType>,
 ```
 
+### 惰性账户
+
+从Anchor 0.31.0开始，`LazyAccount`提供了一种更高效的方式来读取账户数据。与将整个账户反序列化到堆栈上的标准`Account`类型不同，`LazyAccount`是一个只读的、堆分配的账户，仅使用24字节的堆栈内存，并允许您选择性地加载特定字段。
+
+首先在您的`Cargo.toml`中启用该功能：
+
+```
+anchor-lang = { version = "0.31.1", features = ["lazy-account"] }
+```
+
+现在我们可以像这样使用它：
+
+```rust
+#[derive(Accounts)]
+pub struct MyInstruction<'info> {
+    pub account: LazyAccount<'info, CustomAccountType>,
+}
+
+#[account(discriminator = 1)]
+pub struct CustomAccountType {
+    pub balance: u64,
+    pub metadata: String,
+}
+
+pub fn handler(ctx: Context<MyInstruction>) -> Result<()> {
+    // Load specific field
+    let balance = ctx.accounts.account.get_balance()?;
+    let metadata = ctx.accounts.account.get_metadata()?;
+    
+    Ok(())
+}
+```
+
+> `LazyAccount`是只读的。尝试修改字段会导致panic，因为您操作的是引用，而不是堆栈分配的数据。
+
+当CPI修改账户时，缓存的值会变得过时。因此，您需要使用`unload()`函数来刷新：
+
+```rust
+// Load the initial value
+let initial_value = ctx.accounts.my_account.load_field()?;
+
+// Do CPI...
+
+// We still have a reference to the account from `initial_value`, drop it before `unload`
+drop(initial_value);
+
+// Load the updated value
+let updated_value = ctx.accounts.my_account.unload()?.load_field()?;
+```
+
 <ArticleSection name="Token Accounts" id="token-program" level="h2" />
 
 Token Program 是 Solana Program Library (SPL) 的一部分，是用于铸造和转移任何非原生 SOL 资产的内置工具包。它提供了创建代币、铸造新供应、转移余额、销毁、冻结等指令。
 
 该程序拥有两种关键账户类型：
-- **铸造账户**：存储特定代币的元数据：供应量、小数位、铸造权限、冻结权限等。
-- **代币账户**：为特定所有者持有该铸造代币的余额。只有所有者可以减少余额（转移、销毁等），但任何人都可以向账户发送代币，从而增加其余额。
+- **铸造账户  (Mint Account)**：存储特定代币的元数据：供应量、小数位、铸造权限、冻结权限等。
+- **代币账户  (Token Account)**：为特定所有者持有该铸造代币的余额。只有所有者可以减少余额（转移、销毁等），但任何人都可以向账户发送代币，从而增加其余额。
 
 ### Anchor 中的 Token 账户
 
@@ -351,7 +401,7 @@ pub struct InstructionAccounts<'info> {
 }
 ```
 
-<ArticleSection name="Custom Account Validation" id="custom-account-validation" level="h2" />
+<ArticleSection name="自定义账户验证" id="custom-account-validation" level="h2" />
 
 Anchor 提供了一套强大的约束，可以直接应用在 `#[account]` 属性中。这些约束有助于确保账户的有效性，并在指令逻辑运行之前，在账户级别强制执行程序规则。以下是可用的约束：
 
@@ -435,3 +485,87 @@ pub account: Account<'info, CustomAccountType>,
 ```
 
 这些约束可以组合起来，为您的账户创建强大的验证规则。通过在账户级别进行验证，您可以将安全检查与账户定义紧密结合，避免在指令逻辑中散布 `require!()` 调用。
+
+<ArticleSection name="剩余账户" id="remaining-accounts" level="h2" />
+
+在编写程序时，指令账户的固定结构有时无法提供程序所需的灵活性。
+
+剩余账户通过允许您传递超出定义指令结构的额外账户，解决了这一问题，从而根据运行时条件实现动态行为。
+
+### 实现指南
+
+传统的指令定义要求您明确指定将使用哪些账户：
+
+```rust
+#[derive(Accounts)]
+pub struct Transfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+```
+
+这对于单一操作非常有效，但如果您希望在一个指令中执行多次代币转账，该怎么办？您需要多次调用指令，这会增加交易成本和复杂性。
+
+剩余账户允许您传递不属于固定指令结构的额外账户，这意味着您的程序可以遍历这些账户并动态应用重复逻辑。
+
+与其为每次转账单独定义指令，您可以设计一个指令来处理 "N" 次转账：
+
+```rust
+#[derive(Accounts)]
+pub struct BatchTransfer<'info> {
+    pub from: Account<'info, TokenAccount>,
+    pub to: Account<'info, TokenAccount>,
+    pub authority: Signer<'info>,
+}
+
+pub fn batch_transfer(ctx: Context<BatchTransfer>, amounts: Vec<u64>) -> Result<()> {
+    // Handle the first transfer using fixed accounts
+    transfer_tokens(&ctx.accounts.from, &ctx.accounts.to, amounts[0])?;
+    
+    let remaining_accounts = &ctx.remaining_accounts;
+
+    // CRITICAL: Validate remaining accounts schema
+    // For batch transfers, we expect pairs of accounts
+    require!(
+        remaining_accounts.len() % 2 == 0,
+        TransferError::InvalidRemainingAccountsSchema
+    );
+
+    // Process remaining accounts in groups of 2 (from_account, to_account)
+    for (i, chunk) in remaining_accounts.chunks(2).enumerate() {
+        let from_account = &chunk[0];
+        let to_account = &chunk[1];
+        let amount = amounts[i + 1];
+        
+        // Apply the same transfer logic to remaining accounts
+        transfer_tokens(from_account, to_account, amount)?;
+    }
+    
+    Ok(())
+}
+```
+
+批量处理指令意味着：
+- 更小的指令大小：重复的账户和数据不需要包含在内
+- 更高的效率：每次 CPI 消耗 1000 CU，这意味着使用您程序的用户如果需要执行批量指令，只需调用一次，而不是调用三次
+
+> 剩余账户作为 `UncheckedAccount` 传递，这意味着 Anchor 不会对其进行任何验证。始终验证 `RemainingAccountSchema` 和底层账户。
+
+### 客户端实现
+
+我们可以通过 Anchor SDK 轻松传递剩余账户，一旦我们执行 `anchor build`。由于这些是“原始”账户，我们需要指定它们是否需要作为签名者和/或可变账户传递，如下所示：
+
+```ts
+await program.methods.someMethod().accounts({
+  // some accounts
+})
+.remainingAccounts([
+  {
+    isSigner: false,
+    isWritable: true,
+    pubkey: new Pubkey().default
+  }
+])
+.rpc();
+```

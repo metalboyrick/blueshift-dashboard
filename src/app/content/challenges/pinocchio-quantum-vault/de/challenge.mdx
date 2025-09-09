@@ -1,0 +1,91 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Der Quantum Vault
+
+![Pinocchio Quantum Vault Challenge](/graphics/challenge-banners/pinocchio-quantum-vault.png)
+
+Ein Vault ist ein grundlegender Baustein im DeFi-Bereich, der Nutzern eine sichere Möglichkeit bietet, ihre Assets zu speichern.
+
+In dieser Challenge werden wir einen Vault erstellen, der Winternitz-Signaturen zur Transaktionsverifizierung verwendet. Dies ist besonders interessant, da die Winternitz-Signatur die erste Post-Quantum-Signatur ist, die in Solana integriert wurde.
+
+> Wenn du mit Winternitz-Signaturen nicht vertraut bist, beginne mit dem Lesen von [Winternitz-Signatur auf Solana](/de/courses/winternitz-signatures-on-solana), um die Kernkonzepte und die zugrundeliegende Kryptographie zu verstehen.
+
+In dieser Challenge werden wir den einfachen Lamport-Vault, den wir in der [Pinocchio Vault Challenge](/de/challenges/pinocchio-vault) erstellt haben, aktualisieren, um Winternitz-Signaturen als Verifizierungsmethode für Transaktionen zu ermöglichen.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Bevor du beginnst, stelle sicher, dass Rust und Pinocchio installiert sind. Führe dann Folgendes in deinem Terminal aus:
+
+```bash
+# create workspace
+cargo new blueshift-pinocchio-quantum-vault --lib --edition 2021
+cd blueshift-pinocchio-quantum-vault
+```
+
+Füge `pinocchio`, `pinocchio-system`, `solana-nostd-sha256` und `solana-winternitz` hinzu:
+
+```bash
+cargo add pinocchio pinocchio-system solana-nostd-sha256 solana-winternitz
+```
+
+Deklariere die Crate-Typen in `Cargo.toml`, um Deployment-Artefakte in `target/deploy` zu generieren:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Du bist jetzt bereit, dein Quantum-Vault-Programm zu schreiben.
+
+<ArticleSection name="Vorlage" id="template" level="h2" />
+
+Diesmal werden wir das Programm in kleine, fokussierte Module aufteilen, anstatt alles in `lib.rs` zu platzieren. Die Ordnerstruktur wird ungefähr so aussehen:
+
+```
+src
+├── instructions
+│       ├── close.rs
+│       ├── open.rs
+│       ├── mod.rs
+│       └── split.rs
+└── lib.rs
+```
+
+**Hinweis**: Denke daran, die Programm-ID in `22222222222222222222222222222222222222222222` zu ändern, da wir diese im Hintergrund verwenden, um dein Programm zu testen.
+
+Der Einstiegspunkt in `lib.rs` ist sehr ähnlich zu dem, was wir im [Einführungskurs zu Pinocchio](/de/courses/introduction-to-pinocchio) behandelt haben.
+
+```rust
+pub mod instructions;
+use instructions::*;
+
+use pinocchio::{
+    account_info::AccountInfo, program_entrypoint, program_error::ProgramError,
+    pubkey::Pubkey, ProgramResult,
+};
+
+program_entrypoint!(process_instruction);
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee, 
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7, 
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((OpenVault::DISCRIMINATOR, data)) => OpenVault::try_from((data, accounts))?.process(),
+        Some((SplitVault::DISCRIMINATOR, data)) => SplitVault::try_from((data, accounts))?.process(),
+        Some((CloseVault::DISCRIMINATOR, data)) => CloseVault::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+Wir benötigen hierfür kein State-Setup, also werden wir direkt zur Erstellung unserer Anweisungen übergehen.

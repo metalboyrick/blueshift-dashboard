@@ -1,0 +1,105 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Performa
+
+Meskipun banyak pengembang beralih ke Pinocchio untuk kontrol yang lebih detail atas bidang akun, kekuatan sebenarnya terletak pada kemampuannya untuk memungkinkan performa maksimal. 
+
+Dalam bagian ini, kita akan mengeksplorasi strategi praktis untuk mencapai efisiensi optimal dalam program Solana Anda.
+
+<ArticleSection name="Superfluous Checks" id="superfluous-checks" level="h2" />
+
+Pengembang sering menambahkan batasan akun tambahan untuk keamanan, tetapi ini dapat menimbulkan overhead yang tidak perlu. Penting untuk membedakan antara pemeriksaan yang esensial dan yang berlebihan.
+
+Misalnya, ketika hanya membaca dari `Token Account` atau `Mint`, deserialisasi dan validasi diperlukan. Tetapi jika akun yang sama ini kemudian digunakan dalam CPI (Cross-Program Invocation), ketidakcocokan atau kesalahan akan menyebabkan instruksi gagal pada titik tersebut. Dengan demikian, pemeriksaan preventif bisa menjadi berlebihan.
+
+Demikian pula, memverifikasi "owner" dari Token Account sering kali berlebihan; terutama jika akun dikendalikan oleh PDA (Program Derived Address). Jika pemiliknya salah, CPI akan gagal karena seed yang tidak valid. Dalam kasus di mana transfer tidak dieksekusi oleh PDA, Anda harus fokus pada validasi penerima, terutama saat melakukan deposit ke akun yang dikendalikan PDA karena kepentingan pengirim selaras dengan kepentingan program.
+
+Mari kita ambil contoh `Escrow`:
+
+...
+
+### Associated Token Program
+
+`Associated Token Accounts` (ATA) memang nyaman tetapi memiliki biaya performa. Hindari memaksakan penggunaannya kecuali benar-benar diperlukan, dan jangan pernah mewajibkan pembuatannya dalam logika instruksi Anda. Untuk sebagian besar skenario, pola `init-if-needed` menambahkan kompleksitas dan penggunaan sumber daya yang dapat dihindari (seperti dalam instruksi Amm yang disusun oleh router seperti Jupiter).
+
+Jika program Anda bergantung pada ATA, pastikan mereka dibuat secara eksternal. Di dalam program Anda, verifikasi kebenaran mereka dengan menurunkan alamat yang diharapkan secara langsung seperti ini:
+
+```rust
+let (associated_token_account, _) = find_program_address(
+    &[
+        self.accounts.owner.key(),
+        self.accounts.token_program.key(),
+        self.accounts.mint.key(),
+    ],
+    &pinocchio_associated_token_account::ID,
+);
+```
+
+Dengan meminimalkan pemeriksaan yang tidak perlu dan persyaratan akun, Anda mengurangi biaya komputasi dan merampingkan eksekusi program Anda; membuka potensi performa penuh dari pengembangan solana native.
+
+> Menambahkan pemeriksaan agar instruksi gagal lebih awal memiliki keuntungan, karena unit komputasi yang dikonsumsi pasti akan lebih rendah. Jadi pertimbangkan apakah instruksi tersebut akan terutama digunakan dengan flag seperti `{ skipPreflight: true }`.
+
+<ArticleSection name="Perf Flag" id="perf-flag" level="h2" />
+
+Flag fitur Rust menyediakan cara yang ampuh untuk mengompilasi kode secara kondisional, memungkinkan Anda untuk mengaktifkan atau menonaktifkan fungsionalitas untuk profil build yang berbeda; seperti pengembangan, pengujian, atau performa maksimum dalam produksi.
+
+Ini sangat berguna dalam program Solana, di mana setiap unit komputasi sangat berharga.
+
+### Menyiapkan Flag Fitur
+
+Flag fitur didefinisikan dalam file `Cargo.toml` Anda di bawah bagian `[features]`. Misalnya, Anda mungkin ingin flag `perf` yang mengaktifkan optimasi performa dengan menonaktifkan logging dan pemeriksaan tambahan:
+
+```
+[features]
+default = ["perf"]
+perf = []
+```
+
+Di sini, fitur perf diaktifkan secara default, tetapi Anda dapat menggantinya saat membangun atau menguji.
+
+### Menggunakan Flag Fitur dalam Kode
+
+Anda dapat menggunakan atribut kompilasi kondisional Rust untuk menyertakan atau mengecualikan kode berdasarkan fitur yang aktif. Contohnya:
+
+```rust
+pub fn process(ctx: Context<'info>) -> ProgramResult {
+    #[cfg(not(feature = "perf"))]
+    sol_log("Create Class");
+    Self::try_from(ctx)?.execute()
+}
+```
+
+Kebanyakan program mengembalikan nama instruksi sebagai log untuk memudahkan debugging dan memastikan bahwa instruksi yang benar dipanggil.
+
+Namun, ini mahal dan sebenarnya tidak diperlukan kecuali untuk membuat explorer lebih mudah dibaca dan untuk meningkatkan debugging.
+
+```rust
+#[cfg(not(feature = "perf"))]
+if name.len() > MAX_NAME_LEN {
+    return Err(ProgramError::InvalidArgument);
+}
+```
+
+Contoh lain adalah pemeriksaan berlebihan yang telah dibahas sebelumnya.
+
+Jika kita tahu bahwa instruksi kita aman tanpa pemeriksaan ini, kita sebaiknya tidak menjadikannya default, tetapi menyembunyikannya di balik flag.
+
+> Dalam contoh ini, kita membuat flag `perf` untuk menunjukkan bahwa, jika kita ingin program berjalan seefisien mungkin, kita harus menggunakan flag perf saat mengompilasi program tersebut.
+
+### Membangun dengan Flag Berbeda
+
+Untuk membangun program Anda dengan atau tanpa fitur `perf`, gunakan:
+
+- Dengan optimasi performa (default):
+
+```
+cargo build-bpf
+```
+
+- Dengan pemeriksaan tambahan dan logging:
+
+```
+cargo build-bpf --no-default-features
+```
+
+Pendekatan ini memungkinkan Anda untuk mempertahankan satu basis kode yang dapat disesuaikan untuk keamanan pengembangan atau kecepatan produksi hanya dengan mengubah flag fitur.

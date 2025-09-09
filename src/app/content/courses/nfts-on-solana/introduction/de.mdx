@@ -1,0 +1,90 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# NFTs auf Solana
+
+![NFTs auf Solana](/graphics/course-banners/nfts-on-solana.png)
+
+Non-Fungible Tokens (NFTs) sind digitale Token mit spezifischen Eigenschaften, die sie von fungiblen Token wie Kryptowährungen unterscheiden.
+
+Im Gegensatz zu fungiblen Token, bei denen jede Einheit identisch und austauschbar ist, repräsentieren NFTs einzigartige, unteilbare digitale Vermögenswerte, die nicht repliziert oder unterteilt werden können.
+
+<ArticleSection name="NFT-Eigenschaften" id="nft-properties" level="h2" />
+
+Damit ein Token als echter NFT gilt, muss er diese wesentlichen Eigenschaften besitzen:
+- Unteilbarkeit: Enthält keine Dezimalstellen, sodass man keine Bruchteile wie 0,1 eines NFTs besitzen kann
+- Einzigartigkeit: Hat eine Versorgung von genau 1, was garantiert, dass nur eine Instanz existiert
+- Feste Versorgung: Es existiert keine Prägeautorität, die verhindert, dass zusätzliche Token erstellt werden können
+- Gruppierbarkeit: Kann in Sammlungen organisiert werden, um ähnliche Token zu gruppieren, während die individuelle Einzigartigkeit erhalten bleibt
+- Umfangreiche Metadaten: Enthält lesbare Daten wie Namen, Beschreibungen, Bilder und andere Attribute zur Anzeige in Explorern und Wallets
+
+Aus diesem Grund umfasst die Erstellung eines NFT die Implementierung eines Smart Contracts oder einer Schnittstelle, die:
+- Ein Mint-Konto mit null Dezimalstellen erstellt
+- Einen einzelnen Token an die Wallet des Besitzers prägt
+- Die Prägeautorität widerruft, um zukünftiges Prägen zu verhindern
+- Metadaten-Konten verknüpft, die die beschreibenden Informationen des Tokens enthalten
+
+Etablierte Protokolle vereinfachen diese Komplexität erheblich. Solana-Entwickler verwenden häufig Programme wie `mpl-token-metadata` oder `mpl-core` von [Metaplex](https://metaplex.com), die die technischen Implementierungsdetails übernehmen und standardisierte Schnittstellen für die Erstellung und Verwaltung von NFTs bereitstellen.
+
+<ArticleSection name="Warum Non-Fungible Tokens wichtig sind" id="why-non-fungible-tokens-matter" level="h2" />
+
+NFTs stellen die erste technische Lösung dar, die nachweisbares digitales Eigentum ohne vertrauenswürdige Vermittler ermöglicht. Vor NFTs existierten digitale Vermögenswerte ausschließlich innerhalb zentralisierter Plattformen, wo das Eigentum willkürlich widerrufen werden konnte.
+
+> NFTs etablieren Eigentum, das unabhängig auf Protokollebene funktioniert und echte digitale Eigentumsrechte schafft.
+
+### Vorteile gegenüber physischen Vermögenswerten
+
+NFTs verbessern den Besitz physischer Vermögenswerte durch programmierbare Logik, die auf vorbestimmte Bedingungen reagiert.
+
+Smart Contracts können automatisch Lizenzgebühren an Ersteller auszahlen, wenn ihre NFTs auf Sekundärmärkten verkauft werden.
+
+Übertragungsbeschränkungen können unbefugte Bewegungen sensibler Assets verhindern, während zeitbasierte Mechanismen Funktionen freischalten oder Eigenschaften basierend auf bestimmten Daten oder Bedingungen ändern können.
+
+Einige NFTs aktualisieren sogar ihre visuellen oder funktionalen Eigenschaften dynamisch und reagieren auf externe Datenfeeds oder Benutzerinteraktionen.
+
+### Neue Wirtschaftsmodelle
+
+NFTs erschließen wirtschaftliche Strukturen, die traditionelle Systeme nicht unterstützen können.
+
+Die Schöpferökonomie verändert, wie Künstler Einkommen generieren, indem sie dauerhafte Lizenzgebührenströme etablieren—jedes Mal, wenn ein NFT den Besitzer wechselt, erhält der ursprüngliche Ersteller automatisch einen Prozentsatz des Verkaufspreises.
+
+Dies schafft nachhaltige Einkommensmodelle, die weit über den ersten Verkauf hinausgehen.
+
+Gemeinschaftseigentum entsteht durch kollektive NFT-Governance, bei der Gruppen gemeinsam wertvolle digitale Assets besitzen und durch dezentrale Abstimmungsmechanismen Entscheidungen über deren Nutzung treffen können.
+
+Gleichzeitig bietet die digitale Arbeitsvergütung neue Rahmenbedingungen für die Belohnung von Beiträgen zu Online-Communities, kreativen Kollaborationen und der Entwicklung virtueller Welten auf eine Weise, die traditionelle Beschäftigungsstrukturen nicht bieten können.
+
+### Komponierbarkeit und Interoperabilität
+
+NFTs erreichen vollständige Komponierbarkeit über Anwendungen und Protokolle hinweg und schaffen beispiellose Flexibilität bei der Nutzung digitaler Assets.
+
+Ein einzelnes Spielgegenstand-NFT kann gleichzeitig in mehreren Spielen mit unterschiedlichen Mechaniken funktionieren, in digitalen Galerien und virtuellen Welten angezeigt werden, als Sicherheit in DeFi-Protokollen für Kredite oder Yield Farming dienen und durch Smart-Contract-Integrationen mit anderen Protokollen interagieren.
+
+Diese Interoperabilität funktioniert ohne Genehmigung des ursprünglichen Erstellers und etabliert wirklich offene digitale Wirtschaftssysteme, in denen Assets durch Netzwerkeffekte und plattformübergreifenden Nutzen anstatt durch plattformspezifische Einschränkungen an Wert gewinnen.
+
+<ArticleSection name="Collections" id="collections" level="h2" />
+
+Eine Kollektion repräsentiert eine Gruppe von NFTs, die gemeinsame Attribute, Themen oder Herkunft teilen und verifizierbare On-Chain-Beziehungen zwischen verschiedenen Assets herstellen.
+
+Da theoretisch jeder ein NFT erstellen und fälschlicherweise die Zugehörigkeit zu einer prestigeträchtigen Kollektion behaupten könnte, verfügen Kollektionen über eine Autorität (typischerweise der ursprüngliche Ersteller oder eine autorisierte Entität), die überprüfen kann, welche NFTs rechtmäßig zur Kollektion gehören.
+
+Dieser Verifizierungsprozess erzeugt einen unveränderlichen On-Chain-Datensatz, der in den Metadaten des NFTs gespeichert wird und eine authentische Kollektionszugehörigkeit etabliert, die nach der Erstellung nicht gefälscht oder manipuliert werden kann.
+
+Kollektionen erfüllen mehrere kritische Funktionen im NFT-Ökosystem. Sie ermöglichen effizientes Entdecken und Durchsuchen verwandter Assets, bieten Markenidentität und thematische Kohärenz für Ersteller, etablieren Herkunfts- und Authentizitätsverifizierung und schaffen Rahmenbedingungen für Community-Governance und gemeinsame Erfahrungen unter den Besitzern von Kollektions-Assets.
+
+Darüber hinaus schaffen sie eine sehr effiziente Möglichkeit, verwandte Tokens logisch zu gruppieren und gleichzeitig ihre individuelle Einzigartigkeit und Eigenschaften beizubehalten, was die Zugriffskontrolle für gleichartige Assets wesentlich effizienter und kostengünstiger macht.
+
+<ArticleSection name="Metadata" id="metadata" level="h2" />
+
+Die Metadaten dienen als beschreibende Schicht, die rohe NFT-Tokens in bedeutungsvolle digitale Assets verwandelt.
+
+Während die Blockchain nur die wesentlichen Token-Informationen speichert: Eigentum, Angebot und grundlegende Identifikatoren, liefern Metadaten den reichhaltigen Kontext, der Fungible und Non-Fungible Tokens wertvoll und in Anwendungen nutzbar macht.
+
+Die Metadatenstruktur folgt typischerweise etablierten Standards, um sicherzustellen, dass Wallets, Marktplätze und Anwendungen NFT-Informationen konsistent interpretieren und anzeigen können, unabhängig davon, welches Programm den Token erstellt hat.
+
+Die Metadaten umfassen grundlegende Elemente wie den Namen und die Beschreibung des Assets, die einen menschenlesbaren Kontext dafür liefern, was das NFT repräsentiert.
+
+Das Bildfeld enthält einen URI, der auf das visuelle Asset verweist, sei es digitale Kunst, ein Profilbild oder eine Spielgegenstandsillustration. Für komplexere Medien können zusätzliche Felder auf Animationen, 3D-Modelle oder interaktive Inhalte verweisen, die das NFT in kompatiblen Anwendungen zum Leben erwecken.
+
+Benutzerdefinierte Attribute erweitern Metadaten über grundlegende Beschreibungen hinaus und ermöglichen ausgeklügelte Klassifizierungs- und Filtersysteme. Diese Attribute können Seltenheitsmerkmale bei Sammlerstücken, statistische Eigenschaften bei Gaming-Assets oder Nutzungsparameter bei funktionalen Tokens darstellen. Das flexible Attributsystem ermöglicht es Erstellern, beliebige relevante Daten einzubetten, die den Wert oder die Funktionalität des NFTs verbessern.
+
+Einige Projekte speichern Metadaten direkt on-chain für maximale Beständigkeit (mit einem Prozess, den wir Inscription nennen), andere nutzen dezentrale Speicherlösungen wie IPFS oder Arweave, um Kosten mit Haltbarkeit zu balancieren, manche verwenden eine zentralisierte Datenbank. Der Hauptunterschied besteht darin, dass die gewählte Speichermethode direkt die langfristige Zugänglichkeit des NFTs und die fortlaufenden Verantwortlichkeiten des Erstellers für die Pflege der zugehörigen Inhalte beeinflusst.

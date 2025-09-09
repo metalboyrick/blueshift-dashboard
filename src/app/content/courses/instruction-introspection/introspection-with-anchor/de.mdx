@@ -1,0 +1,81 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Instruction Introspection mit Anchor
+
+Anchor hat keinen eingebauten Helper für die `Instruction` Sysvar, aber alle Typen und Funktionen aus dem `solana_program` Crate werden in Anchor grundsätzlich unterstützt.
+
+Um Instruction Introspection in Anchor zu verwenden, müssen Sie das `solana_program` Crate zu Ihrem Projekt hinzufügen:
+
+```sh
+cargo add solana-program
+```
+
+Nach dem Hinzufügen des Crates können Sie auf die notwendigen Funktionen zugreifen, indem Sie sie importieren:
+
+```rust
+use solana_program::sysvar::instructions::{
+    self,
+    load_current_index_checked, 
+    load_instruction_at_checked
+}; 
+```
+
+<ArticleSection name="Wie man Introspection verwendet" id="how-to-use-introspection" level="h2" />
+
+Wie in der Einleitung erwähnt, funktioniert Instruction Introspection durch Deserialisierung der Daten aus dem `Instruction` Sysvar-Konto, um Details über die Anweisungen in einer Transaktion bereitzustellen.
+
+Obwohl die `load_instruction_at_checked` Funktion überprüft, dass das zu deserialisierende Konto das richtige ist, ist es gute Praxis, eine zusätzliche Prüfung zu Ihrer Account-Struktur hinzuzufügen:
+
+```rust
+#[account(address = instructions::ID)]
+/// CHECK: InstructionsSysvar account
+instructions: UncheckedAccount<'info>,
+```
+
+Jetzt können Sie mit Instruction Introspection arbeiten.
+
+Überprüfen Sie zunächst den Index der aktuellen Anweisung mit der `load_current_index_checked` Funktion:
+
+```rust
+// Check the index of the currently executing instruction. This could be in a different position than [0]).
+let index = load_current_index_checked(&ctx.accounts.instructions.to_account_info())?;
+```
+
+Als nächstes können Sie eine Anweisung an einem relativen Index mit `load_instruction_at_checked` überprüfen. Hier werden wir die Anweisung überprüfen, die unmittelbar auf die aktuelle folgt:
+
+```rust
+// Load the next instruction to check its input.
+let ix = load_instruction_at_checked(index as usize + 1, &ctx.accounts.instructions.to_account_info())?;
+```
+
+Bevor wir zum nächsten Schritt übergehen, ist es wichtig zu überlegen, welche Informationen wesentlich sind, um einen bösartigen Angriff zu verhindern.
+
+Wir beginnen in der Regel mit der Überprüfung, ob das aufgerufene Programm das erwartete ist. In diesem Beispiel untersuchen wir eine andere Anweisung aus demselben Programm:
+
+```rust
+require_keys_eq!(ix.program_id, ID, EscrowError::InvalidProgram);
+```
+
+Überprüfen Sie als nächstes, ob die Anweisung die erwartete ist. Vergleichen Sie dazu den Diskriminator der Anweisung mit dem erwarteten. In diesem Fall, da es sich um eine weitere Anchor-Anweisung handelt, können Sie es so tun:
+
+```rust
+require!(ix.data[0..8].eq(instruction::TakeEnd::DISCRIMINATOR.as_slice()), EscrowError::InvalidIx);
+```
+
+> Anchor macht dies einfacher, indem es das `Discriminator` Trait `anchor_lang::Discriminator` direkt auf der
+Instruction bereitstellt.
+
+Sie können dann programmspezifischere Prüfungen basierend auf der Logik der zu prüfenden Instruction durchführen.
+
+In diesem Beispiel prüfen wir, ob die Instruction-Daten (ein Betrag) korrekt sind. Instruction-Daten werden immer nach dem Diskriminator deserialisiert, sodass Sie es so machen können:
+
+```rust
+require!(ix.data[8..16].eq(&escrow.take_amount.to_le_bytes()), EscrowError::InvalidAmount);
+```
+
+Prüfen Sie schließlich die Konten, die in der untersuchten Instruction vorhanden sind. Dieser Schritt erfordert, dass Sie die genaue Struktur der `Account` Struct kennen, da Sie die Daten oder den öffentlichen Schlüssel eines Kontos an einem bestimmten Index anfordern werden:
+
+```rust
+let maker_ata = get_associated_token_address(&ctx.accounts.maker.key(), &escrow.mint_b);
+require_keys_eq!(ix.accounts.get(3).unwrap().pubkey, maker_ata, EscrowError::InvalidMakerATA);
+```

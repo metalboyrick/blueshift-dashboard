@@ -1,0 +1,41 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF Assembly Slippage</ChallengeTitle>
+
+Sekarang setelah Anda mulai merasa nyaman menulis Assembly, alih-alih hanya menggunakan akun normal, pemeriksaan slippage Anda harus berfungsi untuk Akun SPL-Token dan Token2022.
+
+> `amount` akan ditempatkan di memori pada konstanta yang sama seperti contoh. Perbedaan utamanya adalah kita tidak bisa mendapatkan data instruksi menggunakan konstanta karena `data_len` dari akun bersifat dinamis (data instruksi terletak di akhir data akun terakhir).
+
+Buat program yang hanya memiliki satu instruksi. Program tersebut harus:
+- Menerima satu akun Token SPL atau Token2022
+- Menerima saldo minimum u64 (8-byte) dalam data instruksi
+- Menghitung offset ke saldo minimum secara dinamis
+- Jika slippage terlampaui, log string `Slippage exceeded` dan kembalikan kode error 1
+
+> Untuk mendapatkan offset data instruksi yang tepat, Anda dapat menggunakan [alat](https://sbpf.xyz) kami. Tapi kami akan membantu Anda: `data_len` dari akun token berada di `.equ TOKEN_ACCOUNT_DATA_LEN, 0x0058`
+
+Mulailah dengan menginstal paket sBPF seperti yang dijelaskan di [bagian alat](/id/courses/introduction-to-assembly/tooling) dari kursus Pengantar Assembly dan bangun program Anda menggunakan perintah berikut di terminal Anda:
+
+```
+sbpf build
+```
+
+Ini akan menghasilkan file `.so` di folder `target/deploy` Anda. 
+
+Sekarang klik tombol `take challenge` dan letakkan file tersebut di sana!
+
+<RequirementList>
+  <Requirement title="Tantangan 1: Menguji Slippage dengan SPL-Token">
+    Program Anda harus berhasil ketika jumlah token dalam Akun SPL-Token lebih tinggi dari jumlah yang dimasukkan.
+  </Requirement>
+
+  <Requirement title="Tantangan 2: Menguji Kegagalan Slippage">
+    Program Anda harus gagal ketika jumlah token dalam Akun Token lebih rendah dari jumlah yang dimasukkan.
+  </Requirement>
+
+  <Requirement title="Tantangan 3: Menguji Slippage dengan Token2022">
+    Program Anda harus berhasil ketika jumlah token dalam Akun Token2022 lebih tinggi dari jumlah yang dimasukkan.
+  </Requirement>
+</RequirementList>

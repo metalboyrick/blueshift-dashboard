@@ -1,0 +1,44 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex Token Metadata Program
+
+想像一下，在 Solana 上發行一個代幣，但它在每個錢包中都顯示為一串毫無意義的字符，例如「7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU」。
+
+用戶完全不知道他們持有的是什麼，而您精心設計的項目將無法與網絡上數以千計的其他匿名代幣區分開來。
+
+Metaplex Token Metadata Program 解決了這個關鍵問題，將匿名的區塊鏈條目轉化為有品牌、可識別的數字資產。
+
+雖然 SPL-Token 程式在技術機制方面表現出色——追蹤所有權、管理供應和促進轉移——但它將代幣留作沒有任何人類可讀上下文的簡單數據結構。
+
+這正是 Metaplex 發揮其魔力的地方，彌合了原始區塊鏈功能與用戶體驗之間的差距。用戶不再看到神秘的地址，而是看到「Solana (SOL)」，配有熟悉的標誌、清晰的描述以及所有使代幣在現實世界中真正可用的上下文信息。
+
+<ArticleSection name="Metadata Account" id="metadata-account" level="h2" />
+
+`Metadata` 帳戶就像是您的代幣的數字身份證，存儲所有將簡單的鑄幣地址轉化為可識別資產的信息。
+
+這不僅僅是關於漂亮的名稱和圖片：這是為您的代幣在整個 Solana 生態系統中的展示方式奠定基礎。
+
+使用 Solana 的程式衍生地址系統，每個代幣都會獲得一個與其鑄幣數學鏈接的唯一 metadata 帳戶。這在技術代幣與其描述信息之間創造了一個不可分割的聯繫，確保所有應用程序中的一致性並防止身份衝突：
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+
+let (metadata, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+    ], 
+    &ID  
+);
+```
+
+metadata 帳戶成為您的代幣的通用護照，包含應用程序正確顯示您的資產所需的一切。
+
+代幣名稱取代了難以理解的地址，符號提供了即時識別（想想「SOL」而不是上面那串長長的字符），而 URI 引用則指向豐富的媒體，例如標誌和詳細描述。
+
+結果是什麼？您的代幣不僅僅存在於區塊鏈上——它在錢包中蓬勃發展，在區塊瀏覽器中專業呈現，並無縫整合到 Solana 生態系統中的應用程式中。
+
+> 想了解更多有關如何使用`Token Metadata`程式的資訊，請參考[官方文件](https://developers.metaplex.com/token-metadata)

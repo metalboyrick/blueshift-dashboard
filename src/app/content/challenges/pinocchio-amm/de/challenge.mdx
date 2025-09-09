@@ -1,0 +1,353 @@
+import ArticleSection from "../../../../components/ArticleSection/ArticleSection";
+
+# Der Amm
+
+![Pinocchio Amm Challenge](/graphics/challenge-banners/pinocchio-amm.png)
+
+Ein Automated Market Maker (AMM) ist ein grundlegender Baustein der dezentralen Finanzwelt, der es Nutzern ermöglicht, Token direkt mit einem Smart Contract zu tauschen, anstatt auf ein traditionelles Orderbuch oder eine zentralisierte Börse angewiesen zu sein.
+
+Stellen Sie sich einen AMM als selbstbetriebenen Liquiditätspool vor: Nutzer hinterlegen Token-Paare, und der AMM verwendet eine mathematische Formel, um den Preis zu bestimmen und den Tausch zwischen ihnen zu ermöglichen. Dies erlaubt jedem, Token sofort zu handeln, zu jeder Zeit, ohne einen Handelspartner zu benötigen.
+
+Bei genauerer Betrachtung werden Sie feststellen, dass ein AMM nichts anderes als ein Escrow mit zusätzlichen Schritten, Berechnungen und Logik ist. Wenn Sie es verpasst haben, absolvieren Sie die [Pinocchio Escrow Challenge](/de/challenges/pinocchio-escrow), bevor Sie mit diesem Kurs fortfahren.
+
+In dieser Challenge werden Sie einen einfachen AMM mit vier Kernfunktionen implementieren:
+- **Initialize**: Richten Sie den AMM ein, indem Sie sein Konfigurationskonto erstellen und den LP-Token (Liquidity Provider) prägen, der Anteile am Pool repräsentiert.
+- **Deposit**: Ermöglichen Sie Nutzern, sowohl `token_x` als auch `token_y` in den Pool einzuzahlen. Im Gegenzug erhalten sie eine proportionale Menge an LP-Token, die ihren Anteil an der Liquidität darstellen.
+- **Withdraw**: Ermöglichen Sie Nutzern, ihre LP-Token einzulösen, um ihren Anteil an `token_x` und `token_y` aus dem Pool abzuheben und damit effektiv Liquidität zu entfernen.
+- **Swap**: Erlauben Sie jedem, token_x gegen `token_y` (oder umgekehrt) über den Pool zu tauschen, wobei eine kleine Gebühr an die Liquiditätsanbieter gezahlt wird.
+
+**Hinweis**: Wenn Sie mit Pinocchio nicht vertraut sind, sollten Sie zunächst die [Einführung in Pinocchio](/de/courses/introduction-to-pinocchio) lesen, um sich mit den Kernkonzepten vertraut zu machen, die wir in diesem Programm verwenden werden.
+
+<ArticleSection name="Installation" id="installation" level="h2" />
+
+Beginnen wir mit der Erstellung einer neuen Rust-Umgebung:
+
+```bash
+# create workspace
+cargo new blueshift_native_amm --lib --edition 2021
+cd blueshift_native_amm
+```
+
+Füge `pinocchio`, `pinocchio-system`, `pinocchio-token`, `pinocchio-associated-token-account` und die von [Dean](https://x.com/deanmlittle) erstellte `constant-product-curve` hinzu, um alle Berechnungen für unsere Amm zu verarbeiten:
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token pinocchio-associated-token-account
+cargo add --git="https://github.com/deanmlittle/constant-product-curve" constant-product-curve
+```
+
+Deklariere die Crate-Typen in `Cargo.toml`, um Deployment-Artefakte in `target/deploy` zu generieren:
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+Du bist jetzt bereit, dein Amm-Programm zu schreiben.
+
+<ArticleSection name="Constant Product Curve" id="constant-product-curve" level="h2" />
+
+Im Zentrum der meisten AMMs steht eine einfache, aber leistungsstarke Formel, die als Constant Product Curve bekannt ist. Diese Formel stellt sicher, dass das Produkt der beiden Token-Reserven im Pool immer konstant bleibt, auch wenn Benutzer handeln oder Liquidität bereitstellen.
+
+### Die Formel
+
+Die gebräuchlichste AMM-Formel ist: `x * y = k` wobei:
+- `x` = Menge von Token X im Pool
+- `y` = Menge von Token Y im Pool
+- `k` = eine Konstante (ändert sich nie)
+
+Wenn jemand einen Token gegen einen anderen tauscht, passt der Pool die Reserven so an, dass das Produkt `k` unverändert bleibt. Dies erzeugt eine Preiskurve, die sich automatisch an Angebot und Nachfrage anpasst.
+
+### Beispiel
+
+Angenommen, der Pool beginnt mit 100 Token X und 100 Token Y: `100 * 100 = 10,000`.
+
+Wenn ein Benutzer 10 Token X gegen Token Y tauschen möchte, muss der Pool `k = 10,000` beibehalten. Wenn also `x_new` = 110 (nach der Einzahlung), löse nach `y_new` auf: `110 * y_new = 10,000` also `y_new = 10,000 / 110 ≈ 90.91`.
+
+Der Benutzer erhält `100 - 90.91 = 9.09` Token Y (abzüglich eventueller Gebühren).
+
+### Liquiditätsbereitstellung
+
+Wenn Benutzer beide Tokens in den Pool einzahlen, werden sie zu Liquiditätsanbietern (LPs). Im Gegenzug erhalten sie LP-Tokens, die ihren Anteil am Pool repräsentieren.
+- LP-Tokens werden im Verhältnis zur bereitgestellten Liquidität geprägt.
+- Beim Abheben verbrennst du deine LP-Tokens, um deinen Anteil an beiden Tokens (plus einen Anteil an den bei Swaps erhobenen Gebühren) zurückzufordern.
+
+Der erste Liquiditätsanbieter legt das anfängliche Verhältnis fest. Wenn du beispielsweise 100 X und 100 Y einzahlst, könntest du 100 LP-Token erhalten.
+
+Wenn der Pool danach bereits 100 X und 100 Y enthält und du 10 X und 10 Y hinzufügst, erhältst du LP-Token proportional zu deinem Beitrag: `share = deposit_x / total_x = 10 / 100 = 10%` sodass die Amm 10% der gesamten LP-Versorgung an das Benutzer-Wallet überträgt.
+
+### Gebühren
+
+Für jeden Tausch wird in der Regel eine kleine Gebühr (z.B. 0,3%) erhoben, die dem Pool hinzugefügt wird. Das bedeutet, dass LPs einen Anteil an den Handelsgebühren verdienen, was den Wert ihrer LP-Token im Laufe der Zeit erhöht und Anreize für die Bereitstellung von Liquidität schafft.
+
+<ArticleSection name="Template" id="template" level="h2" />
+
+Diesmal werden wir das Programm in kleine, fokussierte Module aufteilen, anstatt alles in die `lib.rs` zu packen. Die Ordnerstruktur wird ungefähr so aussehen:
+
+```
+src
+├── instructions
+│       ├── deposit.rs
+│       ├── initialize.rs
+│       ├── mod.rs
+│       ├── swap.rs
+│       └── withdraw.rs
+├── lib.rs
+└── state.rs
+```
+
+Der Einstiegspunkt, der in der `lib.rs` liegt, sieht immer gleich aus:
+
+```rust
+use pinocchio::{
+    account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey,
+    ProgramResult,
+};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+pub mod state;
+pub use state::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Initialize::DISCRIMINATOR, data)) => {
+            Initialize::try_from((data, accounts))?.process()
+        }
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, data)) => Withdraw::try_from((data, accounts))?.process(),
+        Some((Swap::DISCRIMINATOR, data)) => Swap::try_from((data, accounts))?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="State" id="state" level="h2" />
+
+Wir werden in die `state.rs` wechseln, wo alle Daten für unsere `AMM` gespeichert sind.
+
+Lass uns das in drei Teile aufteilen: die Struct-Definition, Lese-Helfer und Schreib-Helfer
+
+Schauen wir uns zunächst die Struct-Definition an:
+
+```rust
+use core::mem::size_of;
+use pinocchio::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+
+#[repr(C)]
+pub struct Config {
+    state: u8,
+    seed: [u8; 8],
+    authority: Pubkey,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    fee: [u8; 2],
+    config_bump: [u8; 1],
+}
+
+#[repr(u8)]
+pub enum AmmState {
+    Uninitialized = 0u8,
+    Initialized = 1u8,
+    Disabled = 2u8,
+    WithdrawOnly = 3u8,
+}
+
+impl Config {
+    pub const LEN: usize = size_of::<Config>();
+
+    //...
+}
+```
+
+Das Attribut `#[repr(C)]` stellt sicher, dass unsere Struct ein vorhersehbares, C-kompatibles Speicherlayout hat, das über verschiedene Plattformen und Rust-Compiler-Versionen hinweg konsistent bleibt. Dies ist entscheidend für On-Chain-Programme, bei denen Daten zuverlässig serialisiert und deserialisiert werden müssen.
+
+Wir speichern `seed` (u64) und `fee` (u16) als Byte-Arrays anstelle ihrer nativen Typen, um eine sichere Deserialisierung zu gewährleisten. Wenn Daten aus dem Account-Speicher gelesen werden, gibt es keine Garantie für die Speicherausrichtung, und das Lesen eines `u64` von einer nicht ausgerichteten Speicheradresse ist undefiniertes Verhalten. Durch die Verwendung von Byte-Arrays und die Konvertierung mit `from_le_bytes()` stellen wir sicher, dass die Daten unabhängig von der Ausrichtung sicher gelesen werden können und gleichzeitig eine konsistente Little-Endian-Bytereihenfolge auf allen Plattformen garantiert wird.
+
+Jedes Feld in der `Config` Struktur dient einem bestimmten Zweck:
+- **state**: Verfolgt den aktuellen Status der AMM (z.B. nicht initialisiert, initialisiert, deaktiviert oder nur Abhebungen).
+- **seed**: Ein einzigartiger Wert für die Generierung von programmabgeleiteten Adressen (PDA), der es ermöglicht, mehrere AMMs mit unterschiedlichen Konfigurationen zu erstellen.
+- **authority**: Der öffentliche Schlüssel mit administrativer Kontrolle über die AMM (z.B. zum Pausieren oder Aktualisieren des Pools). Kann durch Übergabe von `[0u8; 32]` unveränderlich gesetzt werden.
+- **mint_x**: Die SPL-Token-Mint-Adresse für Token X im Pool.
+- **mint_y**: Die SPL-Token-Mint-Adresse für Token Y im Pool.
+- **fee**: Die Tauschgebühr, ausgedrückt in Basispunkten (1 Basispunkt = 0,01%), die bei jedem Handel erhoben und an Liquiditätsanbieter verteilt wird.
+- **config_bump**: Der Bump-Seed, der bei der PDA-Ableitung verwendet wird, um sicherzustellen, dass die Konfigurationskonto-Adresse gültig und einzigartig ist. Wird gespeichert, um die PDA-Ableitung effizienter zu gestalten.
+
+Das `AmmState` Enum definiert die möglichen Zustände für die AMM und erleichtert so die Verwaltung des Pool-Lebenszyklus und die Einschränkung bestimmter Aktionen basierend auf seinem Status.
+
+### Lesehilfen
+
+Die Lesehilfen bieten sicheren, effizienten Zugriff auf die `Config` Daten mit ordnungsgemäßer Validierung und Ausleihe:
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load(account_info: &AccountInfo) -> Result<Ref<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Ref::map(account_info.try_borrow_data()?, |data| unsafe {
+            Self::from_bytes_unchecked(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub unsafe fn load_unchecked(account_info: &AccountInfo) -> Result<&Self, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner() != &crate::ID {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(Self::from_bytes_unchecked(
+            account_info.borrow_data_unchecked(),
+        ))
+    }
+
+    /// Return a `Config` from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`, and
+    /// it is properly aligned to be interpreted as an instance of `Config`.
+    /// At the moment `Config` has an alignment of 1 byte.
+    /// This method does not perform a length validation.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> &Self {
+        &*(bytes.as_ptr() as *const Config)
+    }
+
+    /// Return a mutable `Config` reference from the given bytes.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `bytes` contains a valid representation of `Config`.
+    #[inline(always)]
+    pub unsafe fn from_bytes_unchecked_mut(bytes: &mut [u8]) -> &mut Self {
+        &mut *(bytes.as_mut_ptr() as *mut Config)
+    }
+
+    // Getter methods for safe field access
+    #[inline(always)]
+    pub fn state(&self) -> u8 { self.state }
+
+    #[inline(always)]
+    pub fn seed(&self) -> u64 { u64::from_le_bytes(self.seed) }
+
+    #[inline(always)]
+    pub fn authority(&self) -> &Pubkey { &self.authority }
+
+    #[inline(always)]
+    pub fn mint_x(&self) -> &Pubkey { &self.mint_x }
+
+    #[inline(always)]
+    pub fn mint_y(&self) -> &Pubkey { &self.mint_y }
+
+    #[inline(always)]
+    pub fn fee(&self) -> u16 { u16::from_le_bytes(self.fee) }
+
+    #[inline(always)]
+    pub fn config_bump(&self) -> [u8; 1] { self.config_bump }
+}
+```
+
+Hauptmerkmale der Lesehilfen:
+- Sicheres Ausleihen: Die `load` Methode gibt ein `Ref<Self>` zurück, das das Ausleihen aus den Kontodaten sicher verwaltet, Datenrennen verhindert und Speichersicherheit gewährleistet.
+- Validierung: Sowohl `load` als auch `load_unchecked` validieren die Kontodatenlänge und den Eigentümer, bevor sie Zugriff auf die Struktur gewähren.
+- Getter-Methoden: Auf alle Felder wird über Getter-Methoden zugegriffen, die die Umwandlung von Byte-Arrays in ihre richtigen Typen handhaben (z.B. `u64::from_le_bytes` für den `seed`).
+- Leistung: Das `#[inline(always)]` Attribut stellt sicher, dass diese häufig aufgerufenen Methoden für optimale Leistung inline gesetzt werden.
+
+### Schreibhilfen
+
+Die Schreibhilfen bieten sichere, validierte Methoden zur Änderung der `Config` Daten:
+
+```rust
+impl Config {
+    //...
+
+    #[inline(always)]
+    pub fn load_mut(account_info: &AccountInfo) -> Result<RefMut<Self>, ProgramError> {
+        if account_info.data_len() != Self::LEN {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        if account_info.owner().ne(&crate::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+        Ok(RefMut::map(account_info.try_borrow_mut_data()?, |data| unsafe {
+            Self::from_bytes_unchecked_mut(data)
+        }))
+    }
+
+    #[inline(always)]
+    pub fn set_state(&mut self, state: u8) -> Result<(), ProgramError> {
+        if state.ge(&(AmmState::WithdrawOnly as u8)) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.state = state as u8;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_fee(&mut self, fee: u16) -> Result<(), ProgramError> {
+        if fee.ge(&10_000) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+        self.fee = fee.to_le_bytes();
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn set_inner(
+        &mut self,
+        seed: u64,
+        authority: Pubkey,
+        mint_x: Pubkey,
+        mint_y: Pubkey,
+        fee: u16,
+        config_bump: [u8; 1],
+    ) -> Result<(), ProgramError> {
+        self.set_state(AmmState::Initialized as u8)?;
+        self.set_seed(seed);
+        self.set_authority(authority);
+        self.set_mint_x(mint_x);
+        self.set_mint_y(mint_y);
+        self.set_fee(fee)?;
+        self.set_config_bump(config_bump);
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn has_authority(&self) -> Option<Pubkey> {
+        let bytes = self.authority();
+        let chunks: &[u64; 4] = unsafe { &*(bytes.as_ptr() as *const [u64; 4]) };
+        if chunks.iter().any(|&x| x != 0) {
+            Some(self.authority)
+        } else {
+            None
+        }
+    }
+}
+```
+
+Hauptmerkmale der Schreibhilfen:
+- Veränderliche Ausleihe: Die `load_mut` Methode gibt ein `RefMut<Self>` zurück, das die veränderliche Ausleihe aus den Kontodaten sicher verwaltet.
+- Eingabevalidierung: Methoden wie `set_state` und `set_fee` beinhalten Validierung, um sicherzustellen, dass nur gültige Werte gespeichert werden (z.B. kann die Gebühr 10.000 Basispunkte nicht überschreiten).
+- Atomare Updates: Die `set_inner` Methode ermöglicht effiziente, atomare Aktualisierungen aller Strukturfelder auf einmal und minimiert das Risiko eines inkonsistenten Zustands.
+- Autoritätsprüfung: Die `has_authority` Methode bietet eine effiziente Möglichkeit zu prüfen, ob eine Autorität gesetzt ist (ungleich Null) oder ob der AMM unveränderlich ist (alle Nullen).
+- Byte-Konvertierung: Mehrbyte-Werte werden mit Methoden wie `to_le_bytes()` ordnungsgemäß in Little-Endian-Byte-Arrays umgewandelt, um ein konsistentes plattformübergreifendes Verhalten zu gewährleisten.

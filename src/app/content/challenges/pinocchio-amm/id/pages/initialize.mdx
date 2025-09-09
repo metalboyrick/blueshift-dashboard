@@ -1,0 +1,175 @@
+# Inisialisasi
+
+Instruksi `initialize` melakukan dua tugas utama:
+- Menginisialisasi akun `Config` dan menyimpan semua informasi yang diperlukan agar amm dapat beroperasi dengan benar.
+- Membuat akun Mint `mint_lp` dan menetapkan `mint_authority` ke akun `config`.
+
+> Kita tidak akan menginisialisasi Associated Token Accounts (ATAs) di sini, karena seringkali tidak diperlukan dan bisa menjadi pemborosan. Dalam instruksi `deposit`, `withdraw`, dan `swap` berikutnya, kita akan memeriksa bahwa token disimpan ke dalam ATA yang benar. Namun, Anda sebaiknya membuat helper "initializeAccount" di frontend untuk menghasilkan akun-akun ini sesuai kebutuhan.
+
+<ArticleSection name="Required Accounts" id="required-accounts" level="h2" />
+
+Berikut adalah akun-akun yang diperlukan untuk konteks ini:
+- `initializer`: Pembuat akun `config`. Ini tidak harus menjadi otoritas atas akun tersebut juga. Harus berupa `signer` dan `mutable`, karena akun ini akan membayar untuk inisialisasi baik `config` maupun `mint_lp`.
+- `mint_lp`: Akun Mint yang akan mewakili likuiditas pool. `mint_authority` harus ditetapkan ke akun `config`. Harus dilewatkan sebagai `mutable`.
+- `config`: Akun konfigurasi yang sedang diinisialisasi. Harus `mutable`.
+- Program `system` dan `token`: Akun program yang diperlukan untuk menginisialisasi akun-akun di atas. Harus `executable`.
+
+> Seiring Anda menjadi lebih berpengalaman, Anda akan menyadari bahwa banyak dari pemeriksaan ini dapat dihilangkan, mengandalkan batasan yang diterapkan oleh CPI itu sendiri. Misalnya, untuk struct akun ini, pemeriksaan eksplisit tidak diperlukan; jika batasan tidak terpenuhi, program akan gagal secara default. Saya akan menunjukkan nuansa-nuansa ini saat kita membahas logikanya.
+
+Karena tidak banyak perubahan dari struct biasa yang kita buat, saya akan menyerahkan implementasinya kepada Anda:
+
+```rust
+pub struct InitializeAccounts<'a> {
+    pub initializer: &'a AccountInfo,
+    pub mint_lp: &'a AccountInfo,
+    pub config: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for InitializeAccounts<'a> {
+  type Error = ProgramError;
+
+  fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+    //..
+  }
+}
+```
+
+> Anda perlu menyertakan semua akun yang telah dibahas di atas, tetapi tidak semuanya perlu disertakan dalam struct `InitializeAccounts`, karena Anda mungkin tidak perlu mereferensikan setiap akun secara langsung dalam implementasi.
+
+<ArticleSection name="Instruction Data" id="instruction-data" level="h2" />
+
+Berikut adalah data instruksi yang perlu kita masukkan:
+- `seed`: Angka acak yang digunakan untuk derivasi seed PDA (Program Derived Address). Ini memungkinkan instance pool yang unik. Harus berupa `[u64]`
+- `fee`: Biaya swap, dinyatakan dalam basis poin (1 basis poin = 0,01%). Biaya ini dikumpulkan pada setiap perdagangan dan didistribusikan kepada penyedia likuiditas. Harus berupa `[u16]`
+- `mint_x`: Alamat SPL token mint untuk token X di pool. Harus berupa `[u8; 32]`
+- `mint_y`: Alamat SPL token mint untuk token Y di pool. Harus berupa `[u8; 32]`
+- `config_bump`: Bump seed yang digunakan untuk menurunkan PDA akun `config`. Harus berupa `u8`
+- `lp_bump`: Bump seed yang digunakan untuk menurunkan PDA akun `lp_mint`. Harus berupa `u8`
+- `authority`: Kunci publik yang akan memiliki otoritas administratif atas AMM. Jika tidak disediakan, pool dapat diatur sebagai tidak dapat diubah. Harus berupa `[u8; 32]`
+
+> Seperti yang Anda lihat, beberapa bidang ini dapat diturunkan secara berbeda. Misalnya, kita bisa mendapatkan `mint_x` dengan meneruskan akun `Mint` dan membacanya langsung dari sana, atau menghasilkan nilai `bump` di dalam program itu sendiri. Namun, dengan meneruskannya secara eksplisit, kita bertujuan untuk membuat program yang paling optimal dan efisien.
+
+Dalam implementasi ini, kita menangani parsing data instruksi dengan cara yang lebih fleksibel dan level rendah daripada biasanya. Karena alasan ini, kita akan menjelaskan mengapa kita membuat keputusan-keputusan berikut:
+
+```rust
+#[repr(C, packed)]
+pub struct InitializeInstructionData {
+    pub seed: u64,
+    pub fee: u16,
+    pub mint_x: [u8; 32],
+    pub mint_y: [u8; 32],
+    pub config_bump: [u8; 1],
+    pub lp_bump: [u8; 1],
+    pub authority: [u8; 32],
+}
+
+impl TryFrom<&[u8]> for InitializeInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        const INITIALIZE_DATA_LEN_WITH_AUTHORITY: usize = size_of::<InitializeInstructionData>();
+        const INITIALIZE_DATA_LEN: usize =
+            INITIALIZE_DATA_LEN_WITH_AUTHORITY - size_of::<[u8; 32]>();
+
+        match data.len() {
+            INITIALIZE_DATA_LEN_WITH_AUTHORITY => {
+                Ok(unsafe { (data.as_ptr() as *const Self).read_unaligned() })
+            }
+            INITIALIZE_DATA_LEN => {
+                // If the authority is not present, we need to build the buffer and add it at the end before transmuting to the struct
+                let mut raw: MaybeUninit<[u8; INITIALIZE_DATA_LEN_WITH_AUTHORITY]> = MaybeUninit::uninit();
+                let raw_ptr = raw.as_mut_ptr() as *mut u8;
+                unsafe {
+                    // Copy the provided data
+                    core::ptr::copy_nonoverlapping(data.as_ptr(), raw_ptr, INITIALIZE_DATA_LEN);
+                    // Add the authority to the end of the buffer
+                    core::ptr::write_bytes(raw_ptr.add(INITIALIZE_DATA_LEN), 0, 32);
+                    // Now transmute to the struct
+                    Ok((raw.as_ptr() as *const Self).read_unaligned())
+                }
+            }
+            _ => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+}
+```
+
+Kolom authority dalam `InitializeInstructionData` bersifat opsional dan dapat dihilangkan untuk membuat pool yang tidak dapat diubah.
+
+Untuk memfasilitasi ini dan menghemat 32 byte data transaksi saat membuat pool yang tidak dapat diubah, kita memeriksa panjang data instruksi dan mengurai data sesuai dengan itu; jika datanya lebih pendek, kita mengatur kolom authority ke `None` dengan menulis 32 byte nol ke akhir buffer; jika data tersebut menyertakan seluruh kolom `authority`, kita mengkonversi slice byte langsung ke struct.
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h2" />
+
+Kita mulai dengan mendeserialkan baik `instruction_data` maupun `accounts`.
+
+Kemudian kita perlu:
+- Membuat akun `Config` menggunakan instruksi `CreateAccount` dari program sistem dan seed berikut:
+
+```rust
+let seed_binding = self.instruction_data.seed.to_le_bytes();
+let config_seeds = [
+    Seed::from(b"config"),
+    Seed::from(&seed_binding),
+    Seed::from(&self.instruction_data.mint_x),
+    Seed::from(&self.instruction_data.mint_y),
+    Seed::from(&self.instruction_data.config_bump),
+];
+```
+
+- Mengisi akun `Config` dengan memuat menggunakan helper `Config::load_mut_unchecked()` dan kemudian mengisinya dengan semua data yang diperlukan menggunakan helper `config.set_inner()`.
+- Membuat akun `Mint` untuk lp menggunakan instruksi `CreateAccount` dan `InitializeMint2` dan seed berikut:
+
+```rust
+let mint_lp_seeds = [
+    Seed::from(b"mint_lp"),
+    Seed::from(self.accounts.config.key()),
+    Seed::from(&self.instruction_data.lp_bump),
+];
+```
+
+> `mint_authority` dari `mint_lp` adalah akun `config`
+
+Anda seharusnya cukup mahir untuk melakukan ini sendiri, jadi saya akan menyerahkan implementasinya kepada Anda:
+
+```rust
+pub struct Initialize<'a> {
+    pub accounts: InitializeAccounts<'a>,
+    pub instruction_data: InitializeInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Initialize<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = InitializeAccounts::try_from(accounts)?;
+        let instruction_data: InitializeInstructionData = InitializeInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Initialize<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+      //..
+
+      Ok(())
+    }
+}
+```
+
+<ArticleSection name="Security" id="security" level="h2" />
+
+Seperti yang disebutkan sebelumnya, mungkin tampak tidak biasa, tetapi kita tidak perlu melakukan pemeriksaan eksplisit pada akun-akun yang dimasukkan.
+
+Ini karena, dalam praktiknya, instruksi akan gagal jika ada yang salah; baik selama CPI (Cross-Program Invocation) atau lebih awal melalui pemeriksaan yang kita masukkan ke dalam program.
+
+Sebagai contoh, pertimbangkan akun `initializer`. Kita mengharapkannya menjadi `signer` dan `mutable`, tetapi jika tidak, instruksi `CreateAccount` akan gagal secara otomatis karena memerlukan properti tersebut untuk `payer`.
+
+Demikian juga, jika akun `config` diberikan dengan `mint_x` atau `mint_y` yang tidak valid, setiap upaya untuk melakukan deposit ke dalam protokol akan gagal selama transfer token.
+
+Seiring dengan bertambahnya pengalaman, Anda akan menemukan bahwa banyak pemeriksaan dapat dihilangkan untuk menjaga instruksi tetap ringan dan optimal, dengan mengandalkan sistem dan instruksi berikutnya untuk menerapkan batasan.

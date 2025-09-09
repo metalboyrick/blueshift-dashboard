@@ -1,0 +1,197 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Pinocchio 101
+
+![Pinocchio 入門](/graphics/course-banners/introduction-to-pinocchio.png)
+
+<ArticleSection name="什麼是 Pinocchio" id="what-is-pinocchio" level="h2" />
+
+雖然大多數 Solana 開發者依賴 Anchor，但有很多充分的理由選擇不使用它來編寫程式。可能是因為你需要對每個帳戶欄位進行更細緻的控制，或者你追求極致的性能，亦或是你只是想避免使用巨集。
+
+在沒有像 Anchor 這樣的框架下編寫 Solana 程式被稱為 **原生開發**。這種方式要求更高，但在本課程中，你將學習如何使用 Pinocchio 從零開始構建一個 Solana 程式；這是一個輕量級的庫，讓你可以跳過外部框架，完全掌控你的程式碼。
+
+Pinocchio 是一個極簡的 Rust 庫，讓你在不引入重量級 `solana-program` crate 的情況下構建 Solana 程式。它的工作原理是將傳入的交易負載（帳戶、指令數據等）視為單一的位元組切片，並通過零拷貝技術就地讀取。
+
+### 主要優勢
+
+這種極簡設計帶來了三大好處：
+- 更少的計算單元。無需額外的反序列化或記憶體拷貝。
+- 更小的二進制檔案。更精簡的程式碼路徑意味著更輕量的 `.so` 上鏈。
+- 零依賴拖累。無需更新（或擔心破壞）外部 crate。
+
+該項目由 [Febo](https://x.com/0x_febo) 在 [Anza](https://www.anza.xyz) 發起，並由 Solana 生態系統和 Blueshift 團隊核心貢獻，目前托管於 [這裡](https://github.com/anza-xyz/pinocchio)。
+
+除了核心 crate，你還會找到 `pinocchio-system` 和 `pinocchio-token`，它們為 Solana 的原生 System 和 SPL-Token 程式提供零拷貝輔助工具和 CPI 實用工具。
+
+### 原生開發
+
+原生開發可能聽起來令人望而生畏，但這正是本章的目的所在。完成本章後，你將了解每個跨越程式邊界的位元組，以及如何保持你的邏輯緊湊、安全和高效。
+
+Anchor 使用 **程序宏和派生宏** 來簡化處理帳戶、指令數據和錯誤處理的樣板代碼，這些是構建 Solana 程式的核心。
+
+使用原生方式意味著我們不再擁有這種便利，我們需要：
+- 為不同的指令創建我們自己的識別碼和入口點
+- 創建我們自己的帳戶、指令和反序列化邏輯
+- 實現所有 Anchor 之前為我們處理的安全檢查
+
+**注意**：目前還沒有用於構建 Pinocchio 程式的「框架」。因此，我們將根據我們的經驗，介紹我們認為是編寫 Pinocchio 程式的最佳方法。
+
+<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+
+在 Anchor 中，`#[program]` 宏隱藏了許多底層的連接。在底層，它為每個指令和帳戶結構構建了一個 8 字節的識別碼（自版本 0.31 起可自定義大小）。
+
+<AnchorDiscriminatorCalculator value={"Test"} />
+
+原生程式通常更精簡。單字節識別碼（值範圍為 0x01…0xFF）足以處理最多 255 個指令，這對大多數使用情況來說已經足夠。如果需要更多，可以切換到雙字節變體，擴展到 65,535 種可能的變體。
+
+`entrypoint!` 宏是程式執行的起點。它提供了三個原始切片：
+- **program_id**：已部署程式的公鑰
+- **accounts**：指令中傳遞的每個帳戶
+- **instruction_data**：包含識別碼和任何用戶提供數據的不透明字節數組
+
+這意味著在入口點之後，我們可以創建一個模式，通過適當的處理器執行所有不同的指令，我們將其稱為 `process_instruction`。以下是它的典型外觀：
+
+```rust
+entrypoint!(process_instruction);
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((Instruction1::DISCRIMINATOR, data)) => Instruction1::try_from((data, accounts))?.process(),
+        Some((Instruction2::DISCRIMINATOR, _)) => Instruction2::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+在幕後，這個處理器：
+1. 使用 `split_first()` 提取識別符字節
+2. 使用 `match` 確定要實例化的指令結構
+3. 每個指令的 `try_from` 實現會驗證並反序列化其輸入
+4. 調用 `process()` 執行業務邏輯
+
+### `solana-program` 和 `pinocchio` 之間的區別
+
+主要的區別和優化在於 `entrypoint()` 的行為方式。
+- 標準 Solana 入口點使用傳統的序列化模式，運行時會提前反序列化輸入數據，並在內存中創建擁有的數據結構。這種方法廣泛使用 Borsh 序列化，在反序列化過程中複製數據，並為結構化數據類型分配內存。
+- Pinocchio 入口點通過直接從輸入字節數組中讀取數據而不進行複製來實現零拷貝操作。該框架定義了零拷貝類型，這些類型引用原始數據，消除了序列化/反序列化的開銷，並使用直接內存訪問來避免抽象層。
+
+<ArticleSection name="Accounts and Instructions" id="accounts-and-instructions" level="h2" />
+
+由於我們沒有宏，並且為了保持程序的精簡和高效，我們希望避免使用宏，因此每個指令數據和帳戶的字節都必須手動驗證。
+
+為了使這個過程更有條理，我們使用了一種模式，該模式提供了類似 Anchor 的易用性，但不使用宏，通過實現 Rust 的 `TryFrom` trait，保持實際的 `process()` 方法幾乎無需樣板代碼。
+
+### `TryFrom` Trait
+
+`TryFrom` 是 Rust 標準轉換系列的一部分。與 `From` 假設轉換不會失敗不同，`TryFrom` 返回 `Result`，允許您提前暴露錯誤——這非常適合鏈上驗證。
+
+該 trait 定義如下：
+
+```rust
+pub trait TryFrom<T>: Sized {
+    type Error;
+    fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+```
+
+在 Solana 程序中，我們實現 `TryFrom`，以將原始帳戶切片（以及在需要時的指令字節）轉換為強類型結構，同時強制執行每個約束。
+
+<ArticleSection name="帳戶驗證" id="accounts-validation" level="h2" />
+
+我們通常會在每個 `TryFrom` 實現中處理所有不需要雙重借用（即在帳戶驗證和可能的處理過程中同時借用）的特定檢查。這樣可以使所有指令邏輯發生的 `process()` 函數保持盡可能簡潔。
+
+我們首先實現指令所需的帳戶結構，類似於 Anchor 的 `Context`。
+
+**注意**：與 Anchor 不同，在此帳戶結構中，我們僅包括在處理過程中需要使用的帳戶，並將其餘在指令中需要但不會使用的帳戶（例如 `SystemProgram`）標記為 `_`。
+
+對於類似 `Vault` 的情況，會像這樣：
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub owner: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+```
+
+現在我們知道在指令中需要使用哪些帳戶，我們可以使用 `TryFrom` 特性來反序列化並執行所有必要的檢查：
+
+```rust
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        // 1. Destructure the slice
+        let [owner, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // 2. Custom checks
+        if !owner.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // 3. Return the validated struct
+        Ok(Self { owner, vault })
+    }
+}
+```
+
+如您所見，在此指令中，我們將使用 `SystemProgram` CPI 將 lamports 從擁有者轉移到保管庫，但我們不需要在指令本身中使用 SystemProgram。該程序只需包含在指令中，因此我們可以將其作為 `_` 傳遞。
+
+然後我們對帳戶進行自定義檢查，類似於 Anchor 的 `Signer` 和 `SystemAccount` 檢查，並返回經過驗證的結構。
+
+<ArticleSection name="指令驗證" id="instruction-validation" level="h2" />
+
+指令驗證遵循與帳戶驗證類似的模式。我們使用 `TryFrom` 特性來驗證和反序列化指令數據為強類型結構，保持 `process()` 中的業務邏輯簡潔且專注。
+
+首先，我哋嚟定義一個 struct，代表我哋嘅指令數據：
+
+```rust
+pub struct DepositInstructionData {
+    pub amount: u64,
+}
+```
+
+之後，我哋會實現 `TryFrom` 嚟驗證指令數據，並將其轉換為我哋嘅結構化類型。呢個過程包括：
+1. 驗證數據長度同我哋預期嘅大小一致
+2. 將字節切片轉換為我哋嘅具體類型
+3. 進行任何必要嘅驗證檢查
+
+以下係實現嘅方式：
+
+```rust
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        // 1. Verify the data length matches a u64 (8 bytes)
+        if data.len() != core::mem::size_of::<u64>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        // 2. Convert the byte slice to a u64
+        let amount = u64::from_le_bytes(data.try_into().unwrap());
+
+        // 3. Validate the amount (e.g., ensure it's not zero)
+        if amount == 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        Ok(Self { amount })
+    }
+}
+```
+
+呢個模式可以幫助我哋：
+- 喺指令數據進入業務邏輯之前進行驗證
+- 將驗證邏輯同核心功能分開
+- 喺驗證失敗時提供清晰嘅錯誤信息
+- 喺整個程序中保持類型安全

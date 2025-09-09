@@ -1,0 +1,264 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 軟體 Mollusk 101
+
+![使用 Mollusk 測試](/graphics/course-banners/testing-with-mollusk.png)
+
+高效測試 Solana 程式需要一個能平衡速度、精確性和洞察力的框架。在開發複雜的程式邏輯時，您需要一個能快速迭代的環境，同時不犧牲測試邊界情況或準確測量效能的能力。
+
+理想的 Solana 測試框架應該具備三個基本功能：
+- 快速執行以縮短開發週期，
+- 靈活的帳戶狀態操作以進行全面的邊界情況測試，
+- 詳細的效能指標以提供優化洞察。
+
+Mollusk 通過提供一個專為 Solana 程式開發設計的精簡測試環境，滿足了這些需求。
+
+<ArticleSection name="什麼是 Mollusk" id="what-is-mollusk" level="h2" />
+
+[Mollusk](https://github.com/anza-xyz/mollusk) 是由 [Anza](https://x.com/anza_xyz) 團隊的 [Joe Caulfield](https://x.com/realbuffalojoe) 創建和維護的輕量級 Solana 程式測試工具，它提供了一個直接的程式執行介面，而無需完整驗證器運行時的額外負擔。
+
+Mollusk 並非模擬完整的驗證器環境，而是使用低階 Solana 虛擬機（SVM）元件構建程式執行管道。這種方法在保留必要功能以進行全面程式測試的同時，消除了不必要的負擔。
+
+該框架通過排除 Agave 驗證器實現中的 `AccountsDB` 和 `Bank` 等重量級元件，實現了卓越的效能。這種設計選擇需要明確的帳戶配置，這實際上成為了一個優勢，因為它提供了對帳戶狀態的精確控制，並能夠測試在完整驗證器環境中難以重現的情景。
+
+Mollusk 的測試工具支援全面的配置選項，包括計算預算調整、功能集修改和系統變數自定義。這些配置直接通過 `Mollusk` 結構管理，並可使用內建的輔助函數進行修改。
+
+<ArticleSection name="First Steps" id="first-steps" level="h2" />
+
+核心的`mollusk-svm` crate 提供了基本的測試基礎設施，而其他的 crate 則為常見的 Solana 程式（例如`Token`和`Memo`程式）提供了專門的輔助工具。
+
+### 設置
+
+將主要的 Mollusk crate 添加到您的項目中：
+
+```
+cargo add mollusk-svm --dev
+```
+
+根據需要包含特定程式的輔助工具：
+
+```
+cargo add mollusk-svm-programs-memo mollusk-svm-programs-token --dev
+```
+
+這些額外的 crate 提供了為標準 Solana 程式預配置的輔助工具。這減少了樣板代碼，並簡化了涉及代幣操作或備忘指令的常見測試場景的設置。
+
+> `--dev` 標誌在 `cargo add <crate-name> --dev` 中用於通過將它們添加到 `[dev-dependencies]` 部分來保持程式二進制文件的輕量化。
+> 這種配置確保了測試工具在開發過程中不會增加程式的部署大小，同時提供了訪問所有必要的 Solana 類型和輔助功能的能力。
+
+### 額外的依賴項
+
+多個 Solana crate 通過提供必要的類型和工具來增強測試體驗：
+
+```
+cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk --dev
+```
+
+<ArticleSection name="Mollusk Basics" id="mollusk-basics" level="h2" />
+
+首先聲明`program_id`，並使用您在程式中使用的地址創建一個`Mollusk`實例，以便正確調用它並避免在測試期間出現 "ProgramMismatch" 錯誤，以及構建程式的路徑，如下所示：
+
+```rust
+use mollusk_svm::Mollusk;
+use solana_sdk::pubkey::Pubkey;
+
+const ID: Pubkey = solana_sdk::pubkey!("22222222222222222222222222222222222222222222");
+
+// Alternative using an Array of bytes
+// pub const ID: [u8; 32] = [
+//    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+//    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+//    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+//    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+// ];
+
+#[test]
+fn test() {
+    // Omit the `.so` file extension for the program name since
+    // it is automatically added when Mollusk is loading the file.
+    let mollusk = Mollusk::new(&ID, "target/deploy/program");
+
+    // Alternative using an Array of bytes
+    // let mollusk = Mollusk::new(&Pubkey::new_from_array(ID), "target/deploy/program")
+}
+```
+
+進行測試時，我們可以使用以下四種主要的 API 方法之一：
+
+- `process_instruction`：處理指令並返回結果。
+- `process_and_validate_instruction`：處理指令並對結果執行一系列檢查，如果任何檢查失敗則會引發錯誤。
+- `process_instruction_chain`：處理一系列指令並返回結果。
+- `process_and_validate_instruction_chain`：處理一系列指令並對每個結果執行一系列檢查，如果任何檢查失敗則會引發錯誤。
+
+但在使用這些方法之前，我們需要先建立我們的帳戶和指令結構以供傳遞：
+
+### 帳戶
+
+在使用 Mollusk 測試 Solana 程式時，您將處理多種類型的帳戶，這些帳戶模擬了真實世界的程式執行場景。正確構建這些帳戶對於有效測試至關重要。
+
+最基本的帳戶類型是 `SystemAccount`，它有兩種主要變體：
+- 付款者：一個擁有 lamports 的帳戶，用於資助程式帳戶的建立或 lamport 轉移
+- 預設帳戶：一個空的且沒有 lamports 的帳戶，通常用於表示指令中等待初始化的程式帳戶
+
+系統帳戶不包含任何數據，並且由系統程式擁有。付款者和未初始化帳戶之間的主要區別在於它們的 lamport 餘額：付款者有資金，而未初始化帳戶則是空的。
+
+以下是在 Mollusk 中建立這些基本帳戶的方法：
+
+```rust
+use solana_sdk::{
+    account::Account,
+    system_program
+};
+
+// Payer account with lamports for transactions
+let payer = Pubkey::new_unique();
+let payer_account = Account::new(100_000_000, 0, &system_program::id());
+
+// Uninitialized account with no lamports
+let default_account = Account::default();
+```
+
+對於包含數據的 `ProgramAccounts`，您有兩種構建方法：
+
+```rust
+use solana_sdk::account::Account;
+
+let data = vec![
+    // Your serialized account data
+];
+let lamports = mollusk
+    .sysvars
+    .rent
+    .minimum_balance(data.len());
+
+let program_account = Pubkey::new_unique();
+let program_account_account = Account {
+    lamports,
+    data,
+    owner: ID, // The program's that owns the account
+    executable: false,
+    rent_epoch: 0,
+};
+```
+
+一旦您建立了帳戶，將它們編譯成 Mollusk 所需的格式：
+
+```rust
+let accounts = [
+    (user, user_account),
+    (program_account, program_account_account)
+];
+```
+
+### 指令
+
+一旦您了解了三個基本組成部分，為 Mollusk 測試創建指令就變得簡單了：識別您的程式的 `program_id`，包含識別碼和參數的 `instruction_data`，以及指定涉及的帳戶及其權限的帳戶元數據。
+
+以下是基本的指令結構：
+
+```rust
+use solana_sdk::instruction::{Instruction, AccountMeta};
+
+let instruction = Instruction::new_with_bytes(
+    ID, // Your program's ID
+    &[0], // Instruction data (discriminator + parameters)
+    vec![AccountMeta::new(payer, true)], // Account metadata
+);
+```
+
+指令數據必須包括指令識別碼，後接指令所需的任何參數。對於 Anchor 程式，預設的識別碼是從指令名稱派生的 8 字節值。
+
+為了簡化 Anchor 識別碼的生成，使用此輔助函數，並通過將識別碼與序列化參數連接來構建您的指令數據：
+
+```rust
+use sha2::{Sha256, Digest};
+
+let instruction_data = &[
+    &get_anchor_discriminator_from_name("deposit"),
+    &1_000_000u64.to_le_bytes()[..],
+]
+.concat();
+
+pub fn get_anchor_discriminator_from_name(name: &str) -> [u8; 8] {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("global:{}", name));
+    let result = hasher.finalize();
+
+    [
+        result[0], result[1], result[2], result[3],
+        result[4], result[5], result[6], result[7],
+    ]
+}
+```
+
+對於 `AccountMeta` 結構，我們需要根據帳戶權限使用適當的構造函數：
+
+- `AccountMeta::new(pubkey, is_signer)`：用於可變帳戶
+- `AccountMeta::new_readonly(pubkey, is_signer)`：用於只讀帳戶
+
+布爾參數指示帳戶是否必須簽署交易。大多數帳戶是非簽署者（false），除了需要授權操作的付款人和授權人。
+
+### 執行
+
+在準備好帳戶和指令後，您現在可以使用 Mollusk 的執行 API 執行並驗證您的程式邏輯。Mollusk 提供四種不同的執行方法，取決於您是否需要驗證檢查以及您是否正在測試單個或多個指令。
+
+最簡單的執行方法處理單個指令而不進行驗證：
+
+```rust
+mollusk.process_instruction(&instruction, &accounts);
+```
+
+這將返回執行結果，您可以手動檢查，但不會執行自動驗證。
+
+為了進行全面測試，請使用允許您指定預期結果的驗證方法：
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::success(), // Verify the transaction succeeded
+        Check::compute_units(5_000), // Expect specific compute usage
+        Check::account(&payer).data(&expected_data).build(), // Validate account data
+        Check::account(&payer).owner(&ID).build(), // Validate account owner
+        Check::account(&payer).lamports(expected_lamports).build(), // Check lamport balance
+    ],
+);
+```
+
+> 我們可以通過將多個檢查 "捆綁" 在一起來對同一帳戶執行多次檢查，例如這樣：`Check::account(&payer).data(&expected_data).owner(&ID).build()`
+
+驗證系統支持各種檢查類型，以驗證執行結果的不同方面。對於邊界情況測試，您可以驗證指令是否按預期失敗：
+
+```rust
+mollusk.process_and_validate_instruction(
+    &instruction,
+    &accounts,
+    &[
+        Check::err(ProgramError::MissingRequiredSignature), // Expect specific error
+    ],
+);
+```
+
+對於需要多個指令的複雜工作流程測試，請使用指令鏈方法：
+
+```rust
+mollusk.process_instruction_chain(
+    &[
+        (&instruction, &accounts),
+        (&instruction_2, &accounts_2)
+    ]
+);
+```
+
+結合多個指令與全面驗證：
+
+```rust
+mollusk.process_and_validate_instruction_chain(&[
+    (&instruction, &accounts, &[Check::success()]),
+    (&instruction_2, &accounts_2, &[
+        Check::success(),
+        Check::account(&target_account).lamports(final_balance).build(),
+    ]),
+]);
+```

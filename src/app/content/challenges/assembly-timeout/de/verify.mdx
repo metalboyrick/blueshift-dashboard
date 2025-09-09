@@ -1,0 +1,35 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF Assembly Timeout</ChallengeTitle>
+
+Jetzt, wo du dich mit dem Schreiben von Assembly vertraut machen solltest, versuche anstatt des `sol_get_clock_sysvar` das gleiche Ziel zu erreichen, indem du das `Clock`-Konto übergibst.
+
+Erstelle ein Programm, das nur eine Anweisung hat. Es muss:
+- Das `Clock`-Konto (mit Größe 40) entgegennehmen.
+- Einen u64 (8-Byte) Slot in den Anweisungsdaten entgegennehmen.
+- Die ersten 8 Bytes des `Clock`-Kontos verwenden, um den aktuellen Slot zu erfassen.
+- Prüfen, ob der aktuelle Slot größer ist als der in der Anweisung übergebene Slot. Wenn ja, gib den Fehlercode 1 zurück.
+
+> Um den richtigen Offset für die Anweisungsdaten zu erhalten, kannst du unser [Tool](https://sbpf.xyz) verwenden. Denk daran, ein Konto hinzuzufügen und seine Datenlänge auf 40 zu setzen!
+
+Beginne mit der Installation des sBPF-Pakets, wie im [Tooling-Abschnitt](/de/courses/introduction-to-assembly/tooling) des Kurses "Einführung in Assembly" erklärt, und erstelle dein Programm mit dem folgenden Befehl in deinem Terminal:
+
+```
+sbpf build
+```
+
+Dies generiert eine `.so`-Datei in deinem `target/deploy`-Ordner.
+
+Klicke jetzt auf die Schaltfläche `take challenge` und lege die Datei dort ab!
+
+<RequirementList>
+  <Requirement title="Challenge 1: Testen des Timeouts">
+    Dein Programm sollte erfolgreich sein, wenn ein Slot übergeben wird, der höher als der aktuelle ist.
+  </Requirement>
+
+  <Requirement title="Challenge 2: Testen des Fehlschlags eines Timeouts">
+    Dein Programm sollte fehlschlagen, wenn ein Slot übergeben wird, der niedriger als der aktuelle ist.
+  </Requirement>
+</RequirementList>

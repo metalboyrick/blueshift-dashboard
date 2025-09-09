@@ -1,0 +1,124 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Pemeriksaan Penandatangan
+
+Pemeriksaan penandatangan adalah setara digital dari persyaratan tanda tangan tulisan tangan, yang membuktikan bahwa pemilik akun benar-benar mengotorisasi transaksi daripada orang lain yang bertindak atas nama mereka. Dalam lingkungan tanpa kepercayaan Solana, bukti kriptografi ini adalah satu-satunya cara untuk memverifikasi otorisasi yang otentik.
+
+Hal ini menjadi penting ketika berurusan dengan Program Derived Accounts (PDA) dan operasi yang dibatasi oleh otoritas. Sebagian besar akun program menyimpan bidang `authority` yang menentukan siapa yang dapat memodifikasinya, dan banyak PDA diturunkan dari akun pengguna tertentu. Tanpa verifikasi penandatangan, program Anda tidak memiliki cara untuk membedakan antara pemilik yang sah dan penipu yang berbahaya.
+
+Konsekuensi dari pemeriksaan penandatangan yang hilang sangat merusak: akun apa pun dapat melakukan operasi yang seharusnya dibatasi untuk otoritas tertentu, yang menyebabkan akses tidak sah, akun terkuras, dan kehilangan kendali sepenuhnya atas status program.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Pertimbangkan instruksi rentan ini yang mentransfer kepemilikan akun program:
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Pada pandangan pertama, ini tampak aman. Batasan `has_one = owner` memastikan bahwa akun pemilik yang diberikan ke instruksi cocok dengan bidang `owner` yang disimpan dalam `program_account`. Validasi data sempurna, tetapi ada kelemahan fatal.
+
+Perhatikan bahwa `owner` adalah `UncheckedAccount`, bukan `Signer`. Ini berarti meskipun Anchor memverifikasi bahwa akun yang disediakan cocok dengan pemilik yang tersimpan, ia tidak pernah memeriksa apakah akun tersebut benar-benar menandatangani transaksi.
+
+Penyerang dapat mengeksploitasi ini dengan:
+- Menemukan akun program apa pun yang ingin mereka bajak
+- Membaca kunci publik pemilik saat ini dari data akun
+- Membuat transaksi yang meneruskan kunci publik pemilik asli sebagai parameter pemilik
+- Menetapkan diri mereka sendiri sebagai `new_owner`
+- Mengirimkan transaksi tanpa tanda tangan pemilik asli
+
+Batasan `has_one` lolos karena kunci publik cocok, tetapi karena tidak ada verifikasi penandatangan, penyerang berhasil mentransfer kepemilikan ke diri mereka sendiri tanpa persetujuan pemilik yang sah. Setelah mereka mengendalikan akun, mereka dapat melakukan operasi apa pun sebagai otoritas baru.
+
+Untungnya `Anchor` membuatnya sangat mudah untuk melakukan pemeriksaan ini langsung di struktur akun dengan hanya mengubah `UncheckedAccount` menjadi `Signer` seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Atau Anda dapat menambahkan batasan akun `signer` seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    #[account(signer)]
+    /// CHECK: This account will not be checked by Anchor
+    pub owner: UncheckedAccount<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        has_one = owner
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Atau Anda dapat menambahkan pemeriksaan penandatangan dalam instruksi menggunakan pemeriksaan `ctx.accounts.owner.is_signer` seperti ini:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if !ctx.accounts.owner.is_signer {
+        return Err(ProgramError::MissingRequiredSignature.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+
+    Ok(())
+}
+```
+
+Dengan menambahkan pemeriksaan ini, handler instruksi hanya akan melanjutkan jika akun otoritas telah menandatangani transaksi. Jika akun tidak ditandatangani, transaksi akan gagal.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dalam Pinocchio, karena kita tidak memiliki kemungkinan untuk menambahkan pemeriksaan keamanan langsung di dalam struktur akun, kita terpaksa melakukannya dalam logika instruksi.
+
+Kita dapat melakukannya dengan cara yang sangat mirip dengan Anchor dengan menggunakan fungsi `is_signer()` seperti ini:
+
+```rust
+if !self.accounts.owner.is_signer() {
+    return Err(ProgramError::MissingRequiredSignature.into());
+}
+```

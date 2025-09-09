@@ -1,0 +1,71 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 功能
+
+代幣程式通過一組指令運作，這些指令允許您創建代幣鑄幣、初始化代幣帳戶、在帳戶之間轉移代幣以及管理權限。
+
+它還支持多重簽名帳戶以增強安全性，並提供凍結帳戶和委派代幣權限的機制。
+
+<ArticleSection name="初始化帳戶" id="intializing-an-account" level="h2" />
+
+代幣程式提供不同的指令和輔助工具，簡化了初始化新帳戶的複雜性。
+
+如果我們想初始化 `Mint` 帳戶或 `Token` 帳戶，對於 `Associated Token` 帳戶，關聯的代幣程式會在內部使用 `initializeAccount` 指令，並在推導出正確的程式推導地址後執行。
+
+> 此功能僅初始化帳戶，因此我們需要確保在此之前使用系統程式的 `createAccount()` 指令，並設置正確的擁有者（代幣程式）、空間和 lamports 以使其免租金。
+
+<ArticleSection name="轉移" id="transfer" level="h2" />
+
+將代幣從一個帳戶移動到另一個帳戶。這是用戶之間傳送代幣的基本操作。
+
+代幣帳戶的擁有者需要是該交易的 `Signer`，而該轉移的目標需要是另一個代幣帳戶。
+
+> 我們決定轉移的數量不包括小數位。因此，如果我們想傳送 1 個有 6 位小數的代幣，我們需要使用 `1e6` 表示法。
+
+<ArticleSection name="授權" id="approve" level="h2" />
+
+授予代理人權限，允許其代表帳戶擁有者轉移特定數量的代幣。這使得程式化的代幣轉移成為可能，而無需授予完整的帳戶控制權。
+
+> 我們設定了一個「批准」的金額，代理只能轉移不超過該金額的資金
+
+<ArticleSection name="Revoke" id="revoke" level="h2" />
+
+移除當前代理對賬戶的權限，將完整控制權還給賬戶擁有者。
+
+> 立即取消任何現有的代理權限，並且只有賬戶擁有者可以撤銷代理（代理本身無法撤銷）
+
+<ArticleSection name="Set Authority" id="set-authority" level="h2" />
+
+更改鑄幣或賬戶的權限。這允許轉移所有權或更新特定的權限類型。
+
+> 可以更改鑄幣權限、凍結權限或賬戶擁有者，並且將權限設置為`None`是一個不可逆的操作，永久移除該功能
+
+<ArticleSection name="Mint To" id="mint-to" level="h2" />
+
+創建新代幣並將其存入指定賬戶。只有鑄幣權限持有者可以執行此操作。
+
+> 增加代幣的總供應量，並且金額遵循鑄幣的小數配置
+
+<ArticleSection name="Burn" id="burn" level="h2" />
+
+永久銷毀代幣，將其從流通中移除。這會減少代幣的總供應量。
+
+> 永久減少代幣的總供應量，此操作可以由賬戶擁有者或代理執行
+
+<ArticleSection name="Close Account" id="close-account" level="h2" />
+
+關閉一個代幣賬戶，並將其剩餘的 SOL 租金轉移到目標賬戶。該代幣賬戶必須為零餘額，除非它是本地 SOL 賬戶。
+
+> 從 Token2022 開始，可以關閉一個供應量為 0 的`Mint`賬戶
+
+<ArticleSection name="Freeze Account" id="set-mint-to" level="h2" />
+
+阻止賬戶上的所有代幣操作，直到解凍為止。只有鑄幣的凍結權限持有者可以執行此操作。
+
+> 完全禁用轉賬、授權和銷毀操作，並且只影響特定的凍結賬戶
+
+<ArticleSection name="Thaw Account" id="thaw-account" level="h2" />
+
+重新啟用之前被凍結賬戶的代幣操作。只有鑄幣的凍結權限持有者可以解凍賬戶。
+
+> 恢復凍結賬戶的全部功能，且只能由鑄幣的凍結權限持有者執行

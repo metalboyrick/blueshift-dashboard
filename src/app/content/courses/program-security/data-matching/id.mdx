@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Pencocokan Data
+
+Pencocokan data adalah praktik keamanan untuk memvalidasi bahwa data akun berisi nilai yang diharapkan sebelum mempercayainya dalam logika program Anda. Sementara pemeriksaan `owner` memverifikasi siapa yang mengendalikan akun dan pemeriksaan `signer` memverifikasi otorisasi, pencocokan data memastikan bahwa keadaan internal akun selaras dengan asumsi program Anda.
+
+Hal ini menjadi penting ketika handler instruksi bergantung pada hubungan antar akun atau ketika nilai data tertentu menentukan perilaku program. Tanpa validasi data yang tepat, penyerang dapat memanipulasi alur program dengan membuat akun yang memiliki kombinasi data tak terduga, meskipun akun tersebut lolos pemeriksaan kepemilikan dan otorisasi dasar.
+
+Bahayanya terletak pada kesenjangan antara validasi struktural dan validasi logis. Program Anda mungkin dengan benar memverifikasi bahwa akun memiliki tipe yang tepat dan dimiliki oleh program yang tepat, tetapi masih membuat asumsi yang salah tentang hubungan antara berbagai bagian data.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Pertimbangkan instruksi rentan ini yang memperbarui kepemilikan akun program:
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Kode ini tampak aman pada pandangan pertama. `owner` ditandai dengan benar sebagai `Signer`, memastikan mereka mengotorisasi transaksi. `program_account` memiliki tipe yang benar dan dimiliki oleh program. Semua pemeriksaan keamanan dasar lolos.
+
+Tetapi ada kelemahan kritis: program tidak pernah memvalidasi bahwa `owner` yang menandatangani transaksi sebenarnya sama dengan `owner` yang tersimpan dalam data `program_account`.
+
+Penyerang dapat mengeksploitasi ini dengan:
+- Membuat keypair mereka sendiri (sebut saja `attacker_keypair`)
+- Menemukan akun program apa pun yang ingin mereka bajak
+- Membuat transaksi di mana: `owner` adalah `attacker_keypair` (yang mereka kendalikan dan dapat ditandatangani); `new_owner` adalah kunci publik utama mereka dan `program_account` adalah akun korban
+
+Transaksi berhasil karena `attacker_keypair` menandatanganinya dengan benar, tetapi program tidak pernah memeriksa apakah `attacker_keypair` cocok dengan `owner` yang sebenarnya tersimpan di `program_account.owner`. Penyerang berhasil mentransfer kepemilikan akun orang lain ke dirinya sendiri.
+
+Untungnya `Anchor` membuatnya sangat mudah untuk melakukan pemeriksaan ini langsung di struct akun dengan menambahkan batasan `has_one` seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut, has_one = owner)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Atau kita bisa memutuskan untuk mengubah desain program dan membuat `program_account` menjadi PDA yang diturunkan dari `owner` seperti ini:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        seeds = [owner.key().as_ref()],
+        bump
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Atau Anda bisa memeriksa data tersebut dalam instruksi menggunakan pemeriksaan `ctx.accounts.program_account.owner` seperti ini:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+    Ok(())
+}
+```
+
+Dengan menambahkan pemeriksaan ini, handler instruksi hanya akan melanjutkan jika akun memiliki `owner` yang benar. Jika `owner` tidak benar, transaksi akan gagal.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+Dalam Pinocchio, karena kita tidak memiliki kemungkinan untuk menambahkan pemeriksaan keamanan langsung di dalam struct akun, kita terpaksa melakukannya dalam logika instruksi.
+
+Kita dapat melakukannya dengan mendeserialkan data akun dan memeriksa nilai `owner`:
+
+```rust
+let account_data = ctx.accounts.program_account.try_borrow_data()?;
+let mut account_data_slice: &[u8] = &account_data;
+let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+if account_state.owner != self.accounts.owner.key() {
+    return Err(ProgramError::InvalidAccountData.into());
+}
+```
+
+> Anda perlu membuat fungsi `ProgramAccount::try_deserialize()` Anda sendiri karena Pinocchio memungkinkan kita menangani deserialisasi dan serialisasi sesuai keinginan kita

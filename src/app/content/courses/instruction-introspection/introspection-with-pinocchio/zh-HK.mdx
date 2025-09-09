@@ -1,0 +1,65 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 使用 Pinocchio 進行指令內省
+
+Pinocchio 使用的類型與 `solana_program` crate 不同。這意味著我們需要為 Pinocchio 創建一個全新且優化的 SDK。
+
+在 [Orion](https://x.com/BasedOrion_) 的幫助下，我們創建了一組輔助工具，這些工具既尊重了「原始」實現，又使得 `Instruction` sysvar —— 一個使用成本最高的 sysvar —— 成為了效率最高的之一。
+
+因此，我們可以在 Pinocchio 中使用 *指令內省*，而無需安裝任何外部 crate，並且可以通過導入這些函數來獲取我們所需的所有信息：
+
+```rust
+use pinocchio::sysvars::instructions::{
+    load_current_index_checked, 
+    load_instruction_at_checked
+}; 
+```
+
+<ArticleSection name="如何使用內省" id="how-to-use-introspection" level="h2" />
+
+如前所述，指令內省只是從 `Instruction` sysvar 帳戶中反序列化數據，以提供我們所需的所有指令相關數據。
+
+我們首先檢查當前索引。我們可以通過使用 `load_current_index_checked` 函數來完成，如下所示：
+
+```rust
+let index = load_current_index_checked(&self.accounts.sysvar_instructions)?;
+```
+
+之後，我們可以使用 `load_instruction_at_checked` 在相對索引處檢查一條指令。這次，我們將檢查執行內省的指令之後的那條指令，如下所示：
+
+```rust
+// We load the next instruction, which is the one we want to check for the correct input.
+let instruction = load_instruction_at_checked(index as usize + 1, &self.accounts.sysvar_instructions)?;
+```
+
+在進入下一步之前，我們應該問自己，哪些信息對於防止惡意攻擊是必不可少的。
+
+我們通常從檢查所使用的程序是否是我們預期的開始。在此示例中，我們正在內省系統程序的另一條指令，因此我們可以這樣做：
+
+```rust
+if instruction.get_program_id() != &pinocchio_system::ID {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+接下來，我們檢查指令是否是我們預期的。為此，我們將鑑別器和指令數據與預期值進行比較。我們首先創建一個 `instruction_data` 變量並進行檢查，如下所示：
+
+```rust
+let mut instruction_data = [0u8; 12];
+instruction_data[0..4].copy_from_slice(&2u32.to_le_bytes());
+instruction_data[4..12].copy_from_slice(&100_000_000u64.to_le_bytes());
+
+if instruction.get_instruction_data() != instruction_data {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+然後，我們可以根據正在檢查的指令邏輯執行更多特定於程式的檢查。
+
+我們還可以檢查內省指令中存在的帳戶。此步驟需要我們了解帳戶結構的確切結構，因為我們將在特定索引處請求帳戶的數據或公鑰，如下所示：
+
+```rust
+if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+    return Err(ProgramError::InvalidAccountData);
+}
+```

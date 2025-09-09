@@ -1,0 +1,107 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 程序示例 
+
+现在让我们看看寄存器（r0-r10）、内存区域和指令如何在实际程序中协同工作。我们将从最简单的 sBPF 程序开始，以了解基本的执行流程。
+
+<ArticleSection name="NoOp-program" id="noop-program" level="h2" />
+
+一个 "NoOp"（无操作）程序非常适合学习，因为它在没有任何复杂性的情况下展示了基本的程序结构：
+- 程序如何接收输入（在寄存器 r1 中）
+- 它们如何返回结果（在寄存器 r0 中）
+- 每个 sBPF 程序遵循的基本入口/退出流程
+- Rust 如何编译为 sBPF 汇编
+
+尽管它“什么都不做”，但它展示了每个 Solana 程序所构建的基础。
+
+现在我们已经了解了基本的 sBPF 操作，让我们看看它们在一个真实（即使是微小的）程序中是什么样子的。
+
+<ArticleSection name="Pinocchio NoOp" id="pinocchio-noop" level="h2" />
+
+下面是一个使用 Pinocchio 编写的高性能 "noop"。它所做的只是返回成功：
+
+```rust
+#![no_std]
+use pinocchio::{entrypoint::InstructionContext, lazy_program_entrypoint, no_allocator, nostd_panic_handler, ProgramResult};
+
+lazy_program_entrypoint!(process_instruction);
+
+nostd_panic_handler!();
+no_allocator!();
+
+fn process_instruction(
+    _context: InstructionContext, // wrapper around the input buffer
+ ) -> ProgramResult {
+    Ok(())
+}
+```
+
+如果我们使用 `cargo build-sbf --dump` 构建此代码，我们将获得一个 ELF 转储，该转储会在 `/target/deploy/` 目录中提供有关我们的二进制文件的信息。
+
+然后我们需要查找 `.text` 部分——这是二进制文件中存储可执行代码的部分。
+
+```pinocchio_noop-dump.txt
+Disassembly of section .text
+0000000000000120 <entrypoint>
+     120 b7 00 00 00 00 00 00 00      	mov64 r0, 0x0
+     128 95 00 00 00 00 00 00 00      	exit
+```
+
+让我们使用我们学到的指令格式来分解这些十六进制字节的实际含义：
+
+这是第一条指令：`120 b7 00 00 00 00 00 00 00`
+- 地址：`0x120`（位于从 0x100000000 开始的文本区域内）
+- 操作码：`0xb7` = `mov64` 带立即值
+- dst：`0x00` = 寄存器 `r0`
+- src：`0x00` = 未使用（立即操作）
+- 偏移量：`0x0000` = 未使用
+- imm：`0x00000000` = 立即值 0
+
+这是第二条指令：`128 95 00 00 00 00 00 00 00`
+- 地址：`0x128`（在第一条指令之后的8字节）
+- 操作码：`0x95` = 退出/返回
+- 其他所有字段：`0x00` = 对于退出指令未使用
+
+> `0x120` 偏移量是链接器决定将入口点函数放置在ELF文件的 `.text` 部分的位置。ELF文件以头部、节表和其他元数据开头，这些内容占用了前大约 ~`0x120` 字节（288字节）。实际的可执行代码位于这些记录信息之后。
+
+<ArticleSection name="Assembly NoOp" id="assembly-noop" level="h2" />
+
+如果我们反汇编二进制文件，将其还原为可编译的sBPF汇编代码，代码将如下所示：
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    mov64 r0, 0x00   // r0 <- success
+    exit             // finish, return r0
+```
+
+让我们分解代码：
+- `.globl entrypoint`：这是一个汇编指令，告诉链接器使入口点符号在全局范围内可见。Solana运行时会查找此符号以确定程序的起始执行位置。
+- `entrypoint`：这是一个标签，标记了程序执行开始的内存地址。当运行时加载您的程序时，它会跳转到此地址。
+- `mov64 r0, 0x00`：将立即值0移动到寄存器r0中。由于r0是返回寄存器，这设置了一个成功的返回代码。
+- `exit`：终止程序执行并将r0中的值返回给运行时。
+
+> 返回0表示我们为程序返回了成功。
+
+这是一个非常小的程序，仅包含2条指令，执行时仅消耗2个计算单元（CUs），并且与我们的Rust代码完美匹配：
+- 我们定义了一个入口点函数
+- 我们返回Ok(())，其计算结果为0
+- 编译器生成了相应的 `mov64` 和 `exit` 指令
+
+<ArticleSection name="优化的汇编 NoOp" id="optimized-assembly-noop" level="h2" />
+
+然而，我们可以进一步优化。由于 Solana 运行时默认将`r0`初始化为 0，我们可以省略冗余的`mov64`指令：
+
+```sbpf
+.globl entrypoint
+entrypoint:
+    exit
+```
+
+这个优化版本：
+- 仅消耗 1 个计算单元（减少了 50%！）
+- 产生相同的结果（`r0`仍然为 0）
+
+> 这就是为什么理解汇编有助于优化！
+
+这种优化之所以可能，是因为我们了解初始寄存器状态——这是 Rust 编译器并不总能利用的。理解 sBPF 汇编可以帮助你识别并消除性能关键代码中的此类低效之处。

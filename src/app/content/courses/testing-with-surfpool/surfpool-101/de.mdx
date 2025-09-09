@@ -1,0 +1,60 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Surfpool 101
+
+![Testen mit Surfpool](/graphics/course-banners/testing-with-surfpool.png)
+
+Das Testen von Solana-Programmen, die auf Cross-Program Invocations (CPIs) angewiesen sind, erforderte bisher, dass Entwickler Konten und Programme vom Mainnet exportieren und dann auf einen lokalen Validator hochladen.
+
+Dieser Prozess funktioniert für einige wenige Konten, wird aber völlig unpraktikabel, wenn CPIs in komplexe Programme wie Jupiter getestet werden sollen, die von mehr als 40 Konten und 8+ Programmen abhängen können.
+
+Surfpool löst dieses Problem, indem es Entwicklern ermöglicht, Programme lokal zu simulieren, wobei Mainnet-Konten bei Bedarf abgerufen werden, plus zusätzliche Funktionen:
+- **Systemvariablen anpassen**: Zeitreisen (testen Sie Ihr Programm zu jedem historischen Slot oder Zeitstempel), pausieren Sie die Uhr oder stoppen Sie die Blockerstellung
+- **Kontodaten ändern**: SOL-Versorgung festlegen (gesamt, im Umlauf und nicht im Umlauf), Kontodaten zwischen Programmen übertragen oder Kern-Kontodaten und Token-Kontoinformationen aktualisieren
+- **Blockchain-Daten analysieren**: Transaktionen auf Recheneinheiten, Kontoänderungen und Ausführungsdetails profilieren und dann detaillierte Profile nach Signatur, UUID oder Tag abrufen
+
+<ArticleSection name="Was ist Surfpool" id="what-is-surfpool" level="h2" />
+
+[Surfpool](https://docs.surfpool.run/) ist das umfassende SDK und Tooling-Suite, während **Surfnet** das lokale Solana-Netzwerk ist, das es erstellt. Stellen Sie sich Surfpool als Ihre Entwicklungsumgebung vor und Surfnet als das Blockchain-Netzwerk, das darin läuft.
+
+Surfnet dient als direkter Ersatz für solana-test-validator und wurde speziell entwickelt, um die beste Entwicklungserfahrung für Solana-Entwickler zu bieten.
+
+Entwickelt vom [TxTx](https://x.com/txtx_sol)-Team, integriert Surfpool Infrastructure as Code nahtlos in Anchor-basierte Projekte und ermöglicht reproduzierbare, prüfbare und sichere Bereitstellungen in jedem Solana-Netzwerk – privat oder öffentlich.
+
+<ArticleSection name="Erste Schritte" id="first-steps" level="h2" />
+
+Alles, was Sie zum Ausführen von Surfnet benötigen, ist im Surfpool SDK enthalten. Da die Installation je nach Betriebssystem variiert, folgen Sie der offiziellen [Installationsseite](https://docs.surfpool.run/install) für Ihre spezifische Einrichtung.
+
+Nach der Installation des Surfpool SDK, starten Sie Surfnet mit:
+
+```bash
+surfpool start
+```
+
+Dies startet Surfnet auf dem Standard-Port des lokalen Validators (`http://127.0.0.1:8899`) mit einer Terminal-UI, die Folgendes anzeigt:
+- **Slots und Epoch**: Aktuell ausgeführte Slots werden automatisch alle 400ms verarbeitet. Verwenden Sie **Tab**, um manuell zum nächsten Slot zu wechseln, oder **Leertaste**, um die automatische Blockerstellung zu pausieren/fortzusetzen
+- **Transaktionslogs**: Zeitgestempelter Aktivitätsstrom, der alle Ausführungen Ihrer Transaktionen anzeigt
+
+Für eine browserbasierte Erfahrung verbinden Sie sich mit Surfpool Studio unter [diesem Link](http://127.0.0.1:8899).
+
+> Surfpool Studio umfasst alle Terminal-UI-Funktionen sowie zusätzliche Möglichkeiten wie Zeitreisen und das Hinzufügen von Tokens zu jedem Konto für jede Münze.
+
+### Programme bereitstellen
+
+Nach dem Einrichten von Surfnet können Sie Ihr Programm bereitstellen und mit dem Aufbau beginnen.
+
+**Anchor-Programme**: Verwenden Sie `anchor deploy` mit Ihrer `Anchor.toml`, die für `[programs.localnet]` konfiguriert ist.
+
+**Pinocchio-Programme**: Bereitstellung über Solana CLI mit Ihrer Konfiguration auf Localnet eingestellt: `solana program deploy ./target/deploy/your_program.so --program-id ./target/deploy/your_program-keypair.json`
+
+> Wenn Sie `surfpool start` in einen Anchor-Workspace ausführen, werden Sie aufgefordert, Infrastructure as Code für eine nahtlose automatische Bereitstellung Ihres Programms auf Surfnet zu verwenden.
+
+### Programme testen
+
+Nach der Bereitstellung auf Localnet verbinden Sie sich mit Surfnet, indem Sie den lokalen Validator anvisieren:
+
+```ts
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("http://localhost:8899", "confirmed");
+```

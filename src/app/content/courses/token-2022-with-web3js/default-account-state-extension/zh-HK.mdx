@@ -1,0 +1,135 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 預設帳戶狀態擴展
+
+`DefaultAccountState` 擴展是一個 Mint 擴展，允許所有新創建的 `Token` 帳戶在該特定 Mint 中默認為凍結狀態。Mint 的 `Freeze Authority` 然後可以解凍（解除凍結）這些 `Token` 帳戶，使其可以使用。
+
+<ArticleSection name="初始化 Mint 帳戶" id="initializing-the-mint-account" level="h2" />
+
+要在 `Mint` 帳戶上初始化 `DefaultAccountState` 擴展，我們需要使用 `initializeDefaultAccountState()` 函數。
+
+以下是如何使用預設帳戶狀態擴展創建一個 Mint：
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeMintInstruction,
+    createInitializeDefaultAccountStateInstruction,
+    getMintLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Default Account State extension
+const mintLen = getMintLen([ExtensionType.DefaultAccountState]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Default Account State extension
+const initializeDefaultAccountState = createInitializeDefaultAccountStateInstruction(
+    mint.publicKey,
+    AccountState.Frozen,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    keypair.publicKey, // freeze authority is MANDATORY
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeDefaultAccountState,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+> 請記住，`Freeze Authority` 在 `Mint` 上是此擴展的必要條件，否則我們將無法在創建時解凍任何 `Token` 帳戶。
+
+<ArticleSection name="解凍代幣帳戶" id="thawing-the-token-account" level="h2" />
+
+擁有 `DefaultAccountState` 擴展意味著所有初始化的 `Token` 帳戶將默認為 `frozen` 狀態。
+
+這意味著如果我們不解凍（解除凍結）它們，就無法 `Mint`、`Transfer` 或幾乎無法對這些 `Token` 帳戶執行任何操作。
+
+我們可以使用 `thawAccount` 指令輕鬆解凍一個 `Token` 帳戶，如下所示：
+
+```ts
+const ata = await getAssociatedTokenAddress(
+    mint.publicKey,
+    keypair.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID
+);
+
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    ata, // associated token account address
+    keypair.publicKey, // owner
+    mint.publicKey, // mint
+    TOKEN_2022_PROGRAM_ID
+)
+
+const thawAtaInstruction = createThawAccountInstruction(
+    ata,
+    mint.publicKey,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+    thawAtaInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair], {skipPreflight: true});
+
+console.log(`Token accounts created and thawed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+<ArticleSection name="更改預設帳戶狀態" id="changing-the-default-account-state" level="h2" />
+
+當我們不再需要對代幣分發進行更高的控制，並希望讓所有人自由交易或使用代幣時，我們可以使用 `updateDefaultAccountState` 指令更改預設帳戶狀態，如下所示：
+
+```ts
+const updateDefaultAccountStateInstruction = createUpdateDefaultAccountStateInstruction(
+    mint.publicKey,
+    AccountState.Initialized,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(updateDefaultAccountStateInstruction);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Default account state changed! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

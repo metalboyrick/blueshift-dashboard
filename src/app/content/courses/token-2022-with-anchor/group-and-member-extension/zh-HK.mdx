@@ -1,0 +1,195 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 群組與成員擴展
+
+`Group` 和 `Member` 擴展是 `Mint` 帳戶的擴展，這些擴展引入了創建群組的功能，例如與多個資產相關聯的 NFT 集合。
+
+<ArticleSection name="初始化鑄幣帳戶" id="initializing-the-mint-account" level="h2" />
+
+`Member` 和 `Group` 擴展與我們習慣的方式有些不同，因為它由兩個不同的擴展組成，這兩個擴展都位於 `Mint` 帳戶上：
+- 包含有關群組或成員的所有信息的 `Extension`。
+- 參考 `Mint` 帳戶的 `Pointer Extension`，該帳戶中存有 `Group` 或 `Member` 擴展。
+
+通常情況下，`Extension` 和 `Pointer Extension` 會位於同一個 `Mint` 帳戶中；在這個例子中，我們也會這樣做。
+
+> `Group` 和 `Member` 擴展不能位於同一個帳戶中
+
+在深入代碼之前，讓我們先了解一些基礎知識：
+
+雖然 `GroupPointer` 和 `MemberPointer` 擴展位於 `anchor-spl` crate 中，但要初始化 `Group` 和 `Member`，我們需要使用 `spl_token_group_interface` crate。
+
+因此，讓我們安裝所需的套件：
+
+```
+cargo add spl_token_metadata_interface
+```
+
+此外，`Group` 和 `Member` 擴展是少數需要在初始化 `Mint` 帳戶後再初始化的擴展之一。
+
+這是因為元數據初始化指令會根據群組和成員內容的長度動態分配所需的空間。
+
+同時，這意味著我們需要初始化 `Mint` 帳戶，並包含足夠的 lamports 以使其免租金，且包含 `Group` 或 `Member` 擴展，但僅為 `GroupPointer` 或 `MemberPointer` 擴展分配足夠的空間，因為 `initializeGroup()` 和 `intializeMember()` 指令實際上會正確地增加空間。
+
+在初始化程式碼中，`Group` 看起來像這樣：
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::token_2022::spl_token_2022::extension::group_pointer::GroupPointer;
+use anchor_spl::token_interface::token_group_initialize, Mint, Token2022, TokenGroupInitialize;
+use spl_token_group_interface::state::TokenGroup;
+
+pub fn initialize_group(ctx: Context<InitializeGroup>) -> Result<()> {
+    // Add 4 extra bytes for size of MetadataExtension (2 bytes for the discriminator, 2 bytes for length)
+    let data_len = 4 + size_of::<TokenGroup>();?;
+
+    // Calculate lamports required for the additional metadata
+    let lamports =
+        data_len as u64 * DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64;
+
+    // Transfer additional lamports to mint account
+    transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.payer.to_account_info(),
+                to: ctx.accounts.mint_account.to_account_info(),
+            },
+        ),
+        lamports,
+    )?;
+
+    // Initialize the token group extension
+    token_group_initialize(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TokenGroupInitialize {
+                token_program_id: ctx.accounts.token_program.to_account_info(),
+                group: ctx.accounts.mint_account.to_account_info(),
+                mint: ctx.accounts.mint_account.to_account_info(),
+                mint_authority: ctx.accounts.payer.to_account_info(),
+            },
+        )
+        Some(ctx.accounts.payer.key()), // update_authority
+        10,                             // max_size
+    )?;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct InitializeGroup<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = 2,
+        mint::authority = payer,
+        mint::freeze_authority = mint_account,
+        extensions::group_pointer::authority = payer,
+        extensions::group_pointer::group_address = mint_account,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+完成這一步後，我們可以使用剛剛建立的群組來新增成員，如下所示：
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::token_2022::spl_token_2022::extension::group_pointer::GroupPointer;
+use anchor_spl::token_interface::token_group_member_initialize, Mint, Token2022, TokenGroupMemberInitialize;
+use spl_token_group_interface::state::TokenGroupMember;
+
+pub fn initialize_group(ctx: Context<InitializeMember>) -> Result<()> {
+    // Add 4 extra bytes for size of MetadataExtension (2 bytes for the discriminator, 2 bytes for length)
+    let data_len = 4 + size_of::<TokenGroupMember>();?;
+
+    // Calculate lamports required for the additional metadata
+    let lamports =
+        data_len as u64 * DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64;
+
+    // Transfer additional lamports to mint account
+    transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.payer.to_account_info(),
+                to: ctx.accounts.mint_account.to_account_info(),
+            },
+        ),
+        lamports,
+    )?;
+
+    // Initialize the token group extension
+    token_group_member_initialize(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TokenGroupMemberInitialize {
+                token_program_id: ctx.accounts.token_program.to_account_info(),
+                group: ctx.accounts.group.to_account_info(),
+                group_update_authority: ctx.accounts.payer.to_account_info(),
+                member: ctx.accounts.mint_account.to_account_info(),
+                member_mint: ctx.accounts.mint_account.to_account_info(),
+                member_mint_authority: ctx.accounts.mint_account.to_account_info(),
+            },
+        )
+    )?;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct InitializeMember<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(mut)]
+    pub group: InterfaceAccount<'info, Mint>,
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = 2,
+        mint::authority = mint_account,
+        mint::freeze_authority = mint_account,
+        extensions::group_member_pointer::authority = payer,
+        extensions::group_member_pointer::member_address = mint_account,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+<ArticleSection name="更新群組的 maxSize" id="updating-the-max-size-for-groups" level="h2" />
+
+如你所見，當我們建立群組時，我們分配了一個 `maxSize` 欄位，用來限制該特定群組中最多可以有多少 `Member`。
+
+如果我們改變主意，並且仍然擁有該群組的 `updateAuthority`，我們可以使用 `updateGroupMaxSize()` 指令來縮小或增加該數字，如下所示：
+
+```ts
+const updateGroupMaxSizeInstructions = createUpdateGroupMaxSizeInstruction(
+    {
+        programId: TOKEN_2022_PROGRAM_ID,
+        group: mint.publicKey,
+        updateAuthority: keypair.publicKey,
+        maxSize: BigInt(100),
+    }
+);
+```
+
+<ArticleSection name="更新群組的 updateAuthority" id="updating-the-update-authority-for-groups" level="h2" />
+
+如果我們想更改 `UpdateAuthority` 或將其設為不可變，以防止任何人再新增 `Member`，我們可以使用 `updateGroupAuthority()` 指令，如下所示：
+
+```ts
+const updateGroupAuthorityInstructions = createUpdateGroupAuthorityInstruction(
+    {
+        programId: TOKEN_2022_PROGRAM_ID,
+        group: mint.publicKey,
+        currentAuthority: keypair.publicKey,
+        newAuthority: null,
+    }
+);
+```

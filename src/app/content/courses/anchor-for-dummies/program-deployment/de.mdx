@@ -1,0 +1,176 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Programm-Deployment
+
+Sobald dein Programm fertiggestellt ist, deploye es auf Devnet oder Mainnet, um die Interaktion mit Nutzern zu ermöglichen.
+
+<ArticleSection name="Program Deployment" id="program-deployment" level="h2" />
+
+Baue dein Programm, um die notwendigen Deployment-Dateien zu generieren:
+
+```
+anchor build
+```
+
+Dies erstellt einen `target/deploy` Ordner mit:
+- `<project-name>.so`: der Bytecode deines Programms
+- `<project-name>-keypair.json`: ein generiertes Keypair für das Deployment
+
+> Du kannst dieses Keypair durch eine Vanity-Adresse ersetzen, indem du das Keypair in der `<project-name>-keypair.json` Datei austauschst.
+
+Rufe die Programm-Adresse ab:
+
+```
+solana address -k target/deploy/<project-name>-keypair.json
+```
+
+Aktualisiere die `declare_id!()` Funktion in `lib.rs` mit dieser Adresse und konfiguriere dann deine `Anchor.toml` mit dem richtigen Ziel-Cluster und der Programm-ID:
+
+```
+[provider]
+cluster = "devnet"
+
+[programs.devnet]
+<project-name> = "<PROGRAM_ID>"
+```
+
+Deploye dein Programm:
+
+```
+anchor deploy
+```
+
+Dies führt das Deployment mit der angegebenen Adresse, dem Cluster und dem Wallet aus `Anchor.toml` als Gebührenzahler durch.
+
+### Deployment-Fehler
+
+Fehlgeschlagene Deployments erstellen Zwischenpuffer-Konten, die Lamports halten. Du wirst Wiederherstellungsanweisungen wie diese sehen:
+
+```
+==================================================================================
+Recover the intermediate account's ephemeral keypair file with
+`solana-keygen recover` and the following 12-word seed phrase:
+==================================================================================
+valley flat great hockey share token excess clever benefit traffic avocado athlete
+==================================================================================
+To resume a deploy, pass the recovered keypair as
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
+Or to recover the account's lamports, pass it as the
+[BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
+==================================================================================
+```
+
+Um dein Guthaben wiederherzustellen:
+
+- **Setze das Deployment fort**, indem du das Keypair wiederherstellst:
+
+    ```
+    solana-keygen recover -o <KEYPAIR_PATH>
+    ```
+
+    Gib die 12-Wörter-Seed-Phrase ein, wenn du dazu aufgefordert wirst, und deploye dann mit dem Puffer:
+
+    ```
+    solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json --buffer ./target/deploy/<buffer>-keypair.json
+    ```
+
+- **Schließe** den Puffer, um Lamports zurückzufordern:
+
+    ```
+    solana program close <ADDRESS>
+    ```
+
+### Deployment über Solana CLI
+
+Du kannst deine Programme direkt über die Solana CLI anstatt über Anchor deployen:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+Bei Netzwerküberlastung verwende diese Flags, um den Deployment-Erfolg zu verbessern:
+- `--with-compute-unit-price`: Legt den Compute-Unit-Preis in Mikro-Lamports fest
+- `--use-rpc`: Sendet Transaktionen an RPC anstatt an Validator-TPUs
+- `--max-sign-attempts`: Maximale Wiederholungsversuche nach Ablauf des Blockhash
+
+<ArticleSection name="Program Upgrade" id="program-upgrade" level="h2" />
+
+Standardmäßig erstellt `anchor deploy` eine neue Programm-ID. Um ein bestehendes Programm zu aktualisieren und dabei seine Adresse und zugehörige Konten beizubehalten:
+
+```
+anchor upgrade target/deploy/<project-name>.so --program-id <PROGRAM_ID>
+```
+
+Wenn die neue ausführbare Datei größer als die bereitgestellte Version ist, erweitere zuerst das Programmkonto:
+
+```
+solana program extend ./target/deploy/<project-name>.so <ADDITIONAL_BYTES>
+```
+
+### Upgrade über Solana CLI
+
+Der Prozess bleibt gleich: bei Bedarf erweitern, dann deployen:
+
+```
+solana program deploy ./target/deploy/<project-name>.so --program-id ./target/deploy/<project-name>-keypair.json
+```
+
+### Programme unveränderbar machen
+
+Du kannst die Upgrade-Berechtigung entfernen, um dein Programm unveränderbar zu machen:
+
+```
+solana program set-upgrade-authority <PROGRAM_ID> --final
+```
+
+> Diese Aktion ist nicht umkehrbar. Einmal festgelegt, kann das Programm nicht mehr aktualisiert werden.
+
+### Programme migrieren
+
+Die Migration überträgt ein Programm von einer Adresse zu einer anderen. Die CLI schließt das alte Programm und stellt es am neuen Ort bereit:
+
+```
+solana program migrate ./target/deploy/<project-name>.json
+```
+
+> Die Migration unterbricht alle bestehenden PDAs, da diese von der alten Programm-ID abgeleitet werden. Benutzer müssen ihre Anwendungen aktualisieren, um die neue Adresse zu verwenden und die Berechtigung über alle Token-Konten zu ändern, deren Autorität ein PDA ist.
+
+<ArticleSection name="Uploading an IDL" id="uploading-an-idl" level="h2" />
+
+Eine Interface Description Language (IDL)-Datei bietet eine standardisierte JSON-Beschreibung der Anweisungen und Konten deines Programms und ermöglicht eine einfachere Client-Integration.
+
+Lade die IDL onchain hoch, um Entwicklern die Integration deines Programms zu erleichtern:
+
+```
+anchor idl init --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+### Aktualisieren der IDL
+
+Nach der erneuten Bereitstellung deines Programms, aktualisiere die Onchain-IDL:
+
+```
+anchor idl upgrade --filepath target/idl/<program_name>.json <PROGRAM_ID>
+```
+
+<ArticleSection name="Verified Builds" id="verified-builds" level="h2" />
+
+Verifizierte Builds stellen sicher, dass das auf Solana bereitgestellte ausführbare Programm mit dem Quellcode in deinem Repository übereinstimmt. Diese Verifizierung ermöglicht es Entwicklern und Nutzern zu bestätigen, dass das Onchain-Programm exakt dem öffentlichen Codebase entspricht.
+
+Der Verifizierungsprozess vergleicht den Hash des Onchain-Programms mit dem lokal aus dem Quellcode erstellten Programm und erkennt so Abweichungen zwischen den Versionen.
+
+Das Erstellen von Programmen mit der Solana CLI kann maschinenspezifischen Code in Binärdateien einbetten. Das Kompilieren desselben Programms auf verschiedenen Maschinen kann zu unterschiedlichen ausführbaren Dateien führen. Um dieses Problem zu lösen, erfolgt der Build innerhalb eines Docker-Containers mit festgelegten Abhängigkeiten für reproduzierbare Ergebnisse.
+
+Anchor bietet CLI-Befehle, die den Build-Prozess und die Docker-Konfiguration übernehmen:
+
+```
+anchor build --verifiable
+```
+
+Verifiziere einen Build gegen ein auf dem Mainnet bereitgestelltes Programm:
+
+```
+anchor verify -p <lib-name> <program-id>
+```
+
+> Der `<lib-name>` entspricht dem Namen, der in der `Cargo.toml`-Datei deines Programms definiert ist.

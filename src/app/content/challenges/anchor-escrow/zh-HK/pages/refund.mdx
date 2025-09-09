@@ -1,0 +1,66 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="退款" id="refund" level="h2" />
+
+我們現在可以進入 `refund` 指令，該指令位於 `refund.rs`，並將執行以下操作：
+- 關閉托管 PDA，並將其租金 lamports 退還給創建者。
+- 將保管庫中的全部 Token A 餘額移回創建者，然後關閉保管庫帳戶。
+
+### 帳戶 
+
+在此情境中需要的帳戶包括：
+- `maker`：決定交換條款的用戶
+- `escrow`：存放所有交換條款的帳戶
+- `mint_a`：`maker` 已存入的代幣
+- `vault`：與 `escrow` 和 `mint_a` 關聯的代幣帳戶，存放了代幣
+- `maker_ata_a`：與 `maker` 和 `mint_a` 關聯的代幣帳戶，將從 `vault` 接收代幣
+- `associated_token_program`：用於創建關聯代幣帳戶的關聯代幣程序
+- `token_program`：用於 CPI 轉移的代幣程序
+- `system_program`：用於創建 `Escrow` 的系統程序
+
+這次我們不會幫助你創建 `Context`，所以請嘗試自己完成！請確保使用正確的帳戶順序，否則我們的測試將失敗。
+
+### 邏輯 
+
+邏輯與 `take` 指令類似，但這次我們只是將代幣從 `vault` 移動到 `maker_ata_a`，然後關閉現在已空的保管庫。
+
+這次輪到你自己學習如何完成，所以我們不會告訴你解決方案是什麼。
+
+請注意，一旦執行此操作，該提議將失效，保管庫將被移除，並且創建者的 Token A 和租金將返回到他們的錢包中。
+
+<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+
+現在我們已經在不同的指令中創建了所有的函數，終於可以將我們創建的所有函數填充到 `lib.rs` 中；像這樣：
+
+```rust
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        instructions::make::handler(ctx, seed, receive, amount)
+    }
+
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        instructions::take::handler(ctx)
+    }
+
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        instructions::refund::handler(ctx)
+    }
+}
+```
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+現在你可以使用我們的單元測試來測試你的程式並領取你的 NFT！
+
+首先在終端中使用以下指令構建你的程式
+
+```bash
+anchor build
+```
+
+這會直接在你的 `target/deploy` 資料夾中生成一個 `.so` 檔案。
+
+現在點擊 `take challenge` 按鈕，然後將檔案拖放到那裡！

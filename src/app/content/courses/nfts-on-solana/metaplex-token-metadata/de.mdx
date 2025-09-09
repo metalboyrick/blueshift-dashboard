@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Metaplex Token Metadata Programm
+
+Das Metaplex Token Metadata Programm adressiert eine grundlegende Einschränkung im SPL-Token Programm, indem es die Verknüpfung von umfangreichen beschreibenden Daten sowohl mit fungiblen als auch nicht-fungiblen Tokens ermöglicht.
+
+Während das SPL-Token Programm effizient die Kern-Token-Mechanismen wie Besitz und Angebot verwaltet, erscheinen Tokens ohne Metadaten in Wallets und Explorern als anonyme Public Keys.
+
+Metaplex verwandelt diese grundlegenden Blockchain-Einträge in bedeutungsvolle digitale Assets, indem es die kontextuellen Informationen bereitstellt, die Anwendungen und Benutzer benötigen.
+
+<ArticleSection name="Metadata Account" id="metadata-account" level="h2" />
+
+Das `Metadata` Konto dient als beschreibende Schicht, die Blockchain-Tokens Kontext und Nutzen verleiht. Diese Kontostruktur verwendet Solanas Program Derived Address-System, um eine zuverlässige Beziehung zwischen jedem Token und seinen zugehörigen Informationen zu schaffen.
+
+Die deterministische Adressgenerierung stellt sicher, dass jedes Mint-Konto genau ein entsprechendes Metadata-Konto hat, wodurch klare Dateneigentumsverhältnisse etabliert und Konflikte verhindert werden.
+
+Das `Metadata` Konto leitet seine Adresse durch einen deterministischen Prozess ab, der spezifische Seed-Werte mit dem Public Key des Mint-Kontos kombiniert:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+
+let (metadata, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+    ], 
+    &ID  
+);
+```
+
+Das `Metadata` Konto speichert umfassende Informationen, die weit über grundlegende Token-Identifikatoren hinausgehen.
+
+Das Creator-Verifizierungssystem führt eine Liste von Token-Erstellern, jeder mit einem verifizierten Attribut, das kryptographischen Nachweis für eine authentische Creator-Autorisierung bietet. Diese Verifizierung verhindert Identitätsbetrug und etabliert eine zuverlässige Herkunftsverfolgung für digitale Assets.
+
+Das integrierte Royalty-System ermöglicht eine automatisierte Einnahmenverteilung durch Anteilsattribute, die jedem Creator zugewiesen werden. Marktplätze können diese Prozentsätze programmatisch referenzieren, um Erlöse aus Sekundärverkäufen gemäß vorbestimmten Vereinbarungen zu verteilen, wodurch manuelle Berechnungen und Vertrauensabhängigkeiten eliminiert werden.
+
+Dies schafft nachhaltige Wirtschaftsmodelle, bei denen Ersteller über den ersten Verkauf hinaus weiterhin an ihren Werken verdienen.
+
+Das Token-Metadata-Programm überbrückt erfolgreich die Lücke zwischen rohen Blockchain-Daten und benutzerfreundlichen digitalen Assets. Durch die Anreicherung von Mint-Konten mit umfangreichen Kontextinformationen ermöglicht das Programm Anwendungen, Token auf sinnvolle Weise anzuzeigen, zu kategorisieren und mit ihnen zu interagieren.
+
+Diese Metadaten-Ebene bildet die Grundlage für das vielfältige digitale Asset-Ökosystem, das heute auf Solana existiert.
+
+<ArticleSection name="Master Edition Account" id="master-edition-account" level="h2" />
+
+Während Metadata-Konten sowohl fungible als auch nicht-fungible Token effektiv bedienen, erfordern authentische NFT-Eigenschaften zusätzliche Kontrollmechanismen.
+
+Das `Master Edition` Konto adressiert diesen Bedarf als spezialisiertes PDA, das die Token-Autoritätsverwaltung regelt. Dieses Konto wird erst erstellt, nachdem das Token-Metadata-Programm überprüft hat, dass die richtigen Eigenschaften für nicht-fungible Token eingerichtet wurden.
+
+Das Master Edition System verwendet einen ausgeklügelten Ansatz zur Autoritätsverwaltung. Anstatt die Mint-Autorität dauerhaft zu zerstören, überträgt das Programm sowohl die Mint- als auch die Freeze-Autorität an das Master Edition PDA. Dieses Design bietet im Vergleich zu dauerhaft ungültigen Autoritäten verbesserte Sicherheit und Funktionalität, während gleichzeitig eine strenge Kontrolle über die Token-Erstellung und -Verwaltung gewährleistet wird.
+
+> Lesen Sie [die FAQ](https://developers.metaplex.com/token-metadata/faq#why-are-the-mint-and-freeze-authorities-transferred-to-the-edition-pda), um den Grund für diese Entscheidung zu verstehen.
+
+Die Seeds des `Master Edition` Kontos sind wie folgt:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+const EDITION: &str = "edition";
+
+let (master_edition, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+        EDITION.as_bytes(),
+    ], 
+    &ID  
+);
+```
+
+<ArticleSection name="Programmable NFTs" id="programmable-nfts" level="h2" />
+
+Programmierbare NFTs (pNFTs) stellen einen fortschrittlichen Token-Standard dar, der anpassbare Verhaltensweisen und Einschränkungen auf Protokollebene durchsetzt.
+
+Diese Asset-Klasse adressiert die Einschränkungen traditioneller NFTs, indem sie es Erstellern ermöglicht, spezifische Lebenszyklus-Regeln zu definieren, die während Token-Interaktionen automatisch ausgeführt werden und so die Einhaltung für Ersteller sicherstellen, ohne auf externe Durchsetzungsmechanismen angewiesen zu sein.
+
+Die Durchsetzungsarchitektur funktioniert durch ein System mit eingefrorenen Token-Konten. Wenn ein NFT programmierbar wird, bleibt sein zugehöriges Token-Konto dauerhaft eingefroren, wodurch alle Operationen über das Token Metadata-Programm geleitet werden müssen.
+
+Dieses Design schafft einen obligatorischen Validierungskontrollpunkt, an dem Regeln überprüft werden, bevor eine Aktion fortgesetzt werden kann, was es unmöglich macht, vom Ersteller definierte Einschränkungen zu umgehen.
+
+Vom Ersteller definierte Regeln werden in `RuleSet`Konten gespeichert, die mit dem `Token Record`Konto verbunden sind, einem neuen Kontotyp, der mit der Mint verknüpft ist und den Status eines programmierbaren NFTs signalisiert.
+
+Das `Token Record`Konto leitet seine Adresse aus spezifischen Seeds ab, die es sowohl mit der Mint als auch mit Token-Konten verknüpfen:
+
+```rust
+const ID: Pubkey = solana_pubkey::pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+const PREFIX: &str = "metadata";
+const TOKEN_RECORD_SEED: &str = "token_record";
+
+let (master_edition, _) = Pubkey::find_program_address(
+    &[
+        PREFIX.as_bytes(), 
+        &ID, 
+        mint.as_ref()
+        TOKEN_RECORD_SEED.as_bytes(),
+        token.as_ref(),
+    ], 
+    &ID  
+);
+```
+
+Diese `RuleSets` ermöglichen anspruchsvolle bedingte Logik, einschließlich Marketplace-Allowlists, die Lizenzgebühren respektieren, Multi-Signatur-Anforderungen für Transfers, zeitbasierte Einschränkungen für Operationen oder komplexe Genehmigungsworkflows.
+
+Das [Token Auth Rules](https://developers.metaplex.com/token-auth-rules)-Programm verwaltet diese `RuleSet`Konten und handhabt deren Validierungslogik, wodurch ein flexibler Rahmen für die Implementierung benutzerdefinierter Governance-Mechanismen bereitgestellt wird.
+
+Die Entwicklerinteraktion mit pNFTs erfolgt über das Token Metadata-Programm und nicht direkt über das SPL-Token-Programm. Das Programm bietet optimierte Anweisungen wie `Create` und `Update`, die traditionelle Operationen wie `CreateMetadataAccount` und `UpdateMetadata` ersetzen.
+
+Jede Anweisung erfordert einen `authorization_rules`Kontoparameter, der auf die anwendbare `RuleSet` verweist, die durch On-Chain-Ableitung oder über die Metaplex Read API entdeckt werden kann.
+
+Dieses programmierbare Framework ermöglicht es Erstellern, nuancierte Wirtschaftsmodelle und Governance-Strukturen mit garantierter Durchsetzung zu implementieren.
+
+Ob bei der Implementierung bedingter Transfers, dynamischer Lizenzgebührenstrukturen oder komplexer Eigentumsanforderungen, pNFTs stellen sicher, dass alle Verhaltensweisen automatisch auf Protokollebene ausgeführt werden, ohne von der Kooperation des Marktplatzes oder der freiwilligen Benutzerkonformität abhängig zu sein.
+
+> Um mehr darüber zu erfahren, wie man das `Token Metadata` Programm verwendet, siehe die [offizielle Dokumentation](https://developers.metaplex.com/token-metadata)

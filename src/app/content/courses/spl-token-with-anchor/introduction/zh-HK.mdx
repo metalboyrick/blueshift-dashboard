@@ -1,0 +1,89 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Token 程式
+
+![SPL Token with Anchor](/graphics/course-banners/spl-token-with-anchor.png)
+
+在 Solana 上，所有與代幣相關的操作都由 [SPL Token 程式](https://github.com/solana-program/token) 和 [Token2022 程式](/zh-HK/courses/token-2022-program) 處理：這是 Solana 的原生代幣框架，定義了所有代幣的創建、管理和轉移方式。
+
+這是一個單一的統一程式，負責處理整個網絡上的所有代幣操作，確保一致性和互操作性。
+
+> 在 Solana 上採用單一統一介面來處理所有代幣的決定，創造了一個簡單的實現方式，可以在所有 dApps（去中心化應用程式）和整合（如錢包等）中複製。
+
+對於 anchor，所有與代幣相關的內容都可以在 `anchor-spl` crate 中找到。因此，在初始化 `Anchor` 工作區後，我們可以這樣做：
+
+```bash
+cargo add anchor-spl
+```
+
+> 如果你不熟悉 anchor，我們建議你在繼續之前先閱讀我們的 [Anchor for Dummies](/zh-HK/courses/anchor-for-dummies)。
+
+<ArticleSection name="Mint 和 Token 帳戶" id="mint-and-token-accounts" level="h2" />
+
+如果你熟悉 `Anchor`，你會知道它們有一組宏，幫助用戶抽象掉與初始化帳戶相關的許多複雜性。
+
+對於 `Mint`、`Token` 和 `Associated Token` 帳戶，這裡的操作方式也是一樣的。
+
+### Mint 帳戶
+
+多虧了 `Anchor` 提供的宏，我們可以輕鬆地創建一個 `Mint` 帳戶，如下所示：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6,
+        mint::authority = signer.key(),
+    )]
+    pub mint: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### Token 帳戶
+
+同樣適用於 `Token` 帳戶。通過宏創建 `Token` 帳戶的方式如下：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+```
+
+### 關聯的 Token 帳戶
+
+對於 `Associated Token` 帳戶也是一樣的。通過宏創建 `Associated Token` 帳戶的方式與創建 `Token` 帳戶類似，唯一的區別在於約束條件，具體如下：
+
+```rust
+#[derive(Accounts)]
+pub struct CreateToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    pub mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+```

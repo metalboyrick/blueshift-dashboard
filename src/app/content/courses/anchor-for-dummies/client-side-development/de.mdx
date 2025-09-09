@@ -1,0 +1,307 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Client-seitige Entwicklung
+
+Die meisten dApps verwenden TypeScript, um mit bereitgestellten Solana-Programmen zu interagieren. Das Verständnis, wie man sein Programm client-seitig integriert, ist entscheidend für die Entwicklung funktionaler Anwendungen.
+
+<ArticleSection name="Anchor Client SDK" id="anchor-client-sdk" level="h2" />
+
+Anchor vereinfacht die Client-Interaktion mit Solana-Programmen durch eine Interface Description Language (IDL)-Datei, die die Struktur deines Programms widerspiegelt.
+
+In Kombination mit Anchors TypeScript-Bibliothek (@coral-xyz/anchor) bietet die IDL einen optimierten Ansatz zum Erstellen von Anweisungen und Transaktionen.
+
+### Setup
+
+Das `@coral-xyz/anchor` Paket wird automatisch installiert, wenn ein Anchor-Programm erstellt wird. Nach dem Ausführen von anchor build generiert Anchor:
+- Eine IDL unter `target/idl/<program-name>.json`
+- Ein TypeScript SDK unter `target/types/<program-name>.ts`
+
+Diese Dateien abstrahieren einen Großteil der zugrunde liegenden Komplexität. Übertrage sie zu deinem TypeScript-Client mit dieser Struktur:
+
+```
+src
+├── anchor
+│     ├── <program-name>.json
+│     └── <program-name>.ts
+└── integration.ts
+```
+
+> Die `integration.ts` Datei enthält die Logik für die Programminteraktion. Die `<program-name>.json` Datei ist die IDL, und `<program-name>.ts` enthält generierte TypeScript-Typen.
+
+Um den Wallet-Adapter mit Anchors TypeScript SDK zu verwenden, erstelle ein Provider-Objekt, das die Connection (localhost, devnet oder mainnet) und die Wallet (die Adresse, die für Transaktionen bezahlt und diese signiert) kombiniert.
+
+Richte die Wallet und Connection ein:
+
+```ts
+import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
+
+const { connection } = useConnection();
+const wallet = useAnchorWallet();
+```
+
+> Der `useWallet` Hook aus `@solana/wallet-adapter-react` ist nicht kompatibel mit dem Wallet-Objekt, das Anchors Provider erwartet. Deshalb verwenden wir den `useAnchorWallet` Hook.
+
+Erstelle das Provider-Objekt und setze es als Standard:
+
+```
+import { AnchorProvider, setProvider } from "@coral-xyz/anchor";
+
+const provider = new AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
+
+setProvider(provider);
+```
+
+### Programm
+
+Anchors Program-Objekt erstellt eine benutzerdefinierte API für die Interaktion mit Solana-Programmen. Diese API dient als zentrale Schnittstelle für die gesamte Onchain-Programmkommunikation:
+- Senden von Transaktionen, 
+- Abrufen deserialisierter Konten, 
+- Dekodieren von Anweisungsdaten, 
+- Abonnieren von Kontoänderungen, 
+- Überwachen von Ereignissen
+
+Erstelle das Program-Objekt durch Importieren der Typen und des IDL:
+
+```ts
+import <program-name> from "./<program-name>.json";
+import type { <Program-Type> } from "./<program-name>.ts";
+import { Program, Idl } from "@coral-xyz/anchor";
+
+const program = new Program(<program-name> as <Program-Type>);
+```
+
+Wenn du keinen Standard-Provider festgelegt hast, gib ihn explizit an:
+
+```ts
+const program = new Program(<program-name> as <Program-Type>, provider);
+```
+
+Nach der Konfiguration kannst du den Anchor Methods Builder verwenden, um Anweisungen und Transaktionen zu erstellen. Der `MethodsBuilder` nutzt das IDL, um ein optimiertes Format für den Aufbau von Transaktionen bereitzustellen, die Programmanweisungen aufrufen.
+
+Das grundlegende `MethodsBuilder` Muster:
+
+```ts
+await program.methods
+  .instructionName(instructionDataInputs)
+  .accounts({})
+  .signers([])
+  .rpc();
+```
+
+> Die API verwendet camelCase-Benennung anstelle der snake_case-Konvention von Rust. Rufe Anweisungen mit Punktsyntax und dem Anweisungsnamen auf und übergib Argumente als kommagetrennte Werte.
+
+Übergib zusätzliche Signierer über den Provider hinaus mit `.signers()`.
+
+### Konten
+
+Verwende die Punktsyntax, um `.accounts` auf dem `MethodsBuilder` aufzurufen und übergib ein Objekt mit jedem Konto, das die Anweisung gemäß IDL erwartet.
+
+> Ab Anchor 0.30.0 werden Konten, die automatisch aufgelöst werden können (wie PDAs oder explizite Adressen), in das IDL aufgenommen und sind im `.accounts`Aufruf nicht erforderlich (`.accountPartial()` wird zum Standard). Um alle Konten manuell zu übergeben, verwende `.accountsStrict()`.
+
+### Transaktionen
+
+Die Standardmethode zum Senden von Transaktionen über Anchor ist `.rpc()`, die die Transaktion direkt an die Blockchain sendet.
+
+Für Szenarien, die Backend-Signierung erfordern (wie das Erstellen einer Transaktion im Frontend mit dem Wallet des Benutzers und anschließendes sicheres Signieren mit einem Backend-Keypair), verwende `.transaction()`:
+
+```ts
+const transaction = await program.methods
+  .instructionName(instructionDataInputs)
+  .accounts({})
+  .transaction();
+
+//... Sign the transaction in the backend
+
+// Send the transaction to the chain
+await sendTransaction(transaction, connection);
+```
+
+Um mehrere Anchor-Anweisungen zu bündeln, verwende `.instruction()`, um Anweisungsobjekte zu erhalten:
+
+```ts
+// Create first instruction
+const instructionOne = await program.methods
+  .instructionOneName(instructionOneDataInputs)
+  .accounts({})
+  .instruction();
+
+// Create second instruction
+const instructionTwo = await program.methods
+  .instructionTwoName(instructionTwoDataInputs)
+  .accounts({})
+  .instruction();
+
+// Add both instructions to one transaction
+const transaction = new Transaction().add(instructionOne, instructionTwo);
+
+// Send transaction
+await sendTransaction(transaction, connection);
+```
+
+<ArticleSection name="Konten abrufen und filtern" id="fetch-and-filter-accounts" level="h2" />
+
+Wenn dein Programm Hunderte von Konten erstellt, wird die Verfolgung schwierig. Das Program-Objekt bietet Methoden, um Programmkonten effizient abzurufen und zu filtern.
+
+Rufe alle Adressen eines bestimmten Kontotyps ab:
+
+```ts
+const accounts = await program.account.counter.all();
+```
+
+Filtere bestimmte Konten mit dem Flag `memcmp`:
+
+```ts
+const accounts = await program.account.counter.all([
+  {
+    memcmp: {
+      offset: 8,
+      bytes: bs58.encode(new BN(0, "le").toArray()),
+    },
+  },
+]);
+```
+
+> Dies ruft alle `Counter` Konten ab, bei denen das erste Feld gleich 0 ist.
+
+Um zu prüfen, ob sich Kontodaten geändert haben, rufen Sie deserialisierte Kontodaten für ein bestimmtes Konto mit fetch ab:
+
+```ts
+const account = await program.account.counter.fetch(ACCOUNT_ADDRESS);
+```
+
+Mehrere Konten gleichzeitig abrufen:
+
+```ts
+const accounts = await program.account.counter.fetchMultiple([
+  ACCOUNT_ADDRESS_ONE,
+  ACCOUNT_ADDRESS_TWO,
+]);
+```
+
+<ArticleSection name="Events und Webhooks" id="events-and-webhooks" level="h2" />
+
+Anstatt Onchain-Daten jedes Mal abzurufen, wenn Benutzer ihre Wallets verbinden, richten Sie Systeme ein, die die Blockchain überwachen und relevante Daten in einer Datenbank speichern.
+
+Es gibt zwei Hauptansätze für das Abhören von Onchain-Events:
+- Polling: Der Client prüft in regelmäßigen Abständen wiederholt auf neue Daten. Der Server antwortet mit den neuesten Daten unabhängig von Änderungen, was möglicherweise zu doppelten Informationen führt.
+- Streaming: Der Server sendet Daten nur dann an den Client, wenn Aktualisierungen auftreten. Dies ermöglicht eine effizientere Echtzeit-Datenübertragung, da nur relevante Änderungen übermittelt werden.
+
+Für das Streaming von Anchor-Anweisungen verwenden Sie Webhooks, die auf Events hören und sie an Ihren Server senden, wenn sie auftreten. Aktualisieren Sie beispielsweise einen Datenbankeintrag, wenn ein NFT-Verkauf auf Ihrem Marktplatz stattfindet.
+
+> Für Anwendungen mit extrem niedriger Latenz, bei denen Unterschiede von 5 ms wichtig sind, bieten Webhooks möglicherweise nicht ausreichend Geschwindigkeit.
+
+Anchor bietet zwei Makros zum Emittieren von Events:
+- `emit!()`: Emittiert Events direkt in Programmlogs unter Verwendung des `sol_log_data()` Syscalls, wobei Eventdaten als Base64-Strings mit dem Präfix "Program Data" codiert werden
+- `emit_cpi!()`: Emittiert Events durch Cross Program Invocations (CPIs). Eventdaten werden codiert und in die Anweisungsdaten des CPI anstelle von Programmlogs aufgenommen
+
+### `emit!()` Makro
+
+Programmimplementierung:
+
+```rust
+use anchor_lang::prelude::*;
+ 
+declare_id!("8T7MsCZyzxboviPJg5Rc7d8iqEcDReYR2pkQKrmbg7dy");
+ 
+#[program]
+pub mod event {
+    use super::*;
+ 
+    pub fn emit_event(_ctx: Context<EmitEvent>, input: String) -> Result<()> {
+        emit!(CustomEvent { message: input });
+        Ok(())
+    }
+}
+ 
+#[derive(Accounts)]
+pub struct EmitEvent {}
+ 
+#[event]
+pub struct CustomEvent {
+    pub message: String,
+}
+```
+
+Client-seitiges Event-Listening mit Anchor SDK-Helfern für Base64-Decodierung:
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { Event } from "../target/types/event";
+ 
+describe("event", () => {
+  // Configure the client to use the local cluster.
+  anchor.setProvider(anchor.AnchorProvider.env());
+ 
+  const program = anchor.workspace.Event as Program<Event>;
+ 
+  it("Emits custom event", async () => {
+    // Set up listener before sending transaction
+    const listenerId = program.addEventListener("customEvent", event => {
+      // Process the event data
+      console.log("Event Data:", event);
+    });
+  });
+});
+```
+
+### `emit_cpi!()` Makro
+
+Programmimplementierung:
+
+```rust
+use anchor_lang::prelude::*;
+ 
+declare_id!("2cDQ2LxKwQ8fnFUz4LLrZ157QzBnhPNeQrTSmWcpVin1");
+ 
+#[program]
+pub mod event_cpi {
+    use super::*;
+ 
+    pub fn emit_event(ctx: Context<EmitEvent>, input: String) -> Result<()> {
+        emit_cpi!(CustomEvent { message: input });
+        Ok(())
+    }
+}
+ 
+#[event_cpi]
+#[derive(Accounts)]
+pub struct EmitEvent {}
+ 
+#[event]
+pub struct CustomEvent {
+    pub message: String,
+}
+```
+
+Client-seitige Event-Dekodierung:
+
+```ts
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { EventCpi } from "../target/types/event_cpi";
+ 
+describe("event-cpi", () => {
+  // Configure the client to use the local cluster.
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const program = anchor.workspace.EventCpi as Program<EventCpi>;
+ 
+  it("Emits custom event", async () => { 
+    // Fetch the transaction data
+    const transactionData = await program.provider.connection.getTransaction(
+      transactionSignature,
+      { commitment: "confirmed" },
+    );
+ 
+    // Decode the event data from the CPI instruction data
+    const eventIx = transactionData.meta.innerInstructions[0].instructions[0];
+    const rawData = anchor.utils.bytes.bs58.decode(eventIx.data);
+    const base64Data = anchor.utils.bytes.base64.encode(rawData.subarray(8));
+    const event = program.coder.events.decode(base64Data);
+
+    console.log(event);
+  });
+});
+```

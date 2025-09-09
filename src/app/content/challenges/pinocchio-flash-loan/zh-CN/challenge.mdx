@@ -1,0 +1,119 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 匹诺曹闪电贷
+
+![匹诺曹闪电贷](/graphics/challenge-banners/pinocchio-flash-loan.png)
+
+指令内省是一项强大的功能，它允许区块链程序检查和分析同一交易包中的其他指令。这包括尚未执行的指令，使您的程序能够“预见”并根据交易稍后发生的情况做出决策。
+
+可以将其想象为交易的X光视野：您的程序可以透视整个交易，了解完整的操作序列，然后决定如何进行。
+
+指令内省最引人注目的应用是闪电贷。这是一种仅存在于单笔交易范围内的独特贷款类型。
+
+以下是闪电贷的工作原理：
+- **借款**：在交易开始时，您可以通过`loan`指令立即借入大量资金
+- **使用**：您可以在同一交易中使用这笔借来的资金进行交易、套利或其他操作
+- **还款**：在交易结束之前，您必须通过`repay`指令偿还贷款并支付少量费用
+
+关键点在于闪电贷依赖于区块链交易的原子性。如果交易的任何部分失败（包括还款），整个交易将被回滚，就像从未发生过一样。这意味着贷款方没有任何风险：要么他们得到还款，要么贷款根本没有发生。
+
+在本次挑战中，您将创建一个简单的闪电贷程序，展示指令内省的实际应用。该程序将检查同一交易中不同指令的指令数据和账户，以确保贷款条款得到满足。
+
+如果您是指令自省的新手，我们建议从[指令自省课程](/zh-CN/courses/instruction-introspection)开始，以了解本程序中使用的基本概念。
+
+<ArticleSection name="安装" id="installation" level="h2" />
+
+在开始之前，请确保已安装 Rust 和 Pinocchio。然后，在终端中运行以下命令：
+
+```bash
+# create workspace
+cargo new blueshift_pinocchio_flash_loan --lib --edition 2021
+cd blueshift_pinocchio_flash_loan
+```
+
+添加`pinocchio`、`pinocchio-system`和`pinocchio-token`：
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-token
+```
+
+在`Cargo.toml`中声明 crate 类型，以便在`target/deploy`中生成部署工件：
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+现在，您可以开始编写闪电贷程序了。
+
+<ArticleSection name="模板" id="template" level="h2" />
+
+这次，我们将把程序分成小而集中的模块，而不是将所有内容放在`lib.rs`中。文件夹结构大致如下：
+
+```
+src
+├── instructions
+│       ├── helpers.rs
+│       ├── loan.rs
+│       ├── mod.rs
+│       └── repay.rs
+├── lib.rs
+```
+
+**注意**：请记得将程序 ID 更改为`22222222222222222222222222222222222222222222`，因为我们在底层使用它来测试您的程序。
+
+`lib.rs`中的入口点与我们在[Pinocchio 入门课程](/zh-CN/courses/introduction-to-pinocchio)中介绍的内容非常相似。
+
+```rust
+use pinocchio::{account_info::AccountInfo, entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+entrypoint!(process_instruction);
+
+pub mod instructions;
+pub use instructions::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07, 
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee, 
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07, 
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7, 
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Loan::DISCRIMINATOR, data)) => Loan::try_from((data, accounts))?.process(),
+        Some((Repay::DISCRIMINATOR, _)) => Repay::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+<ArticleSection name="辅助工具" id="helpers" level="h2" />
+
+在深入研究`loan`和`repay`指令之前，让我们先来看看`helpers.rs`：
+
+```rust
+#[repr(C, packed)]
+pub struct LoanData {
+    pub protocol_token_account: [u8; 32],
+    pub balance: u64,
+}
+
+pub fn get_token_amount(data: &[u8]) -> u64 {
+    if !account.is_owned_by(&pinocchio_token::ID) {
+        return Err(PinocchioError::InvalidOwner.into());
+    }
+
+    if account.data_len().ne(&pinocchio_token::state::TokenAccount::LEN) {
+        return Err(PinocchioError::InvalidAccountData.into());
+    }
+    
+    u64::from_le_bytes(data[64..72].try_into().unwrap())
+}
+```
+
+这个文件很简单。它包含一个`LoanData`结构体，我们将用它在贷款偿还之前临时存储账户中的贷款数据。它还提供了一个`get_token_amount()`辅助函数，用于从账户中读取代币数量。

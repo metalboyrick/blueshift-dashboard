@@ -1,0 +1,116 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Secp256r1 di Solana
+
+![Secp256r1 di Solana](/graphics/course-banners/secp256r1-on-solana.png)
+
+Secp256r1 adalah salah satu kurva eliptik yang paling banyak diadopsi dalam kriptografi modern, menggerakkan segala hal mulai dari koneksi TLS hingga kunci keamanan perangkat keras. Kurva ini membentuk tulang punggung keamanan digital di berbagai aplikasi.
+
+Fitur gerbang precompile secp256r1, yang diusulkan oleh [Orion](https://x.com/BasedOrion_) dalam [SIMD 75](https://github.com/solana-foundation/solana-improvement-documents/blob/main/proposals/0075-precompile-for-secp256r1-sigverify.md), diaktifkan di Solana pada blok 800.
+
+<ArticleSection name="Apa itu Secp256r1" id="what-is-secp256r1" level="h2" />
+
+Kurva yang kita kenal sebagai secp256r1 distandardisasi oleh Standards for Efficient Cryptography Group (SECG) pada awal tahun 2000-an. Konvensi penamaan memberitahu kita semua yang perlu diketahui:
+- `sec`: Standards for Efficient Cryptography
+- `p`: Kurva didefinisikan pada bidang prima
+- `256`: Modulus prima kira-kira 2^256
+- `r`: Kurva acak (berbeda dengan kurva Koblitz)
+- `1`: Kurva pertama dalam kategori ini
+
+Secp256r1 kemudian diadopsi oleh NIST sebagai P-256 dan menjadi bagian dari FIPS 186-2. Standardisasi ganda oleh SECG dan NIST memberikan legitimasi luas pada kurva ini dan menyebabkan adopsinya di berbagai protokol dan aplikasi—menjadikannya salah satu kurva yang paling teruji dalam sistem produksi di seluruh dunia.
+
+<ArticleSection name="Dasar-dasar Matematika" id="mathematical-foundations" level="h2" />
+
+### Bidang Prima dan Aritmatika Terbatas
+
+Untuk memahami secp256r1, kita harus terlebih dahulu memahami konsep bekerja dalam bidang terbatas. Tidak seperti aritmatika biasa di mana angka dapat tumbuh tanpa batas, kriptografi kurva eliptik beroperasi dalam ruang matematika yang terbatas.
+
+Kurva ini beroperasi pada bidang prima 𝔽p, di mana: `p = 2^256 - 2^224 + 2^192 + 2^96 - 1`.
+
+Ini bukan sekadar bilangan prima 256-bit acak; ini dikenal sebagai bilangan prima pseudo-Mersenne. Bilangan prima Mersenne memiliki bentuk `2^n - 1`, yang memungkinkan reduksi modular yang sangat cepat menggunakan pergeseran bit dan pengurangan alih-alih operasi pembagian yang mahal. Bilangan prima pseudo-Mersenne memperluas konsep ini ke angka yang "mendekati" pangkat 2, mempertahankan sebagian besar keunggulan komputasi sambil menambahkan properti keamanan tambahan.
+
+Untuk bilangan prima secp256r1, kita dapat menuliskannya kembali sebagai: `p = 2^256 - c`, di mana `c = 2^224 - 2^192 - 2^96 + 1`
+
+Struktur ini berarti bahwa ketika kita perlu mereduksi angka `mod p` (yang terjadi terus-menerus dalam operasi kurva eliptik), kita dapat menggunakan algoritma reduksi cepat alih-alih pembagian tujuan umum yang lambat.
+
+> Ini membuat operasi secp256r1 jauh lebih cepat daripada kurva yang menggunakan bilangan prima acak: keuntungan penting untuk aplikasi yang kritis terhadap kinerja seperti jabat tangan TLS dan modul keamanan perangkat keras.
+
+### Persamaan Kurva Eliptik
+
+Secp256r1 mengikuti bentuk Weierstrass pendek dari kurva eliptik: `y² = x³ + ax + b (mod p)`
+
+Untuk secp256r1, parameternya adalah:
+- `a = -3` (atau setara dengan, p-3)
+- `b = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b`
+
+> `a = -3` bukanlah angka acak tetapi memungkinkan optimasi signifikan dalam operasi penambahan dan penggandaan titik, mengurangi jumlah perkalian bidang yang diperlukan.
+ 
+Setiap sistem kriptografi kurva eliptik membutuhkan titik generator G dengan urutan yang diketahui. Untuk secp256r1:
+
+```
+G = (Gx, Gy) where:
+Gx = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
+Gy = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
+```
+
+> Nilai-nilai ini dihasilkan melalui proses "secara terverifikasi acak" untuk memastikan tidak ada pintu belakang tersembunyi. Jika perancang kurva dapat memilih nilai-nilai secara acak, mereka mungkin memilih parameter yang mengandung hubungan matematis rahasia yang hanya mereka ketahui, menciptakan pintu belakang yang akan membahayakan setiap sistem yang menggunakan kurva tersebut.
+
+### Urutan Kurva dan Tingkat Keamanan
+
+**Urutan kurva (n)** mewakili jumlah total titik pada kurva eliptik, termasuk titik di tak hingga: `n = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551`
+
+Urutan kurva menentukan ukuran ruang kunci privat dan secara langsung memengaruhi keamanan. Meskipun disebut "256-bit," secp256r1 sebenarnya memberikan sekitar 128 bit keamanan, bukan 256 bit. Ini karena serangan terbaik yang diketahui terhadap masalah logaritma diskrit kurva eliptik memiliki kompleksitas sekitar `√n`, yang berarti kurva dengan urutan `~2^256` memberikan keamanan `~2^128`.
+
+**Kofaktor (h)** adalah 1, yang berarti secp256r1 adalah kurva dengan orde prima. Ini penting karena:
+- Setiap titik non-identitas memiliki orde n yang sama
+- Serangan subgrup kecil tidak mungkin terjadi
+- Implementasi disederhanakan karena kita tidak perlu khawatir tentang titik-titik orde rendah
+
+### Medan Skalar
+
+Sementara kurva itu sendiri didefinisikan pada medan koordinat 𝔽p, kunci privat berada dalam ruang matematis yang berbeda: medan skalar 𝔽n, di mana n adalah orde kurva.
+
+```
+Private key ∈ [1, n-1]
+Public key = private_key × G (scalar multiplication)
+```
+
+Perbedaan ini sangat penting karena:
+- Kunci privat adalah skalar (bilangan bulat `mod n`)
+- Koordinat kurva adalah elemen medan (bilangan bulat `mod p`)
+- Ini adalah moduli yang berbeda: `n ≠ p`
+
+Ketika menghasilkan kunci privat, kita mengambil sampel secara merata dari `[1, n-1]`, bukan dari `[1, p-1]`. Ini memastikan bahwa setiap kunci privat sesuai dengan operasi perkalian skalar yang valid dan mencegah serangan matematis tertentu.
+
+<ArticleSection name="Mengapa Secp256r1 Mendominasi" id="why-secp256r1-dominates" level="h2" />
+
+Meskipun ada kurva yang berpotensi lebih unggul seperti Curve25519, secp256r1 mencapai adopsi universal melalui kombinasi standardisasi awal, persetujuan regulasi, dan optimasi perangkat keras yang ekstensif.
+
+Tidak seperti kurva yang lebih baru yang mungkin secara matematis lebih unggul, secp256r1 mewakili keseimbangan optimal antara kekuatan kriptografi, efisiensi implementasi, dan kompatibilitas ekosistem yang dibutuhkan oleh sistem dunia nyata.
+
+Setelah produsen perangkat keras, sistem operasi, dan standar keamanan semuanya konvergen pada secp256r1, biaya untuk beralih menjadi sangat tinggi.
+
+Sifat-sifat matematis spesifik yang telah kita eksplorasi (bilangan prima pseudo-Mersenne, optimasi a = -3, dan generasi parameter yang dapat diverifikasi), memungkinkan implementasi yang sangat dioptimalkan di berbagai perangkat mulai dari elemen aman smartphone hingga server berkinerja tinggi.
+
+Efek ekosistem perangkat keras ini menciptakan siklus adopsi yang saling menguatkan.
+
+<ArticleSection name="Secp256r1 di Solana" id="secp256r1-on-solana" level="h2" />
+
+Solana menawarkan dukungan native untuk verifikasi tanda tangan secp256r1 melalui precompile bawaan yang diperkenalkan dengan [SIMD-0075](https://github.com/solana-foundation/solana-improvement-documents/pull/75) oleh [Orion](https://x.com/BasedOrion_).
+
+Precompile ini memungkinkan metode autentikasi modern seperti passkey di Solana, karena secp256r1 adalah kurva eliptik yang sama yang digunakan oleh implementasi WebAuthn dan passkey.
+
+Properti matematis yang kami jelaskan secara detail, khususnya aritmatika bidang yang dioptimalkan dan parameter yang distandarisasi, adalah yang menjadikan secp256r1 pilihan universal untuk modul keamanan perangkat keras dan secure enclave yang menggerakkan sistem autentikasi ini.
+
+### Menjembatani Autentikasi Web2 dan Web3
+
+Proses onboarding dompet tradisional mengalami tingkat pengguna yang berhenti sebesar 60-80% karena seed phrase menuntut keamanan sempurna dari manusia yang tidak sempurna. Pengguna harus menghafal 12-24 kata acak, menyimpannya dengan aman selamanya, dan tidak pernah menjadi korban phishing—standar yang mustahil untuk adopsi massal.
+
+Metode autentikasi modern seperti passkey menghilangkan kesalahan manusia dengan memindahkan kunci privat ke dalam perangkat keras keamanan khusus.
+
+ Namun, sistem-sistem ini distandarisasi pada secp256r1 karena keunggulan matematis dan implementasi spesifik yang telah kita eksplorasi:
+- **Kompatibilitas perangkat keras:** Bilangan prima pseudo-Mersenne memungkinkan implementasi yang efisien dalam lingkungan secure element yang terbatas
+- **Kepatuhan regulasi:** Standardisasi NIST memungkinkan penggunaan dalam persyaratan keamanan pemerintah dan perusahaan
+- **Konsistensi lintas platform:** Parameter acak yang dapat diverifikasi memastikan kurva yang sama berfungsi secara identik di semua produsen perangkat keras
+
+Dengan dukungan native secp256r1, pengembang Solana sekarang dapat membangun aplikasi yang memanfaatkan infrastruktur keamanan perangkat keras yang sudah ada, memungkinkan onboarding yang mulus melalui metode autentikasi yang familiar sambil mempertahankan jaminan keamanan yang membuat properti matematis spesifik dari kurva ini begitu penting.

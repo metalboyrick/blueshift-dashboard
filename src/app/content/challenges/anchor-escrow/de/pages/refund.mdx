@@ -1,0 +1,66 @@
+import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
+
+<ArticleSection name="Rückerstattung" id="refund" level="h2" />
+
+Wir können jetzt zur `refund` Anweisung übergehen, die sich in der `refund.rs` befindet und folgende Aktionen ausführen wird:
+- Schließen des Escrow PDA und Rücksendung seiner Rent-Lamports an den Ersteller.
+- Verschieben des gesamten Token A-Guthabens aus dem Tresor zurück zum Ersteller und anschließendes Schließen des Tresorkontos.
+
+### Konten
+
+Die in diesem Kontext benötigten Konten sind:
+- `maker`: der Benutzer, der die Bedingungen des Austauschs festgelegt hat
+- `escrow`: das Konto, in dem alle Bedingungen dieses Austauschs gespeichert sind
+- `mint_a`: der Token, den der `maker` eingezahlt hat
+- `vault`: das Token-Konto, das mit dem `escrow` und `mint_a` verknüpft ist, wo die Tokens eingezahlt wurden
+- `maker_ata_a`: das Token-Konto, das mit dem `maker` und `mint_a` verknüpft ist und die Tokens vom `vault` erhalten wird
+- `associated_token_program`: das Associated Token Program, das zur Erstellung der zugehörigen Token-Konten verwendet wird
+- `token_program`: das Token-Programm, das für den CPI-Transfer verwendet wird
+- `system_program`: das System-Programm, das zur Erstellung des `Escrow` verwendet wird
+
+Diesmal werden wir dir nicht helfen, indem wir das `Context` erstellen, also versuche es selbst! Bitte stelle sicher, dass du die richtige Reihenfolge der Konten verwendest, sonst werden unsere Tests fehlschlagen.
+
+### Logik
+
+Die Logik ähnelt der `take` Anweisung, aber diesmal verschieben wir die Tokens nur vom `vault` zum `maker_ata_a`, bevor wir den nun leeren Tresor schließen.
+
+Diesmal bist du an der Reihe, selbst zu lernen, wie man es macht, daher werden wir dir nicht verraten, wie die Lösung aussieht.
+
+Beachte, dass sobald dies ausgeführt wird, das Angebot ungültig ist, der Tresor verschwindet und der Ersteller sein Token A und die Miete zurück in seiner Wallet hat.
+
+<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+
+Nachdem wir alle Funktionen in den verschiedenen Anweisungen erstellt haben, können wir endlich den `lib.rs` mit allen erstellten Funktionen füllen; so:
+
+```rust
+#[program]
+pub mod blueshift_anchor_escrow {
+    use super::*;
+
+    pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+        instructions::make::handler(ctx, seed, receive, amount)
+    }
+
+    pub fn take(ctx: Context<Take>) -> Result<()> {
+        instructions::take::handler(ctx)
+    }
+
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        instructions::refund::handler(ctx)
+    }
+}
+```
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+Du kannst jetzt dein Programm gegen unsere Unit-Tests testen und deine NFTs beanspruchen!
+
+Beginne damit, dein Programm mit folgendem Befehl in deinem Terminal zu bauen
+
+```bash
+anchor build
+```
+
+Dies erzeugt eine `.so` Datei direkt in deinem `target/deploy` Ordner.
+
+Klicke jetzt auf die Schaltfläche `take challenge` und lege die Datei dort ab!

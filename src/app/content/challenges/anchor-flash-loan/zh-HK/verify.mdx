@@ -1,0 +1,17 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>Anchor 閃電貸款</ChallengeTitle>
+
+現在，測試一下你所學到的知識。使用 Anchor 框架構建一個滿足以下要求的閃電貸款程序：
+
+<RequirementList>
+  <Requirement title="挑戰 1：建立一個 `borrow` 指令">
+    你的程序應該允許借款人從協議中借款，並檢查在交易結尾是否存在 `repay` 指令。
+  </Requirement>
+
+  <Requirement title="挑戰 2：建立一個 `repay` 指令">
+    你的程序應該在交易結尾檢查 `borrowed_amount`，並以正確的金額償還協議。
+  </Requirement>
+</RequirementList>

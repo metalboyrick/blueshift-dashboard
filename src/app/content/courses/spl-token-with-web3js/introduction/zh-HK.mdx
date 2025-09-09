@@ -1,0 +1,197 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Token 程式
+
+![SPL Token 與 Web3JS](/graphics/course-banners/spl-token-with-web3js.png)
+
+在 Solana 上，所有與 token 相關的操作都由 [SPL Token 程式](https://github.com/solana-program/token) 和 [Token2022 程式](/zh-HK/courses/token-2022-program) 處理：這是 Solana 的原生 token 框架，定義了所有 token 的創建、管理和轉移方式。
+
+這是一個統一的程式，負責處理整個網絡上的所有 token 操作，確保一致性和互操作性。
+
+> 在 Solana 上為所有 token 提供一個統一的介面，這一決策使得實現變得簡單，可以在所有 dApp（去中心化應用）和整合（如錢包等）中複製。
+
+讓我們開始安裝所需的套件，使用 Web3.js 與 SPL Token 程式一起工作：
+
+```bash
+npm i @solana/spl-token
+```
+
+<ArticleSection name="Mint 和 Token 帳戶" id="mint-and-token-accounts" level="h2" />
+
+在底層，創建一個 `Mint` 和 `Token` 帳戶相當「複雜」。需要不同的指令，並需要不同的輸入和帳戶；帳戶需要在初始化之前設置為免租金狀態，...
+
+### Mint 帳戶
+
+如果沒有任何抽象，創建一個 `Mint` 帳戶會像這樣：
+
+```ts
+import {
+    Keypair,
+    sendAndConfirmTransaction,
+    SystemProgram,
+    Transaction,
+} from "@solana/web3.js";
+
+import {
+    createInitializeMint2Instruction,
+    MINT_SIZE,
+    getMinimumBalanceForRentExemptMint,
+    TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+
+const mint = Keypair.generate();
+
+const mintRent = await getMinimumBalanceForRentExemptMint(connection);
+
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: feePayer.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: MINT_SIZE,
+    lamports: mintRent,
+    programId: TOKEN_PROGRAM_ID
+});
+
+const initializeMintInstruction = createInitializeMint2Instruction(
+    mint.publicKey, // mint pubkey
+    6, // decimals
+    feePayer.publicKey, // mint authority
+    null, // freeze authority
+    TOKEN_PROGRAM_ID
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+幸運的是，`@solana/spl-token` 套件提供了一些抽象。因此，我們可以使用一個 `createMint()` 函數來創建一個 `Mint` 帳戶，如下所示：
+
+```ts
+const mint = await createMint(
+    connection, // connection
+    keypair, // payer
+    keypair.publicKey, // mint authority
+    null, // freeze authority
+    6 // decimals
+);
+```
+
+### Token 帳戶
+
+同樣地，`Token` 帳戶也是如此。如果我們在沒有任何抽象的情況下創建它，會像這樣：
+
+```ts
+import {
+    Keypair,
+    sendAndConfirmTransaction,
+    SystemProgram,
+    Transaction,
+} from "@solana/web3.js";
+
+import {
+    createInitializeAccount3Instruction,
+    ACCOUNT_SIZE,
+    getMinimumBalanceForRentExemptAccount,
+    TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+
+const token = Keypair.generate();
+
+const tokenRent = await getMinimumBalanceForRentExemptAccount(connection);
+
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: feePayer.publicKey,
+    newAccountPubkey: token.publicKey,
+    space: ACCOUNT_SIZE,
+    lamports: tokenRent,
+    programId: TOKEN_PROGRAM_ID
+});
+
+const initializeTokenInstruction = createInitializeAccount3Instruction(
+    token.publicKey, // token pubkey
+    mint.publicKey, // mint pubkey
+    feePayer.publicKey, // owner pubkey
+    TOKEN_PROGRAM_ID
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTokenInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, token]);
+
+console.log(`Token created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+但與 `Mint` 帳戶一樣，`@solana/spl-token` 套件提供了一些抽象來創建 `Token` 帳戶。我們可以使用 `createAccount()` 函數，如下所示：
+
+```ts
+const token = await createAccount(
+    connection, // connection
+    keypair, // payer
+    mint.publicKey, // mint pubkey
+    keypair.publicKey, // owner pubkey
+);
+```
+
+### 關聯的 Token 帳戶
+
+對於 `Associated Token` 帳戶也是如此，但抽象並不涉及帳戶的創建，像 `Mint` 和 `Token` 帳戶那樣，而主要與地址推導有關。
+
+以下是如何在沒有任何抽象的情況下建立`Associated Token`帳戶：
+
+```ts
+import {
+    sendAndConfirmTransaction,
+    Transaction,
+} from "@solana/web3.js";
+
+import {
+    TOKEN_PROGRAM_ID,
+    createAssociatedTokenAccountIdempotentInstruction,
+    getAssociatedTokenAddress,
+} from "@solana/spl-token";
+
+const associatedTokenAccount = await getAssociatedTokenAddress(
+    mint.publicKey, // mint pubkey
+    keypair.publicKey, // owner pubkey
+    false, // allow owner off-curve
+    TOKEN_PROGRAM_ID
+);
+
+// Create ATA creation instructions for all accounts
+const createAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    associatedTokenAccount, // associated token account address
+    keypair.publicKey, // owner
+    mint.publicKey, // mint
+    TOKEN_PROGRAM_ID
+);
+
+const transaction = new Transaction().add(
+    createAtaInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair]);
+
+console.log(`Associated Token created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+以下是使用抽象後的效果：
+
+```ts
+const ata = await getOrCreateAssociatedTokenAccount(
+    connection, // connection
+    keypair, // payer
+    mint, // mint pubkey
+    keypair.publicKey // owner pubkey
+);
+```
+
+> 如你所見，該函數被稱為`getOrCreateAssociatedTokenAccount()`。這是因為可能`Associated Token`帳戶已經先前被建立，我們不希望因此導致交易失敗。所以它的作用是創建或僅返回ATA的地址。

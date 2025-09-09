@@ -1,0 +1,313 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+import { AnchorDiscriminatorCalculator } from "../../../../components/AnchorDiscriminatorCalculator/AnchorDiscriminatorCalculator";
+
+# 指引及 CPI
+
+指令是 Solana 程式的基礎組件，定義了可以執行的操作。在 Anchor 中，指令以具有特定屬性和限制的函數實現。讓我們一起探索如何有效地使用它們。
+
+<ArticleSection name="指令結構" id="instruction-structure" level="h2" />
+
+在 Anchor 中，指令是使用 `#[program]` 模組和個別的指令函數定義的。以下是基本結構：
+
+```rust
+use anchor_lang::prelude::*;
+
+#[program]
+pub mod my_program {
+    use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>, data: u64) -> Result<()> {
+        // Instruction logic here
+        Ok(())
+    }
+}
+```
+
+<ArticleSection name="指令上下文" id="instruction-context" level="h3" />
+
+每個指令函數的第一個參數都會接收一個 `Context` 結構。此上下文包含：
+- `accounts`：傳遞給指令的帳戶
+- `program_id`：程式的公鑰
+- `remaining_accounts`：任何未在上下文結構中明確定義的額外帳戶
+- `bumps`：當與 PDA 一起使用時，`bumps` 欄位特別有用，因為它提供了用於推導 PDA 地址的 bump 種子（僅當您在帳戶結構中推導它們時）
+
+可以通過以下方式訪問：
+
+```rust
+// Accessing accounts
+ctx.accounts.account_1
+ctx.accounts.account_2
+
+// Accessing program ID
+ctx.program_id
+
+// Accessing remaining accounts
+for remaining_account in ctx.remaining_accounts {
+    // Process remaining account
+}
+
+// Accessing bumps for PDAs
+let bump = ctx.bumps.pda_account;
+```
+
+<ArticleSection name="指令識別碼" id="instruction-discriminator" level="h3" />
+
+與帳戶類似，Anchor 中的指令使用識別碼來區分不同的指令類型。默認的識別碼是一個使用 `sha256("global:<instruction_name>")[0..8]` 生成的 8 字節前綴。指令名稱應使用 snake_case 格式。
+
+<AnchorDiscriminatorCalculator value={"initialize_account"} displayMode="instruction" />
+
+<ArticleSection name="自定義指令識別碼" id="custom-instruction-discriminator" level="h3" />
+
+您還可以為您的指令指定自定義的識別碼：
+
+```rust
+#[instruction(discriminator = 1)]
+pub fn custom_discriminator(ctx: Context<Custom>) -> Result<()> {
+    // Instruction logic
+    Ok(())
+}
+```
+
+<ArticleSection name="指令模板" id="instruction-scaffold" level="h2" />
+
+您可以用不同的方式編寫指令，在本節中，我們將教授一些設置它們的風格和方法。
+
+<ArticleSection name="Instruction Logic" id="instruction-logic" level="h3" />
+
+指令邏輯可以根據程式的複雜性和您偏好的編碼風格以不同方式組織。以下是主要的方法：
+
+1. **內聯指令邏輯**
+
+對於簡單的指令，您可以直接在指令函數中編寫邏輯：
+
+```rust
+pub fn initialize(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    // Transfer tokens logic
+
+    // Close token account logic
+    
+    Ok(())
+}
+```
+
+2. **分離模組實現**
+
+對於非常複雜的程式，您可以將邏輯組織到分離的模組中：
+
+```rust
+// In a separate file: transfer.rs
+pub fn execute(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    // Transfer tokens logic
+
+    // Close token account logic
+ 
+    Ok(())
+}
+
+// In your lib.rs
+pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    transfer::execute(ctx, amount)
+}
+```
+
+3. **分離上下文實現**
+
+對於更複雜的指令，您可以將邏輯移至上下文結構的實現中：
+
+```rust
+// In a separate file: transfer.rs
+pub fn execute(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    ctx.accounts.transfer_tokens(amount)?;
+    ctx.accounts.close_token_account()?;
+ 
+    Ok(())
+}
+
+impl<'info> Transfer<'info> {
+    /// Transfers tokens from source to destination account
+    pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
+        // Transfer tokens logic
+
+        Ok(())
+    }
+
+    /// Closes the source token account after transfer
+    pub fn close_token_account(&mut self) -> Result<()> {
+        // Close token account logic
+
+    }
+}
+
+// In your lib.rs
+pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
+    transfer::execute(ctx, amount)
+}
+```
+
+<ArticleSection name="Instruction Parameters" id="instruction-parameters" level="h3" />
+
+指令可以接受上下文以外的參數。這些參數會由 Anchor 自動序列化和反序列化。以下是有關指令參數的關鍵點：
+
+1. **基本類型**
+
+Anchor 支援所有 Rust 原始類型和常見的 Solana 類型：
+
+```rust
+pub fn complex_instruction(
+    ctx: Context<Complex>,
+    amount: u64,
+    pubkey: Pubkey,
+    vec_data: Vec<u8>,
+) -> Result<()> {
+    // Instruction logic
+    Ok(())
+}
+```
+
+2. **自定義類型**
+
+您可以使用自定義類型作為參數，但它們必須實現 `AnchorSerialize` 和 `AnchorDeserialize`：
+
+```rust
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct InstructionData {
+    pub field1: u64,
+    pub field2: String,
+}
+
+pub fn custom_type_instruction(
+    ctx: Context<Custom>,
+    data: InstructionData,
+) -> Result<()> {
+    // Instruction logic
+    Ok(())
+}
+```
+
+<ArticleSection name="Best Practices" id="best-practices" level="h3" />
+
+1. **保持指令專注**：每個指令應該專注於做好一件事。如果一個指令做得太多，請考慮將其拆分為多個指令。
+
+2. **使用上下文實現**：對於複雜的指令，使用上下文實現方法以：
+   - 保持程式碼有條理
+   - 更容易測試
+   - 提高重用性
+   - 添加適當的文檔
+
+3. **錯誤處理**：始終使用適當的錯誤處理並返回有意義的錯誤訊息：
+
+```rust
+#[error_code]
+pub enum TransferError {
+    #[msg("Insufficient balance")]
+    InsufficientBalance,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+}
+
+impl<'info> Transfer<'info> {
+    pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
+        require!(amount > 0, TransferError::InvalidAmount);
+        require!(
+            self.source.amount >= amount,
+            TransferError::InsufficientBalance
+        );
+
+        // Transfer logic
+        Ok(())
+    }
+}
+```
+
+4. **文檔**：始終為您的指令邏輯編寫文檔，特別是在使用上下文實現時：
+
+```rust
+impl<'info> Transfer<'info> {
+    /// # Transfers tokens
+    /// 
+    /// Transfers tokens from source to destination account
+    pub fn transfer_tokens(&mut self, amount: u64) -> Result<()> {
+        // Implementation
+        Ok(())
+    }
+}
+```
+
+<ArticleSection name="跨程式調用 (CPIs)" id="cross-program-invocations" level="h2" />
+
+跨程式調用 (CPI) 是指一個程式調用另一個程式的指令，從而實現 Solana 程式的可組合性。Anchor 提供了一種方便的方法，通過 `CpiContext` 和特定程式的建構器來進行 CPI。
+
+**注意**：你可以通過使用主要的 anchor crate 並執行以下操作來找到所有系統程式的 CPI：`use anchor_lang::system_program::*`；而對於與 SPL 代幣程式相關的 CPI，我們需要導入 anchor_spl crate 並執行以下操作：`use anchor_spl::token::*`
+
+<ArticleSection name="基本 CPI 結構" id="basic-cpi-structure" level="h3" />
+
+以下是如何進行基本的 CPI：
+
+```rust
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::system_program::{transfer, Transfer};
+
+pub fn transfer_lamport(ctx: Context<TransferLamport>, amount: u64) -> Result<()> {
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.from.to_account_info(),
+        to: ctx.accounts.to.to_account_info(),
+    };
+    
+    let cpi_program = ctx.accounts.system_program.to_account_info();
+    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    
+    transfer(cpi_ctx, amount)?;
+    
+    Ok(())
+}
+```
+
+<ArticleSection name="使用 PDA 簽名的 CPI" id="cpi-with-pda-signers" level="h3" />
+
+當進行需要 PDA 簽名的 CPI 時，請使用 `CpiContext::new_with_signer`：
+
+```rust
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_lang::system_program::{transfer, Transfer};
+
+pub fn transfer_lamport_with_pda(ctx: Context<TransferLamportWithPda>, amount: u64) -> Result<()> {
+    let seeds = &[
+        b"vault".as_ref(),
+        &[ctx.bumps.vault],
+    ];
+    let signer = &[&seeds[..]];
+    
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.vault.to_account_info(),
+        to: ctx.accounts.recipient.to_account_info(),
+    };
+    
+    let cpi_program = ctx.accounts.system_program.to_account_info();
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+    
+    transfer(cpi_ctx, amount)?;
+    
+    Ok(())
+}
+```
+
+<ArticleSection name="錯誤處理" id="error-handling" level="h2" />
+
+Anchor 為指令提供了一個強大的錯誤處理系統。以下是如何實現自定義錯誤並在指令中處理它們：
+
+```rust
+#[error_code]
+pub enum MyError {
+    #[msg("Custom error message")]
+    CustomError,
+    #[msg("Another error with value: {0}")]
+    ValueError(u64),
+}
+
+pub fn handle_errors(ctx: Context<HandleErrors>, value: u64) -> Result<()> {
+    require!(value > 0, MyError::CustomError);
+    require!(value < 100, MyError::ValueError(value));
+    
+    Ok(())
+}
+```

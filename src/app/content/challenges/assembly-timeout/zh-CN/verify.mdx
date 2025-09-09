@@ -1,0 +1,35 @@
+import { ChallengeTitle } from "../../../../components/Challenges/ChallengeTitle";
+import { RequirementList } from "../../../../components/Challenges/RequirementList";
+import { Requirement } from "../../../../components/Challenges/Requirement";
+
+<ChallengeTitle>sBPF 汇编超时</ChallengeTitle>
+
+现在您应该已经开始熟悉编写汇编代码了。尝试通过传入 `Clock` 账户来实现相同的目标，而不是使用 `sol_get_clock_sysvar`。
+
+创建一个仅包含一个指令的程序。它必须：
+- 接收一个 `Clock` 账户（大小为 40）。
+- 接收指令数据中的一个 u64（8 字节）槽位。
+- 使用 `Clock` 账户的前 8 字节获取当前槽位。
+- 检查当前槽位是否大于指令中传入的槽位。如果是，则返回错误代码 1。
+
+> 要获取正确的指令数据偏移量，您可以使用我们的[工具](https://sbpf.xyz)。请记住添加一个账户并将其数据长度设置为 40！
+
+首先按照汇编课程[工具部分](/zh-CN/courses/introduction-to-assembly/tooling)中的说明安装 sBPF 包，并在终端中使用以下命令构建您的程序：
+
+```
+sbpf build
+```
+
+这将在您的 `target/deploy` 文件夹中生成一个 `.so` 文件。
+
+现在点击 `take challenge` 按钮并将文件拖放到那里！
+
+<RequirementList>
+  <Requirement title="挑战 1：测试超时">
+    当传入的槽位高于当前槽位时，您的程序应成功运行。
+  </Requirement>
+
+  <Requirement title="挑战 2：测试超时失败">
+    当传入的槽位低于当前槽位时，您的程序应失败。
+  </Requirement>
+</RequirementList>

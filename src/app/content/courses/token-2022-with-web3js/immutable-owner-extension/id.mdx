@@ -1,0 +1,72 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Ekstensi Pemilik Tidak Dapat Diubah
+
+Ekstensi `ImmutableOwner` adalah ekstensi akun `Token` yang mencegah perubahan kepemilikan akun `Token`. Ini mengamankan akun dari akses tidak sah dan upaya transfer.
+
+> Semua ATA Program Ekstensi `Token` memiliki pemilik tidak dapat diubah yang diaktifkan secara default
+
+<ArticleSection name="Menginisialisasi Akun Token" id="initializing-the-token-account" level="h2" />
+
+Untuk menginisialisasi ekstensi `ImmutableOwner` pada akun `Token` kita akan membutuhkan fungsi `initializeImmutableOwner()`.
+
+Berikut cara membuat token dengan ekstensi Pemilik Tidak Dapat Diubah:
+
+```ts
+import {
+    Keypair,
+    SystemProgram,
+    Transaction,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+    createInitializeAccountInstruction,
+    createInitializeImmutableOwnerInstruction,
+    getAccountLen,
+    ExtensionType,
+    TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const tokenAccount = Keypair.generate();
+
+// Calculate the size needed for a Token account with Immutable Owner extension
+const accountLen = getAccountLen([ExtensionType.ImmutableOwner]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Immutable Owner extension
+const initializeImmutableOwnerInstruction = createInitializeImmutableOwnerInstruction(
+    tokenAccount.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the Token account itself
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeImmutableOwnerInstruction,
+    initializeAccountInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {skipPreflight: false});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Seperti yang ditunjukkan, jika kita ingin menambahkan ekstensi ini ke akun `Associated Token`, kita cukup menginisialisasinya dengan program Token2022.

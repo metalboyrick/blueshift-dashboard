@@ -1,0 +1,178 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Das Token2022-Programm
+
+![Token 2022 mit Web3JS](/graphics/course-banners/token-2022-with-web3js.png)
+
+Das Token2022-Programm, auch bekannt als Token Extensions, ist eine Erweiterung der Funktionalität des Token-Programms.
+
+Wenn du mehr über die zusätzlichen Funktionen und die Unterschiede zum Legacy-Token-Programm erfahren möchtest, folge [diesem Kurs](/de/courses/token-2022-program)
+
+Beginnen wir mit der Installation des erforderlichen Pakets, um mit dem SPL Token-Programm über Web3.js zu arbeiten:
+
+```
+npm i @solana/spl-token
+```
+
+<ArticleSection name="Mint- und Token-Konten" id="mint-and-token-accounts" level="h2" />
+
+Wenn du bereits mit der Erstellung von `Mint`Konten, `Associated Token`Konten oder `Token`Konten mit TypeScript vertraut bist, wirst du feststellen, dass Token2022 einem sehr ähnlichen Muster folgt.
+
+Der Hauptunterschied liegt in der Kontoinitialisierung, da Erweiterungen zusätzlichen Speicherplatz benötigen und konfiguriert werden müssen, bevor der Mint abgeschlossen wird.
+
+### Mint-Konto mit Erweiterungen
+
+Beim Hinzufügen von Erweiterungen zu einem `Mint` müssen wir:
+- Den zusätzlichen Speicherplatz für Erweiterungsdaten berechnen
+- Jede Erweiterung mit ihrer spezifischen Konfiguration initialisieren
+- Die richtige Reihenfolge der Initialisierungsanweisungen sicherstellen
+
+Hier ist, wie man einen Mint mit der Transfer Fee-Erweiterung erstellt:
+
+```ts
+import {
+  Keypair,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction,
+} from '@solana/web3.js';
+import {
+  createInitializeMintInstruction,
+  createInitializeTransferFeeConfigInstruction,
+  getMintLen,
+  ExtensionType,
+  TOKEN_2022_PROGRAM_ID,
+} from '@solana/spl-token';
+
+const mint = Keypair.generate();
+
+// Calculate the size needed for a Mint account with Transfer Fee extension
+const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+
+// Calculate minimum lamports required for rent exemption
+const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+// Create the account with the correct size and owner
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: mint.publicKey,
+    space: mintLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+// Initialize the Transfer Fee extension
+const initializeTransferFeeConfig = createInitializeTransferFeeConfigInstruction(
+    mint.publicKey,
+    keypair.publicKey,
+    keypair.publicKey,
+    500,
+    BigInt(1e6),
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Initialize the mint itself
+const initializeMintInstruction = createInitializeMintInstruction(
+    mint.publicKey,
+    6,
+    keypair.publicKey,
+    null,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+// Combine all instructions in the correct order
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeTransferFeeConfig, // Extension must be initialized before mint
+    initializeMintInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, mint]);
+
+console.log(`Mint created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```
+
+Wie du sehen kannst, ist es ziemlich unkompliziert:
+- Generiere das `Mint`Keypair mit der `Keypair.generate()`Funktion.
+- Berechne die Länge des `Mint`Kontos mit spezifischer Erweiterung mit der `getMintLen()`Funktion
+- Berechne die minimalen benötigten Lamports mit `connection.getMinimumBalanceForRentExemption(mintLen)`
+- Erstelle ein Konto mit der richtigen Länge, Miete und Eigentümer
+- Initialisiere die gewünschte Erweiterung auf dem `Mint`Konto mit den entsprechenden Funktionalitäten
+- Initialisiere das `Mint`Konto
+
+> Ein Basis-Mint-Konto ohne Erweiterungen hat die gleiche Größe wie ein Legacy `Mint`. Erweiterungen fügen ihre spezifischen Datenanforderungen zusätzlich zu dieser Basisgröße hinzu, zusammen mit dem Padding und Diskriminator, die das Konto als Token2022 `Mint` identifizieren.
+
+### Associated Token Account mit Erweiterungen
+
+`Associated Token` Konten kommen standardmäßig mit der `ImmutableOwner` Erweiterung. Der einzige Unterschied zwischen der Erstellung eines Legacy- oder Token2022 `Token Account` ist daher nur das Besitzerprogramm.
+
+Hier ist, wie man ein `Associated Token` Konto erstellt:
+
+```ts
+const ata = await getAssociatedTokenAddress(
+    mint.publicKey,
+    keypair.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID
+);
+
+// Create ATA creation instructions for all accounts
+const createAtaInstructions = createAssociatedTokenAccountIdempotentInstruction(
+    keypair.publicKey, // payer
+    ata, // associated token account address
+    keypair.publicKey, // owner
+    mint.publicKey, // mint
+    TOKEN_2022_PROGRAM_ID
+)
+```
+
+### Token-Konto mit Erweiterungen
+
+Der Mechanismus zur Erstellung eines `Token` Kontos mit Erweiterungen ähnelt dem, was wir mit dem `Mint` Konto gemacht haben:
+- Berechnung des zusätzlichen Speicherplatzes für Erweiterungsdaten
+- Initialisierung jeder Erweiterung mit ihrer spezifischen Konfiguration
+- Sicherstellung der richtigen Reihenfolge der Initialisierungsanweisungen
+
+Hier ist, wie man ein `Token` Konto mit der `CpiGuard` Erweiterung erstellt:
+
+```ts
+const tokenAccount = Keypair.generate();
+
+// Size of Token Account with extensions
+const accountLen = getAccountLen([ExtensionType.CpiGuard]);
+
+// Minimum lamports required for Token Account
+const lamports = await connection.getMinimumBalanceForRentExemption(accountLen);
+
+const createAccountInstruction = SystemProgram.createAccount({
+    fromPubkey: keypair.publicKey,
+    newAccountPubkey: tokenAccount.publicKey,
+    space: accountLen,
+    lamports,
+    programId: TOKEN_2022_PROGRAM_ID,
+});
+
+const enableCpiGuardInstruction = createEnableCpiGuardInstruction(
+    tokenAccount.publicKey,
+    keypair.publicKey,
+    undefined,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const initializeAccountInstruction = createInitializeAccountInstruction(
+    tokenAccount.publicKey,
+    mint.publicKey,
+    keypair.publicKey,
+    TOKEN_2022_PROGRAM_ID,
+);
+
+const transaction = new Transaction().add(
+    createAccountInstruction,
+    initializeAccountInstruction,
+    enableCpiGuardInstruction,
+);
+
+const signature = await sendAndConfirmTransaction(connection, transaction, [keypair, tokenAccount], {commitment: "finalized"});
+
+console.log(`Token accounts created! Check out your TX here: https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+```

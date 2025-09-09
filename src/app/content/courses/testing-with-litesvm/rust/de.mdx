@@ -1,0 +1,300 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# LiteSVM mit Rust
+
+Das `litesvm` Paket bietet die grundlegende Testinfrastruktur zum Erstellen einer leichtgewichtigen Solana-Umgebung, in der Sie den Kontozustand direkt manipulieren und Transaktionen für Ihre Programme ausführen können.
+
+<ArticleSection name="Erste Schritte" id="first-steps" level="h2" />
+
+Fügen Sie LiteSVM zu Ihrem Projekt hinzu:
+
+```bash
+cargo add --dev litesvm
+```
+
+<ArticleSection name="LiteSVM Grundlagen" id="basics" level="h2" />
+
+Beginnen Sie mit der Deklaration Ihrer Programm-ID und der Erstellung einer LiteSVM-Instanz.
+
+Verwenden Sie genau dieselbe Programm-ID, die Sie in Ihrem Programm definiert haben, um sicherzustellen, dass Transaktionen korrekt ausgeführt werden und während des Tests keine `ProgramMismatch` Fehler auftreten:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::{pubkey, Pubkey};
+
+const program_id: Pubkey = pubkey!("22222222222222222222222222222222222222222222");
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Load the program with the right publickey
+    svm.add_program_from_file(program_id, "target/deploy/program.so");
+}
+```
+
+Um Tests auszuführen, erstellen Sie ein Transaktionsobjekt und verwenden Sie die `.send_transaction(tx)` Funktion:
+
+```rust
+use litesvm::LiteSVM;
+use solana_transaction::Transaction;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Transaction
+    let mut tx = Transaction::new_signed_with_payer(
+        &[...ixs],
+        Some(&payer.pubkey()),
+        &[...signersKeypair],
+        svm.latest_blockhash(),
+    );
+
+    // Send the Transaction
+    let result = svm.send_transaction(tx).unwrap();
+}
+```
+
+<ArticleSection name="Konten" id="accounts" level="h2" />
+
+Beim Testen von Solana-Programmen mit LiteSVM arbeiten Sie mit verschiedenen Kontotypen, die reale Programmausführungsszenarien widerspiegeln.
+
+Das Verständnis, wie man diese Konten richtig konstruiert, ist für effektives Testen unerlässlich.
+
+### System-Konten
+
+Der grundlegendste Kontotyp ist das System-Konto, das in zwei Hauptvarianten vorkommt:
+- **Zahler-Konten**: Konten mit Lamports, die die Erstellung von Programmkonten oder Lamport-Überweisungen finanzieren
+- **Nicht initialisierte Konten**: Leere Konten ohne Lamports, die typischerweise Programmkonten darstellen, die auf Initialisierung warten
+
+System-Konten enthalten keine Daten und gehören dem System-Programm. Der Hauptunterschied zwischen Zahlern und nicht initialisierten Konten ist ihr Lamport-Guthaben: Zahler haben Guthaben, während nicht initialisierte Konten leer beginnen.
+
+Hier ist, wie man ein `payer` Konto in LiteSVM erstellt:
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports: 100_000_000,
+            data: [],
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+> Ein nicht initialisiertes Konto ist einfach ein normal generiertes Konto mit `Keypair.generate()` - keine zusätzliche Einrichtung erforderlich.
+
+### Programm-Konten
+
+Für Programmkonten, die benutzerdefinierte Datenstrukturen enthalten, können Sie einen ähnlichen Ansatz verwenden.
+Sie müssen auch die Kontodaten in ein Byte-Array serialisieren, was entweder manuell oder mithilfe einer Bibliothek wie `borsh`, `bincode` oder `solana_program_pack` erfolgen kann.
+
+```rust
+use litesvm::LiteSVM;
+use solana_account::Account;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Account
+    let account = Keypair::new();
+
+    let mut account_data = [0; SIZE_OF_THE_ACCOUNT];
+
+    // Serialize the account data into the byte array defined above
+    // ...
+
+    let lamports = svm.minimum_balance_for_rent_exemption(SIZE_OF_THE_ACCOUNT);
+
+    // Add the Account with the modified data
+    svm.set_account(
+        account.pubkey(),
+        Account {
+            lamports,
+            data: account_data,
+            owner: ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+}
+```
+
+> Beim Testen müssen Sie keine exakte Miete berechnen. Sie können Lamports auf einen hohen Wert wie `100_000_000_000` setzen und die Mietberechnung überspringen, da es sich nicht um echtes Geld handelt.
+
+### Token-Konten
+
+Um Daten für SPL-Token-Konten zu serialisieren, können Sie `spl_token::Mint` und `spl_token::Account` verwenden, die `solana_program_pack::Pack` implementieren.
+
+```rust
+use litesvm::LiteSVM;
+use solana_keypair::Keypair;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_account::Account;
+use spl_token::{ID as TOKEN_PROGRAM_ID, state::{Mint, Account as TokenAccount}};
+use solana_program_pack::Pack;
+
+#[test]
+fn test() {
+    // Create a new instance of LiteSVM
+    let mut svm = LiteSVM::new();
+
+    // Create a new Mint Account
+    let mint = Keypair::new();
+
+    // Populate the data of the Mint Account
+    let mint_data = Mint {
+        mint_authority: None.into(),
+        supply: 0,
+        decimals: 6,
+        is_initialized: true,
+        freeze_authority: None.into(),
+    };
+
+    let mut mint_account_data = vec![0; Mint::LEN];
+    Mint::pack(mint_data, &mut mint_account_data).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(Mint::LEN);
+
+    // Add the Mint Account
+    svm.set_account(
+        mint.pubkey(),
+        Account {
+            lamports,
+            data: mint_account_data,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+
+    // Create a new Token Account
+    let token_account = Keypair::new();
+    let owner = Keypair::new();
+
+    // Populate the data of the Token Account
+    let token_account_data = TokenAccount {
+        mint: mint.pubkey(),
+        owner: owner.pubkey(),
+        amount: 0,
+        delegate: None.into(),
+        state: spl_token::state::AccountState::Initialized,
+        is_native: None.into(),
+        delegated_amount: 0,
+        close_authority: None.into(),
+    };
+
+    let mut token_account_data_bytes = vec![0; TokenAccount::LEN];
+    TokenAccount::pack(token_account_data, &mut token_account_data_bytes).unwrap();
+
+    // Grab the minimum amount of lamports to make it rent exempt
+    let lamports = svm.minimum_balance_for_rent_exemption(TokenAccount::LEN);
+
+    // Add the Token Account
+    svm.set_account(
+        token_account.pubkey(),
+        Account {
+            lamports,
+            data: token_account_data_bytes,
+            owner: TOKEN_PROGRAM_ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+```
+
+<ArticleSection name="Ausführung" id="execution" level="h2" />
+
+Mit erstellten Konten, die zu Ihrer LiteSVM-Instanz hinzugefügt wurden, können Sie jetzt Transaktionen senden und Ihre Programmlogik validieren.
+
+Vor dem Senden einer Transaktion können Sie das Ergebnis simulieren:
+
+```rust
+let simulated_result = svm.simulate_transaction(tx);
+```
+
+Dann senden Sie die Transaktion und prüfen die Logs:
+
+```rust
+let result = svm.send_transaction(tx);
+let logs = result.logs;
+```
+
+### Erweiterte Funktionen
+
+Vor und nach der Ausführung ist das gesamte Ledger in Ihrer LiteSVM-Instanz lesbar und anpassbar.
+
+Sie können Sysvar-Werte wie die Uhr manipulieren:
+
+```rust
+// Change the Clock
+let mut new_clock = svm.get_sysvar::<Clock>();
+new_clock.unix_timestamp = 1735689600;
+svm.set_sysvar::<Clock>(&new_clock);
+
+// Jump to a certain Slot
+svm.warp_to_slot(500);
+
+// Expire the current blockhash
+svm.expire_blockhash();
+```
+
+Sie können auch Konto- und Protokolldaten lesen:
+
+```rust
+// Get all the information about an account (data, lamports, owner, ...)
+svm.get_account(&account.publickey);
+
+// Get the lamport balance of an account
+svm.get_balance(&account.publickey);
+
+// Get the number of Compute Unit used till now
+svm.get_compute_budget();
+```
+
+Oder konfigurieren, wie sich die Laufzeitumgebung verhält:
+
+```rust
+// Sets the compute budget
+let compute_budget = ComputeBudget::default();
+compute_budget.compute_unit_limit = 2_000_000;
+svm.with_compute_budget(compute_budget);
+
+// Sets Sigverify as active
+svm.with_sigverify(true);
+
+// Sets the Blockhash check as active
+svm.with_blockhash_check(true);
+
+// Sets the default Sysvars
+svm.with_sysvars();
+
+// Set the FeatureSet to use
+svm.with_feature_set(FeatureSet::default())
+```

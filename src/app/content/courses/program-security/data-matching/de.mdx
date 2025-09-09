@@ -1,0 +1,118 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Datenabgleich
+
+Datenabgleich ist die Sicherheitspraxis, bei der überprüft wird, ob Kontodaten die erwarteten Werte enthalten, bevor man ihnen in der Programmlogik vertraut. Während `owner`Prüfungen verifizieren, wer ein Konto kontrolliert, und `signer`Prüfungen die Autorisierung verifizieren, stellt der Datenabgleich sicher, dass der interne Zustand des Kontos mit den Annahmen deines Programms übereinstimmt.
+
+Dies wird entscheidend, wenn Anweisungshandler von Beziehungen zwischen Konten abhängen oder wenn bestimmte Datenwerte das Programmverhalten bestimmen. Ohne ordnungsgemäße Datenvalidierung können Angreifer den Programmablauf manipulieren, indem sie Konten mit unerwarteten Datenkombinationen erstellen, selbst wenn diese Konten die grundlegenden Eigentums- und Autorisierungsprüfungen bestehen.
+
+Die Gefahr liegt in der Lücke zwischen struktureller Validierung und logischer Validierung. Dein Programm könnte korrekt überprüfen, ob ein Konto den richtigen Typ hat und dem richtigen Programm gehört, aber dennoch falsche Annahmen über die Beziehungen zwischen verschiedenen Datenelementen treffen.
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+Betrachte diese anfällige Anweisung, die den Besitz eines Programmkontos aktualisiert:
+
+```rust
+#[program]
+pub mod insecure_update{
+    use super::*;
+    //..
+
+    pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+        ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+Dieser Code erscheint auf den ersten Blick sicher. Der `owner` ist ordnungsgemäß als `Signer` markiert, was sicherstellt, dass er die Transaktion autorisiert hat. Das `program_account` hat den richtigen Typ und gehört dem Programm. Alle grundlegenden Sicherheitsprüfungen werden bestanden.
+
+Aber es gibt einen kritischen Fehler: Das Programm überprüft nie, ob der `owner`, der die Transaktion signiert hat, tatsächlich derselbe ist wie der `owner`, der in den `program_account`Daten gespeichert ist.
+
+Ein Angreifer kann dies ausnutzen, indem er:
+- Sein eigenes Schlüsselpaar erstellt (nennen wir es `attacker_keypair`)
+- Ein beliebiges Programmkonto findet, das er kapern möchte
+- Eine Transaktion erstellt, bei der: der `owner` der `attacker_keypair` ist (den er kontrolliert und mit dem er signieren kann); der `new_owner` sein öffentlicher Hauptschlüssel ist und das `program_account` das Konto des Opfers ist
+
+Die Transaktion ist erfolgreich, weil `attacker_keypair` sie ordnungsgemäß signiert, aber das Programm überprüft nie, ob `attacker_keypair` mit dem tatsächlichen `owner` übereinstimmt, der in `program_account.owner` gespeichert ist. Der Angreifer überträgt erfolgreich den Besitz des Kontos einer anderen Person auf sich selbst.
+
+Glücklicherweise macht es `Anchor` sehr einfach, diese Überprüfung direkt in der Account-Struktur durchzuführen, indem man die `has_one`-Einschränkung wie folgt hinzufügt:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(mut, has_one = owner)]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Oder wir könnten uns entscheiden, das Design des Programms zu ändern und den `program_account` zu einem PDA machen, der vom `owner` abgeleitet wird, wie hier:
+
+```rust
+#[derive(Accounts)]
+pub struct UpdateOwnership<'info> {
+    pub owner: Signer<'info>,
+    /// CHECK: This account will not be checked by Anchor
+    pub new_owner: UncheckedAccount<'info>,
+   #[account(
+        mut,
+        seeds = [owner.key().as_ref()],
+        bump
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+```
+
+Oder du könntest diese Daten einfach in der Anweisung mit der `ctx.accounts.program_account.owner`-Prüfung überprüfen, wie hier:
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.owner != ctx.accounts.owner.key() {
+        return Err(ProgramError::InvalidAccountData.into());
+    }
+
+    ctx.accounts.program_account.owner = ctx.accounts.new_owner.key();
+    
+    Ok(())
+}
+```
+
+Durch das Hinzufügen dieser Überprüfung wird der Anweisungshandler nur fortfahren, wenn das Konto den korrekten `owner` hat. Wenn der `owner` nicht korrekt ist, wird die Transaktion fehlschlagen.
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+In Pinocchio haben wir nicht die Möglichkeit, Sicherheitsüberprüfungen direkt in der Account-Struktur hinzuzufügen, daher sind wir gezwungen, dies in der Anweisungslogik zu tun.
+
+Wir können dies tun, indem wir die Daten des Kontos deserialisieren und den `owner`-Wert überprüfen:
+
+```rust
+let account_data = ctx.accounts.program_account.try_borrow_data()?;
+let mut account_data_slice: &[u8] = &account_data;
+let account_state = ProgramAccount::try_deserialize(&mut account_data_slice)?;
+
+if account_state.owner != self.accounts.owner.key() {
+    return Err(ProgramError::InvalidAccountData.into());
+}
+```
+
+> Du musst deine eigene `ProgramAccount::try_deserialize()`-Funktion erstellen, da Pinocchio uns die Deserialisierung und Serialisierung nach Belieben handhaben lässt

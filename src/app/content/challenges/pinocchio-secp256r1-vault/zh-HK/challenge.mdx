@@ -1,0 +1,438 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Secp256r1 保險庫
+
+![Pinocchio Secp256r1 Vault Challenge](/graphics/challenge-banners/pinocchio-secp256r1-vault.png)
+
+保險庫是去中心化金融（DeFi）中的一個基本構建模塊，為用戶提供了一種安全存儲資產的方法。
+
+在這個挑戰中，我們將構建一個使用 Secp256r1 簽名進行交易驗證的保險庫。這特別有趣，因為 Secp256r1 是現代身份驗證方法（如通行密鑰）使用的橢圓曲線，允許用戶通過生物識別身份驗證（如 Face ID 或 Touch ID）簽署交易，而不是使用傳統的基於錢包的簽名。
+
+這裡的關鍵創新在於，我們將交易費的支付與實際的用戶身份驗證分離開來。這意味著，雖然用戶可以使用 Secp256r1 簽名（可以通過現代身份驗證方法生成）來驗證交易，但實際的交易費可以由服務提供商支付。這在保持安全性的同時，創造了一種更無縫的用戶體驗。
+
+在這個挑戰中，我們將更新我們在 [Pinocchio Vault Challenge](/zh-HK/challenges/pinocchio-vault) 中構建的簡單 Lamport 保險庫，允許使用 Secp256r1 簽名作為交易的驗證方法。
+
+<ArticleSection name="安裝" id="installation" level="h2" />
+
+在開始之前，請確保已安裝 Rust 和 Pinocchio。然後在終端中運行：
+
+```bash
+# create workspace
+cargo new blueshift_secp256r1_vault --lib --edition 2021
+cd blueshift_secp256r1_vault
+```
+
+添加 Pinocchio 和與 Pinocchio 兼容的 `Secp256r1` crate
+
+```bash
+cargo add pinocchio pinocchio-system pinocchio-secp256r1-instruction
+```
+
+在 `Cargo.toml` 中聲明 crate 類型，以在 `target/deploy` 中生成部署工件：
+
+```toml
+[lib]
+crate-type = ["lib", "cdylib"]
+```
+
+<ArticleSection name="模板" id="template" level="h2" />
+
+讓我們從基本的程序結構開始。我們將在 `lib.rs` 中實現所有內容，因為這是一個簡單的程序。以下是我們需要的核心組件的初始模板：
+
+```rust
+#![no_std]
+
+use pinocchio::{account_info::AccountInfo, entrypoint, nostd_panic_handler, program_error::ProgramError, pubkey::Pubkey, ProgramResult};
+
+entrypoint!(process_instruction);
+nostd_panic_handler!();
+
+pub mod instructions;
+pub use instructions::*;
+
+// 22222222222222222222222222222222222222222222
+pub const ID: Pubkey = [
+    0x0f, 0x1e, 0x6b, 0x14, 0x21, 0xc0, 0x4a, 0x07,
+    0x04, 0x31, 0x26, 0x5c, 0x19, 0xc5, 0xbb, 0xee,
+    0x19, 0x92, 0xba, 0xe8, 0xaf, 0xd1, 0xcd, 0x07,
+    0x8e, 0xf8, 0xaf, 0x70, 0x47, 0xdc, 0x11, 0xf7,
+];
+
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    match instruction_data.split_first() {
+        Some((Deposit::DISCRIMINATOR, data)) => Deposit::try_from((data, accounts))?.process(),
+        Some((Withdraw::DISCRIMINATOR, _)) => Withdraw::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData),
+    }
+}
+```
+
+<ArticleSection name="存款" id="deposit" level="h2" />
+
+存款指令執行以下步驟：
+1. 驗證保管庫為空（擁有零 lamports），以防止重複存款
+2. 確保存款金額超過基本帳戶的免租金最低限額
+3. 使用 CPI 到系統程序，將 lamports 從付款人轉移到保管庫
+
+普通保管庫與 Secp256r1 保管庫的主要區別在於我們如何推導 PDA 以及誰被視為「擁有者」。
+
+由於使用 Secp256r1 簽名時，實際錢包的擁有者不需要支付交易費，因此我們將 `owner` 帳戶更改為更通用的命名約定，例如 `payer`。
+
+因此，`deposit` 的帳戶結構將如下所示：
+
+```rust
+pub struct DepositAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for DepositAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, _] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        // Accounts Checks
+        if !payer.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().ne(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        // Return the accounts
+        Ok(Self { payer, vault })
+    }
+}
+```
+
+讓我們分解每個帳戶檢查：
+1. `payer`：必須是簽署者，因為他們需要授權 lamports 的轉移
+2. `vault`：
+   - 必須由系統程序擁有
+   - 必須擁有零 lamports（確保「全新」存款）
+
+對於 `vault`，我們將檢查：
+- 它是否來自正確的種子推導
+- 是否匹配預期的 PDA 地址
+由於種子的一部分位於我們目前無法訪問的 `instruction_data` 中。
+
+現在讓我們實現指令數據結構：
+
+```rust
+#[repr(C, packed)]
+pub struct DepositInstructionData {
+    pub pubkey: Secp256r1Pubkey,
+    pub amount: u64,
+}
+
+impl<'a> TryFrom<&'a [u8]> for DepositInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() != size_of::<Self>() {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+
+        let (pubkey_bytes, amount_bytes) = data.split_at(size_of::<Secp256r1Pubkey>());
+
+        Ok(Self {
+            pubkey: pubkey_bytes.try_into().unwrap(),
+            amount: u64::from_le_bytes(amount_bytes.try_into().unwrap()),
+      })
+    }
+}
+```
+
+我們將指令數據反序列化為 `DepositInstructionData` 結構，其中包含：
+- `pubkey`：進行存款的用戶的 Secp256r1 公鑰
+- `amount`：存款的 lamports 金額
+
+雖然在生產代碼中通常不建議使用 unwrap，但在這種情況下，由於我們已經在 `try_from` 方法中驗證了數據的長度，因此可以安全使用。如果數據長度不匹配，它將在到達此點之前返回錯誤。
+
+最後，我們來實現存款指令：
+
+```rust
+pub struct Deposit<'a> {
+    pub accounts: DepositAccounts<'a>,
+    pub instruction_data: DepositInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Deposit<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = DepositAccounts::try_from(accounts)?;
+        let instruction_data = DepositInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Deposit<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &0;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Check vault address
+        let (vault_key, _) = find_program_address(
+            &[
+                b"vault",
+                &self.instruction_data.pubkey[..1],
+                &self.instruction_data.pubkey[1..33]
+            ],
+            &crate::ID
+        );
+        if vault_key.ne(self.accounts.vault.key()) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        Transfer {
+            from: self.accounts.payer,
+            to: self.accounts.vault,
+            lamports: self.instruction_data.amount,
+        }
+        .invoke()
+    }
+}
+```
+
+如前所述，我們需要驗證保險庫的 PDA 是否來自正確的種子。在這個基於 Secp256r1 的保險庫中，我們使用 `Secp256r1Pubkey` 作為種子的一部分，而不是傳統的擁有者公鑰。這是一個關鍵的安全措施，確保只有對應 Secp256r1 密鑰的持有者才能訪問保險庫。
+
+`Secp256r1Pubkey` 是 33 字節長，因為它使用了橢圓曲線公鑰的壓縮點表示法。這種格式包括：
+- 1 字節表示點的奇偶性（指示 y 坐標是偶數還是奇數）
+- 32 字節表示 x 坐標
+
+由於 Solana 的 `find_program_address` 函數對每個種子有 32 字節的限制，我們需要將 `Secp256r1Pubkey` 分成兩部分：
+1. 奇偶性字節（`pubkey[..1]`）
+2. x 坐標字節（`pubkey[1..33]`）
+
+<ArticleSection name="Withdraw" id="withdraw" level="h2" />
+
+提款指令執行以下步驟：
+1. 驗證保險庫內有 lamports（非空）
+2. 使用保險庫的 PDA 以其自身名義簽署轉賬
+3. 將保險庫內的所有 lamports 轉回給擁有者
+
+首先，我們來定義提款的帳戶結構：
+
+```rust
+pub struct WithdrawAccounts<'a> {
+    pub payer: &'a AccountInfo,
+    pub vault: &'a AccountInfo,
+    pub instructions: &'a AccountInfo,
+}
+
+impl<'a> TryFrom<&'a [AccountInfo]> for WithdrawAccounts<'a> {
+    type Error = ProgramError;
+
+    fn try_from(accounts: &'a [AccountInfo]) -> Result<Self, Self::Error> {
+        let [payer, vault, instructions, _system_program] = accounts else {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        };
+
+        if !payer.is_signer() {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if !vault.is_owned_by(&pinocchio_system::ID) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        if vault.lamports().eq(&0) {
+            return Err(ProgramError::InvalidAccountData);
+        }
+
+        Ok(Self { payer, vault, instructions })
+    }
+}
+```
+
+現在我們來實現指令數據結構：
+
+```rust
+pub struct WithdrawInstructionData {
+    pub bump: [u8;1]
+}
+
+impl<'a> TryFrom<&'a [u8]> for WithdrawInstructionData {
+    type Error = ProgramError;
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        Ok(Self {
+            bump: [*data.first().ok_or(ProgramError::InvalidInstructionData)?],
+        })
+    }
+}
+```
+
+如你所見，為了優化，我們將 bump 作為指令數據傳遞，而不是在 `process()` 中重新推導，因為該過程已經因其他檢查而變得“繁重”。
+
+最後，我們來實現 `withdraw` 指令：
+
+```rust
+pub struct Withdraw<'a> {
+    pub accounts: WithdrawAccounts<'a>,
+    pub instruction_data: WithdrawInstructionData,
+}
+
+impl<'a> TryFrom<(&'a [u8], &'a [AccountInfo])> for Withdraw<'a> {
+    type Error = ProgramError;
+
+    fn try_from((data, accounts): (&'a [u8], &'a [AccountInfo])) -> Result<Self, Self::Error> {
+        let accounts = WithdrawAccounts::try_from(accounts)?;
+        let instruction_data = WithdrawInstructionData::try_from(data)?;
+
+        Ok(Self {
+            accounts,
+            instruction_data,
+        })
+    }
+}
+
+impl<'a> Withdraw<'a> {
+    pub const DISCRIMINATOR: &'a u8 = &1;
+
+    pub fn process(&mut self) -> ProgramResult {
+        // Deserialize our instructions
+        let instructions: Instructions<Ref<[u8]>> = Instructions::try_from(self.accounts.instructions)?;
+        // Get instruction directly after this one
+        let ix: IntrospectedInstruction = instructions.get_instruction_relative(1)?;
+        // Get Secp256r1 instruction
+        let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+        // Enforce that we only have one signature
+        if secp256r1_ix.num_signatures() != 1 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        // Enforce that the signer of the first signature is our PDA owner
+        let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+
+        // Check that our fee payer is the correct 
+        let (payer, expiry) = secp256r1_ix
+            .get_message_data(0)?
+            .split_at_checked(32)
+            .ok_or(ProgramError::InvalidInstructionData)?;
+
+        if self.accounts.payer.key().ne(payer) {
+            return Err(ProgramError::InvalidAccountOwner);
+        }
+
+        // Get current timestamp
+        let now = Clock::get()?.unix_timestamp;
+        // Get signature expiry timestamp
+        let expiry = i64::from_le_bytes(
+            expiry
+                .try_into()
+                .map_err(|_| ProgramError::InvalidInstructionData)?
+        );
+        if now > expiry {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+        
+        // Create signer seeds for our CPI
+        let seeds = [
+            Seed::from(b"vault"),
+            Seed::from(signer[..1].as_ref()),
+            Seed::from(signer[1..].as_ref()),
+            Seed::from(&self.instruction_data.bump),
+        ];
+        let signers = [Signer::from(&seeds)];
+
+        Transfer {
+            from: self.accounts.vault,
+            to: self.accounts.payer,
+            lamports: self.accounts.vault.lamports(),
+        }
+        .invoke_signed(&signers)
+    }
+}
+```
+
+提款過程涉及多項安全檢查，以確保交易的合法性。我們來分解如何驗證 Secp256r1 簽名並防範潛在攻擊：
+
+1. **指令內省**
+- 我們使用指令系統變數來檢查交易中的下一個指令
+- 這讓我們可以驗證 Secp256r1 簽名，證明簽名密鑰的擁有權
+- Secp256r1 的簽名驗證總是在單獨的指令中進行
+
+2. **簽名驗證**
+
+```rust
+let secp256r1_ix = Secp256r1Instruction::try_from(&ix)?;
+if secp256r1_ix.num_signatures() != 1 {
+    return Err(ProgramError::InvalidInstructionData);
+}
+let signer: Secp256r1Pubkey = *secp256r1_ix.get_signer(0)?;
+```
+
+- 我們驗證是否只有一個簽名
+- 我們提取簽名者的公鑰，該公鑰必須與用於創建驗證用途的保管庫 PDA 的公鑰匹配
+
+3. **訊息驗證**
+
+```rust
+let (payer, expiry) = secp256r1_ix.get_message_data(0)?.split_at_checked(32)?;
+if self.accounts.payer.key().ne(payer) {
+    return Err(ProgramError::InvalidAccountOwner);
+}
+```
+
+- 簽名的訊息包含兩個關鍵資訊：
+    - 預定接收者的地址（32 字節）
+    - 簽名過期的時間戳（8 字節）
+- 這可以防止 MEV 攻擊，例如有人攔截並重複使用有效簽名，通過傳遞另一個 `payer` 並聲稱保管庫中的金額
+
+4. **過期檢查**
+
+```rust
+let now = Clock::get()?.unix_timestamp;
+let expiry = i64::from_le_bytes(expiry.try_into()?);
+if now > expiry {
+    return Err(ProgramError::InvalidInstructionData);
+}
+```
+
+- 我們驗證簽名是否已過期
+- 這增加了一個基於時間的安全層，防止簽名重複使用
+- 過期時間應被視為一個「冷卻期」；在過期之前不能創建新的保管庫，否則可能在實際擁有者不知情的情況下被重複使用
+
+5. **PDA 簽名**
+
+```rust
+let seeds = [
+    Seed::from(b"vault"),
+    Seed::from(signer[..1].as_ref()),
+    Seed::from(signer[1..].as_ref()),
+    Seed::from(&self.instruction_data.bump),
+];
+```
+
+- 最後，我們使用已驗證的公鑰來創建 PDA 種子
+- 這確保只有合法的 Secp256r1 密鑰持有者可以簽署提款交易
+
+<ArticleSection name="Conclusion" id="conclusion" level="h2" />
+
+現在，您可以使用我們的單元測試來測試您的程式並領取您的 NFT！
+
+首先，在終端中使用以下命令來構建您的程式：
+
+```bash
+cargo build-sbf
+```
+
+這會在您的 `target/deploy` 資料夾中直接生成一個 `.so` 文件。
+
+現在點擊 `take challenge` 按鈕，然後將文件拖放到那裡！

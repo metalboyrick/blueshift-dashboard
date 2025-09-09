@@ -1,0 +1,111 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 重新初始化攻擊
+
+重新初始化攻擊利用程式未檢查帳戶是否已初始化的漏洞，讓攻擊者能覆寫現有數據並劫持對有價值帳戶的控制權。
+
+初始化是為首次使用設置新帳戶的合法操作，而重新初始化則是惡意地將現有帳戶重置為攻擊者控制的狀態。
+
+如果沒有正確的初始化驗證，攻擊者可以對已在使用中的帳戶調用初始化功能，實際上對已建立的程式狀態進行惡意接管。這在像托管、保險庫或任何帳戶所有權決定對有價值資產控制權的系統中尤為毀滅性。
+
+初始化是首次為新帳戶設置數據的過程。為了防止覆寫現有數據，檢查帳戶是否已初始化是至關重要的。
+
+<ArticleSection name="Anchor" id="anchor" level="h2" />
+
+請考慮以下這段易受攻擊的指令碼，它用於初始化程式帳戶：
+
+```rust
+#[program]
+pub mod unsafe_initialize_account{
+    use super::*;
+
+    //..
+
+    pub fn unsafe_initialize_account(ctx: Context<InitializeAccount>) -> Result<()> {
+        let mut writer: Vec<u8> = vec![];
+
+        ProgramAccount {
+            owner: ctx.accounts.owner.key()
+        }.try_serialize(&mut writer)?;
+
+        let mut data = ctx.accounts.program_account.try_borrow_mut_data()?;
+        sol_memcpy(&mut data, &writer, writer.len());
+
+        Ok(())
+    }
+
+    //..
+}
+
+#[derive(Accounts)]
+pub struct InitializeAccount<'info> {
+    pub owner: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: This account will not be checked by Anchor
+    pub program_account: UncheckedAccount<'info>,
+}
+
+#[account]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+這段程式碼有一個致命的缺陷：它從未檢查帳戶是否已經初始化。每次調用這個指令時，它都會無條件地覆寫帳戶數據，並將調用者設為新擁有者，而不考慮帳戶的先前狀態。
+
+攻擊者可以通過以下方式利用這個漏洞：
+- 找到一個有價值的已初始化帳戶（例如控制代幣帳戶的托管 PDA）
+- 使用該現有帳戶調用 `unsafe_initialize_account`
+- 覆寫先前的擁有者數據，成為新的「擁有者」
+- 利用他們的新擁有權，提取該帳戶控制的任何資產
+
+這種攻擊在托管場景中特別毀滅性。想像一個托管 PDA 擁有包含數千美元資產的代幣帳戶。原始的托管初始化正確地設置了帳戶並有合法參與者。但如果攻擊者能調用重新初始化功能，他們可以覆寫托管數據，將自己設為擁有者，並獲得對所有托管代幣的控制權。
+
+幸運地，`Anchor` 讓我們可以非常輕鬆地直接在帳戶結構中執行此檢查，只需在初始化帳戶時使用 `init` 約束，如下所示：
+
+```rust
+#[derive(Accounts)]
+pub struct InitializeAccount<'info> {
+    pub owner: Signer<'info>,
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + ProgramAccount::INIT_SPACE
+    )]
+    pub program_account: Account<'info, ProgramAccount>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct ProgramAccount {
+    owner: Pubkey,
+}
+```
+
+或者，你可以在指令中使用 `ctx.accounts.program_account.is_initialized` 檢查，確認帳戶已經初始化，如下所示：
+
+```rust
+pub fn update_ownership(ctx: Context<UpdateOwnership>) -> Result<()> {
+    if ctx.accounts.program_account.is_initialized {
+        return Err(ProgramError::AccountAlreadyInitialized.into());
+    }
+
+    Ok(())
+}
+```
+
+> Anchor 的 `init_if_needed` 約束（受功能標誌保護）應該極為謹慎地使用。雖然它方便地僅在帳戶尚未初始化時初始化帳戶，但它也帶來了一個危險的陷阱：如果帳戶已經初始化，指令處理程序會繼續正常執行。這意味著你的程式可能會在不知情的情況下操作現有帳戶，可能覆蓋關鍵數據或允許未經授權的訪問。
+
+<ArticleSection name="Pinocchio" id="pinocchio" level="h2" />
+
+在 Pinocchio 中，由於我們無法直接在帳戶結構內添加安全檢查，因此我們被迫在指令邏輯中進行這些檢查。
+
+我們可以通過檢查帳戶是否具有正確的識別符來實現：
+
+```rust
+let account_data = self.accounts.program_account.try_borrow_data()?;
+
+if account_data[0] == DISCRIMINATOR {
+    return Err(ProgramError::AccountAlreadyInitialized.into());
+}
+```

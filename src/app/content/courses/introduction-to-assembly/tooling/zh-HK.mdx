@@ -1,0 +1,104 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# 工具
+
+傳統上，編寫和構建 sBPF Assembly 程式需要完整的 Solana 工具鏈，這可能需要複雜的設置並且依賴於平台。正因如此，[Dean](https://x.com/deanmlittle) 在 [Claire](https://x.com/clairefxyz) 的貢獻下，創建了 sBPF：一個完整的工具包，用於創建和構建 sBPF Assembly 程式。
+
+<ArticleSection name="安裝" id="installation" level="h2" />
+
+我們首先通過以下方式安裝此套件：
+
+```
+cargo install --git https://github.com/blueshift-gg/sbpf.git
+```
+
+之後，我們可以執行以下所有命令：
+- `init`：創建一個新的項目模板。
+- `build`：編譯為 Solana 程式可執行文件。
+- `deploy`：構建並部署程式。
+- `test`：測試已部署的程式。
+- `e2e`：構建、部署並測試程式。
+- `clean`：清理構建和部署的工件。
+- `help`：打印此消息或給定子命令的幫助信息。
+
+```text
+Usage: sbpf <COMMAND>
+
+Commands:
+  init    Create a new project scaffold
+  build   Compile into a Solana program executable
+  deploy  Build and deploy the program
+  test    Test deployed program
+  e2e     Build, deploy and test a program
+  clean   Clean up build and deploy artifacts
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+<ArticleSection name="初始化新項目" id="initialize-a-new-project" level="h2" />
+
+要創建一個新項目，請使用 `sbpf init` 命令。默認情況下，它會使用 Mollusk 初始化帶有 Rust 測試的項目。您還可以使用 `--ts-tests` 選項初始化帶有 TypeScript 測試的項目。
+
+```text
+sbpf init --help
+Create a new project scaffold
+
+Usage: sbpf init [OPTIONS] [NAME]
+
+Arguments:
+  [NAME]  The name of the project to create
+
+Options:
+  -t, --ts-tests  Initialize with TypeScript tests instead of Mollusk Rust tests
+  -h, --help      Print help information
+  -V, --version   Print version information
+```
+
+初始化項目後，您可以進入項目目錄並使用其他命令來構建、部署和測試您的程式。
+
+<ArticleSection name="構建程式" id="building-programs" level="h2" />
+
+sBPF 根據您的設置和需求提供兩種構建選項：
+
+### sBPF 構建
+
+構建命令使用一個獨立的組譯器，無需額外的依賴項。它非常適合學習和實驗，因為它可以在任何平台上「即插即用」。
+
+```
+sbpf build
+```
+
+{/*
+
+TODO: 更新 sbpf 以啟用 llvm 構建作為可選配置，然後重新啟用此功能
+
+### 完整構建
+
+標準構建指令提供與完整的 Solana 工具鏈及項目管理功能的整合。
+
+> 這需要安裝 [Solana 命令行工具](https://docs.anza.xyz/cli/install/)。
+
+```
+sbpf build
+```
+
+ */}
+
+### 高級用法
+
+你可以通過在 src 目錄中包含與你的程序同名的自定義鏈接器文件來覆蓋默認鏈接器。例如：
+
+```text
+src/example/example.s
+src/example/example.ld
+```
+
+<ArticleSection name="開發環境" id="development-environment" level="h2" />
+
+為了獲得最佳的開發體驗，建議安裝 [VS Code sBPF Assembly 擴展](https://github.com/deanmlittle/vscode-sbpf-asm)，它提供：
+- sBPF 彙編語法高亮
+- 指令和寄存器的代碼補全
+- 錯誤檢測和警告
