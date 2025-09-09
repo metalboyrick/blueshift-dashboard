@@ -31,7 +31,7 @@ export function Codeblock(props: CodeblockProps) {
   };
 
   return (
-    <div className="flex flex-col w-full border border-border rounded-xl overflow-hidden !my-8">
+    <div className="flex flex-col w-full border border-border rounded-xl overflow-hidden !my-8 code-block">
       <div className="text-sm font-medium text-brand-secondary flex items-center justify-between px-6 py-3 border-b-border bg-background-card-foreground rounded-t-xl">
         {lang || "\u00A0"}
         {children && (
@@ -60,7 +60,7 @@ export function Codeblock(props: CodeblockProps) {
         )}
       </div>
       <div className="bg-background-card" ref={preRef}>
-        <pre className="m-0!">
+        <pre>
           {children}
         </pre>
       </div>
