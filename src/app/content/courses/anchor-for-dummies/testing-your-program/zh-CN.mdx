@@ -10,7 +10,7 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 TypeScript 测试是最常见的方法，因为无论如何您都需要为 dApp 客户端使用 TypeScript。这使您可以同时开发测试和客户端代码。
 
-我们在[这里](/en/courses/anchor-for-dummies/client-side-development)详细介绍了客户端设置。
+我们在[这里](/zh-CN/courses/anchor-for-dummies/client-side-development)详细介绍了客户端设置。
 
 > 每个 Anchor CLI 项目都包含一个测试文件夹，其中有一个准备好测试的 TypeScript 文件。
 
@@ -26,7 +26,7 @@ TypeScript 测试具有以下关键优势：
 anchor test
 ```
 
-> 通过在配置中将集群设置为 localnet 来在 localnet 上运行。这会启动一个本地验证器并向提供者钱包添加 1,000 SOL。如果您需要包含数据的额外账户，请查看运行[本地验证器](/en/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)的相关内容。
+> 通过在配置中将集群设置为 localnet 来在 localnet 上运行。这会启动一个本地验证器并向提供者钱包添加 1,000 SOL。如果您需要包含数据的额外账户，请查看运行[本地验证器](/zh-CN/courses/anchor-for-dummies/testing-your-program#running-a-local-validator)的相关内容。
 
 <ArticleSection name="Mollusk Tests" id="mollusk-tests" level="h2" />
 
@@ -38,7 +38,7 @@ Mollusk 是一个专为 Solana 程序构建的 Rust 测试框架。它使您能�
 - 比完整的集成测试运行更快的测试
 - 模拟特定的区块链条件和边界情况
 
-我们在[这里](/en/courses/testing-with-mollusk)详细介绍了 Mollusk 测试。
+我们在[这里](/zh-CN/courses/testing-with-mollusk)详细介绍了 Mollusk 测试。
 
 使用 Mollusk 创建一个新的 Anchor 程序：
 
@@ -64,9 +64,9 @@ LiteSVM 是一个轻量级测试框架，可以直接在您的测试过程中运
 
 LiteSVM 通过将虚拟机嵌入到您的测试中，消除了验证器的开销，在不牺牲测试准确性的情况下提供了快速开发周期所需的速度。
 
-我们在[这里](/en/courses/testing-with-litesvm)全面介绍了 LiteSVM 测试。
+我们在[这里](/zh-CN/courses/testing-with-litesvm)全面介绍了 LiteSVM 测试。
 
-您可以设置 Anchor 提供程序，并使用我们[之前](/en/courses/anchor-for-dummies/client-side-development)看到的客户端设置与 `anchor-litesvm` 包一起使用。
+您可以设置 Anchor 提供程序，并使用我们[之前](/zh-CN/courses/anchor-for-dummies/client-side-development)看到的客户端设置与 `anchor-litesvm` 包一起使用。
 
 安装 `anchor-litesvm` 包。
 
@@ -157,4 +157,4 @@ import { Connection } from "@solana/web3.js";
 const connection = new Connection("http://localhost:8899", "confirmed");
 ```
 
-我们在[这里](/en/courses/testing-with-surfpool)详细介绍了 Surfnet 的设置和使用。
+我们在[这里](/zh-CN/courses/testing-with-surfpool)详细介绍了 Surfnet 的设置和使用。
