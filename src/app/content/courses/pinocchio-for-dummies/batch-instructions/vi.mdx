@@ -1,0 +1,122 @@
+
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Batch Instructions
+
+Cross-Program Invocations (CPIs) chi tiêu một chi phí cơ bản là 1,000 đơn vị tính toán cho mỗi lời gọi. Đối với các chương trình nhận được nhiều CPI thường xuyên trong cùng một instruction, chi phí này trở thành một nút thắt cổ chai hiệu suất đáng kể.
+
+Để giải quyết vấn đề không hiệu quả này, [Dean](https://x.com/deanmlittle) đã tạo ra "batch" instruction trong [PR này](https://github.com/febo/p-token/pull/7) cho p-token, cho phép nhiều hoạt động được thực hiện trong một cuộc gọi CPI duy nhất.
+
+<ArticleSection name="Batch Instruction" id="the-batch-instruction" level="h2" />
+
+Một batch instruction cho phép nhiều hoạt động được xử lý trong một CPI duy nhất thay vì yêu cầu các cuộc gọi riêng biệt cho mỗi hoạt động. Điều này làm giảm đáng kể mức tiêu thụ đơn vị tính toán cho các chương trình xử lý nhiều hoạt động liên quan.
+
+### Cấu trúc
+
+Batch instruction sử dụng một cấu trúc header nâng cao chứa:
+- **Số lượng tài khoản**: Số lượng tài khoản cần thiết cho instruction bên trong
+- **Độ dài dữ liệu**: Kích thước của dữ liệu instruction
+
+Phần header này cho phép xử lý hiệu quả nhiều "inner" instructions trong một batch duy nhất. Hệ thống sẽ lặp qua và xử lý từng inner instruction một cách tuần tự.
+
+> Chúng ta sử dụng `u8::MAX` (255) làm discriminator cho các batch instructions.
+
+<ArticleSection name="Thiết kế entrypoint" id="entrypoint-design" level="h2" />
+
+Entrypoint đầu tiên kiểm tra discriminator instruction để xác định xem có nên xử lý một batch instruction hay một regular instruction. Điều này ngăn chặn việc lồng ghép các batch instructions trong các batch instructions khác, điều này sẽ không hợp lệ.
+
+Như thế này:
+
+```rust
+#[inline(always)]
+pub fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {
+    let [discriminator, remaining @ ..] = instruction_data else {
+        return Err(TokenError::InvalidInstruction.into());
+    };
+
+    let result = if *discriminator == 255 {
+        // 255 - Batch
+        #[cfg(feature = "logging")]
+        pinocchio::msg!("Instruction: Batch");
+
+        process_batch(accounts, remaining)
+    } else {
+        inner_process_instruction(accounts, instruction_data)
+    };
+
+    result.inspect_err(log_error)
+}
+```
+
+### Sử lý Batch
+
+Hàm `process_batch` xử lý logic chính của việc xử lý batch:
+
+```rust
+/// The size of the batch instruction header.
+///
+/// The header of each instruction consists of two `u8` values:
+///  * number of the accounts
+///  * length of the instruction data
+const IX_HEADER_SIZE: usize = 2;
+
+pub fn process_batch(mut accounts: &[AccountInfo], mut instruction_data: &[u8]) -> ProgramResult {
+    loop {
+        // Validates the instruction data and accounts offset.
+
+        if instruction_data.len() < IX_HEADER_SIZE {
+            // The instruction data must have at least two bytes.
+            return Err(TokenError::InvalidInstruction.into());
+        }
+
+        // SAFETY: The instruction data is guaranteed to have at least two bytes
+        // (header) + one byte (discriminator) and the values are within the bounds
+        // of an `usize`.
+        let expected_accounts = unsafe { *instruction_data.get_unchecked(0) as usize };
+        let data_offset = IX_HEADER_SIZE + unsafe { *instruction_data.get_unchecked(1) as usize };
+
+        if instruction_data.len() < data_offset || data_offset == IX_HEADER_SIZE {
+            return Err(TokenError::InvalidInstruction.into());
+        }
+
+        if accounts.len() < expected_accounts {
+            return Err(ProgramError::NotEnoughAccountKeys);
+        }
+
+        // Process the instruction.
+
+        // SAFETY: The instruction data and accounts lengths are already validated so
+        // all slices are guaranteed to be valid.
+        let (ix_accounts, ix_data) = unsafe {
+            (
+                accounts.get_unchecked(..expected_accounts),
+                instruction_data.get_unchecked(IX_HEADER_SIZE..data_offset),
+            )
+        };
+
+        inner_process_instruction(ix_accounts, ix_data)?;
+
+        if data_offset == instruction_data.len() {
+            // The batch is complete.
+            break;
+        }
+
+        accounts = &accounts[expected_accounts..];
+        instruction_data = &instruction_data[data_offset..];
+    }
+
+    Ok(())
+}
+```
+
+Đây là những gì xảy ra trong hàm này:
+- **Header Validation**: Hàm bắt đầu bằng cách xác thực rằng dữ liệu instruction chứa ít nhất kích thước header yêu cầu (2 byte).
+- **Account and Data Extraction**: Nó trích xuất số lượng tài khoản mong đợi và tính toán offset dữ liệu, xác thực các giá trị này để ngăn chặn hành vi không xác định.
+- **Instruction Processing**: Mỗi instruction bên trong được xử lý bằng cách sử dụng hàm `inner_process_instruction` tiêu chuẩn với các tài khoản và dữ liệu cụ thể của nó.
+- **Loop Control**: Hàm tiếp tục xử lý cho đến khi tất cả các instruction trong batch hoàn tất, tiến tới các con trỏ tài khoản và dữ liệu instruction cho mỗi lần lặp.
+
+> Một vài instruction có thể yêu cầu kiểm tra quyền sở hữu rõ ràng khi được thực thi trong một batch, vì runtime chỉ thực thi quyền sở hữu vào cuối quá trình xử lý batch. Các instruction không thay đổi tài khoản hoặc đã thực hiện kiểm tra quyền sở hữu rõ ràng không cần xác thực bổ sung.

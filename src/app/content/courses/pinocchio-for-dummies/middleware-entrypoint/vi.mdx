@@ -1,0 +1,182 @@
+import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
+
+# Middleware entrypoint
+
+Tất cả các instrcuctions không hoàn toàn giống nhau. Một vài trong số chúng được gọi thường xuyên hơn những cái khác, tạo ra các nút thắt cổ chai về hiệu suất.
+
+Để ưu tiên hiệu suất và tối ưu hóa, chúng ta cần một cách tiếp cận khác để xử lý những instruction có tần suất gọi cao này.
+
+Đây là nơi chiến lược đường "hot" và "cold" xuất hiện.
+
+Đường "hot" tạo ra một entrypoint tối ưu cho các instruction được gọi thường xuyên, được thiết kế để đạt được trạng thái "fail" nhanh nhất có thể để chúng ta có thể quay lại entrypoint tiêu chuẩn của Pinocchio khi cần thiết.
+
+<ArticleSection name="Đường Hot" id="the-hot-path" level="h2" />
+
+Con đường hot bỏ qua logic entrypoint tiêu chuẩn mà deserializes tất cả dữ liệu tài khoản trước khi xử lý. Thay vào đó, nó làm việc trực tiếp với dữ liệu thô để đạt được hiệu suất tối đa.
+
+### Xử lý tiêu chuẩn so với Hot
+
+Đối với entrypoint tiêu chuẩn, trình tải sẽ đóng gói mọi thứ mà một instruction cần vào một bản ghi phẳng, kiểu C được lưu trữ trên trang đầu vào của BPF VM. Macro entrypoint sẽ giải nén bản ghi này và cung cấp ba lát an toàn: `program_id`, tài khoản và `instruction_data`.
+
+Đối với con đường Hot, bởi vì chúng ta biết chính xác những gì mong đợi, chúng ta có thể kiểm tra và thao tác với các tài khoản trực tiếp từ dữ liệu thô của entrypoint, loại bỏ chi phí deserialization không cần thiết.
+
+Cấu trúc đầu vào thô trông như thế này:
+
+```rust
+pub struct Entrypoint {
+    account_len: u64,
+    account_info: [AccountRaw; account_len]
+    instruction_len: u64,
+    instruction_data: [u8; instruction_len]
+    program_id: [u8; 32],
+}
+
+pub struct AccountRaw {
+    is_duplicate: u8,
+    is_signer: u8,
+    is_writable: u8,
+    executable: u8,
+    alignment: u32,
+    key: [u8; 32],
+    owner: [u8; 32],
+    lamports: u64,
+    data_len: usize,
+    data: [u8; data_len],
+    padding: [u8; 10_240],
+    alignment_padding: [u8; ?],
+    rent_epoch: i64,
+}
+```
+
+### Discriminators của Hot Path
+
+Khi thiết kế đường hot, chúng ta cần một cách đáng tin cậy để xác định xem instruction hiện tại có nên được xử lý bởi đường hot hay được chuyển đến đường cold một cách nhanh chóng nhất có thể.
+
+Các discriminators truyền thống không làm việc ở đây vì chúng xuất hiện ở offset khác nhau mỗi lần dựa trên số lượng tài khoản và dữ liệu bên trong chúng.
+
+Chúng ta cần kiểm tra một cái gì đó luôn ở cùng một offset. Hiện tại, chúng ta có hai cách tiếp cận để phân biệt các instruction này:
+- Số lượng tài khoản: Vì số lượng tài khoản là đầu vào đầu tiên trong entrypoint thô, chúng ta có thể phân biệt dựa trên số lượng tài khoản được truyền vào: `if *input == 4u64`.
+    Điều này hoạt động vì số lượng tài khoản có một vị trí cố định ở đầu tiên của dữ liệu đầu vào.
+
+- Khóa công khai của tài khoản đầu tiên: Vì khóa công khai của tài khoản đầu tiên xuất hiện ở một offset cố định, chúng ta có thể thiết kế chương trình của mình để luôn đặt một keypair (như một authority hoặc một chương trình) cố định ở vị trí đầu tiên và phân biệt dựa trên khóa đó.
+
+> Hiện tại có một SIMD mở để có trong registry `r2` dữ liệu instruction. Điều này có nghĩa là sau khi điều đó được triển khai, chúng ta sẽ có thể sử dụng discriminator cho đường hot của mình.
+
+<ArticleSection name="Thiết kế entrypoint" id="entrypoint-design" level="h2" />
+
+Với [PR này](https://github.com/anza-xyz/pinocchio/pull/241), [Dean](https://x.com/deanmlittle) đã giới thiệu một entrypoint mới có tên là `middleware_entrypoint` cho Pinocchio, cho phép tạo đường hot dễ dàng cho các chương trình.
+
+Dưới đây là cách để triển khai nó:
+
+```rust
+/// A "dummy" function with a hint to the compiler that it is unlikely to be
+/// called.
+///
+/// This function is used as a hint to the compiler to optimize other code paths
+/// instead of the one where the function is used.
+#[cold]
+pub const fn cold_path() {}
+
+/// Return the given `bool` value with a hint to the compiler that `true` is the
+/// likely case.
+#[inline(always)]
+pub const fn likely(b: bool) -> bool {
+    if b {
+        true
+    } else {
+        cold_path();
+        false
+    }
+}
+
+middleware_entrypoint!(hot, process_instruction);
+
+#[inline(always)]
+pub fn hot(input: *mut u8) -> u64 {
+    unsafe { *input as u64 }
+}
+
+#[inline(always)]
+fn process_instruction(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    instruction_data: &[u8],
+) -> ProgramResult {    
+    match instruction_data.split_first() {
+        Some((Instruction1::DISCRIMINATOR, data)) => Instruction1::try_from((data, accounts))?.process(),
+        Some((Instruction2::DISCRIMINATOR, _)) => Instruction2::try_from(accounts)?.process(),
+        _ => Err(ProgramError::InvalidInstructionData)
+    }
+}
+```
+
+### Cách nó làm việc
+
+Entrypoint gọi hàm "hot" trước tiên, kiểm tra xem nó có trả về lỗi hay không, và nếu có, sẽ quay lại entrypoint mặc định của Pinocchio. Điều này tạo ra một đường dẫn nhanh cho các hoạt động phổ biến trong khi vẫn duy trì tính tương thích.
+
+Thuộc tính `#[cold]` cho trình biên dịch biết rằng hàm này hiếm khi được gọi. Trong quá trình tối ưu hóa, trình biên dịch sẽ giảm ưu tiên cho các đường dẫn mã lạnh và tập trung tài nguyên vào việc tối ưu hóa đường dẫn nóng.
+
+### Nguyên tắc thiết kế đường dẫn Hot
+
+Khi thiết kế đường hot, việc xác thực nghiêm ngặt là rất quan trọng vì chúng ta đang làm việc với các đầu vào thô. Bất kỳ hành vi không xác định nào cũng có thể làm tổn hại toàn bộ chương trình.
+
+Luôn luôn xác minh rằng các offset và độ dài tài khoản khớp với mong đợi. Sử dụng [sbpf.xyz](https://sbpf.xyz/) để xác định các offset chính xác, sau đó xác thực như sau:
+
+```rust
+if *input == 4
+    && (*input.add(ACCOUNT1_DATA_LEN).cast::<u64>() == 165)
+    && (*input.add(ACCOUNT2_DATA_LEN).cast::<u64>() == 82)
+    && (*input.add(IX12_ACCOUNT3_DATA_LEN).cast::<u64>() == 165)
+{
+    //...
+}
+```
+
+Khi các account có độ dài biến thiên, tạo các offset động để xác định dữ liệu instruction như sau:
+
+```rust
+/// Align an address to the next multiple of 8.
+#[inline(always)]
+fn align(input: u64) -> u64 {
+    (input + 7) & (!7)
+}
+
+//...
+
+// The `authority` account can have variable data length.
+    let account_4_data_len_aligned =
+        align(*input.add(IX12_ACCOUNT4_DATA_LEN).cast::<u64>()) as usize;
+    let offset = IX12_EXPECTED_INSTRUCTION_DATA_LEN_OFFSET + account_4_data_len_aligned;
+```
+
+Khi việc xác thực hoàn tất, trích xuất dữ liệu instruction, chuyển đổi các tài khoản và xử lý như bình thường:
+
+```rust
+// Check that we have enough instruction data.
+if input.add(offset).cast::<usize>().read() >= INSTRUCTION_DATA_SIZE {
+    let discriminator = input.add(offset + size_of::<u64>()).cast::<u8>().read();
+
+    // Check for instruction discriminator.
+    if likely(discriminator == 12) {
+        // instruction data length (u64) + discriminator (u8)
+        let instruction_data = unsafe { from_raw_parts(input.add(offset + size_of::<u64>() + size_of::<u8>()), INSTRUCTION_DATA_SIZE - size_of::<u8>()) };
+
+        let accounts = unsafe {
+            [
+                transmute::<*mut u8, AccountInfo>(input.add(ACCOUNT1_HEADER_OFFSET)),
+                transmute::<*mut u8, AccountInfo>(input.add(ACCOUNT2_HEADER_OFFSET)),
+                transmute::<*mut u8, AccountInfo>(input.add(IX12_ACCOUNT3_HEADER_OFFSET)),
+                transmute::<*mut u8, AccountInfo>(input.add(IX12_ACCOUNT4_HEADER_OFFSET)),
+            ]
+        };
+
+        return match Instruction1::try_from((instruction_data, accounts))?.process() {
+            Ok(()) => SUCCESS,
+            Err(error) => {
+                log_error(&error);
+                error.into()
+            }
+        };
+    }
+}
+```
