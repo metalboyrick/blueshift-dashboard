@@ -60,7 +60,7 @@ if instruction.get_instruction_data() != instruction_data {
 Ми також можемо перевірити облікові записи, присутні в інструкції, яку ми аналізуємо. Цей крок вимагає знання точної структури структури облікового запису, оскільки ми будемо запитувати дані або публічний ключ облікового запису за певним індексом, ось так:
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```

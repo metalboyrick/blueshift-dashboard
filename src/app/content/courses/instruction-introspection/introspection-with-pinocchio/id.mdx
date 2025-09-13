@@ -59,7 +59,7 @@ Kita kemudian dapat melakukan pemeriksaan yang lebih spesifik terhadap program b
 Kita juga dapat memeriksa akun-akun yang ada dalam instruksi yang diintrospeksi. Langkah ini mengharuskan kita mengetahui struktur pasti dari struct akun, karena kita akan meminta data atau pubkey dari akun pada indeks tertentu, seperti ini:
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```

@@ -59,7 +59,7 @@ Sau đó chúng ta có thể thực hiện các kiểm tra cụ thể cho chươ
 Chúng ta cũng có thể kiểm tra các tài khoản có mặt trong instruction được introspect. Bước này yêu cầu chúng ta phải biết cấu trúc chính xác của tài khoản, vì chúng ta sẽ yêu cầu dữ liệu hoặc pubkey của một tài khoản tại một chỉ số cụ thể, như thế này:
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```

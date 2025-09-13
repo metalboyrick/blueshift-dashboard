@@ -59,7 +59,7 @@ Nous pouvons ensuite effectuer des vérifications plus spécifiques au programme
 Nous pouvons également vérifier les comptes présents dans l'instruction introspectée. Cette étape nécessite de connaître la structure exacte de la structure de compte car nous allons demander les données ou la clé publique d'un compte à un index précis comme ceci :
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```
