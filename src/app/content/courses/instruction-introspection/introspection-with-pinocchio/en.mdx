@@ -60,7 +60,7 @@ We can then perform more program-specific checks based on the logic of the instr
 We can also check the accounts present in the introspected instruction. This step requires us to know the exact structure of the account struct, since we'll be requesting the data or pubkey of an account at a specific index, like this:
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```

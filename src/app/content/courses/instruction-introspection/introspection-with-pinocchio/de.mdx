@@ -59,7 +59,7 @@ Wir können dann weitere programmspezifische Prüfungen basierend auf der Logik 
 Wir können auch die Konten überprüfen, die in der analysierten Anweisung vorhanden sind. Dieser Schritt erfordert, dass wir die genaue Struktur der Kontostruktur kennen, da wir die Daten oder den öffentlichen Schlüssel eines Kontos an einem bestimmten Index abfragen werden, wie hier:
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```

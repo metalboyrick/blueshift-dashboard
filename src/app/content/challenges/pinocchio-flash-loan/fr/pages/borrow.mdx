@@ -32,7 +32,7 @@ impl<'a> TryFrom<&'a [AccountInfo]> for LoanAccounts<'a> {
             return Err(ProgramError::NotEnoughAccountKeys);
         };
         
-        if instruction_sysvar.key() != &INSTRUCTIONS_ID {
+        if !pubkey_eq(instruction_sysvar.key(), &INSTRUCTIONS_ID) {
             return Err(ProgramError::UnsupportedSysvar);
         }
 

@@ -59,7 +59,7 @@ if instruction.get_instruction_data() != instruction_data {
 我们还可以检查被内省的指令中存在的账户。此步骤要求我们了解账户结构的确切结构，因为我们需要在特定索引处请求账户的数据或公钥，如下所示：
 
 ```rust
-if instruction.get_account_meta_at(0)?.key() != self.accounts.from.key() {
+if !pubkey_eq(instruction.get_account_meta_at(0)?.key(), self.accounts.from.key()) {
     return Err(ProgramError::InvalidAccountData);
 }
 ```
