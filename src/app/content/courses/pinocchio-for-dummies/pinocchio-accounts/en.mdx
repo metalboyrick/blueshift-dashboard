@@ -116,7 +116,7 @@ impl Mint {
     ) -> ProgramResult {
         mint_account_check(account) {
             Ok(_) => Ok(()),
-            Err(_) => init_mint_account(account, payer, decimals, mint_authority, freeze_authority),
+            Err(_) => init(account, payer, decimals, mint_authority, freeze_authority),
         }
     }
 }

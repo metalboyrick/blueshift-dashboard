@@ -245,7 +245,7 @@ export default function ChallengeTable({
 
                   {!isLoading && error && (
                     <div className="text-xs font-medium">
-                      An error occured. Please try again.
+                      An error occurred. Please try again.
                     </div>
                   )}
                 </div>
