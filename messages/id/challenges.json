@@ -23,13 +23,13 @@
       "title": "Escrow Anchor",
       "pages": {
         "make": {
-          "title": "Buat"
+          "title": "Fungsi Pembuatan (Make)"
         },
         "take": {
-          "title": "Ambil"
+          "title": "Fungsi Pengambilan (Take)"
         },
         "refund": {
-          "title": "Batal"
+          "title": "Fungsi Refund"
         }
       },
       "requirements": {

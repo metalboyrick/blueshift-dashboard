@@ -2,38 +2,39 @@ import { ArticleSection } from "../../../../components/ArticleSection/ArticleSec
 
 ![Anchor Escrow Challenge](/graphics/challenge-banners/anchor-escrow.png)
 
-# The Escrow
+# Konsep Escrow
 
-Escrow adalah alat finansial yang ampuh yang memungkinkan pertukaran token yang aman antara dua pihak.
+Escrow adalah alat finansial yang kuat untuk memfasilitasi pertukaran token yang aman di antara dua pihak.
 
-Anggap saja seperti kotak penyimpanan digital di mana satu pengguna dapat mengunci Token A, menunggu pengguna lain menyetor Token B sebelum pertukaran selesai.
+Escrow dapat dianggap seperti kotak penyimpanan digital di mana satu pengguna dapat mengunci Token A sembari menunggu pengguna lain menyetor Token B sebelum proses pertukaran selesai.
 
-Ini menciptakan lingkungan tanpa kepercayaan di mana kedua belah pihak tidak perlu khawatir tentang pihak lain yang membatalkan kesepakatan.
+Konsep ini dapat menciptakan lingkungan tanpa kepercayaan di mana kedua belah pihak tidak perlu khawatir tentang pihak lain yang membatalkan kesepakatan secara sepihak.
 
-Dalam tantangan ini, kita akan mengimplementasikan konsep ini melalui tiga instruksi sederhana namun ampuh:
-- **Make**: Pembuat (pengguna pertama) menentukan persyaratan perdagangan dan menyetor jumlah Token A yang disepakati ke dalam vault yang aman. Ini seperti menempatkan barang Anda di kotak penyimpanan dan menetapkan persyaratan pertukaran.
-- **Take**: Pengambil (pengguna kedua) menerima tawaran dengan mentransfer jumlah Token B yang dijanjikan kepada pembuat, dan sebagai gantinya, menerima Token A yang terkunci. Ini adalah saat ketika kedua belah pihak menyelesaikan bagian mereka dalam kesepakatan.
-- **Refund**: Jika pembuat berubah pikiran atau tidak ada pengambil yang cocok, mereka dapat membatalkan tawaran dan mengambil kembali Token A mereka. Ini seperti mendapatkan kembali barang Anda dari kotak penyimpanan jika kesepakatan gagal.
+Dalam tantangan ini, kita akan mengimplementasikan konsep ini melalui tiga instruksi sederhana namun kuat:
 
-**Catatan**: Jika Anda tidak familiar dengan Anchor, Anda sebaiknya mulai dengan membaca [Anchor for Dummies](/id/courses/anchor-for-dummies) untuk membiasakan diri dengan konsep inti yang akan kita gunakan dalam program ini.
+- **Make**: Pembuat Escrow (pengguna pertama) menentukan persyaratan pertukaran dan menyetor jumlah Token A yang disepakati ke dalam _vault_ (brankas) yang aman. Ini seperti menempatkan barang Anda di dalam suatu kotak penyimpanan dan menetapkan persyaratan pertukaran.
+- **Take**: Pengambil Escrow (pengguna kedua) menerima tawaran dengan mentransfer jumlah Token B sesuai permintaan dalam Escrow kepada pembuat, dan sebagai gantinya, Pengambil Escrow akan secara otomatis menerima Token A yang terkunci dalam _vault_. Ini adalah saat ketika kedua belah pihak menyelesaikan bagian mereka dalam kesepakatan.
+- **Refund**: Jika pembuat berubah pikiran atau tidak ada pengambil escrow yang cocok, mereka dapat membatalkan tawaran dan mengambil kembali Token A mereka dari _vault_. Ini seperti mendapatkan kembali barang Anda dari kotak penyimpanan jika kesepakatan gagal.
+
+**Catatan**: Jika Anda tidak familiar dengan Anchor, kami menyarankan anda untuk membaca kursus [Anchor for Dummies](/id/courses/anchor-for-dummies) terlebih dahulu untuk mendalami konsep inti yang akan kita gunakan dalam program ini.
 
 <ArticleSection name="Instalasi" id="installation" level="h2" />
 
-Mari mulai dengan membuat workspace Anchor baru:
+Mari mulai dengan membuat _workspace_ Anchor baru:
 
 ```bash
 anchor init blueshift_anchor_escrow
 cd blueshift_anchor_escrow
 ```
 
-Kemudian kita lanjutkan dengan mengaktifkan `init-if-needed` pada crate `anchor-lang` dan dengan menambahkan crate `anchor-spl` juga:
+Kemudian kita lanjutkan dengan mengaktifkan `init-if-needed` pada _crate_ `anchor-lang` dan dengan menambahkan _crate_ `anchor-spl` juga:
 
 ```bash
 cargo add anchor-lang --features init-if-needed
 cargo add anchor-spl
 ```
 
-Karena kita menggunakan `anchor-spl`, kita juga perlu memperbarui file `programs/blueshift_anchor_escrow/Cargo.toml` untuk menyertakan `anchor-spl/idl-build` dalam fitur `idl-build`.
+Karena kita menggunakan `anchor-spl`, kita juga perlu mengubah file `programs/blueshift_anchor_escrow/Cargo.toml` untuk menyertakan `anchor-spl/idl-build` dalam fitur `idl-build`.
 
 Buka `Cargo.toml` dan Anda akan melihat baris `idl-build` yang sudah ada seperti ini:
 
@@ -41,17 +42,17 @@ Buka `Cargo.toml` dan Anda akan melihat baris `idl-build` yang sudah ada seperti
 idl-build = ["anchor-lang/idl-build"]
 ```
 
-Modifikasi untuk menambahkan `anchor-spl/idl-build` juga:
+Tambahkan `anchor-spl/idl-build` seperti berikut:
 
 ```toml
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 ```
 
-Sekarang Anda dapat membuka folder yang baru dibuat, dan Anda siap untuk mulai coding!
+Sekarang Anda dapat membuka folder yang baru dibuat, dan Anda siap untuk mulai koding!
 
-<ArticleSection name="Template" id="template" level="h2" />
+<ArticleSection name="Kerangka Awal" id="template" level="h2" />
 
-Kali ini, karena programnya cukup kompleks, kita akan membaginya menjadi modul-modul kecil yang terfokus alih-alih memadatkan semuanya ke dalam `lib.rs`.
+Kali ini, karena programnya cukup kompleks, kita akan membaginya menjadi modul-modul kecil yang terfokus alih-alih membuat semuanya semuanya dalam file `lib.rs`.
 
 Struktur folder akan terlihat kurang lebih seperti ini:
 
@@ -67,7 +68,7 @@ src
 └── state.rs
 ```
 
-Dengan `lib.rs` yang akan terlihat kurang lebih seperti ini:
+Dengan file `lib.rs` yang akan terlihat kurang lebih seperti ini:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -100,11 +101,13 @@ pub mod blueshift_anchor_escrow {
 }
 ```
 
-Seperti yang Anda lihat, kami mengimplementasikan discriminator kustom untuk instruksi. Jadi pastikan untuk menggunakan anchor versi 0.31.0 atau yang lebih baru.
+Seperti yang Anda lihat, kita telah mengimplementasikan diskriminator kustom untuk instruksi-instruksi kita. Jadi pastikan versi anchor Anda adalah 0.31.0 atau yang lebih terkini.
 
 <ArticleSection name="State" id="state" level="h2" />
 
-Kita akan beralih ke `state.rs` di mana semua data untuk `Escrow` kita berada. Untuk melakukannya, kita akan memberikannya discriminator kustom dan membungkus struct ke dalam macro `#[account]` seperti ini:
+State adalah struktur data yang akan kita gunakan untuk menyimpan data untuk `Escrow` kita.
+
+Kita akan beralih ke `state.rs` di mana semua data untuk `Escrow` kita berada. Untuk melakukannya, kita akan memberikannya diskriminator kustom dan membungkus `struct` ke dalam makro `#[account]` seperti ini:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -119,22 +122,23 @@ pub struct Escrow {
     pub receive: u64,
     pub bump: u8,
 }
-  ```
+```
 
-Fungsi masing-masing field:
-- **seed**: Angka acak yang digunakan selama derivasi seed sehingga satu maker dapat membuka beberapa escrow dengan pasangan token yang sama; disimpan on-chain agar kita selalu dapat menurunkan kembali PDA.
-- **maker**: Dompet yang membuat escrow; diperlukan untuk pengembalian dana dan untuk menerima pembayaran.
-- **mint_a** & **mint_b**: Alamat SPL mints untuk sisi "give" dan "get" dari swap.
-- **receive**: Berapa banyak token B yang diinginkan maker. (Saldo vault itu sendiri menunjukkan berapa banyak token A yang disetor, jadi kita tidak menyimpannya.)
-- **bump**: Byte bump yang di-cache; menurunkannya secara langsung membutuhkan komputasi, jadi kita menyimpannya sekali.
+Fungsi masing-masing bagian:
 
-Kita bisa memasukkan lebih banyak informasi, tetapi byte tambahan berarti sewa tambahan. Menyimpan hanya hal-hal penting membuat deposit tetap murah sambil tetap memungkinkan program menerapkan setiap aturan yang dibutuhkan.
+- **seed**: Angka acak yang digunakan selama derivasi _seed_ sehingga satu _maker_ dapat membuka beberapa escrow dengan pasangan token yang sama; disimpan di dalam blockchain (_on-chain_) agar kita selalu dapat mendapatkan kembali nilai PDA yang sesuai.
+- **maker**: _Wallet_ yang membuat escrow; diperlukan untuk pengembalian dana dan menerima pembayaran.
+- **mint_a** & **mint_b**: Alamat SPL Mint untuk sisi "give" dan "get" dari pertukaran.
+- **receive**: Berapa banyak token B yang diinginkan _maker_. (Saldo vault itu sendiri menunjukkan berapa banyak token A yang disetor, jadi kita tidak perlu menyimpan nilai tersebut secara terpisah.)
+- **bump**: _Byte bum_p_ yang di-_cache_; menurunkannya secara langsung akan memakan "biaya" komputasi, jadi kita hanya perlu menyimpannya sekali.
 
-Kita selesaikan dengan menambahkan makro `#[derive(InitSpace)]` sehingga kita tidak perlu menghitung sewa struktur ini secara manual.
+Kita sebenarnya dapat juga memasukkan lebih banyak informasi kedalam `struct` kita, akan tetapi, _byte_ yang lebih banyak akan memakan biaya _rent_ yang lebih banyak juga. Oleh karena itu,kita hanya perlu menyimpan data-data kunci untuk menjaga biaya deposit tetap murah dan dalam waktu yang sama tetap memungkinkan program menerapkan setiap instruksi yang dibutuhkan.
 
-<ArticleSection name="Errors" id="errors" level="h2" />
+Kita selesaikan dengan menambahkan makro `#[derive(InitSpace)]` sehingga kita tidak perlu menghitung biaya sewa struktur ini secara manual.
 
-Kita sekarang dapat beralih ke file `errors.rs` di mana kita akan menambahkan beberapa error yang akan kita gunakan nanti seperti ini:
+<ArticleSection name="Definisi Error" id="errors" level="h2" />
+
+Kita sekarang dapat beralih ke file `errors.rs` di mana kita akan menambahkan beberapa definisi error yang akan kita gunakan nanti seperti ini:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -152,4 +156,4 @@ pub enum EscrowError {
 }
 ```
 
-Setiap enum memetakan ke pesan yang jelas dan mudah dibaca manusia yang akan ditampilkan Anchor setiap kali constraint atau `require!()` gagal.
+Setiap enum mengacu ke pesan yang jelas dan mudah dibaca yang akan ditampilkan Anchor setiap kali _constraint_ atau `require!()` gagal.

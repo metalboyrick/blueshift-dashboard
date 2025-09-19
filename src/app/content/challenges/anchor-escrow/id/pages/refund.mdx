@@ -1,34 +1,36 @@
 import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
 
-<ArticleSection name="Refund" id="refund" level="h2" />
+<ArticleSection name="Fungsi Refund" id="refund" level="h2" />
 
-Sekarang kita dapat beralih ke instruksi `refund`, yang berada di `refund.rs` dan akan melakukan tindakan-tindakan berikut:
-- Menutup escrow PDA dan mengirimkan lamports sewanya kembali ke pembuat.
-- Memindahkan seluruh saldo Token A keluar dari vault dan kembali ke pembuat, kemudian menutup akun vault.
+Sekarang kita dapat beralih ke instruksi `refund`, yang berada dalam file `refund.rs` dan akan melakukan rangkaian logika berikut:
 
-### Akun 
+- Menutup akun escrow PDA dan mengirimkan jumlah _lamport_ sewa kembali ke pembuat.
+- Memindahkan seluruh saldo Token A keluar dari _vault_ dan kembali ke pembuat, kemudian menutup akun _vault_.
+
+### Rangkaian Akun
 
 Akun-akun yang dibutuhkan dalam konteks ini adalah:
+
 - `maker`: pengguna yang menentukan persyaratan pertukaran
-- `escrow`: akun tempat semua persyaratan pertukaran ini berada
+- `escrow`: akun Escrow tempat semua persyaratan pertukaran ini berada
 - `mint_a`: token yang telah disimpan oleh `maker`
-- `vault`: akun token yang terkait dengan `escrow` dan `mint_a` tempat token-token telah disimpan
-- `maker_ata_a`: akun token yang terkait dengan `maker` dan `mint_a` yang akan menerima token dari `vault`
-- `associated_token_program`: program token terkait yang digunakan untuk membuat akun token terkait
-- `token_program`: program token yang digunakan untuk CPI transfer
+- `vault`: akun _Associated Token Account_ token yang terkait dengan `escrow` dan `mint_a` tempat token-token telah disimpan
+- `maker_ata_a`: akun _Associated Token Account_ token yang terkait dengan `maker` dan `mint_a` yang akan menerima token dari `vault`
+- `associated_token_program`: program token terkait yang digunakan untuk membuat _Associated Token Account_
+- `token_program`: program token yang digunakan untuk fungsi CPI transfer
 - `system_program`: program sistem yang digunakan untuk membuat `Escrow`
 
-Kali ini kami tidak akan membantu Anda dengan membuat `Context`, jadi cobalah melakukannya sendiri! Pastikan untuk menggunakan urutan akun yang benar atau tes kami akan gagal.
+Kali ini kami tidak akan membantu Anda dalam mendefinisikan `Context`, kami mempersilahkan Anda untuk belajar membuat definisinya sendiri! Pastikan untuk menggunakan urutan akun yang benar atau tes kami akan gagal.
 
-### Logika 
+### Logika Program
 
-Logikanya mirip dengan instruksi `take` tetapi kali ini kita hanya memindahkan token dari `vault` ke `maker_ata_a` sebelum menutup vault yang sekarang kosong. 
+Struktur logika fungsi ini mirip dengan instruksi `take`. Tetapi kali ini kita hanya memindahkan token dari `vault` ke `maker_ata_a` sebelum menutup vault yang sekarang kosong.
 
 Kali ini giliran Anda untuk belajar melakukannya sendiri, jadi kami tidak akan memberitahu Anda apa solusinya.
 
-Ketahuilah bahwa setelah ini dieksekusi, penawaran menjadi tidak berlaku, vault hilang, dan pembuat mendapatkan Token A mereka beserta biaya sewa kembali ke dompet mereka.
+Ketahuilah bahwa setelah logika ini dieksekusi, penawaran menjadi tidak berlaku, _vault_ akan menjadi non-aktif, dan pembuat mendapatkan Token A mereka beserta biaya sewa nya kembali ke _wallet_ mereka.
 
-<ArticleSection name="Entrypoint" id="entrypoint" level="h2" />
+<ArticleSection name="Titik Masuk (Entrypoint)" id="entrypoint" level="h2" />
 
 Sekarang setelah kita membuat semua fungsi di berbagai instruksi, akhirnya kita dapat mengisi `lib.rs` dengan semua fungsi yang telah kita buat; seperti ini:
 
@@ -53,14 +55,14 @@ pub mod blueshift_anchor_escrow {
 
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
 
-Sekarang Anda dapat menguji program Anda dengan unit test kami dan mengklaim NFT Anda!
+Sekarang Anda dapat memeriksa program Anda dengan unit test kami dan mendapatkan NFT Anda!
 
-Mulailah dengan membangun program Anda menggunakan perintah berikut di terminal Anda
+Mulailah dengan melakukan _build_ pada program Anda menggunakan perintah berikut di terminal Anda
 
 ```bash
 anchor build
 ```
 
-Ini akan menghasilkan file `.so` langsung di folder `target/deploy` Anda. 
+Proses _build_ ini akan menghasilkan file `.so` langsung di folder `target/deploy` Anda.
 
-Sekarang klik tombol `take challenge` dan letakkan file tersebut di sana!
+Sekarang klik tombol `Ambil Tantangan` dan upload file tersebut di sana!

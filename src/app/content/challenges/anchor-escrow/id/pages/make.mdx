@@ -1,26 +1,28 @@
 import { ArticleSection } from "../../../../../components/ArticleSection/ArticleSection";
 
-<ArticleSection name="Make" id="make" level="h2" />
+<ArticleSection name="Fungsi Pembuatan (Make)" id="make" level="h2" />
 
-Kita sekarang dapat beralih ke instruksi `make`, yang berada di `make.rs` dan akan melakukan tindakan-tindakan berikut:
+Kita sekarang dapat beralih ke instruksi `make`, yang berada di `make.rs` dan akan membuat beberapa fitur berikut:
+
 - Menginisialisasi catatan Escrow dan menyimpan semua persyaratannya.
-- Membuat Vault (ATA untuk `mint_a` yang dimiliki oleh `escrow`).
-- Memindahkan Token A milik pembuat ke vault tersebut dengan CPI ke program SPL-Token.
+- Membuat Vault (_Associated Token Account_ untuk `mint_a` yang dimiliki oleh `escrow`).
+- Memindahkan Token A milik _maker_ ke _vault_ tersebut dengan melakukan CPI ke program SPL-Token.
 
-### Akun 
+### Akun
 
 Akun-akun yang dibutuhkan dalam konteks ini adalah:
-- `maker`: pengguna yang menentukan persyaratan dan menyetor `mint_a` ke dalam `Escrow`
-- `escrow`: akun yang menyimpan persyaratan pertukaran (pembuat, mint, jumlah)
-- `mint_a`: token yang disetor oleh `maker`
-- `mint_b`: token yang diinginkan `maker` sebagai pertukaran
-- `maker_ata_a`: akun token yang terkait dengan `maker` dan `mint_a` yang digunakan untuk menyetor token ke dalam `vault`
-- `vault`: akun token yang terkait dengan `escrow` dan `mint_a` tempat token yang disetor disimpan
-- `associated_token_program`: program token terkait yang digunakan untuk membuat akun token terkait
-- `token_program`: program token yang digunakan untuk CPI transfer
-- `system_program`: program sistem yang digunakan untuk membuat `Escrow`
 
-Dan dengan semua batasan itu akan terlihat seperti ini:
+- `maker`: pengguna yang menentukan persyaratan dan menyetor token dalam alamat `mint_a` ke dalam `Escrow`
+- `escrow`: akun yang menyimpan persyaratan pertukaran (alamat _maker_, alamat _mint_ token, jumlah token)
+- `mint_a`: token yang disetor oleh `maker` dalam alamat `mint_a`
+- `mint_b`: token yang diinginkan `maker` sebagai pertukaran dalam alamat `mint_b`
+- `maker_ata_a`: akun _Associated Token Account_ token yang terkait dengan `maker` dan `mint_a` yang digunakan untuk menyetor token ke dalam `vault`
+- `vault`: akun _Associated Token Account_ token yang terkait dengan `escrow` dan `mint_a` yang merupakan tempat penyimpanan token yang disetor oleh _maker_.
+- `associated_token_program`: _Associated Token Program_ yang digunakan untuk membuat _Associated Token Account_
+- `token_program`: program token yang digunakan untuk fungsi CPI transfer
+- `system_program`: program sistem dalam Solana yang digunakan untuk membuat `Escrow`
+
+Implementasi Akun dan semua _constraints_ akan terlihat seperti ini:
 
 ```rust
 #[derive(Accounts)]
@@ -69,17 +71,17 @@ pub struct Make<'info> {
 }
 ```
 
-**Catatan**: Instruksi ini meneruskan satu token_program. Karena take mentransfer untuk kedua mint, kita harus memastikan kedua mint dimiliki oleh program yang sama (SPL Token atau Token-2022), atau CPI akan gagal.
+**Catatan**: Instruksi ini hanya menggunakan satu macam `token_program`. Karena fungsi `take` melakukan transfer untuk kedua akun mint, kita harus memastikan kedua akun mint dimiliki oleh `token_program` yang sama (SPL Token atau Token-2022). Jika tidak, maka fungsi CPI akan gagal.
 
-### Logika 
+### Logika Program
 
-Setelah menginisialisasi Akun, akhirnya kita dapat menangani logika dengan membuat fungsi pembantu yang lebih kecil sebagai implementasi dari struct akun.
+Setelah proses inisialisasi Akun, kita dapat melakukan implementasi logika dengan membuat fungsi pembantu yang lebih kecil sebagai implementasi dari `struct` akun.
 
-Kita mulai dengan mengisi `Escrow` menggunakan helper `set_inner()`, dan kemudian kita lanjutkan dengan menyetor token melalui CPI `transfer` seperti ini:
+Kita mulai dengan mengisi akun `Escrow` menggunakan fungsi pembantu `set_inner()`, dan kemudian kita akan melanjutkan dengan menyetor token melalui CPI `transfer` seperti kodingan di bawah ini:
 
 ```rust
 impl<'info> Make<'info> {
-    /// # Create the Escrow
+    /// # Pembuatan akun Escrow
     fn populate_escrow(&mut self, seed: u64, amount: u64, bump: u8) -> Result<()> {
         self.escrow.set_inner(Escrow {
             seed,
@@ -93,7 +95,7 @@ impl<'info> Make<'info> {
         Ok(())
     }
 
-    /// # Deposit the tokens
+    /// # Penyetoran token
     fn deposit_tokens(&self, amount: u64) -> Result<()> {
         transfer_checked(
             CpiContext::new(
@@ -114,33 +116,34 @@ impl<'info> Make<'info> {
 }
 ```
 
-Kita dapat melihat bahwa Anchor membantu kita dalam beberapa cara:
-- `set_inner()`: menjamin setiap field terisi.
-- `transfer_checked`: membungkus Token CPI sama seperti System helper yang kita gunakan sebelumnya.
+Kita dapat melihat bahwa Anchor telah membantu kita dalam beberapa cara:
 
-Dan sekarang kita dapat melanjutkan dengan membuat fungsi `handler` di mana kita melakukan beberapa pemeriksaan sebelum menggunakan helper, seperti ini:
+- `set_inner()`: menjamin setiap bagian data dalam akun `Escrow` terisi.
+- `transfer_checked`: membungkus Token CPI sama seperti _System Helper_ yang telah kita gunakan sebelumnya.
+
+Dan sekarang kita dapat melanjutkan dengan membuat fungsi `handler` di mana kita melakukan beberapa verifikasi sebelum menggunakan fungsi pembantu inti seperti ini:
 
 ```rust
 pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
-    // Validate the amount
+    // Verifikasi jumlah
     require_gt!(receive, 0, EscrowError::InvalidAmount);
     require_gt!(amount, 0, EscrowError::InvalidAmount);
 
-    // Save the Escrow Data
+    // Simpan data Escrow
     ctx.accounts.populate_escrow(seed, receive, ctx.bumps.escrow)?;
 
-    // Deposit Tokens
+    // Penyetoran token
     ctx.accounts.deposit_tokens(amount)?;
 
     Ok(())
 }
-  ```
+```
 
-Di sini kita menambahkan dua pemeriksaan validasi; satu pada argumen `amount` dan satu lagi pada argumen `receive` untuk memastikan kita tidak memasukkan nilai nol untuk keduanya.
+Di sini kita menambahkan dua proses validasi; satu pada argumen `amount` dan satu lagi pada argumen `receive` untuk memastikan kita tidak memasukkan nilai nol untuk keduanya.
 
 ### Peringatan
 
-Ekstensi tertentu dari SPL Token-2022 misalnya, transfer hooks, confidential transfers, default account states dapat memperkenalkan kerentanan seperti memblokir transfer, mengunci dana, dan menyebabkan rug pull dalam logika escrow, vault, atau CPI.
+Ekstensi tertentu dari SPL Token-2022, seperti transfer hooks, confidential transfers, dan default account states dapat membuat celah kerentanan seperti memblokir transfer, mengunci dana, dan menyebabkan _rug-pull_ dalam logika escrow, vault, atau CPI.
 
 - Pastikan `mint_a` dan `mint_b` dimiliki oleh program token yang sama untuk mencegah kegagalan CPI.
 - Gunakan token yang telah diaudit dengan baik (misalnya, USDC, wSOL) dari program SPL Token standar.
