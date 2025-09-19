@@ -45,18 +45,18 @@
       }
     },
     "anchor-flash-loan": {
-      "title": "Pinjaman Kilat Anchor",
+      "title": "Flash Loan dalam Anchor",
       "pages": {
         "borrow": {
-          "title": "Pinjam"
+          "title": "Peminjaman"
         },
         "repay": {
-          "title": "Lunaskan"
+          "title": "Pelunasan"
         }
       },
       "requirements": {
         "flash_loan": {
-          "title": "Tantangan: Meminjam dan Melunasi Pinjaman Kilat"
+          "title": "Tantangan: Meminjam dan Melunasi Flash Loan"
         }
       }
     },

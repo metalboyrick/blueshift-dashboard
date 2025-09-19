@@ -1,27 +1,28 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-# Anchor Flash Loan
+# Flash Loan dalam Anchor
 
 ![Anchor Flash Loan](/graphics/challenge-banners/anchor-flash-loan.png)
 
-Introspeksi instruksi adalah fitur yang kuat yang memungkinkan program blockchain untuk memeriksa dan menganalisis instruksi lain dalam bundel transaksi yang sama. Ini termasuk instruksi yang belum dieksekusi, memberikan program Anda kemampuan untuk "melihat ke depan" dan membuat keputusan berdasarkan apa yang akan terjadi nanti dalam transaksi.
+Introspeksi instruksi adalah fitur yang kuat yang memungkinkan program blockchain untuk memeriksa dan menganalisis instruksi lain dalam bundel transaksi yang sama. Proses ini juga melibatkan instruksi yang belum dieksekusi, memberikan program Anda kemampuan untuk "melihat ke depan" dan membuat keputusan berdasarkan apa yang akan terjadi nanti dalam transaksi.
 
-Bayangkan seperti memiliki penglihatan sinar-X untuk transaksi: program Anda dapat melihat melalui seluruh transaksi untuk memahami urutan operasi yang lengkap sebelum memutuskan bagaimana melanjutkan.
+Bayangkan seperti memiliki penglihatan sinar-X untuk transaksi-transaksi yang terlibat dalam bundel transaksi: program Anda dapat melihat melalui seluruh transaksi untuk memahami urutan operasi secara lengkap sebelum memutuskan eksekusi lanjutan.
 
-Aplikasi paling menarik dari introspeksi instruksi adalah flash loan. Ini adalah jenis pinjaman unik yang hanya ada dalam batas-batas transaksi tunggal.
+Aplikasi paling menarik dari introspeksi instruksi adalah pinjaman kilat atau biasa disebut dengan _flash loan_. Ini adalah jenis peminjaman dana unik yang hanya ada dalam lingkup satu transaksi.
 
-Begini cara kerja flash loan:
-- **Pinjam**: Pada awal transaksi, Anda dapat langsung meminjam sejumlah besar modal menggunakan instruksi `loan`
-- **Gunakan**: Anda dapat menggunakan modal pinjaman ini untuk trading, arbitrase, atau operasi lain dalam transaksi yang sama
-- **Bayar kembali**: Sebelum transaksi berakhir, Anda harus membayar kembali pinjaman plus sedikit biaya menggunakan instruksi `repay`
+Begini cara kerja pinjaman kilat atau biasa disebut dengan _flash loan_ :
 
-Wawasan utamanya adalah bahwa flash loan bergantung pada sifat atomik transaksi blockchain. Jika ada bagian dari transaksi yang gagal (termasuk pembayaran kembali), seluruh transaksi akan dibatalkan seolah-olah tidak pernah terjadi. Ini berarti pemberi pinjaman tidak memiliki risiko sama sekali: mereka mendapatkan pembayaran kembali, atau pinjaman tidak pernah benar-benar terjadi.
+- **Peminjaman Dana**: Pada awal transaksi, Anda dapat langsung meminjam sejumlah besar modal menggunakan instruksi pinjam atau `loan`
+- **Pengunaan Dana**: Anda dapat menggunakan modal pinjaman ini untuk trading, arbitrase, atau operasi lain dalam transaksi yang sama
+- **Pelunasan**: Sebelum transaksi berakhir, Anda harus membayar kembali pinjaman dengan sedikit biaya menggunakan instruksi pelunasan atau `repay`
 
-Dalam tantangan ini, Anda akan membuat program flash loan sederhana yang mendemonstrasikan introspeksi instruksi dalam tindakan. Program akan memeriksa data instruksi dan akun di berbagai instruksi dalam transaksi yang sama untuk memastikan persyaratan pinjaman terpenuhi.
+Kunci utamanya adalah bahwa flash loan bergantung pada sifat atomik transaksi blockchain. Jika ada bagian dari transaksi yang gagal (termasuk pembayaran kembali), seluruh transaksi akan dibatalkan seolah-olah transaksi tersebut tidak pernah terjadi. Ini berarti pemberi pinjaman tidak memiliki risiko sama sekali: entah mereka mendapatkan pembayaran kembali, atau proses pinjaman secara keseluruhan tidak pernah benar-benar terjadi.
 
-Jika Anda baru mengenal introspeksi instruksi, kami menyarankan untuk memulai dengan [Kursus Introspeksi Instruksi](/id/courses/instruction-introspection) untuk memahami konsep dasar yang digunakan dalam program ini.
+Dalam tantangan ini, Anda akan membuat program _flash loan_ sederhana yang mendemonstrasikan konsep introspeksi instruksi. Program akan memeriksa data instruksi dan akun di berbagai instruksi dalam transaksi yang sama untuk memastikan persyaratan pinjaman terpenuhi.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+Jika Anda baru mengenal introspeksi instruksi, kami menyarankan untuk memulai dengan mempelajari [Kursus Introspeksi Instruksi](/id/courses/instruction-introspection) untuk memahami konsep dasar yang digunakan dalam program ini.
+
+<ArticleSection name="Instalasi" id="installation" level="h2" />
 
 Sebelum memulai, pastikan Anda telah menginstal Rust dan Anchor. Jika Anda membutuhkan petunjuk pengaturan, lihat [dokumentasi resmi anchor](https://www.anchor-lang.com/docs/installation). Kemudian di terminal Anda jalankan:
 
@@ -30,6 +31,7 @@ anchor init blueshift_anchor_flash_loan
 ```
 
 Tambahkan dependensi yang diperlukan:
+
 - `anchor-spl`: Menyediakan utilitas untuk bekerja dengan token SPL (standar token Solana)
 
 ```bash
@@ -37,20 +39,20 @@ cd blueshift_anchor_flash_loan
 cargo add anchor-spl
 ```
 
-Sekarang Anda siap untuk mulai membangun program flash loan Anda!
+Sekarang Anda siap untuk mulai membuat program _flash loan_ Anda!
 
-<ArticleSection name="Template" id="template" level="h2" />
+<ArticleSection name="Kerangka Dasar" id="template" level="h2" />
 
-Mari kita bangun dasar program flash loan kita dengan menyiapkan struktur dasar, akun, dan penanganan kesalahan yang akan digunakan oleh instruksi peminjaman dan pembayaran kembali.
+Mari kita bangun kerangka dasar program _flash loan_ kita dengan menyiapkan struktur dasar, akun, dan penanganan Error yang akan digunakan oleh instruksi peminjaman dan pembayaran kembali.
 
-Kita akan mengimplementasikan semuanya di `lib.rs` karena kita hanya memiliki dua instruksi yang berbagi struktur akun yang sama. Berikut adalah template awal kita dengan semua komponen penting:
+Kita akan mengimplementasikan keseluruhan program dalam file `lib.rs` karena kita hanya memiliki dua instruksi yang berbagi struktur akun yang sama. Berikut adalah kerangka awal kita dengan semua komponen kunci yang akan diperlukan:
 
 ```rust
 use anchor_lang::prelude::*;
 use anchor_spl::{
-  token::{Token, TokenAccount, Mint, Transfer, transfer}, 
+  token::{Token, TokenAccount, Mint, Transfer, transfer},
   associated_token::AssociatedToken
-}; 
+};
 use anchor_lang::{
   Discriminator,
   solana_program::sysvar::instructions::{
@@ -67,7 +69,7 @@ pub mod blueshift_anchor_flash_loan {
 
   pub fn borrow(ctx: Context<Loan>, borrow_amount: u64) -> Result<()> {
     // borrow logic...
-    
+
     Ok(())
   }
 
@@ -89,22 +91,23 @@ pub enum ProtocolError {
 }
 ```
 
-**Catatan**: ingat untuk mengubah ID program menjadi `22222222222222222222222222222222222222222222` karena kita menggunakan ini di balik layar untuk menguji program Anda.
+**Catatan**: Jangan lupa untuk mengubah ID program menjadi `22222222222222222222222222222222222222222222` karena kita menggunakan ini di balik layar untuk memeriksa program Anda.
 
-<ArticleSection name="Accounts" id="accounts" level="h2" />
+<ArticleSection name="Rangkaian Akun" id="accounts" level="h2" />
 
-Karena instruksi `borrow` dan `repay` bekerja dengan akun yang sama, kita dapat membuat satu konteks `Loan` yang melayani kedua fungsi tersebut. Ini membuat kode kita lebih mudah dikelola dan dipahami.
+Karena instruksi `borrow` dan `repay` bekerja dengan akun yang sama, kita dapat membuat satu konteks `Loan` (Pinjaman) yang melayani kedua fungsi tersebut. Ini membuat kode kita lebih mudah dikelola dan dipahami.
 
 Struct akun `Loan` kita membutuhkan komponen-komponen berikut:
-- `borrower`: pengguna yang meminta flash loan.
+
+- `borrower`: pengguna yang meminta _flash loan_.
 - `protocol`: Program Derived Address (PDA) yang memiliki pool likuiditas protokol.
 - `mint`: token spesifik yang dipinjam.
-- `borrower_ata`: Associated Token Account peminjam yang akan menerima token yang dipinjam.
-- `protocol_ata`: Associated Token Account protokol yang akan menyediakan token yang dipinjam.
-- `instructions`: akun Instructions Sysvar untuk introspeksi.
+- `borrower_ata`: _Associated Token Account_ peminjam yang akan menerima token yang dipinjam.
+- `protocol_ata`: _Associated Token Account_ protokol yang akan menyediakan token yang dipinjam.
+- `instructions`: akun _Instructions Sysvar_ untuk introspeksi.
 - `token_program`, `associated_token_program`, dan `system_program`: program yang diperlukan untuk program.
 
-Berikut cara kami mendefinisikan struct akun:
+Berikut cara kita mendefinisikan struct akun:
 
 ```rust
 #[derive(Accounts)]
@@ -141,15 +144,16 @@ pub struct Loan<'info> {
 }
 ```
 
-Seperti yang Anda lihat, akun yang diperlukan untuk instruksi ini dan batasannya cukup sederhana:
-- `protocol`: menggunakan `seeds = [b"protocol".as_ref()]` untuk membuat alamat deterministik yang memiliki semua likuiditas protokol. Ini memastikan hanya program kita yang dapat mengontrol dana tersebut.
-- `borrower_ata`: menggunakan `init_if_needed` karena peminjam mungkin belum memiliki akun token terkait untuk token spesifik ini. Batasan ini secara otomatis membuat akun jika diperlukan.
-- `protocol_ata`: harus sudah ada dan dapat diubah karena kita akan mentransfer token darinya. Batasan `associated_token::authority = protocol` memastikan hanya PDA protokol yang dapat mengotorisasi transfer.
+Seperti yang Anda lihat, akun-akun yang diperlukan untuk instruksi ini dan _constraints_ yang diperlukan tidak terlalu rumit:
+
+- `protocol`: menggunakan `seeds = [b"protocol".as_ref()]` untuk membuat alamat deterministik yang memiliki semua likuiditas protokol. Hal ini memastikan hanya program kita yang dapat mengontrol dana tersebut.
+- `borrower_ata`: menggunakan `init_if_needed` karena peminjam belum tentu memiliki akun token terkait untuk token spesifik ini. _Constraint_ ini secara otomatis membuat akun jika diperlukan.
+- `protocol_ata`: harus sudah ada dan dapat diubah karena kita akan mentransfer token darinya. _Constraint_ `associated_token::authority = protocol` memastikan hanya PDA protokol yang dapat mengotorisasi transfer.
 - `instructions`: menggunakan batasan `address` untuk memverifikasi bahwa kita mengakses akun sistem yang benar yang berisi data instruksi transaksi.
 
-<ArticleSection name="Errors" id="errors" level="h2" />
+<ArticleSection name="Definisi Error" id="errors" level="h2" />
 
-Flash loan memerlukan validasi yang tepat pada beberapa tahap, jadi kita membutuhkan penanganan kesalahan yang komprehensif. Berikut enum kesalahan lengkap kita:
+_Flash loan_ memerlukan validasi yang tepat pada beberapa tahap, jadi kita membutuhkan penanganan _error_ yang komprehensif. Berikut enum _error_ lengkap kita:
 
 ```rust
 #[error_code]
@@ -179,6 +183,6 @@ pub enum ProtocolError {
 }
 ```
 
-Dengan dasar ini, kita siap untuk mengimplementasikan logika inti untuk instruksi flash loan kita. Struktur akun memastikan penanganan token yang tepat, sementara sistem kesalahan memberikan umpan balik yang jelas untuk debugging dan validasi keamanan.
+Dengan kerangka dasar ini, kita siap untuk mengimplementasikan logika inti untuk instruksi _flash loan_ kita. Struktur akun memastikan penanganan token yang tepat, sementara sistem _error_ memberikan umpan balik yang jelas untuk debugging dan validasi keamanan.
 
 > Program ini belum sepenuhnya dapat dikompilasi. Bisakah Anda mencari tahu mengapa?

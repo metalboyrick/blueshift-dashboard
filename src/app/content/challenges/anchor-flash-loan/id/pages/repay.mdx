@@ -1,12 +1,17 @@
-# Pembayaran Kembali
+# Pelunasan
 
-Instruksi pembayaran kembali melengkapi siklus flash loan kita dengan memastikan dana yang dipinjam dikembalikan dengan biaya yang sesuai. Instruksi ini melakukan dua langkah penting:
-1. Ekstrak jumlah pinjaman: Gunakan introspeksi instruksi untuk mengambil `amount_borrowed` asli dari data instruksi peminjaman
+Instruksi pelunasan melengkapi siklus _flash loan_ kita dengan memastikan dana yang dipinjam dikembalikan dengan biaya yang sesuai. Instruksi ini mengeksekusi dua langkah penting:
+
+1. Pengambilan nilai pinjaman: Gunakan introspeksi instruksi untuk mengambil `amount_borrowed` (nilai yang dipinjam) asli dari data instruksi peminjaman
 2. Transfer dana kembali: Hitung `fee` dan transfer jumlah yang dipinjam plus biaya kembali ke protokol
 
-<ArticleSection name="Introspeksi Instruksi" id="instruction-introspection" level="h2" />
+<ArticleSection
+  name="Introspeksi Instruksi"
+  id="instruction-introspection"
+  level="h2"
+/>
 
-Pertama, kita perlu memeriksa instruksi pertama dalam transaksi untuk mengekstrak jumlah pinjaman asli:
+Pertama, kita perlu memeriksa instruksi pertama dalam transaksi untuk mengambil nilai pinjaman asli:
 
 ```rust
 let ixs = ctx.accounts.instructions.to_account_info();
@@ -14,7 +19,7 @@ let ixs = ctx.accounts.instructions.to_account_info();
 let mut amount_borrowed: u64;
 
 if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
-    // Check the amount borrowed:
+    // Periksa jumlah yang dipinjam:
     let mut borrowed_data: [u8;8] = [0u8;8];
     borrowed_data.copy_from_slice(&borrow_ix.data[8..16]);
     amount_borrowed = u64::from_le_bytes(borrowed_data)
@@ -24,26 +29,25 @@ if let Ok(borrow_ix) = load_instruction_at_checked(0, &ixs) {
 }
 ```
 
-> Kita tidak memeriksa apakah ini benar-benar `borrow_ix` menggunakan ID program dan diskriminator karena tidak masalah jika mereka benar-benar membuat instruksi "palsu"; ini aman bagi protokol karena protokol hanya menerima pembayaran. Pada saat yang sama, jika kita meminjamkan uang, kita tahu bahwa itu akan menjadi instruksi pertama dan bahwa `amount_borrowed` akan ada di sana.
+> Kita tidak memeriksa apakah ini benar-benar `borrow_ix` (Instruksi Peminjaman) menggunakan ID program dan diskriminator karena tidak masalah jika mereka benar-benar membuat instruksi "palsu"; Hal ini aman bagi protokol karena protokol hanya menerima biaya. Pada saat yang sama, jika kita meminjamkan uang, kita tahu bahwa itu akan menjadi instruksi pertama dan bahwa `amount_borrowed` (jumlah yang dipinjam) akan ada di sana.
 
 <ArticleSection name="Transfer Dana" id="transfer-funds" level="h2" />
 
-Selanjutnya, kita menghitung biaya protokol dan mentransfer jumlah total kembali:
+Selanjutnya, kita menghitung biaya protokol dan mentransfer jumlah total kembali ke protokol:
 
 ```rust
-// Add the fee to the amount borrowed (In our case we hardcoded it to 500 basis point)
+// Menambahkan biaya ke jumlah yang dipinjam (Dalam kasus kita kita mengkodekan tetap sebesar kelipatan 500 poin)
 let fee = (amount_borrowed as u128).checked_mul(500).unwrap().checked_div(10_000).ok_or(ProtocolError::Overflow)? as u64;
 amount_borrowed = amount_borrowed.checked_add(fee).ok_or(ProtocolError::Overflow)?;
 
-// Transfer the funds from the protocol to the borrower
-transfer(
+    // Mentransfer dana dari peminjam ke protokol
     CpiContext::new(ctx.accounts.token_program.to_account_info(), Transfer {
         from: ctx.accounts.borrower_ata.to_account_info(),
         to: ctx.accounts.protocol_ata.to_account_info(),
         authority: ctx.accounts.borrower.to_account_info(),
-    }), 
+    }),
     amount_borrowed
 )?;
 ```
 
-Biaya kita dikodekan tetap sebesar 500 basis poin, dan kita melakukan matematika "checked" untuk memastikan bahwa jumlahnya tidak overflow yang bisa dieksploitasi dengan angka yang sangat besar. Selain itu, kita mengkonversi jumlah ke `u128` untuk perkalian guna mencegah overflow menengah, kemudian kita dengan aman mengkonversi kembali ke `u64`
+Biaya kita di-kodekan untuk menggunakan kelipatan 500 poin basis, dan kita melakukan operasi matematika dengan tambahan "checked" untuk memastikan bahwa jumlahnya tidak _overflow_, yang dimana dapat dieksploitasi dengan angka yang sangat besar. Selain itu, kita juga mengkonversi jumlah ke `u128` untuk perkalian guna mencegah _overflow_ dalam proses perkalian tersebut. Setelah itu, kita dapat dengan aman mengkonversi kembali ke `u64`
