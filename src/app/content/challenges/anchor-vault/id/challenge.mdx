@@ -1,26 +1,26 @@
 import { ArticleSection } from "../../../../components/ArticleSection/ArticleSection";
 
-![Anchor Vault Challenge](/graphics/challenge-banners/anchor-vault.png)
+![Anchor _vault_ Challenge](/graphics/challenge-banners/anchor-_vault_.png)
 
-# The Vault
+# Konsep _vault_ ( Brankas )
 
-Vault memungkinkan pengguna untuk menyimpan aset mereka dengan aman. Vault adalah blok bangunan fundamental dalam DeFi yang, pada intinya, memungkinkan pengguna untuk menyimpan aset mereka (lamport dalam kasus ini) dengan aman yang hanya dapat ditarik kembali oleh pengguna yang sama di kemudian hari.
+_Vault_ ( Brankas dalam Bahasa Inggris ) adalah suatu program yang memungkinkan pengguna untuk menyimpan aset mereka dengan aman. _vault_ adalah konsep dasar dalam DeFi yang pada intinya memungkinkan pengguna untuk menyimpan aset mereka (_lamport_ dalam kasus ini) dengan aman yang hanya dapat ditarik kembali oleh pengguna yang sama di kemudian hari.
 
-Dalam tantangan ini, kita akan membangun vault lamport sederhana yang menunjukkan cara bekerja dengan akun dasar, Program Derived Addresses (PDA), dan Cross-Program Invocation (CPI). Jika Anda belum familiar dengan Anchor, Anda sebaiknya mulai dengan membaca [Pengantar Anchor](/id/courses/introduction-to-anchor) untuk membiasakan diri dengan konsep inti yang akan kita gunakan dalam program ini.
+Dalam tantangan ini, kita akan membangun _vault_ _lamport_ sederhana yang menunjukkan cara bekerja dengan akun dasar, _Program Derived Addresses_ (PDA), dan _Cross-Program Invocation_ (CPI). Jika Anda belum familiar dengan Anchor, kami menyarankan anda untuk membaca kursus [Pengantar Anchor](/id/courses/introduction-to-anchor) untuk mendalami konsep inti yang akan kita gunakan dalam program ini.
 
-<ArticleSection name="Installation" id="installation" level="h2" />
+<ArticleSection name="Proses Instalasi" id="installation" level="h2" />
 
-Sebelum Anda memulai, pastikan Rust dan Anchor sudah terpasang (lihat [dokumentasi resmi](https://www.anchor-lang.com/docs/installation) jika Anda perlu penyegaran). Kemudian di terminal Anda jalankan:
+Sebelum Anda memulai, pastikan Rust dan Anchor sudah terinstalasi (lihat [dokumentasi resmi](https://www.anchor-lang.com/docs/installation) jika Anda perlu referensi ulang). Kemudian di _terminal_ Anda, jalankan:
 
 ```bash
 anchor init blueshift_anchor_vault
 ```
 
-Kita tidak memerlukan crate tambahan untuk tantangan ini, jadi Anda sekarang dapat membuka folder yang baru dibuat, dan Anda siap untuk mulai coding!
+Kita tidak memerlukan _crate_ tambahan untuk tantangan ini, jadi Anda sekarang dapat membuka folder yang baru dibuat, dan Anda siap untuk mulai koding!
 
-<ArticleSection name="Template" id="template" level="h2" />
+<ArticleSection name="Kerangka Awal" id="template" level="h2" />
 
-Mari mulai dengan struktur program dasar. Kita akan mengimplementasikan semuanya di `lib.rs` karena ini adalah program yang sederhana. Berikut adalah template awal dengan komponen inti yang akan kita butuhkan:
+Mari kita mulai dengan struktur program dasar. Kita akan mengimplementasikan semua fitur dalam file `lib.rs` berhubung program yang kita buat adalah program yang sederhana. Berikut ini adalah kerangka awal dengan komponen inti yang akan kita butuhkan:
 
 ```rust
 declare_id!("22222222222222222222222222222222222222222222");
@@ -46,10 +46,10 @@ pub struct VaultAction<'info> {
     pub signer: Signer<'info>,
     #[account(
         mut,
-        seeds = [b"vault", signer.key().as_ref()],
+        _seed_ = [b"_vault_", signer.key().as_ref()],
         bump,
     )]
-    pub vault: SystemAccount<'info>,
+    pub _vault_: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -59,18 +59,19 @@ pub enum VaultError {
 }
 ```
 
-**Catatan**: ingat untuk mengubah ID program menjadi `22222222222222222222222222222222222222222222` karena kami menggunakan ini di balik layar untuk menguji program Anda.
+**Catatan**: Jangan lupa untuk mengubah ID program menjadi `22222222222222222222222222222222222222222222` karena kami menggunakan ID ini di balik layar untuk memeriksa program Anda.
 
-<ArticleSection name="Accounts" id="accounts" level="h2" />
+<ArticleSection name="Rangkaian Akun" id="accounts" level="h2" />
 
-Karena kedua instruksi menggunakan akun yang sama, untuk membuatnya lebih mudah dan lebih mudah dibaca, kita dapat membuat satu konteks bernama `VaultAction` dan menggunakannya untuk kedua `deposit` dan `withdraw`.
+Kita dapat membuat satu konteks bernama `VaultAction` dan menggunakannya untuk funsgi `deposit` dan fungsi `withdraw`. Alasan desain akun seperti ini adalah kesederhanaan implementasi dan pembacaan.
 
 Struktur akun `VaultAction` akan memerlukan:
-- `signer`: ini adalah pemilik vault, dan satu-satunya orang yang dapat menarik lamport setelah membuat vault.
-- `vault`: PDA yang diturunkan dari seeds berikut: `[b"vault", signer.key().as_ref()]` yang menyimpan lamport untuk penandatangan.
-- `system_program`: akun program sistem yang perlu disertakan karena kita akan menggunakan instruksi transfer CPI dari program sistem
 
-Berikut cara kami mendefinisikan struct akun:
+- `signer`: ini adalah pemilik _vault_, dan satu-satunya orang yang dapat menarik _lamport_ setelah membuat _vault_.
+- `_vault_`: PDA yang diturunkan dari _seeds_ berikut: `[b"_vault_", signer.key().as_ref()]` yang menyimpan _lamport_ untuk `signer`.
+- `system_program`: akun program sistem bawaan Solana yang perlu disertakan karena kita akan menggunakan instruksi transfer CPI yang terdapat dalam program ini.
+
+`struct` akun akan terlihat seperti berikut:
 
 ```rust
 #[derive(Accounts)]
@@ -79,34 +80,37 @@ pub struct VaultAction<'info> {
     pub signer: Signer<'info>,
     #[account(
         mut,
-        seeds = [b"vault", signer.key().as_ref()],
+        _seed_ = [b"_vault_", signer.key().as_ref()],
         bump,
     )]
-    pub vault: SystemAccount<'info>,
+    pub _vault_: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 ```
 
-Mari kita uraikan setiap batasan akun:
+Mari kita bahas setiap _constraint_ (batasan) pada akun-akun ini:
 
-1. `signer`: Batasan `mut` diperlukan karena kita akan memodifikasi lamports-nya selama transfer.
-2. `vault`: 
-  - `mut` karena kita akan memodifikasi lamports-nya
-  - `seeds` & `bumps` mendefinisikan cara menurunkan PDA yang valid dari seeds
-3. `system_program`: memeriksa apakah akun diatur sebagai executable dan alamatnya adalah alamat System Program
+1. `signer`: Batasan `mut` diperlukan karena kita akan mengubah nilai saldo lamports selama transfer.
+2. `_vault_`:
 
-<ArticleSection name="Errors" id="errors" level="h2" />
+   - `mut` karena nilai saldo lamports akan berubah.
+   - `_seed_` & `bumps` mendefinisikan cara menurunkan PDA yang sah dari _seeds_.
 
-Kita tidak memerlukan banyak error untuk program kecil ini, jadi kita hanya akan membuat 2 enum:
-- `VaultAlreadyExists`: yang memberi tahu kita jika sudah ada beberapa lamports di akun karena itu berarti vault sudah ada.
-- `InvalidAmount`: kita tidak dapat menyetor jumlah yang kurang dari rent minimum untuk akun dasar, jadi kita memeriksa bahwa jumlahnya lebih besar dari itu.
+3. `system_program`: memastikan dua hal, yaitu apakah akun diatur sebagai akun yang dapat dieksekusi (_executable_) dan _address_ benar adalah _address_ dari System Program.
 
-Ini akan terlihat seperti ini:
+<ArticleSection name="Definisi Error" id="errors" level="h2" />
+
+Kita tidak memerlukan banyak definisi error untuk program kecil ini, jadi kita hanya akan membuat 2 enum:
+
+- `VaultAlreadyExists` (_vault_ Sudah Tersedia): yang memberi tahu kita jika sudah ada beberapa lamports di akun, yang menandakan bahwa _vault_ sudah tersedia.
+- `InvalidAmount` (Jumlah Tidak Sah): kita tidak dapat menyetor jumlah yang kurang dari _rent_ minimum untuk akun dasar, jadi kita memeriksa bahwa jumlahnya lebih besar dari itu.
+
+Definisi Error akan terlihat seperti berikut:
 
 ```rust
 #[error_code]
 pub enum VaultError {
-    #[msg("Vault already exists")]
+    #[msg("_vault_ already exists")]
     VaultAlreadyExists,
     #[msg("Invalid amount")]
     InvalidAmount,
@@ -115,26 +119,28 @@ pub enum VaultError {
 
 <ArticleSection name="Deposit" id="deposit" level="h2" />
 
-Instruksi deposit melakukan langkah-langkah berikut:
-1. Memverifikasi vault kosong (tidak memiliki lamports) untuk mencegah deposit ganda
-2. Memastikan jumlah deposit melebihi minimum rent-exempt untuk `SystemAccount`
-3. Mentransfer lamports dari penandatangan ke vault menggunakan CPI ke System Program
+Kita akan membuat fungsi `deposit` yang akan menjalankan langkah-langkah berikut:
 
-Mari kita implementasikan pemeriksaan ini terlebih dahulu:
+1. Memastikan _vault_ kosong (tidak memiliki _lamports_) untuk mencegah deposit ganda.
+2. Memastikan bahwa jumlah deposit melebihi jumlah bebas biaya _rent_ (sewa) untuk `SystemAccount`
+3. Transfer _lamport_ dari penandatangan ke _vault_ menggunakan eksekusi CPI ke Program Sistem.
+
+Mari kita implementasikan rangkaian verifikasi ini terlebih dahulu:
 
 ```rust
-// Check if vault is empty
-require_eq!(ctx.accounts.vault.lamports(), 0, VaultError::VaultAlreadyExists);
+// Verifikasi vault kosong
+require_eq!(ctx.accounts._vault_.lamports(), 0, VaultError::VaultAlreadyExists);
 
-// Ensure amount exceeds rent-exempt minimum
+// Verifikasi jumlah melebihi jumlah bebas biaya rent
 require_gt!(amount, Rent::get()?.minimum_balance(0), VaultError::InvalidAmount);
 ```
 
-Dua makro `require` bertindak seperti klausa penjaga kustom:
-- `require_eq!` mengonfirmasi vault kosong (mencegah deposit ganda).
-- `require_gt!` memeriksa jumlah melewati ambang batas rent-exempt.
+Dua makro `require` diatas bertindak seperti klausa penjaga yang di kustomisasi:
 
-Setelah pemeriksaan berhasil, helper System Program Anchor memanggil CPI `Transfer` seperti ini:
+- `require_eq!` mengonfirmasi bahwa _vault_ kosong (mencegah deposit ganda).
+- `require_gt!` memeriksa jumlah melewati ambang batas bebas biaya _rent_.
+
+Setelah verifikasi berhasil, fungsi bantuan Program Sistem Anchor memanggil Fungsi CPI `Transfer` seperti berikut:
 
 ```rust
 use anchor_lang::system_program::{transfer, Transfer};
@@ -144,62 +150,64 @@ transfer(
         ctx.accounts.system_program.to_account_info(),
         Transfer {
             from: ctx.accounts.signer.to_account_info(),
-            to: ctx.accounts.vault.to_account_info(),
+            to: ctx.accounts._vault_.to_account_info(),
         },
     ),
     amount,
 )?;
 ```
 
-<ArticleSection name="Withdraw" id="withdraw" level="h2" />
+<ArticleSection name="Penarikan" id="withdraw" level="h2" />
 
-Instruksi withdraw melakukan langkah-langkah berikut:
-1. Memverifikasi vault berisi lamport (tidak kosong)
-2. Menggunakan PDA vault untuk menandatangani transfer atas namanya sendiri
-3. Mentransfer semua lamport dari vault kembali ke penandatangan
+Instruksi `withdraw` di rencanakan untuk dapat menjalankan langkah-langkah berikut:
 
-Pertama, mari kita periksa apakah vault memiliki lamport untuk ditarik:
+1. Verifikasi _vault_ berisi _lamport_ (tidak kosong)
+2. Menggunakan PDA _vault_ untuk menandatangani transfer atas namanya sendiri
+3. Transfer semua _lamport_ dari _vault_ kembali ke penandatangan
+
+Pertama, mari kita periksa apakah _vault_ memiliki _lamport_ untuk ditarik:
 
 ```rust
-// Check if vault has any lamports
-require_neq!(ctx.accounts.vault.lamports(), 0, VaultError::InvalidAmount);
+// Verifikasi _vault_ memiliki _lamport_ untuk ditarik
+require_neq!(ctx.accounts._vault_.lamports(), 0, VaultError::InvalidAmount);
 ```
 
-Kemudian, kita perlu membuat seeds penandatangan PDA dan melakukan transfer:
+Kemudian, kita perlu membuat _seed_ penandatangan PDA dan melakukan transfer:
 
 ```rust
-// Create PDA signer seeds
+// Membuat seed penandatangan PDA
 let signer_key = ctx.accounts.signer.key();
-let signer_seeds = &[b"vault", signer_key.as_ref(), &[ctx.bumps.vault]];
+let signer_seeds = &[b"_vault_", signer_key.as_ref(), &[ctx.bumps._vault_]];
 
-// Transfer all lamports from vault to signer
+// Transfer semua lamport dari vault ke penandatangan
 transfer(
     CpiContext::new_with_signer(
         ctx.accounts.system_program.to_account_info(),
         Transfer {
-            from: ctx.accounts.vault.to_account_info(),
+            from: ctx.accounts._vault_.to_account_info(),
             to: ctx.accounts.signer.to_account_info(),
         },
         &[&signer_seeds[..]]
     ),
-    ctx.accounts.vault.lamports()
+    ctx.accounts._vault_.lamports()
 )?;
 ```
 
 Keamanan penarikan ini dijamin oleh dua faktor:
-1. PDA vault diturunkan menggunakan kunci publik penandatangan, memastikan hanya penyetor asli yang dapat melakukan penarikan
-2. Kemampuan PDA untuk menandatangani transfer diverifikasi melalui seeds yang kita berikan ke `CpiContext::new_with_signer`
+
+1. PDA dari _vault_ merupakan nilai yang diturunkan dari kunci publik penandatangan, dimana hal ini memastikan hanya penyetor asli yang dapat melakukan penarikan.
+2. Eligibilitas PDA untuk menandatangani transfer telah diverifikasi melalui _seeds_ yang kita masukkan ke konteks `CpiContext::new_with_signer`.
 
 <ArticleSection name="Conclusion" id="conclusion" level="h2" />
 
-Sekarang Anda dapat menguji program Anda terhadap unit test kami dan mengklaim NFT Anda!
+Sekarang Anda dapat menguji program Anda terhadap unit test kami dan mendapatkan NFT Anda!
 
-Mulailah dengan membangun program Anda menggunakan perintah berikut di terminal Anda
+Mulailah dengan membangun program Anda menggunakan perintah berikut di _terminal_ Anda
 
 ```bash
 anchor build
 ```
 
-Ini menghasilkan file `.so` langsung di folder `target/deploy` Anda.
+Perintah ini akan menghasilkan file `.so` langsung di folder `target/deploy` Anda.
 
-Sekarang klik tombol `take challenge` dan letakkan file tersebut di sana!
+Sekarang klik tombol `Ambil Tantangan` dan upload file tersebut di sana!
